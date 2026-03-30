@@ -1314,6 +1314,8 @@ export const timeEntries = pgTable("time_entries", {
   index("time_entries_tenant_client_idx").on(table.tenantId, table.clientId),
   index("time_entries_tenant_created_at_idx").on(table.tenantId, table.createdAt),
   index("time_entries_tenant_billing_status_idx").on(table.tenantId, table.billingStatus),
+  index("time_entries_workspace_start_idx").on(table.workspaceId, table.startTime),
+  index("time_entries_tenant_workspace_start_idx").on(table.tenantId, table.workspaceId, table.startTime),
 ]);
 
 /**

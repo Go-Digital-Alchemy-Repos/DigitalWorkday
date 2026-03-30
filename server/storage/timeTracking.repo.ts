@@ -7,8 +7,48 @@ import {
   timeEntries, activeTimers, users, clients, projects, tasks,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lte, lt, inArray, isNull, or, sql, count, sum } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
+
+export type PeriodTotals = {
+  total: number;
+  billable: number;
+  unbillable: number;
+};
+
+export type DailyBreakdownRow = {
+  date: string;
+  total: number;
+  billable: number;
+  unbillable: number;
+};
+
+export type DayTotal = {
+  date: string;
+  totalSeconds: number;
+};
+
+export type MissingDescriptionEntry = {
+  id: string;
+  date: string;
+  duration: number;
+  clientName?: string;
+  projectName?: string;
+};
+
+export type GroupedSummaryRow = {
+  id: string;
+  name: string;
+  seconds: number;
+  clientName?: string | null;
+};
+
+export type ReportTotals = {
+  totalSeconds: number;
+  inScopeSeconds: number;
+  outOfScopeSeconds: number;
+  entryCount: number;
+};
 
 type TimeEntryFilters = {
   userId?: string;
@@ -301,5 +341,303 @@ export class TimeTrackingRepository {
     
     await db.delete(activeTimers).where(eq(activeTimers.id, id));
     return true;
+  }
+
+  private buildScopeConditions(opts: { tenantId?: string; workspaceId: string; userId?: string }): any[] {
+    const conditions: any[] = [eq(timeEntries.workspaceId, opts.workspaceId)];
+    if (opts.tenantId) conditions.push(eq(timeEntries.tenantId, opts.tenantId));
+    if (opts.userId) conditions.push(eq(timeEntries.userId, opts.userId));
+    return conditions;
+  }
+
+  async getAggregatedPeriodTotals(
+    opts: { tenantId?: string; workspaceId: string; userId?: string },
+    periods: { name: string; start: Date; end: Date }[],
+  ): Promise<Record<string, PeriodTotals>> {
+    const baseConditions = this.buildScopeConditions(opts);
+    const result: Record<string, PeriodTotals> = {};
+
+    await Promise.all(periods.map(async (period) => {
+      const conditions = [
+        ...baseConditions,
+        gte(timeEntries.startTime, period.start),
+        lt(timeEntries.startTime, period.end),
+      ];
+      const rows = await db.select({
+        total: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('total'),
+        billable: sql<number>`coalesce(sum(case when ${timeEntries.scope} = 'out_of_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('billable'),
+        unbillable: sql<number>`coalesce(sum(case when coalesce(${timeEntries.scope}, 'in_scope') != 'out_of_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('unbillable'),
+      }).from(timeEntries).where(and(...conditions));
+
+      const row = rows[0];
+      result[period.name] = {
+        total: Number(row?.total ?? 0),
+        billable: Number(row?.billable ?? 0),
+        unbillable: Number(row?.unbillable ?? 0),
+      };
+    }));
+
+    return result;
+  }
+
+  async getAllTimeTotals(
+    opts: { tenantId?: string; workspaceId: string; userId?: string },
+  ): Promise<PeriodTotals> {
+    const conditions = this.buildScopeConditions(opts);
+    const rows = await db.select({
+      total: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('total'),
+      billable: sql<number>`coalesce(sum(case when ${timeEntries.scope} = 'out_of_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('billable'),
+      unbillable: sql<number>`coalesce(sum(case when coalesce(${timeEntries.scope}, 'in_scope') != 'out_of_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('unbillable'),
+    }).from(timeEntries).where(and(...conditions));
+
+    const row = rows[0];
+    return {
+      total: Number(row?.total ?? 0),
+      billable: Number(row?.billable ?? 0),
+      unbillable: Number(row?.unbillable ?? 0),
+    };
+  }
+
+  async getDailyBreakdown(
+    opts: { tenantId?: string; workspaceId: string; userId?: string },
+    start: Date,
+    end: Date,
+  ): Promise<DailyBreakdownRow[]> {
+    const conditions = [
+      ...this.buildScopeConditions(opts),
+      gte(timeEntries.startTime, start),
+      lt(timeEntries.startTime, end),
+    ];
+    const rows = await db.select({
+      date: sql<string>`to_char(${timeEntries.startTime}, 'YYYY-MM-DD')`.as('date'),
+      total: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('total'),
+      billable: sql<number>`coalesce(sum(case when ${timeEntries.scope} = 'out_of_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('billable'),
+      unbillable: sql<number>`coalesce(sum(case when coalesce(${timeEntries.scope}, 'in_scope') != 'out_of_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('unbillable'),
+    })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .groupBy(sql`to_char(${timeEntries.startTime}, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(${timeEntries.startTime}, 'YYYY-MM-DD')`);
+
+    return rows.map(r => ({
+      date: r.date,
+      total: Number(r.total),
+      billable: Number(r.billable),
+      unbillable: Number(r.unbillable),
+    }));
+  }
+
+  async getDayTotalsForMonth(
+    opts: { tenantId?: string; workspaceId: string; userId?: string },
+    monthStart: Date,
+    monthEnd: Date,
+  ): Promise<DayTotal[]> {
+    const conditions = [
+      ...this.buildScopeConditions(opts),
+      gte(timeEntries.startTime, monthStart),
+      lt(timeEntries.startTime, monthEnd),
+    ];
+    const rows = await db.select({
+      date: sql<string>`to_char(${timeEntries.startTime}, 'YYYY-MM-DD')`.as('date'),
+      totalSeconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('total_seconds'),
+    })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .groupBy(sql`to_char(${timeEntries.startTime}, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(${timeEntries.startTime}, 'YYYY-MM-DD')`);
+
+    return rows.map(r => ({
+      date: r.date,
+      totalSeconds: Number(r.totalSeconds),
+    }));
+  }
+
+  async getMissingDescriptionEntries(
+    opts: { tenantId?: string; workspaceId: string; userId?: string },
+    since: Date,
+    limit: number = 10,
+  ): Promise<MissingDescriptionEntry[]> {
+    const conditions = [
+      ...this.buildScopeConditions(opts),
+      gte(timeEntries.startTime, since),
+      sql`(${timeEntries.description} IS NULL OR btrim(${timeEntries.description}) = '')`,
+    ];
+    const rows = await db.select({
+      id: timeEntries.id,
+      startTime: timeEntries.startTime,
+      durationSeconds: timeEntries.durationSeconds,
+      clientId: timeEntries.clientId,
+      projectId: timeEntries.projectId,
+    })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(desc(timeEntries.startTime))
+      .limit(limit);
+
+    if (rows.length === 0) return [];
+
+    const clientIds = [...new Set(rows.filter(r => r.clientId).map(r => r.clientId!))];
+    const projectIds = [...new Set(rows.filter(r => r.projectId).map(r => r.projectId!))];
+
+    const [clientList, projectList] = await Promise.all([
+      clientIds.length > 0 ? db.select({ id: clients.id, displayName: clients.displayName, legalName: sql<string>`${clients.legalName}` }).from(clients).where(inArray(clients.id, clientIds)) : [],
+      projectIds.length > 0 ? db.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, projectIds)) : [],
+    ]);
+
+    const clientMap = new Map(clientList.map(c => [c.id, c.displayName || c.legalName]));
+    const projectMap = new Map(projectList.map(p => [p.id, p.name]));
+
+    return rows.map(r => ({
+      id: r.id,
+      date: r.startTime.toISOString(),
+      duration: r.durationSeconds,
+      clientName: r.clientId ? clientMap.get(r.clientId) || undefined : undefined,
+      projectName: r.projectId ? projectMap.get(r.projectId) || undefined : undefined,
+    }));
+  }
+
+  async getLastEntryId(
+    opts: { tenantId?: string; workspaceId: string; userId?: string },
+  ): Promise<string | null> {
+    const conditions = this.buildScopeConditions(opts);
+    const rows = await db.select({ id: timeEntries.id })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(desc(timeEntries.startTime))
+      .limit(1);
+    return rows[0]?.id ?? null;
+  }
+
+  async getReportTotals(
+    opts: { tenantId?: string; workspaceId: string },
+    filters?: { startDate?: Date; endDate?: Date },
+  ): Promise<ReportTotals> {
+    const conditions: any[] = [eq(timeEntries.workspaceId, opts.workspaceId)];
+    if (opts.tenantId) conditions.push(eq(timeEntries.tenantId, opts.tenantId));
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+
+    const rows = await db.select({
+      totalSeconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('total'),
+      inScopeSeconds: sql<number>`coalesce(sum(case when ${timeEntries.scope} = 'in_scope' then ${timeEntries.durationSeconds} else 0 end), 0)`.as('in_scope'),
+      outOfScopeSeconds: sql<number>`coalesce(sum(case when ${timeEntries.scope} = 'in_scope' then 0 else ${timeEntries.durationSeconds} end), 0)`.as('out_scope'),
+      entryCount: sql<number>`count(*)`.as('cnt'),
+    }).from(timeEntries).where(and(...conditions));
+
+    const row = rows[0];
+    return {
+      totalSeconds: Number(row?.totalSeconds ?? 0),
+      inScopeSeconds: Number(row?.inScopeSeconds ?? 0),
+      outOfScopeSeconds: Number(row?.outOfScopeSeconds ?? 0),
+      entryCount: Number(row?.entryCount ?? 0),
+    };
+  }
+
+  async getReportByClient(
+    opts: { tenantId?: string; workspaceId: string },
+    filters?: { startDate?: Date; endDate?: Date },
+  ): Promise<GroupedSummaryRow[]> {
+    const conditions: any[] = [
+      eq(timeEntries.workspaceId, opts.workspaceId),
+      sql`${timeEntries.clientId} IS NOT NULL`,
+    ];
+    if (opts.tenantId) conditions.push(eq(timeEntries.tenantId, opts.tenantId));
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+
+    const rows = await db.select({
+      id: timeEntries.clientId,
+      name: sql<string>`coalesce(${clients.displayName}, ${clients.companyName})`.as('name'),
+      seconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('seconds'),
+    })
+      .from(timeEntries)
+      .leftJoin(clients, eq(timeEntries.clientId, clients.id))
+      .where(and(...conditions))
+      .groupBy(timeEntries.clientId, clients.displayName, clients.companyName);
+
+    return rows.map(r => ({
+      id: r.id!,
+      name: r.name || 'Unknown',
+      seconds: Number(r.seconds),
+    }));
+  }
+
+  async getReportByProject(
+    opts: { tenantId?: string; workspaceId: string },
+    filters?: { startDate?: Date; endDate?: Date },
+  ): Promise<GroupedSummaryRow[]> {
+    const conditions: any[] = [
+      eq(timeEntries.workspaceId, opts.workspaceId),
+      sql`${timeEntries.projectId} IS NOT NULL`,
+    ];
+    if (opts.tenantId) conditions.push(eq(timeEntries.tenantId, opts.tenantId));
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+
+    const rows = await db.select({
+      id: timeEntries.projectId,
+      name: sql<string>`coalesce(min(${projects.name}), 'Unknown')`.as('name'),
+      seconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('seconds'),
+      clientName: sql<string>`min(coalesce(${clients.displayName}, ${clients.companyName}))`.as('client_name'),
+    })
+      .from(timeEntries)
+      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
+      .leftJoin(clients, eq(timeEntries.clientId, clients.id))
+      .where(and(...conditions))
+      .groupBy(timeEntries.projectId);
+
+    return rows.map(r => ({
+      id: r.id!,
+      name: r.name || 'Unknown',
+      seconds: Number(r.seconds),
+      clientName: r.clientName || null,
+    }));
+  }
+
+  async getReportByUser(
+    opts: { tenantId?: string; workspaceId: string },
+    filters?: { startDate?: Date; endDate?: Date },
+  ): Promise<GroupedSummaryRow[]> {
+    const conditions: any[] = [
+      eq(timeEntries.workspaceId, opts.workspaceId),
+      sql`${timeEntries.userId} IS NOT NULL`,
+    ];
+    if (opts.tenantId) conditions.push(eq(timeEntries.tenantId, opts.tenantId));
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+
+    const rows = await db.select({
+      id: timeEntries.userId,
+      name: sql<string>`coalesce(${users.name}, ${users.email})`.as('name'),
+      seconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)`.as('seconds'),
+    })
+      .from(timeEntries)
+      .leftJoin(users, eq(timeEntries.userId, users.id))
+      .where(and(...conditions))
+      .groupBy(timeEntries.userId, users.name, users.email);
+
+    return rows.map(r => ({
+      id: r.id!,
+      name: r.name || 'Unknown',
+      seconds: Number(r.seconds),
+    }));
+  }
+
+  async hasEntriesWithNullTenant(
+    workspaceId: string,
+    filters?: { startDate?: Date; endDate?: Date },
+  ): Promise<boolean> {
+    const conditions: any[] = [
+      eq(timeEntries.workspaceId, workspaceId),
+      isNull(timeEntries.tenantId),
+    ];
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+
+    const rows = await db.select({ id: timeEntries.id })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .limit(1);
+    return rows.length > 0;
   }
 }

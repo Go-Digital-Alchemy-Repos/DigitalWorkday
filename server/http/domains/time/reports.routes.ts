@@ -9,7 +9,9 @@ import {
   getCurrentWorkspaceId,
 } from "./shared";
 import { perfLog } from "../../../lib/queryDebug";
+import { TimeTrackingRepository } from "../../../storage/timeTracking.repo";
 
+const timeTrackingRepo = new TimeTrackingRepository();
 const router = Router();
 
 router.get("/time-entries/report/summary", async (req, res) => {
@@ -17,90 +19,41 @@ router.get("/time-entries/report/summary", async (req, res) => {
     const t0 = Date.now();
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
-    const { startDate, endDate, groupBy } = req.query;
+    const { startDate, endDate } = req.query;
 
-    const filters: any = {};
-    if (startDate) filters.startDate = new Date(startDate as string);
-    if (endDate) filters.endDate = new Date(endDate as string);
+    const dateFilters: { startDate?: Date; endDate?: Date } = {};
+    if (startDate) dateFilters.startDate = new Date(startDate as string);
+    if (endDate) dateFilters.endDate = new Date(endDate as string);
 
-    let entries;
-    if (tenantId && isStrictMode()) {
-      entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, filters);
-    } else {
-      entries = await storage.getTimeEntriesByWorkspace(workspaceId, filters);
-      if (isSoftMode() && entries.some(e => !e.tenantId)) {
+    const scopeOpts = {
+      tenantId: tenantId && isStrictMode() ? tenantId : undefined,
+      workspaceId,
+    };
+
+    if (isSoftMode() && !(tenantId && isStrictMode())) {
+      const hasNullTenant = await timeTrackingRepo.hasEntriesWithNullTenant(workspaceId, dateFilters);
+      if (hasNullTenant) {
         addTenancyWarningHeader(res, "Report includes entries with legacy null tenantId");
       }
     }
 
-    let totalSeconds = 0;
-    let inScopeSeconds = 0;
-    let outOfScopeSeconds = 0;
-
-    const byClient: Record<string, { name: string; seconds: number }> = {};
-    const byProject: Record<
-      string,
-      { name: string; clientName: string | null; seconds: number }
-    > = {};
-    const byUser: Record<string, { name: string; seconds: number }> = {};
-
-    for (const entry of entries) {
-      totalSeconds += entry.durationSeconds;
-      if (entry.scope === "in_scope") {
-        inScopeSeconds += entry.durationSeconds;
-      } else {
-        outOfScopeSeconds += entry.durationSeconds;
-      }
-
-      if (entry.clientId && entry.client) {
-        if (!byClient[entry.clientId]) {
-          byClient[entry.clientId] = {
-            name: entry.client.displayName || entry.client.companyName,
-            seconds: 0,
-          };
-        }
-        byClient[entry.clientId].seconds += entry.durationSeconds;
-      }
-
-      if (entry.projectId && entry.project) {
-        if (!byProject[entry.projectId]) {
-          byProject[entry.projectId] = {
-            name: entry.project.name,
-            clientName:
-              entry.client?.displayName || entry.client?.companyName || null,
-            seconds: 0,
-          };
-        }
-        byProject[entry.projectId].seconds += entry.durationSeconds;
-      }
-
-      if (entry.userId && entry.user) {
-        if (!byUser[entry.userId]) {
-          byUser[entry.userId] = {
-            name: entry.user.name || entry.user.email,
-            seconds: 0,
-          };
-        }
-        byUser[entry.userId].seconds += entry.durationSeconds;
-      }
-    }
+    const [totals, byClient, byProject, byUser] = await Promise.all([
+      timeTrackingRepo.getReportTotals(scopeOpts, dateFilters),
+      timeTrackingRepo.getReportByClient(scopeOpts, dateFilters),
+      timeTrackingRepo.getReportByProject(scopeOpts, dateFilters),
+      timeTrackingRepo.getReportByUser(scopeOpts, dateFilters),
+    ]);
 
     const result = {
-      totalSeconds,
-      inScopeSeconds,
-      outOfScopeSeconds,
-      entryCount: entries.length,
-      byClient: Object.entries(byClient).map(([id, data]) => ({
-        id,
-        ...data,
-      })),
-      byProject: Object.entries(byProject).map(([id, data]) => ({
-        id,
-        ...data,
-      })),
-      byUser: Object.entries(byUser).map(([id, data]) => ({ id, ...data })),
+      totalSeconds: totals.totalSeconds,
+      inScopeSeconds: totals.inScopeSeconds,
+      outOfScopeSeconds: totals.outOfScopeSeconds,
+      entryCount: totals.entryCount,
+      byClient,
+      byProject,
+      byUser,
     };
-    perfLog("GET /time-entries/report/summary", `${entries.length} entries aggregated in ${Date.now() - t0}ms (batched)`);
+    perfLog("GET /time-entries/report/summary", `SQL aggregated in ${Date.now() - t0}ms`);
     res.json(result);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/time-entries/report/summary", req);

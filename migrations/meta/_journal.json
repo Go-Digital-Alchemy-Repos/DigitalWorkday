@@ -358,6 +358,13 @@
       "when": 1774755998885,
       "tag": "0050_add-client-avatar-url",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1775160000000,
+      "tag": "0051_time_entries_workspace_indexes",
+      "breakpoints": true
     }
   ]
 }

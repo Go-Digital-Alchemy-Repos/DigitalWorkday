@@ -16,6 +16,9 @@ import {
   emitTimeEntryDeleted,
 } from "./shared";
 import { perfLog } from "../../../lib/queryDebug";
+import { TimeTrackingRepository } from "../../../storage/timeTracking.repo";
+
+const timeTrackingRepo = new TimeTrackingRepository();
 
 const router = Router();
 
@@ -97,104 +100,52 @@ router.get("/time-entries/my/stats", async (req, res) => {
     const tenantId = getEffectiveTenantId(req);
     const userId = getCurrentUserId(req);
     const workspaceId = getCurrentWorkspaceId(req);
-    
-    let entries;
-    if (tenantId && isStrictMode()) {
-      entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, { userId });
-    } else {
-      entries = await storage.getTimeEntriesByUser(userId, workspaceId);
-    }
-    
+
+    const scopeOpts = {
+      tenantId: tenantId && isStrictMode() ? tenantId : undefined,
+      workspaceId,
+      userId,
+    };
+
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-    
     const dayOfWeek = now.getDay();
     const weekStart = new Date(todayStart.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
     const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-    
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    
-    let todaySeconds = 0, todayBillable = 0, todayUnbillable = 0;
-    let weekSeconds = 0, weekBillable = 0, weekUnbillable = 0;
-    let monthSeconds = 0, monthBillable = 0, monthUnbillable = 0;
-    let totalSeconds = 0, totalBillable = 0, totalUnbillable = 0;
-    
-    const dailyBreakdown: Record<string, { date: string; total: number; billable: number; unbillable: number }> = {};
-    const entriesWithMissingDescriptions: Array<{ id: string; date: string; duration: number; clientName?: string; projectName?: string }> = [];
-    const dayTotals: Record<string, number> = {};
-    
-    for (const entry of entries) {
-      const entryDate = new Date(entry.startTime);
-      const isBillable = entry.scope === "out_of_scope";
-      const seconds = entry.durationSeconds;
-      
-      totalSeconds += seconds;
-      if (isBillable) totalBillable += seconds;
-      else totalUnbillable += seconds;
-      
-      if (entryDate >= todayStart && entryDate < todayEnd) {
-        todaySeconds += seconds;
-        if (isBillable) todayBillable += seconds;
-        else todayUnbillable += seconds;
-      }
-      
-      if (entryDate >= weekStart && entryDate < weekEnd) {
-        weekSeconds += seconds;
-        if (isBillable) weekBillable += seconds;
-        else weekUnbillable += seconds;
-        
-        const dateKey = entryDate.toISOString().split('T')[0];
-        if (!dailyBreakdown[dateKey]) {
-          dailyBreakdown[dateKey] = { date: dateKey, total: 0, billable: 0, unbillable: 0 };
-        }
-        dailyBreakdown[dateKey].total += seconds;
-        if (isBillable) dailyBreakdown[dateKey].billable += seconds;
-        else dailyBreakdown[dateKey].unbillable += seconds;
-      }
-      
-      if (entryDate >= monthStart && entryDate < monthEnd) {
-        monthSeconds += seconds;
-        if (isBillable) monthBillable += seconds;
-        else monthUnbillable += seconds;
-        
-        const dateKey = entryDate.toISOString().split('T')[0];
-        dayTotals[dateKey] = (dayTotals[dateKey] || 0) + seconds;
-      }
-      
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      if (entryDate >= thirtyDaysAgo && (!entry.description || entry.description.trim() === '')) {
-        entriesWithMissingDescriptions.push({
-          id: entry.id,
-          date: entryDate.toISOString(),
-          duration: seconds,
-          clientName: entry.client?.displayName || (entry.client as any)?.legalName,
-          projectName: entry.project?.name,
-        });
-      }
-    }
-    
-    const longRunningDays = Object.entries(dayTotals)
-      .filter(([_, seconds]) => seconds > 28800)
-      .map(([date, seconds]) => ({ date, hours: Math.round(seconds / 3600 * 10) / 10 }));
-    
-    const sortedEntries = [...entries].sort((a, b) => 
-      new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-    );
-    const lastEntry = sortedEntries[0];
-    
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [periodTotals, allTime, dailyBreakdown, dayTotals, missingDescriptions, lastEntryId] = await Promise.all([
+      timeTrackingRepo.getAggregatedPeriodTotals(scopeOpts, [
+        { name: 'today', start: todayStart, end: todayEnd },
+        { name: 'thisWeek', start: weekStart, end: weekEnd },
+        { name: 'thisMonth', start: monthStart, end: monthEnd },
+      ]),
+      timeTrackingRepo.getAllTimeTotals(scopeOpts),
+      timeTrackingRepo.getDailyBreakdown(scopeOpts, weekStart, weekEnd),
+      timeTrackingRepo.getDayTotalsForMonth(scopeOpts, monthStart, monthEnd),
+      timeTrackingRepo.getMissingDescriptionEntries(scopeOpts, thirtyDaysAgo, 10),
+      timeTrackingRepo.getLastEntryId(scopeOpts),
+    ]);
+
+    const longRunningDays = dayTotals
+      .filter(d => d.totalSeconds > 28800)
+      .map(d => ({ date: d.date, hours: Math.round(d.totalSeconds / 3600 * 10) / 10 }))
+      .slice(0, 5);
+
     res.json({
-      today: { total: todaySeconds, billable: todayBillable, unbillable: todayUnbillable },
-      thisWeek: { total: weekSeconds, billable: weekBillable, unbillable: weekUnbillable },
-      thisMonth: { total: monthSeconds, billable: monthBillable, unbillable: monthUnbillable },
-      allTime: { total: totalSeconds, billable: totalBillable, unbillable: totalUnbillable },
-      dailyBreakdown: Object.values(dailyBreakdown).sort((a, b) => a.date.localeCompare(b.date)),
+      today: periodTotals['today'],
+      thisWeek: periodTotals['thisWeek'],
+      thisMonth: periodTotals['thisMonth'],
+      allTime: allTime,
+      dailyBreakdown,
       warnings: {
-        missingDescriptions: entriesWithMissingDescriptions.slice(0, 10),
-        longRunningDays: longRunningDays.slice(0, 5),
+        missingDescriptions,
+        longRunningDays,
       },
-      lastEntryId: lastEntry?.id || null,
+      lastEntryId,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/time-entries/my/stats", req);

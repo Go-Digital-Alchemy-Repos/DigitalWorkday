@@ -29,7 +29,33 @@
 
 ## Notes / Gotchas
 
-*Add manual notes here. This section will be preserved during sync.*
+### SQL-First Aggregate Strategy (March 2026)
+
+The `GET /api/time-entries/my/stats` endpoint was refactored to use SQL-first aggregation instead of loading all entries into memory.
+
+**What changed:**
+- Period-bucketed totals (today/week/month/allTime) with billable/unbillable splits are now computed via SQL `SUM` + `CASE WHEN` + `GROUP BY` queries
+- Daily breakdown for the current week uses SQL `GROUP BY to_char(start_time, 'YYYY-MM-DD')`
+- Day totals for the current month (used for long-running-day warnings) computed server-side in SQL
+- Missing description entries retrieved via targeted SQL query with `LIMIT 10` and `ORDER BY` instead of scanning all entries
+- Last entry ID retrieved via `ORDER BY start_time DESC LIMIT 1` instead of sorting all entries in memory
+
+**What was preserved:**
+- Exact response shape: `{ today, thisWeek, thisMonth, allTime, dailyBreakdown, warnings: { missingDescriptions, longRunningDays }, lastEntryId }`
+- Tenant isolation via `getEffectiveTenantId` + strict-mode branching
+- Billable = `scope === 'out_of_scope'` mapping
+
+**New repository methods added to `TimeTrackingRepository`:**
+- `getAggregatedPeriodTotals()` — period-bucketed SUM aggregates
+- `getAllTimeTotals()` — all-time SUM aggregates
+- `getDailyBreakdown()` — date-grouped daily breakdown
+- `getDayTotalsForMonth()` — date-grouped totals for month
+- `getMissingDescriptionEntries()` — targeted query with LIMIT
+- `getLastEntryId()` — ORDER BY + LIMIT 1
+
+**New indexes:**
+- `time_entries_workspace_start_idx` on `(workspace_id, start_time)`
+- `time_entries_tenant_workspace_start_idx` on `(tenant_id, workspace_id, start_time)`
 
 <!-- === END MANUAL NOTES SECTION === -->
 

@@ -29,7 +29,28 @@
 
 ## Notes / Gotchas
 
-*Add manual notes here. This section will be preserved during sync.*
+### SQL-First Report Summary Aggregation (March 2026)
+
+The `GET /api/time-entries/report/summary` endpoint was refactored to use SQL-first aggregation instead of loading all entries into memory.
+
+**What changed:**
+- Total/inScope/outOfScope seconds computed via SQL `SUM` + `CASE WHEN` queries
+- Entry count computed via SQL `COUNT(*)` instead of `entries.length`
+- Grouped summaries (byClient, byProject, byUser) computed via SQL `GROUP BY` with `LEFT JOIN` for display names
+- Tenancy null-check for soft-mode uses lightweight `EXISTS` query instead of scanning all entries
+
+**What was preserved:**
+- Exact response shape: `{ totalSeconds, inScopeSeconds, outOfScopeSeconds, entryCount, byClient, byProject, byUser }`
+- `startDate`/`endDate` filter support
+- Tenant/workspace scoping
+- Soft-mode tenancy warning header logic
+
+**New repository methods added to `TimeTrackingRepository`:**
+- `getReportTotals()` — SUM aggregates with COUNT
+- `getReportByClient()` — GROUP BY clientId with LEFT JOIN clients
+- `getReportByProject()` — GROUP BY projectId with LEFT JOIN projects + clients
+- `getReportByUser()` — GROUP BY userId with LEFT JOIN users
+- `hasEntriesWithNullTenant()` — lightweight EXISTS check for soft-mode warnings
 
 <!-- === END MANUAL NOTES SECTION === -->
 
