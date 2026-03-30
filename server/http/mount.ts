@@ -2,10 +2,6 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { registerRoute, clearRouteRegistry, getRouteRegistry } from "./routeRegistry";
 import { apiNoCacheMiddleware } from "../middleware/apiCacheControl";
-import {
-  startDeadlineChecker,
-  startFollowUpChecker,
-} from "../features/notifications/notification.service";
 
 import systemRouter from "./domains/system.router";
 import tagsRouter from "./domains/tags.router";
@@ -35,9 +31,6 @@ import reportsV2AlertsRouter from "./domains/reports-v2-alerts.router";
 import reportsV2DigestRouter from "./domains/reports-v2-digest.router";
 import reportsV2ProjectsRouter from "./domains/reports-v2-projects.router";
 import reportsV2TimeRouter from "./domains/reports-v2-time.router";
-import { startAlertScheduler, stopAlertScheduler } from "../alerts/alertScheduler";
-import { startDigestScheduler, stopDigestScheduler } from "../digests/digestScheduler";
-import { startRetentionScheduler, stopRetentionScheduler } from "../retention/retentionScheduler";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
@@ -620,12 +613,6 @@ export async function mountAllRoutes(
       app.use(route.path, route.router);
     }
   }
-
-  startDeadlineChecker();
-  startFollowUpChecker();
-  startAlertScheduler();
-  startDigestScheduler();
-  startRetentionScheduler();
 
   return httpServer;
 }

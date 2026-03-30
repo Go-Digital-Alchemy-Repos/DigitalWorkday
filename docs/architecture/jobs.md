@@ -149,17 +149,95 @@ registerHandler("my_job_type", myHandler, 2); // concurrency = 2
 | `server/jobs/jobs.router.ts` | REST API for job status polling |
 | `server/jobs/index.ts` | Public exports |
 
+## Worker & Scheduler Separation
+
+The application supports running schedulers and the job queue in a dedicated worker process, separate from the API server. This is controlled by the `PROCESS_MODE` environment variable.
+
+### `PROCESS_MODE` Values
+
+| Value | HTTP API | Schedulers | Job Queue | Use Case |
+|-------|----------|------------|-----------|----------|
+| `"all"` (default) | Yes | Yes | Yes | Single-process deployment (existing behavior) |
+| `"api"` | Yes | No | No | API-only process behind a load balancer |
+| `"worker"` | Health only | Yes | Yes | Dedicated background worker process |
+
+### Deployment Patterns
+
+**Single-process (default):** No configuration needed. Set `PROCESS_MODE=all` or leave unset. This is the existing behavior.
+
+```
+┌──────────────────────────┐
+│  Single Process          │
+│  PROCESS_MODE=all        │
+│  ┌──────────────────┐    │
+│  │ API Server       │    │
+│  │ Schedulers       │    │
+│  │ Job Queue Poller │    │
+│  └──────────────────┘    │
+└──────────────────────────┘
+```
+
+**Split-process:** Run two processes pointing at the same database.
+
+```
+┌──────────────────┐    ┌──────────────────┐
+│  API Process     │    │  Worker Process   │
+│  PROCESS_MODE=api│    │  PROCESS_MODE=    │
+│                  │    │    worker         │
+│  ┌────────────┐  │    │  ┌────────────┐  │
+│  │ HTTP API   │  │    │  │ Schedulers │  │
+│  │ WebSocket  │  │    │  │ Job Queue  │  │
+│  └────────────┘  │    │  │ /health    │  │
+│                  │    │  └────────────┘  │
+└──────────────────┘    └──────────────────┘
+        │                       │
+        └───────┬───────────────┘
+                ▼
+         ┌────────────┐
+         │ PostgreSQL  │
+         └────────────┘
+```
+
+### Entry Points
+
+Both entry points respect `PROCESS_MODE`:
+
+- **`server/index.ts`** — Main entry. Supports `all` (default), `api`, and `worker` modes. In `worker` mode, API initialization (auth, Socket.IO, routes, middleware) is skipped; health checks, schema readiness, schedulers, job queue, and non-critical background diagnostics (migration status, bootstrap, parity checks) still run. In `api` mode, schedulers and job queue are skipped.
+- **`server/worker.ts`** — Lightweight alternative entry point for dedicated worker deployments. Only supports `all` and `worker` modes (fails fast if `PROCESS_MODE=api`). Boots schema readiness, registers job handlers, starts the job queue, starts all schedulers, and exposes a `/health` endpoint on `WORKER_PORT` (default `5001`). Includes graceful shutdown (SIGTERM/SIGINT).
+
+### Scheduler Inventory
+
+| Scheduler | Interval | File |
+|-----------|----------|------|
+| Alert evaluator | 60 min (30s initial delay) | `server/alerts/alertScheduler.ts` |
+| Digest sender | 60 min | `server/digests/digestScheduler.ts` |
+| Retention (soft archive) | 24 h (5 min initial delay) | `server/retention/retentionScheduler.ts` |
+| Deadline checker | 6 h (10s initial delay) | `server/features/notifications/notification.service.ts` |
+| Follow-up checker | 6 h (15s initial delay) | `server/features/notifications/notification.service.ts` |
+| SLA evaluator (tickets + conversations) | 5 min | `server/workers/schedulerBootstrap.ts` (inline) |
+| Job queue poller | 3 s | `server/jobs/queue.ts` |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/lib/processMode.ts` | `PROCESS_MODE` parsing, `shouldRunApi()` / `shouldRunWorkers()` helpers |
+| `server/workers/schedulerBootstrap.ts` | `startAllSchedulers()` / `stopAllSchedulers()` orchestrator |
+| `server/worker.ts` | Standalone worker entry point |
+
 ## Design Decisions
 
 1. **DB-backed over in-memory**: Jobs survive server restarts. The `background_jobs` table serves as both queue and audit log.
 
-2. **In-process execution**: No separate worker process needed. The polling loop runs inside the Express server process via `setInterval`.
+2. **In-process execution**: By default, the polling loop runs inside the Express server process via `setInterval`. Optionally, it can run in a dedicated worker process using `PROCESS_MODE=worker`.
 
 3. **Per-type concurrency limits**: Prevents resource exhaustion. Asana imports (API-heavy) limited to 1; AI calls (stateless) allow 3 concurrent.
 
 4. **Stale lock recovery**: Jobs locked for >30 minutes are automatically reclaimed, handling cases where the server crashes mid-execution.
 
-5. **Graceful shutdown**: The job queue is stopped before HTTP server close, allowing in-flight jobs to complete or be reclaimed on next startup.
+5. **Graceful shutdown**: The job queue and schedulers are stopped before HTTP server close (only when they were started in that process), allowing in-flight jobs to complete or be reclaimed on next startup.
+
+6. **Flag-gated separation**: The `PROCESS_MODE` flag allows gradual migration from single-process to split-process without code changes. The default `"all"` mode preserves existing behavior exactly.
 
 ## Lifecycle
 

@@ -31,8 +31,8 @@ import { repairDemoWorkspaceMembers } from "./startup/repairWorkspaceMembers";
 import { repairNullTenantProjects } from "./startup/repairNullTenantProjects";
 import { repairR2Endpoints } from "./startup/repairR2Endpoints";
 import { storage } from "./storage";
-import { evaluateSlaPolicies } from "./http/domains/support.router";
-import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
+import { shouldRunWorkers, shouldRunApi, processMode } from "./lib/processMode";
+import fileServeRouter from "./http/domains/fileServe.router";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -153,28 +153,6 @@ app.get("/readyz", async (_req, res) => {
 });
 
 // ============================================================================
-// SPA boot fallback: serve a lightweight auto-retry page for browser requests
-// that arrive before routes/Vite are ready. Without this, navigating to any
-// client-side route (e.g. /account/profile) during a restart shows "Cannot GET".
-// ============================================================================
-app.use((req, res, next) => {
-  if (appReady) return next();
-  if (req.method !== "GET") return next();
-  if (req.path.startsWith("/api") || req.path.startsWith("/_") || req.path.startsWith("/health") || req.path.startsWith("/vite-hmr")) return next();
-
-  const accept = req.headers.accept || "";
-  if (!accept.includes("text/html")) return next();
-
-  res.status(200).set({ "Content-Type": "text/html", "Cache-Control": "no-store" }).end(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Loading...</title>
-<style>body{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:system-ui;background:#0f172a;color:#e2e8f0}
-.wrap{text-align:center}.spinner{width:32px;height:32px;border:3px solid #334155;border-top-color:#60a5fa;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
-@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:.7}</style></head>
-<body><div class="wrap"><div class="spinner"></div><p>Starting up&hellip;</p></div>
-<script>setTimeout(()=>location.reload(),1500)</script></body></html>`);
-});
-
-// ============================================================================
 // Now register middleware after health checks
 // ============================================================================
 
@@ -192,267 +170,250 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// Setup authentication middleware (session + passport) - must be before Socket.IO
-setupAuth(app);
+if (shouldRunApi()) {
+  // SPA boot fallback: serve a lightweight auto-retry page for browser requests
+  // that arrive before routes/Vite are ready.
+  app.use((req, res, next) => {
+    if (appReady) return next();
+    if (req.method !== "GET") return next();
+    if (req.path.startsWith("/api") || req.path.startsWith("/_") || req.path.startsWith("/health") || req.path.startsWith("/vite-hmr")) return next();
 
-// Initialize Socket.IO server for real-time updates (after auth for session access)
-initializeSocketIO(httpServer);
+    const accept = req.headers.accept || "";
+    if (!accept.includes("text/html")) return next();
 
-// Setup bootstrap endpoints (first-user registration)
-setupBootstrapEndpoints(app);
+    res.status(200).set({ "Content-Type": "text/html", "Cache-Control": "no-store" }).end(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loading...</title>
+<style>body{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:system-ui;background:#0f172a;color:#e2e8f0}
+.wrap{text-align:center}.spinner{width:32px;height:32px;border:3px solid #334155;border-top-color:#60a5fa;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:.7}</style></head>
+<body><div class="wrap"><div class="spinner"></div><p>Starting up&hellip;</p></div>
+<script>setTimeout(()=>location.reload(),1500)</script></body></html>`);
+  });
 
-// Setup platform invite endpoints (for platform admin onboarding)
-setupPlatformInviteEndpoints(app);
+  setupAuth(app);
+  initializeSocketIO(httpServer);
+  setupBootstrapEndpoints(app);
+  setupPlatformInviteEndpoints(app);
+  setupTenantInviteEndpoints(app);
+  setupPasswordResetEndpoints(app);
 
-// Setup tenant invite endpoints (for tenant user onboarding - public, no auth required)
-setupTenantInviteEndpoints(app);
+  app.use("/api/v1/files/serve", fileServeRouter);
 
-// Setup password reset endpoints (public, no auth required)
-setupPasswordResetEndpoints(app);
-
-// Public file serving proxy (before auth middleware, no auth required)
-import fileServeRouter from "./http/domains/fileServe.router";
-app.use("/api/v1/files/serve", fileServeRouter);
-
-// Setup tenant context middleware (must be after auth)
-app.use(tenantContextMiddleware);
-
-// Request logging middleware (after auth and tenant context for user/tenant info)
-app.use(requestLogger);
-
-// Performance telemetry middleware (after request logger, opt-in via PERF_TELEMETRY=1)
-app.use(requestPerfMiddleware);
-
-// Unified perf logger (always on — sampled at 5% in production, 100% in dev)
-app.use(perfLoggerMiddleware);
-
-// Endpoint-level profiling (auto-enabled in staging, opt-in via ENABLE_PERF_PROFILING=true)
-app.use(profilingMiddleware);
-
-// Setup agreement enforcement (must be after tenant context)
-app.use(agreementEnforcementGuard);
-
-// CSRF protection (after auth, before API routes)
-app.use(csrfProtection);
-
-// API JSON response guard - ensures all /api routes return JSON, never HTML
-app.use(apiJsonResponseGuard);
-
-// Payload size guard - warns on oversized API responses (gated by ENABLE_PAYLOAD_GUARDS)
-app.use(payloadGuardMiddleware);
+  app.use(tenantContextMiddleware);
+  app.use(requestLogger);
+  app.use(requestPerfMiddleware);
+  app.use(perfLoggerMiddleware);
+  app.use(profilingMiddleware);
+  app.use(agreementEnforcementGuard);
+  app.use(csrfProtection);
+  app.use(apiJsonResponseGuard);
+  app.use(payloadGuardMiddleware);
+}
 
 import { createLogger } from "./lib/logger";
 const log = createLogger("express");
 
-// Client performance telemetry endpoint (sampled, no PII)
-app.post("/api/v1/system/perf", (req, res) => {
-  if (process.env.PERF_TELEMETRY !== "1") {
-    return res.status(204).end();
-  }
-  const { entries } = req.body || {};
-  if (!Array.isArray(entries) || entries.length === 0) {
-    return res.status(204).end();
-  }
-  const perfLog = require("./lib/logger").createLogger("perf:client");
-  for (const entry of entries.slice(0, 50)) {
-    if (entry && typeof entry.type === "string" && typeof entry.view === "string") {
-      perfLog.info("Client metric", {
-        metricType: entry.type,
-        view: entry.view,
-        durationMs: entry.durationMs,
-      });
+if (shouldRunApi()) {
+  app.post("/api/v1/system/perf", (req, res) => {
+    if (process.env.PERF_TELEMETRY !== "1") {
+      return res.status(204).end();
     }
-  }
-  res.status(204).end();
-});
-
-// Perf stats endpoint (super-admin or dev only)
-app.get("/api/v1/system/perf/stats", (req, res) => {
-  if (process.env.PERF_TELEMETRY !== "1" && !config.features.enablePerfProfiling) {
-    return res.json({ enabled: false });
-  }
-  const { getRequestPerfStats } = require("./middleware/perfTelemetry");
-  const { getQueryPerfStats } = require("./middleware/queryTelemetry");
-  const perfStats = getPerfStats();
-  const response: Record<string, unknown> = {
-    enabled: true,
-    requests: getRequestPerfStats(),
-    queries: getQueryPerfStats(),
-    unified: perfStats,
-  };
-  const profiling = getProfilingData();
-  if (profiling) {
-    response.profiling = profiling;
-  }
-  res.json(response);
-});
-
-// Observability stats endpoint (dev/admin only) — pool metrics + perf stats + budgets
-app.get("/api/v1/system/observability", async (req: any, res) => {
-  if (!config.features.enableObservability) {
-    return res.status(404).json({ error: "Observability not enabled" });
-  }
-  const { getPoolStats } = await import("./db");
-  const { getRequestPerfStats } = await import("./middleware/perfTelemetry");
-  const { getQueryPerfStats } = await import("./middleware/queryTelemetry");
-  const { PERF_BUDGETS } = await import("./observability/perfBudgets");
-  const perfStats = getPerfStats();
-  const response: Record<string, unknown> = {
-    enabled: true,
-    pool: config.features.enableDbPoolMetrics ? getPoolStats() : null,
-    requests: getRequestPerfStats(),
-    queries: getQueryPerfStats(),
-    unified: perfStats,
-    budgets: PERF_BUDGETS,
-    flags: {
-      enableObservability: config.features.enableObservability,
-      enablePerfProfiling: config.features.enablePerfProfiling,
-      enableDbPoolMetrics: config.features.enableDbPoolMetrics,
-      enablePayloadGuards: config.features.enablePayloadGuards,
-      enableLogSampling: config.features.enableLogSampling,
-    },
-    ts: new Date().toISOString(),
-  };
-  const profiling = getProfilingData();
-  if (profiling) {
-    response.profiling = profiling;
-  }
-  res.json(response);
-});
-
-// Database health endpoint - public, no auth required
-// Returns database connectivity, latency, pool stats, and migration count
-app.get("/api/v1/system/health/db", async (_req, res) => {
-  try {
-    const { checkDbHealth, getPoolStats } = await import("./db");
-    const dbHealth = await checkDbHealth();
-    
-    let migrationCount = 0;
-    try {
-      const { db } = await import("./db");
-      const { sql } = await import("drizzle-orm");
-      const result = await db.execute(
-        sql`SELECT COUNT(*)::int as count FROM drizzle.__drizzle_migrations`
-      );
-      migrationCount = (result.rows[0] as any)?.count || 0;
-    } catch {
-      // Migrations table may not exist yet
+    const { entries } = req.body || {};
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(204).end();
     }
-    
-    res.json({
-      connected: dbHealth.connected,
-      latency: dbHealth.latencyMs,
-      pool: dbHealth.pool,
-      migrations: {
-        applied: migrationCount,
-      },
-      timestamp: new Date().toISOString(),
-      ...(dbHealth.error && { error: dbHealth.error }),
-    });
-  } catch (error: any) {
-    console.error("[health/db] Health check failed:", error);
-    res.status(500).json({
-      connected: false,
-      latency: 0,
-      pool: { total: 0, active: 0, idle: 0, waiting: 0 },
-      migrations: { applied: 0 },
-      timestamp: new Date().toISOString(),
-      error: error?.message || "Health check failed",
-    });
-  }
-});
-
-// Features endpoint - public, no auth required
-// Returns feature availability based on database schema presence
-app.get("/api/v1/system/features", async (_req, res) => {
-  try {
-    const { getFeatureFlags, getRecommendations } = await import("./lib/features");
-    const features = await getFeatureFlags(true);
-    const recommendations = getRecommendations(features);
-
-    res.json({
-      features,
-      recommendations,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error: any) {
-    console.error("[features] Feature check failed:", error);
-    res.status(500).json({
-      features: {},
-      recommendations: ["Unable to check feature status - database may be unavailable"],
-      timestamp: new Date().toISOString(),
-      error: error?.message || "Feature check failed",
-    });
-  }
-});
-
-// Frontend error capture endpoint - accepts client-side error reports
-// No auth required (errors may occur before/during auth)
-app.post("/api/v1/system/errors/frontend", async (req, res) => {
-  try {
-    const { message, name, stack, url, userAgent, source, componentStack } = req.body || {};
-    if (!message || typeof message !== "string") {
-      return res.status(400).json({ ok: false, error: "message is required" });
-    }
-
-    const sanitizedMessage = (message || "").slice(0, 500);
-    const sanitizedStack = (stack || "").slice(0, 4000);
-    const userId = req.user?.id || null;
-    const tenantId = req.user?.tenantId || null;
-
-    const errorLog = {
-      requestId: req.requestId || "frontend",
-      tenantId,
-      userId,
-      method: "FRONTEND",
-      path: (url || "").slice(0, 500),
-      status: 0,
-      errorName: (name || "Error").slice(0, 100),
-      message: sanitizedMessage,
-      stack: sanitizedStack,
-      meta: {
-        source: source || "unknown",
-        userAgent: (userAgent || "").slice(0, 300),
-        ...(componentStack ? { componentStack: componentStack.slice(0, 2000) } : {}),
-      },
-      environment: process.env.NODE_ENV || "development",
-      resolved: false,
-    };
-
-    await storage.createErrorLog(errorLog);
-    console.warn(`[frontend-error] ${sanitizedMessage} (${source || "unknown"}) url=${url}`);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("[frontend-error] Failed to capture:", err);
-    res.status(500).json({ ok: false });
-  }
-});
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+    const perfLog = require("./lib/logger").createLogger("perf:client");
+    for (const entry of entries.slice(0, 50)) {
+      if (entry && typeof entry.type === "string" && typeof entry.view === "string") {
+        perfLog.info("Client metric", {
+          metricType: entry.type,
+          view: entry.view,
+          durationMs: entry.durationMs,
+        });
       }
+    }
+    res.status(204).end();
+  });
 
-      log.info(logLine);
+  app.get("/api/v1/system/perf/stats", (req, res) => {
+    if (process.env.PERF_TELEMETRY !== "1" && !config.features.enablePerfProfiling) {
+      return res.json({ enabled: false });
+    }
+    const { getRequestPerfStats } = require("./middleware/perfTelemetry");
+    const { getQueryPerfStats } = require("./middleware/queryTelemetry");
+    const perfStats = getPerfStats();
+    const response: Record<string, unknown> = {
+      enabled: true,
+      requests: getRequestPerfStats(),
+      queries: getQueryPerfStats(),
+      unified: perfStats,
+    };
+    const profiling = getProfilingData();
+    if (profiling) {
+      response.profiling = profiling;
+    }
+    res.json(response);
+  });
+
+  app.get("/api/v1/system/observability", async (req: any, res) => {
+    if (!config.features.enableObservability) {
+      return res.status(404).json({ error: "Observability not enabled" });
+    }
+    const { getPoolStats } = await import("./db");
+    const { getRequestPerfStats } = await import("./middleware/perfTelemetry");
+    const { getQueryPerfStats } = await import("./middleware/queryTelemetry");
+    const { PERF_BUDGETS } = await import("./observability/perfBudgets");
+    const perfStats = getPerfStats();
+    const response: Record<string, unknown> = {
+      enabled: true,
+      pool: config.features.enableDbPoolMetrics ? getPoolStats() : null,
+      requests: getRequestPerfStats(),
+      queries: getQueryPerfStats(),
+      unified: perfStats,
+      budgets: PERF_BUDGETS,
+      flags: {
+        enableObservability: config.features.enableObservability,
+        enablePerfProfiling: config.features.enablePerfProfiling,
+        enableDbPoolMetrics: config.features.enableDbPoolMetrics,
+        enablePayloadGuards: config.features.enablePayloadGuards,
+        enableLogSampling: config.features.enableLogSampling,
+      },
+      ts: new Date().toISOString(),
+    };
+    const profiling = getProfilingData();
+    if (profiling) {
+      response.profiling = profiling;
+    }
+    res.json(response);
+  });
+
+  app.get("/api/v1/system/health/db", async (_req, res) => {
+    try {
+      const { checkDbHealth, getPoolStats } = await import("./db");
+      const dbHealth = await checkDbHealth();
+      
+      let migrationCount = 0;
+      try {
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        const result = await db.execute(
+          sql`SELECT COUNT(*)::int as count FROM drizzle.__drizzle_migrations`
+        );
+        migrationCount = (result.rows[0] as any)?.count || 0;
+      } catch {
+      }
+      
+      res.json({
+        connected: dbHealth.connected,
+        latency: dbHealth.latencyMs,
+        pool: dbHealth.pool,
+        migrations: {
+          applied: migrationCount,
+        },
+        timestamp: new Date().toISOString(),
+        ...(dbHealth.error && { error: dbHealth.error }),
+      });
+    } catch (error: any) {
+      console.error("[health/db] Health check failed:", error);
+      res.status(500).json({
+        connected: false,
+        latency: 0,
+        pool: { total: 0, active: 0, idle: 0, waiting: 0 },
+        migrations: { applied: 0 },
+        timestamp: new Date().toISOString(),
+        error: error?.message || "Health check failed",
+      });
     }
   });
 
-  next();
-});
+  app.get("/api/v1/system/features", async (_req, res) => {
+    try {
+      const { getFeatureFlags, getRecommendations } = await import("./lib/features");
+      const features = await getFeatureFlags(true);
+      const recommendations = getRecommendations(features);
+
+      res.json({
+        features,
+        recommendations,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("[features] Feature check failed:", error);
+      res.status(500).json({
+        features: {},
+        recommendations: ["Unable to check feature status - database may be unavailable"],
+        timestamp: new Date().toISOString(),
+        error: error?.message || "Feature check failed",
+      });
+    }
+  });
+
+  app.post("/api/v1/system/errors/frontend", async (req, res) => {
+    try {
+      const { message, name, stack, url, userAgent, source, componentStack } = req.body || {};
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ ok: false, error: "message is required" });
+      }
+
+      const sanitizedMessage = (message || "").slice(0, 500);
+      const sanitizedStack = (stack || "").slice(0, 4000);
+      const userId = req.user?.id || null;
+      const tenantId = req.user?.tenantId || null;
+
+      const errorLog = {
+        requestId: req.requestId || "frontend",
+        tenantId,
+        userId,
+        method: "FRONTEND",
+        path: (url || "").slice(0, 500),
+        status: 0,
+        errorName: (name || "Error").slice(0, 100),
+        message: sanitizedMessage,
+        stack: sanitizedStack,
+        meta: {
+          source: source || "unknown",
+          userAgent: (userAgent || "").slice(0, 300),
+          ...(componentStack ? { componentStack: componentStack.slice(0, 2000) } : {}),
+        },
+        environment: process.env.NODE_ENV || "development",
+        resolved: false,
+      };
+
+      await storage.createErrorLog(errorLog);
+      console.warn(`[frontend-error] ${sanitizedMessage} (${source || "unknown"}) url=${url}`);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[frontend-error] Failed to capture:", err);
+      res.status(500).json({ ok: false });
+    }
+  });
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const path = req.path;
+    let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      if (path.startsWith("/api")) {
+        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+        if (capturedJsonResponse) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
+
+        log.info(logLine);
+      }
+    });
+
+    next();
+  });
+}
 
 // Startup state tracking for health checks and /ready endpoint
 // Note: appReady and startupError are declared at the top of the file before health endpoints
@@ -637,32 +598,36 @@ httpServer.listen(port, host, () => {
   }
   
   // Phase 3: Register routes (CRITICAL - must complete before ready)
-  try {
-    await runPhase("routes", "3/4", async () => {
-      await mountAllRoutes(httpServer, app);
-      
-      // API 404 handler - BEFORE error handlers to catch unmatched /api routes first
-      app.use(apiNotFoundHandler);
-      
-      // Error logging middleware (captures 500+ errors to database)
-      app.use(errorLoggingMiddleware);
-      
-      // Global error handler (uses standard error envelope)
-      app.use(errorHandler);
-      
-      // Setup static serving or Vite dev server
-      if (process.env.NODE_ENV === "production") {
-        serveStatic(app);
-      } else {
-        const { setupVite } = await import("./vite");
-        await setupVite(httpServer, app);
-      }
-    });
-  } catch (routesErr) {
-    setPhase("error");
-    console.error("[boot] Routes registration failed:", routesErr instanceof Error ? routesErr.message : routesErr);
-    startupError = routesErr instanceof Error ? routesErr : new Error(String(routesErr));
-    return;
+  if (shouldRunApi()) {
+    try {
+      await runPhase("routes", "3/4", async () => {
+        await mountAllRoutes(httpServer, app);
+        
+        // API 404 handler - BEFORE error handlers to catch unmatched /api routes first
+        app.use(apiNotFoundHandler);
+        
+        // Error logging middleware (captures 500+ errors to database)
+        app.use(errorLoggingMiddleware);
+        
+        // Global error handler (uses standard error envelope)
+        app.use(errorHandler);
+        
+        // Setup static serving or Vite dev server
+        if (process.env.NODE_ENV === "production") {
+          serveStatic(app);
+        } else {
+          const { setupVite } = await import("./vite");
+          await setupVite(httpServer, app);
+        }
+      });
+    } catch (routesErr) {
+      setPhase("error");
+      console.error("[boot] Routes registration failed:", routesErr instanceof Error ? routesErr.message : routesErr);
+      startupError = routesErr instanceof Error ? routesErr : new Error(String(routesErr));
+      return;
+    }
+  } else {
+    console.log("[startup] Phase 3/4: Skipping route registration (worker mode)");
   }
 
   // Phase 4: Mark app as READY immediately after routes are registered
@@ -677,38 +642,26 @@ httpServer.listen(port, host, () => {
   // BACKGROUND TASKS: Run AFTER app is marked ready (non-blocking)
   // ============================================================================
   
-  setImmediate(async () => {
-    try {
-      const { registerAllHandlers, startJobQueue } = await import("./jobs");
-      registerAllHandlers();
-      startJobQueue();
-    } catch (jobErr) {
-      console.error("[background] Job queue startup failed:", jobErr);
-    }
-  });
+  if (shouldRunWorkers()) {
+    setImmediate(async () => {
+      try {
+        const { registerAllHandlers, startJobQueue } = await import("./jobs");
+        registerAllHandlers();
+        startJobQueue();
+      } catch (jobErr) {
+        console.error("[background] Job queue startup failed:", jobErr);
+      }
+    });
 
-  setImmediate(() => {
-    const SLA_CHECK_INTERVAL_MS = 5 * 60_000;
-    setInterval(async () => {
+    setImmediate(async () => {
       try {
-        const result = await evaluateSlaPolicies();
-        if (result.firstResponseBreaches > 0 || result.resolutionBreaches > 0) {
-          console.log(`[sla-evaluator] Checked ${result.checked} tickets: ${result.firstResponseBreaches} first-response breaches, ${result.resolutionBreaches} resolution breaches`);
-        }
-      } catch (err) {
-        console.error("[sla-evaluator] Error:", err);
+        const { startAllSchedulers } = await import("./workers/schedulerBootstrap");
+        startAllSchedulers();
+      } catch (schedulerErr) {
+        console.error("[background] Scheduler startup failed:", schedulerErr);
       }
-      try {
-        const result = await evaluateConversationSla();
-        if (result.firstResponseBreaches > 0 || result.resolutionBreaches > 0) {
-          console.log(`[conversation-sla] Checked ${result.checked} conversations: ${result.firstResponseBreaches} first-response breaches, ${result.resolutionBreaches} resolution breaches`);
-        }
-      } catch (err) {
-        console.error("[conversation-sla] Error:", err);
-      }
-    }, SLA_CHECK_INTERVAL_MS);
-    console.log("[background] SLA evaluator scheduled (every 5 minutes)");
-  });
+    });
+  }
 
   setImmediate(async () => {
     try {
@@ -784,13 +737,23 @@ async function gracefulShutdown(signal: string) {
   forceTimer.unref();
 
   try {
-    console.log("[shutdown] 1/4  Stopping job queue...");
-    try {
-      const { stopJobQueue } = await import("./jobs");
-      await stopJobQueue();
-      console.log("[shutdown] 1/4  Job queue stopped");
-    } catch {
-      console.log("[shutdown] 1/4  Job queue was not initialised — skipped");
+    if (shouldRunWorkers()) {
+      console.log("[shutdown] 1/4  Stopping job queue and schedulers...");
+      try {
+        const { stopJobQueue } = await import("./jobs");
+        await stopJobQueue();
+        console.log("[shutdown] 1/4  Job queue stopped");
+      } catch {
+        console.log("[shutdown] 1/4  Job queue was not initialised — skipped");
+      }
+      try {
+        const { stopAllSchedulers } = await import("./workers/schedulerBootstrap");
+        stopAllSchedulers();
+      } catch {
+        console.log("[shutdown] 1/4  Schedulers were not initialised — skipped");
+      }
+    } else {
+      console.log("[shutdown] 1/4  Workers not running in this process — skipped");
     }
 
     console.log("[shutdown] 2/4  Closing HTTP server (stop accepting connections)...");
@@ -799,14 +762,18 @@ async function gracefulShutdown(signal: string) {
     });
     console.log("[shutdown] 2/4  HTTP server closed");
 
-    console.log("[shutdown] 3/4  Closing Socket.IO...");
-    try {
-      const { getIO } = await import("./realtime/socket");
-      const io = getIO();
-      await new Promise<void>((resolve) => io.close(() => resolve()));
-      console.log("[shutdown] 3/4  Socket.IO closed");
-    } catch {
-      console.log("[shutdown] 3/4  Socket.IO was not initialised — skipped");
+    if (shouldRunApi()) {
+      console.log("[shutdown] 3/4  Closing Socket.IO...");
+      try {
+        const { getIO } = await import("./realtime/socket");
+        const io = getIO();
+        await new Promise<void>((resolve) => io.close(() => resolve()));
+        console.log("[shutdown] 3/4  Socket.IO closed");
+      } catch {
+        console.log("[shutdown] 3/4  Socket.IO was not initialised — skipped");
+      }
+    } else {
+      console.log("[shutdown] 3/4  Socket.IO not running in this process — skipped");
     }
 
     console.log("[shutdown] 4/4  Draining database pool...");
