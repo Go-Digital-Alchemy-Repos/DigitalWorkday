@@ -12,7 +12,6 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { createLogger } from "../lib/logger";
-import { getBudgetForRoute } from "../observability/perfBudgets";
 import { config } from "../config";
 
 const log = createLogger("payload:guard");
@@ -45,7 +44,6 @@ export function payloadGuardMiddleware(
     if (size === 0) return;
 
     const route = req.route?.path || req.path;
-    const budget = getBudgetForRoute(route);
 
     const ctx = {
       requestId: req.requestId || "unknown",
@@ -56,8 +54,8 @@ export function payloadGuardMiddleware(
 
     if (size > ERROR_BYTES) {
       log.error(`Oversized response (${method})`, { ...ctx, threshold: ERROR_BYTES });
-    } else if (size > WARN_BYTES || (budget?.maxPayloadBytes && size > budget.maxPayloadBytes)) {
-      log.warn(`Large response (${method})`, { ...ctx, threshold: budget?.maxPayloadBytes ?? WARN_BYTES });
+    } else if (size > WARN_BYTES) {
+      log.warn(`Large response (${method})`, { ...ctx, threshold: WARN_BYTES });
     }
   }
 

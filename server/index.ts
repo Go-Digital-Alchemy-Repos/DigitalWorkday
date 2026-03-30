@@ -263,6 +263,7 @@ if (shouldRunApi()) {
     const { getRequestPerfStats } = await import("./middleware/perfTelemetry");
     const { getQueryPerfStats } = await import("./middleware/queryTelemetry");
     const { PERF_BUDGETS } = await import("./observability/perfBudgets");
+    const { getDistribution } = await import("./observability/endpointLatencyTracker");
     const perfStats = getPerfStats();
     const response: Record<string, unknown> = {
       enabled: true,
@@ -271,6 +272,7 @@ if (shouldRunApi()) {
       queries: getQueryPerfStats(),
       unified: perfStats,
       budgets: PERF_BUDGETS,
+      latencyDistribution: getDistribution(),
       flags: {
         enableObservability: config.features.enableObservability,
         enablePerfProfiling: config.features.enablePerfProfiling,

@@ -29,39 +29,95 @@ export const PERF_BUDGETS: Record<string, EndpointBudget> = {
   "/api/tasks": {
     p95Ms: ms(600),
     maxPayloadBytes: 300_000,
+    maxDbQueries: 10,
   },
   "/api/clients": {
     p95Ms: ms(700),
     maxPayloadBytes: 300_000,
     maxDbQueries: 6,
   },
+  "/api/clients/:id": {
+    p95Ms: ms(400),
+    maxPayloadBytes: 50_000,
+    maxDbQueries: 4,
+  },
   "/api/projects": {
     p95Ms: ms(600),
     maxPayloadBytes: 300_000,
     maxDbQueries: 8,
   },
+  "/api/projects/:id": {
+    p95Ms: ms(400),
+    maxPayloadBytes: 50_000,
+    maxDbQueries: 6,
+  },
+  "/api/time-entries": {
+    p95Ms: ms(800),
+    maxPayloadBytes: 500_000,
+    maxDbQueries: 10,
+  },
+  "/api/timer": {
+    p95Ms: ms(400),
+    maxPayloadBytes: 100_000,
+    maxDbQueries: 6,
+  },
   "/api/v1/notifications/unread-count": {
     p95Ms: ms(200),
     maxPayloadBytes: 1_000,
+    maxDbQueries: 2,
   },
   "/api/v1/notifications": {
     p95Ms: ms(400),
     maxPayloadBytes: 200_000,
+    maxDbQueries: 6,
   },
   "/api/v1/reports/workload": {
     p95Ms: ms(2_000),
     maxPayloadBytes: 1_000_000,
+    maxDbQueries: 15,
+  },
+  "/api/v1/reports/tasks/analytics": {
+    p95Ms: ms(1_500),
+    maxPayloadBytes: 500_000,
+    maxDbQueries: 12,
+  },
+  "/api/v1/reports/clients/analytics": {
+    p95Ms: ms(1_500),
+    maxPayloadBytes: 500_000,
+    maxDbQueries: 12,
+  },
+  "/api/reports/v2/client": {
+    p95Ms: ms(2_000),
+    maxPayloadBytes: 1_000_000,
+    maxDbQueries: 15,
+  },
+  "/api/reports/v2/employee": {
+    p95Ms: ms(2_000),
+    maxPayloadBytes: 1_000_000,
+    maxDbQueries: 15,
   },
 };
 
+const sortedBudgetKeys = Object.keys(PERF_BUDGETS).sort((a, b) => b.length - a.length);
+
 /**
  * Returns the budget for the given route, or undefined if no budget is defined.
- * Matches exact paths first, then prefix-based lookups.
+ * Matches exact paths first, then longest-prefix match to ensure specific
+ * routes like /api/clients/:id are preferred over /api/clients.
+ * Handles Express parameterized patterns (`:param`) by converting them to
+ * path-segment wildcards for matching.
  */
 export function getBudgetForRoute(route: string): EndpointBudget | undefined {
   if (PERF_BUDGETS[route]) return PERF_BUDGETS[route];
-  for (const key of Object.keys(PERF_BUDGETS)) {
-    if (route.startsWith(key)) return PERF_BUDGETS[key];
+
+  for (const key of sortedBudgetKeys) {
+    if (key.includes(":")) {
+      const pattern = key.replace(/:[^/]+/g, "[^/]+");
+      const regex = new RegExp(`^${pattern}$`);
+      if (regex.test(route)) return PERF_BUDGETS[key];
+    } else if (route.startsWith(key) && (route.length === key.length || route[key.length] === "/")) {
+      return PERF_BUDGETS[key];
+    }
   }
   return undefined;
 }

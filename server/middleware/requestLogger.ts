@@ -1,8 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { createLogger, perfMark, perfMs, type LogContext } from "../lib/logger";
 import { getDbMetrics } from "../lib/dbTimer";
+import { getBudgetForRoute } from "../observability/perfBudgets";
+import { recordEndpointMetrics } from "../observability/endpointLatencyTracker";
 
 const reqLog = createLogger("request");
+const budgetLog = createLogger("perf:budget");
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -47,6 +50,15 @@ function getUserId(req: Request): string | undefined {
   return req.user?.id || undefined;
 }
 
+function getPayloadBytes(res: Response): number {
+  const contentLength = res.getHeader("content-length");
+  if (contentLength) {
+    const parsed = Number(contentLength);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
 export function requestLogger(
   req: Request,
   res: Response,
@@ -65,13 +77,46 @@ export function requestLogger(
     const isSlow = durationMs >= SLOW_THRESHOLD_MS;
     const hot = isHotPath(req.path);
 
+    const dbMetrics = getDbMetrics(req);
+    const payloadBytes = getPayloadBytes(res);
+    const route = req.route?.path
+      ? (req.baseUrl || "") + req.route.path
+      : req.path;
+    const dbQueryCount = dbMetrics?.queryCount ?? 0;
+
+    if (route.startsWith("/api") && req.route) {
+      recordEndpointMetrics(route, durationMs, payloadBytes, dbQueryCount);
+    }
+
+    const budget = getBudgetForRoute(route);
+    if (budget) {
+      const violations: string[] = [];
+      if (durationMs > budget.p95Ms) {
+        violations.push(`latency ${Math.round(durationMs)}ms > ${budget.p95Ms}ms`);
+      }
+      if (budget.maxPayloadBytes && payloadBytes > budget.maxPayloadBytes) {
+        violations.push(`payload ${payloadBytes}B > ${budget.maxPayloadBytes}B`);
+      }
+      if (budget.maxDbQueries && dbQueryCount > budget.maxDbQueries) {
+        violations.push(`queries ${dbQueryCount} > ${budget.maxDbQueries}`);
+      }
+      if (violations.length > 0) {
+        budgetLog.warn("Budget exceeded", {
+          requestId: req.requestId || "unknown",
+          route,
+          violations,
+          durationMs,
+          payloadBytes,
+          dbQueryCount,
+        });
+      }
+    }
+
     if (hot && !isError && !isSlow && IS_PRODUCTION) {
       if (Math.random() >= HOT_PATH_SAMPLE_RATE) {
         return;
       }
     }
-
-    const dbMetrics = getDbMetrics(req);
 
     const ctx: LogContext = {
       requestId: req.requestId || "unknown",
@@ -82,6 +127,10 @@ export function requestLogger(
       status: res.statusCode,
       durationMs,
     };
+
+    if (payloadBytes > 0) {
+      ctx.payloadBytes = payloadBytes;
+    }
 
     if (dbMetrics && dbMetrics.queryCount > 0) {
       ctx.dbQueryCount = dbMetrics.queryCount;
