@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarIcon, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
 
 interface TimeEntryData {
   id?: string;
@@ -57,16 +58,28 @@ export function TimeEntryDrawer({
   const [description, setDescription] = useState("");
   const [durationHours, setDurationHours] = useState(0);
   const [durationMinutes, setDurationMinutes] = useState(0);
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
   const [scope, setScope] = useState<"in_scope" | "out_of_scope">("in_scope");
   const [date, setDate] = useState<Date>(new Date());
 
-  const filteredProjects = useMemo(() => {
-    if (!clientId) return [];
-    return projects.filter(p => p.clientId === clientId);
-  }, [projects, clientId]);
+  const handleFieldChange = () => {
+    setHasChanges(true);
+  };
+
+  const {
+    clientId, projectId, taskId, subtaskId,
+    clients: hookClients, clientsFetched,
+    clientProjects, projectsFetched,
+    subtasks, hasSubtasks, finalTaskId,
+    handleClientChange, handleProjectChange, handleTaskChange,
+    handleSubtaskChange, resetAll,
+  } = useTimeEntryCascade({ enabled: open, onChange: handleFieldChange });
+
+  const displayClients = clientsFetched ? hookClients : clients;
+  const displayProjects = projectsFetched
+    ? clientProjects
+    : clientId
+      ? projects.filter(p => p.clientId === clientId)
+      : [];
 
   useEffect(() => {
     if (open && entry && mode === "edit") {
@@ -74,9 +87,12 @@ export function TimeEntryDrawer({
       setDescription(entry.description || "");
       setDurationHours(entry.durationHours);
       setDurationMinutes(entry.durationMinutes);
-      setClientId(entry.clientId);
-      setProjectId(entry.projectId);
-      setTaskId(entry.taskId);
+      resetAll({
+        clientId: entry.clientId,
+        projectId: entry.projectId,
+        taskId: entry.taskId,
+        subtaskId: null,
+      });
       setScope(entry.scope);
       setDate(entry.date);
     } else if (open && mode === "create") {
@@ -84,18 +100,12 @@ export function TimeEntryDrawer({
       setDescription("");
       setDurationHours(0);
       setDurationMinutes(0);
-      setClientId(null);
-      setProjectId(null);
-      setTaskId(null);
+      resetAll();
       setScope("in_scope");
       setDate(new Date());
     }
     setHasChanges(false);
   }, [open, entry, mode]);
-
-  const handleFieldChange = () => {
-    setHasChanges(true);
-  };
 
   const handleSubmit = async () => {
     try {
@@ -107,7 +117,7 @@ export function TimeEntryDrawer({
         durationMinutes,
         clientId,
         projectId,
-        taskId,
+        taskId: finalTaskId,
         scope,
         date,
       });
@@ -227,20 +237,14 @@ export function TimeEntryDrawer({
             <Label>Client</Label>
             <Select
               value={clientId || "none"}
-              onValueChange={(v) => {
-                const newClientId = v === "none" ? null : v;
-                setClientId(newClientId);
-                setProjectId(null);
-                setTaskId(null);
-                handleFieldChange();
-              }}
+              onValueChange={(v) => handleClientChange(v === "none" ? null : v)}
             >
               <SelectTrigger className="mt-2" data-testid="select-client">
                 <SelectValue placeholder="Select client" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No client</SelectItem>
-                {clients.map((c) => (
+                {displayClients.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.displayName || c.companyName}
                   </SelectItem>
@@ -253,18 +257,15 @@ export function TimeEntryDrawer({
             <Label>Project</Label>
             <Select
               value={projectId || "none"}
-              onValueChange={(v) => {
-                setProjectId(v === "none" ? null : v);
-                setTaskId(null); // Reset task when project changes
-                handleFieldChange();
-              }}
+              onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
+              disabled={!clientId}
             >
               <SelectTrigger className="mt-2" data-testid="select-project">
                 <SelectValue placeholder={clientId ? "Select project" : "Select client first"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No project</SelectItem>
-                {filteredProjects.map((p: any) => (
+                {displayProjects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
                   </SelectItem>
@@ -275,18 +276,34 @@ export function TimeEntryDrawer({
         </div>
 
         <div>
-          <Label>Task</Label>
-          <div className="mt-2">
-            <TaskSelectorWithCreate
-              projectId={projectId}
-              taskId={taskId}
-              onTaskChange={(v) => {
-                setTaskId(v);
-                handleFieldChange();
-              }}
-            />
-          </div>
+          <TaskSelectorWithCreate
+            projectId={projectId}
+            taskId={taskId}
+            onTaskChange={handleTaskChange}
+          />
         </div>
+
+        {hasSubtasks && (
+          <div>
+            <Label>Subtask</Label>
+            <Select
+              value={subtaskId || "none"}
+              onValueChange={(v) => handleSubtaskChange(v === "none" ? null : v)}
+            >
+              <SelectTrigger className="mt-2" data-testid="select-subtask">
+                <SelectValue placeholder="Select subtask (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No subtask</SelectItem>
+                {subtasks.map((st) => (
+                  <SelectItem key={st.id} value={st.id}>
+                    {st.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div>
           <Label>Scope</Label>

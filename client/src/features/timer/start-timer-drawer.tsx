@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -16,6 +15,7 @@ import {
 import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextEditor } from "@/components/richtext";
+import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
 
 const BROADCAST_CHANNEL_NAME = "active-timer-sync";
 
@@ -42,50 +42,54 @@ export function StartTimerDrawer({
   const [hasChanges, setHasChanges] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+
+  const handleFieldChange = () => {
+    setHasChanges(true);
+  };
+
+  const {
+    clientId, projectId, taskId, subtaskId,
+    clients, clientProjects, subtasks, hasSubtasks, finalTaskId,
+    handleClientChange: cascadeClientChange,
+    handleProjectChange: cascadeProjectChange,
+    handleTaskChange: cascadeTaskChange,
+    handleSubtaskChange,
+    resetAll,
+  } = useTimeEntryCascade({
+    enabled: open,
+    onChange: handleFieldChange,
+    initialValues: {
+      clientId: initialClientId,
+      projectId: initialProjectId,
+      taskId: initialTaskId,
+    },
+  });
 
   const broadcastTimerUpdate = useCallback(() => {
     if (broadcastChannelRef.current) {
       try {
         broadcastChannelRef.current.postMessage({ type: "timer-updated" });
       } catch {
-        // BroadcastChannel may fail in some environments
       }
     }
     try {
       localStorage.setItem("timer-sync", Date.now().toString());
       localStorage.removeItem("timer-sync");
     } catch {
-      // localStorage may be unavailable
     }
   }, []);
 
-  // Setup BroadcastChannel
   useEffect(() => {
     try {
       broadcastChannelRef.current = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     } catch {
-      // BroadcastChannel not supported
     }
     return () => {
       broadcastChannelRef.current?.close();
       broadcastChannelRef.current = null;
     };
   }, []);
-
-  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.minimal),
-    enabled: open,
-  });
-
-  const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: tenantKey(queryKeys.clients.projects(clientId!)),
-    queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!clientId && open,
-  });
 
   const startMutation = useMutation({
     mutationFn: async (data: { clientId?: string | null; projectId?: string | null; taskId?: string | null; title?: string; description?: string }) => {
@@ -124,11 +128,14 @@ export function StartTimerDrawer({
   const resetForm = useCallback(() => {
     setTitle("");
     setDescription("");
-    setClientId(initialClientId);
-    setProjectId(initialProjectId);
-    setTaskId(initialTaskId);
+    resetAll({
+      clientId: initialClientId,
+      projectId: initialProjectId,
+      taskId: initialTaskId,
+      subtaskId: null,
+    });
     setHasChanges(false);
-  }, [initialClientId, initialProjectId, initialTaskId]);
+  }, [initialClientId, initialProjectId, initialTaskId, resetAll]);
 
   useEffect(() => {
     if (open) {
@@ -136,28 +143,11 @@ export function StartTimerDrawer({
     }
   }, [open, resetForm]);
 
-  const handleFieldChange = () => {
-    setHasChanges(true);
-  };
-
-  const handleClientChange = (value: string | null) => {
-    setClientId(value);
-    setProjectId(null);
-    setTaskId(null);
-    handleFieldChange();
-  };
-
-  const handleProjectChange = (value: string | null) => {
-    setProjectId(value);
-    setTaskId(null);
-    handleFieldChange();
-  };
-
   const handleStartTimer = () => {
     startMutation.mutate({
       clientId,
       projectId,
-      taskId,
+      taskId: finalTaskId,
       title: title.trim() || undefined,
       description: description.trim() || undefined,
     });
@@ -182,7 +172,7 @@ export function StartTimerDrawer({
       <div className="p-6 space-y-6">
         <div className="space-y-2">
           <Label>Client</Label>
-          <Select value={clientId || "none"} onValueChange={(v) => handleClientChange(v === "none" ? null : v)}>
+          <Select value={clientId || "none"} onValueChange={(v) => cascadeClientChange(v === "none" ? null : v)}>
             <SelectTrigger data-testid="select-start-timer-client">
               <SelectValue placeholder="Select client (optional)" />
             </SelectTrigger>
@@ -201,7 +191,7 @@ export function StartTimerDrawer({
           <Label>Project</Label>
           <Select 
             value={projectId || "none"} 
-            onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
+            onValueChange={(v) => cascadeProjectChange(v === "none" ? null : v)}
             disabled={!clientId}
           >
             <SelectTrigger data-testid="select-start-timer-project">
@@ -209,7 +199,7 @@ export function StartTimerDrawer({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">No project</SelectItem>
-              {projects.map((project) => (
+              {clientProjects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
                 </SelectItem>
@@ -221,13 +211,32 @@ export function StartTimerDrawer({
         <div className="space-y-2">
           <TaskSelectorWithCreate
             taskId={taskId}
-            onTaskChange={(id: string | null) => {
-              setTaskId(id);
-              handleFieldChange();
-            }}
+            onTaskChange={cascadeTaskChange}
             projectId={projectId}
           />
         </div>
+
+        {hasSubtasks && (
+          <div className="space-y-2">
+            <Label>Subtask</Label>
+            <Select 
+              value={subtaskId || "none"} 
+              onValueChange={(v) => handleSubtaskChange(v === "none" ? null : v)}
+            >
+              <SelectTrigger data-testid="select-start-timer-subtask">
+                <SelectValue placeholder="Select subtask (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No subtask</SelectItem>
+                {subtasks.map((st) => (
+                  <SelectItem key={st.id} value={st.id}>
+                    {st.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label>Title</Label>

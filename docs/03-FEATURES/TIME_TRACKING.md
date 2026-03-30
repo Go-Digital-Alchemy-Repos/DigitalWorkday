@@ -250,6 +250,50 @@ const filteredProjects = clientHasDivisions && divisionId
 const finalTaskId = subtaskId || taskId;
 ```
 
+### Shared Cascade Hook: `useTimeEntryCascade`
+
+**Location:** `client/src/hooks/use-time-entry-cascade.ts`
+
+All time entry forms share a single hook for cascade selection logic. This ensures consistent reset semantics, avoids duplicated fetch logic, and provides subtask support everywhere.
+
+**What the hook provides:**
+- State: `clientId`, `projectId`, `taskId`, `subtaskId`
+- Server-fetched data: `clients`, `clientProjects`, `projectTasks`, `openTasks`, `subtasks`
+- Derived values: `hasSubtasks`, `finalTaskId` (= `subtaskId || taskId`)
+- Cascade handlers: `handleClientChange`, `handleProjectChange`, `handleTaskChange`, `handleSubtaskChange`
+- Reset: `resetAll(values?)` to set all cascade fields at once
+
+**Reset semantics (enforced by the hook):**
+- Changing client → clears project, task, subtask
+- Changing project → clears task, subtask
+- Changing task → clears subtask
+
+**Options:**
+```typescript
+useTimeEntryCascade({
+  enabled: boolean,       // controls whether queries run (e.g. only when drawer is open)
+  onChange?: () => void,   // called on any cascade change (e.g. to track dirty state)
+  initialValues?: {       // pre-populate selections (e.g. from props or existing entry)
+    clientId, projectId, taskId, subtaskId
+  },
+})
+```
+
+**Current consumers:**
+| Component | File | Notes |
+|-----------|------|-------|
+| `ManualEntryDialog` | `client/src/pages/time-tracking.tsx` | Full cascade with subtask support |
+| `EditTimeEntryDrawer` | `client/src/pages/time-tracking.tsx` | Populates from existing entry via `resetAll` |
+| `StartTimerDrawer` | `client/src/features/timer/start-timer-drawer.tsx` | Accepts `initialClientId`/`initialProjectId`/`initialTaskId` props, wired through `initialValues` |
+| `TimeEntryDrawer` | `client/src/components/time-entry-drawer.tsx` | Generic reusable drawer; falls back to prop-provided clients if hook returns empty |
+
+**Adding a new cascade consumer:**
+1. Import `useTimeEntryCascade` from `@/hooks/use-time-entry-cascade`
+2. Call the hook with `enabled` set to control query lifecycle (e.g. `enabled: open`)
+3. Use `handleClientChange`, `handleProjectChange`, `handleTaskChange`, `handleSubtaskChange` as `onValueChange` handlers in your Select components
+4. Use `finalTaskId` when submitting (resolves subtask → task fallback)
+5. Use `resetAll(values)` to initialize state (e.g. in a `useEffect` when the form opens with existing data)
+
 ---
 
 ## Database Schema

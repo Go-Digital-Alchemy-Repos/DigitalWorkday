@@ -22,12 +22,12 @@ export function useTimeEntryCascade(options: CascadeOptions = {}) {
   const [taskId, setTaskId] = useState<string | null>(initialValues?.taskId ?? null);
   const [subtaskId, setSubtaskId] = useState<string | null>(initialValues?.subtaskId ?? null);
 
-  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
+  const { data: clients = [], isFetched: clientsFetched } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: tenantKey(queryKeys.clients.minimal),
     enabled,
   });
 
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; clientId?: string | null }>>({
+  const { data: clientProjects = [], isFetched: projectsFetched } = useQuery<Array<{ id: string; name: string; clientId?: string | null }>>({
     queryKey: tenantKey(queryKeys.clients.projects(clientId!)),
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && enabled,
@@ -83,7 +83,9 @@ export function useTimeEntryCascade(options: CascadeOptions = {}) {
     taskId,
     subtaskId,
     clients,
+    clientsFetched,
     clientProjects,
+    projectsFetched,
     projectTasks,
     openTasks,
     subtasks,
