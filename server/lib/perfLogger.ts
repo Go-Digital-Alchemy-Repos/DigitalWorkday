@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { createLogger, perfMark, perfMs, type LogContext } from "./logger";
 import { createHash } from "crypto";
+import { incrementQueryCount } from "../observability/perfProfiler";
 
 const log = createLogger("perf");
 const queryLog = createLogger("perf:query");
@@ -90,6 +91,7 @@ export function instrumentDbPool(pool: import("pg").Pool): void {
 
   (pool as any).query = function (...args: any[]) {
     totalQueryCount++;
+    incrementQueryCount();
     const start = performance.now();
 
     const result = (origQuery as any)(...args);

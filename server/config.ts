@@ -13,7 +13,8 @@
  */
 
 const isProduction = process.env.NODE_ENV === "production";
-const isDevelopment = !isProduction;
+const isStaging = process.env.NODE_ENV === "staging";
+const isDevelopment = !isProduction && !isStaging;
 
 // ============================================================================
 // Configuration Value Helpers
@@ -58,6 +59,7 @@ export const config = {
   // Environment
   nodeEnv: optionalEnv("NODE_ENV", "development"),
   isProduction,
+  isStaging,
   isDevelopment,
   
   // Server
@@ -219,7 +221,7 @@ export const config = {
     enablePrivateProjects: optionalEnvBool("ENABLE_PRIVATE_PROJECTS", true),
     // Observability & stability flags
     enableObservability: optionalEnvBool("ENABLE_OBSERVABILITY", true),
-    enablePerfProfiling: optionalEnvBool("ENABLE_PERF_PROFILING", false),
+    enablePerfProfiling: optionalEnvBool("ENABLE_PERF_PROFILING", isStaging),
     enableDbPoolMetrics: optionalEnvBool("ENABLE_DB_POOL_METRICS", true),
     enablePayloadGuards: optionalEnvBool("ENABLE_PAYLOAD_GUARDS", true),
     enableRegressionSmokeTests: optionalEnvBool("ENABLE_REGRESSION_SMOKE_TESTS", false),

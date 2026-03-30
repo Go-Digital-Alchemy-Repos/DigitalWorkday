@@ -21,6 +21,8 @@ import { instrumentPool } from "./middleware/queryTelemetry";
 import { perfLoggerMiddleware, getPerfStats } from "./lib/perfLogger";
 import { csrfProtection } from "./middleware/csrf";
 import { payloadGuardMiddleware } from "./middleware/payloadGuard";
+import { profilingMiddleware } from "./middleware/profilingMiddleware";
+import { getProfilingData } from "./observability/perfProfiler";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
 import { logAppInfo } from "./startup/appInfo";
@@ -224,6 +226,9 @@ app.use(requestPerfMiddleware);
 // Unified perf logger (always on — sampled at 5% in production, 100% in dev)
 app.use(perfLoggerMiddleware);
 
+// Endpoint-level profiling (auto-enabled in staging, opt-in via ENABLE_PERF_PROFILING=true)
+app.use(profilingMiddleware);
+
 // Setup agreement enforcement (must be after tenant context)
 app.use(agreementEnforcementGuard);
 
@@ -263,18 +268,23 @@ app.post("/api/v1/system/perf", (req, res) => {
 
 // Perf stats endpoint (super-admin or dev only)
 app.get("/api/v1/system/perf/stats", (req, res) => {
-  if (process.env.PERF_TELEMETRY !== "1") {
+  if (process.env.PERF_TELEMETRY !== "1" && !config.features.enablePerfProfiling) {
     return res.json({ enabled: false });
   }
   const { getRequestPerfStats } = require("./middleware/perfTelemetry");
   const { getQueryPerfStats } = require("./middleware/queryTelemetry");
   const perfStats = getPerfStats();
-  res.json({
+  const response: Record<string, unknown> = {
     enabled: true,
     requests: getRequestPerfStats(),
     queries: getQueryPerfStats(),
     unified: perfStats,
-  });
+  };
+  const profiling = getProfilingData();
+  if (profiling) {
+    response.profiling = profiling;
+  }
+  res.json(response);
 });
 
 // Observability stats endpoint (dev/admin only) — pool metrics + perf stats + budgets
@@ -287,7 +297,7 @@ app.get("/api/v1/system/observability", async (req: any, res) => {
   const { getQueryPerfStats } = await import("./middleware/queryTelemetry");
   const { PERF_BUDGETS } = await import("./observability/perfBudgets");
   const perfStats = getPerfStats();
-  res.json({
+  const response: Record<string, unknown> = {
     enabled: true,
     pool: config.features.enableDbPoolMetrics ? getPoolStats() : null,
     requests: getRequestPerfStats(),
@@ -302,7 +312,12 @@ app.get("/api/v1/system/observability", async (req: any, res) => {
       enableLogSampling: config.features.enableLogSampling,
     },
     ts: new Date().toISOString(),
-  });
+  };
+  const profiling = getProfilingData();
+  if (profiling) {
+    response.profiling = profiling;
+  }
+  res.json(response);
 });
 
 // Database health endpoint - public, no auth required
