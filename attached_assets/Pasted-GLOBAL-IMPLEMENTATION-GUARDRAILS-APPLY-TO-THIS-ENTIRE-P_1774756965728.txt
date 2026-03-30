@@ -1,0 +1,172 @@
+GLOBAL IMPLEMENTATION GUARDRAILS — APPLY TO THIS ENTIRE PROMPT EXACTLY
+
+You are working in a production-minded multi-tenant application. This is a NON-DESTRUCTIVE implementation sprint. Your job is to improve stability, scalability, performance, cache correctness, observability, and documentation without changing business behavior, UX expectations, route contracts, auth rules, tenant isolation, or architectural intent unless this prompt explicitly directs a compatibility-safe improvement.
+
+MANDATORY RULES
+- Do not remove existing functionality.
+- Do not delete routes, services, components, hooks, schemas, DTOs, or query paths unless this prompt explicitly instructs you to do so.
+- Do not perform broad cleanup refactors, naming refactors, folder moves, or architecture rewrites outside the exact scope of this prompt.
+- Do not change authentication behavior.
+- Do not change tenant scoping or permissions behavior.
+- Do not change visible UI behavior except where a minor loading-state, pagination, or regression-safe improvement is required by this prompt.
+- Do not silently change API response shapes. If a new shape is needed, introduce it additively via a new DTO, mode, endpoint variant, or compatibility adapter.
+- Do not break backward compatibility for existing consumers.
+- Do not rewrite existing batching/perf work unless you find a measured regression or correctness issue and document it clearly.
+- Do not touch unrelated modules.
+- Do not convert this sprint into a generalized modernization pass.
+
+REQUIRED APPROACH
+- Prefer additive, incremental implementation over replacement.
+- Prefer small, reviewable diffs.
+- Prefer compatibility-safe migrations and adapters where risk exists.
+- Prioritize correctness and delivery safety before aggressive optimization.
+- Prefer SQL-first aggregation for stats/report workloads where safe.
+- Prefer lightweight list DTOs for list screens and lazy-loaded full detail DTOs for drawers/detail views.
+- Reuse existing utilities/patterns where sensible instead of inventing parallel systems.
+- Keep business logic and data semantics intact.
+
+MEASUREMENT + VERIFICATION RULES
+- Before changing behavior, inspect the current code path, request flow, DTO shape, invalidation behavior, and query strategy.
+- After changes, verify:
+  - typecheck passes for the touched area, or the prompt’s explicit TS objective is met
+  - the affected page still renders correctly
+  - auth and tenant scoping remain intact
+  - filters/search/pagination still work where applicable
+  - loading states remain sane
+  - no duplicate requests were introduced
+  - no stale-cache or cross-tenant cache regressions were introduced
+  - no compatibility drift was introduced
+- Where performance changes are made, capture before/after notes for:
+  - request count
+  - payload size
+  - query count if available
+  - server/client aggregation behavior
+  - server/client filtering behavior
+  - expensive hydration removed or deferred
+- If you cannot safely complete a requested migration without high regression risk, do not force it. Instead, implement the safest partial step and document the blocker clearly.
+
+DOCUMENTATION RULES
+- Update App Docs for each phase completed.
+- Document:
+  - what changed
+  - what was preserved
+  - any new DTO, endpoint mode, aggregate query, query key, or compatibility contract
+  - any deferred risk or follow-up recommendation
+- Maintain consistency with existing App Docs structure and writing style.
+- Do not leave docs as TODOs if the code change is complete.
+
+RESPONSE FORMAT AT THE END OF THE TASK
+Return:
+1. Summary of what changed
+2. Files changed
+3. What was intentionally preserved
+4. Before/after flow explanation
+5. Risks or follow-up items
+6. Confirmation of typecheck/test status
+
+TASK
+Perform a full validation, regression-triage, and documentation-synchronization pass across all work completed in this sprint.
+
+GOAL
+Leave the app stable, measurable, and fully documented for the next sprint.
+
+VALIDATE THE FOLLOWING
+
+1. Stability / delivery
+- Confirm npm run check passes.
+- Confirm CI enforces typecheck.
+- Confirm TS target is explicit and compatible.
+- Confirm duplicate getDecryptedSecrets implementation has been removed safely and tested.
+
+2. SQL-first aggregation
+- Confirm targeted stats/report endpoints now use SQL-first aggregation where intended.
+- Confirm response semantics are preserved.
+- Confirm application-loop aggregation is materially reduced in targeted areas.
+
+3. My Time
+- Confirm /api/time-entries supports pagination/cursor where intended.
+- Confirm UI uses incremental loading safely.
+- Confirm My Time list uses lightweight rows for list rendering.
+- Confirm full detail loads only when needed.
+- Confirm lightweight picker endpoints are in use for selectors.
+- Confirm mutation invalidation is targeted and not overly broad.
+- Confirm shared cascade logic works correctly across manual entry/edit flows.
+
+4. DTO strategy
+- Confirm list DTO vs detail DTO strategy is clear and active in touched domains.
+
+5. Cache/query hardening
+- Confirm tenant-aware query key namespacing is active in touched flows.
+- Confirm stale/cache policies are tuned appropriately for touched domains.
+- Confirm no obvious stale cross-tenant cache regressions exist.
+
+6. Observability / profiling
+- Confirm staging profiling is enabled by default.
+- Confirm p95/p99, payload-size, and query-count visibility improved for critical routes.
+
+7. Scheduler separation
+- Confirm worker/scheduler separation plan is documented.
+- Confirm any initial extraction step is stable and compatibility-safe.
+
+REQUIRED STEPS
+- Inspect all updated code paths from this sprint.
+- Compare actual behavior to intended design.
+- Capture before/after notes where meaningful:
+  - request count
+  - payload size
+  - query count
+  - eager vs deferred loading
+  - in-memory vs SQL aggregation
+  - broad vs targeted invalidation
+- Fix only confirmed regressions or obvious implementation gaps.
+- Do not introduce new broad refactors.
+
+MANDATORY FULL APP DOCS REVIEW + UPDATE
+
+You MUST perform a complete App Docs synchronization pass for everything added, changed, standardized, or deferred in this sprint.
+
+CREATE OR UPDATE DOCS FOR AT LEAST:
+- TypeScript Stabilization Status
+- Typecheck CI/CD Policy
+- Compiler Target / Runtime Compatibility
+- Tenant Integration Secret Handling
+- SQL-First Aggregation Strategy
+- Staging Performance Profiling
+- My Time Stats Aggregation
+- Paginated Time Entries Contract
+- Time Entry List DTO vs Detail DTO
+- My Time Targeted Cache Invalidation
+- Lightweight Picker Endpoint Guidance
+- Shared My Time Cascade Hook Pattern
+- Cross-Domain List DTO vs Detail DTO Strategy
+- Tenant-Aware Query Key Strategy
+- Domain Cache Profile Guidance
+- Scheduler / Worker Separation Plan
+- Endpoint Performance Visibility / Budgets
+- Sprint Summary + Remaining Follow-Ups
+
+EACH DOC ENTRY SHOULD INCLUDE:
+- Purpose / overview
+- Before vs after behavior
+- Technical implementation notes
+- API / endpoint / DTO / query key impacts
+- Frontend usage guidance
+- Backward compatibility notes
+- Constraints / tradeoffs
+- Future follow-up recommendations where appropriate
+
+SUCCESS CRITERIA
+- Completed work is validated as safe
+- Regressions are fixed minimally
+- App Docs fully reflect the current codebase state
+- Remaining hotspots are clearly documented for the next sprint
+
+RESPONSE FORMAT AT THE END OF THE TASK
+Return:
+1. Summary of validation completed
+2. Files changed
+3. Regressions found and fixed
+4. Before/after flow explanation
+5. Documentation sections created/updated
+6. Remaining hotspots / follow-up items
+7. Confirmation of typecheck / CI / test status

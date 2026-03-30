@@ -1,0 +1,94 @@
+GLOBAL IMPLEMENTATION GUARDRAILS — APPLY TO THIS ENTIRE PROMPT EXACTLY
+
+You are working in a production-minded multi-tenant application. This is a NON-DESTRUCTIVE implementation sprint. Your job is to improve stability, scalability, performance, cache correctness, observability, and documentation without changing business behavior, UX expectations, route contracts, auth rules, tenant isolation, or architectural intent unless this prompt explicitly directs a compatibility-safe improvement.
+
+MANDATORY RULES
+- Do not remove existing functionality.
+- Do not delete routes, services, components, hooks, schemas, DTOs, or query paths unless this prompt explicitly instructs you to do so.
+- Do not perform broad cleanup refactors, naming refactors, folder moves, or architecture rewrites outside the exact scope of this prompt.
+- Do not change authentication behavior.
+- Do not change tenant scoping or permissions behavior.
+- Do not change visible UI behavior except where a minor loading-state, pagination, or regression-safe improvement is required by this prompt.
+- Do not silently change API response shapes. If a new shape is needed, introduce it additively via a new DTO, mode, endpoint variant, or compatibility adapter.
+- Do not break backward compatibility for existing consumers.
+- Do not rewrite existing batching/perf work unless you find a measured regression or correctness issue and document it clearly.
+- Do not touch unrelated modules.
+- Do not convert this sprint into a generalized modernization pass.
+
+REQUIRED APPROACH
+- Prefer additive, incremental implementation over replacement.
+- Prefer small, reviewable diffs.
+- Prefer compatibility-safe migrations and adapters where risk exists.
+- Prioritize correctness and delivery safety before aggressive optimization.
+- Prefer SQL-first aggregation for stats/report workloads where safe.
+- Prefer lightweight list DTOs for list screens and lazy-loaded full detail DTOs for drawers/detail views.
+- Reuse existing utilities/patterns where sensible instead of inventing parallel systems.
+- Keep business logic and data semantics intact.
+
+MEASUREMENT + VERIFICATION RULES
+- Before changing behavior, inspect the current code path, request flow, DTO shape, invalidation behavior, and query strategy.
+- After changes, verify:
+  - typecheck passes for the touched area, or the prompt’s explicit TS objective is met
+  - the affected page still renders correctly
+  - auth and tenant scoping remain intact
+  - filters/search/pagination still work where applicable
+  - loading states remain sane
+  - no duplicate requests were introduced
+  - no stale-cache or cross-tenant cache regressions were introduced
+  - no compatibility drift was introduced
+- Where performance changes are made, capture before/after notes for:
+  - request count
+  - payload size
+  - query count if available
+  - server/client aggregation behavior
+  - server/client filtering behavior
+  - expensive hydration removed or deferred
+- If you cannot safely complete a requested migration without high regression risk, do not force it. Instead, implement the safest partial step and document the blocker clearly.
+
+DOCUMENTATION RULES
+- Update App Docs for each phase completed.
+- Document:
+  - what changed
+  - what was preserved
+  - any new DTO, endpoint mode, aggregate query, query key, or compatibility contract
+  - any deferred risk or follow-up recommendation
+- Maintain consistency with existing App Docs structure and writing style.
+- Do not leave docs as TODOs if the code change is complete.
+
+RESPONSE FORMAT AT THE END OF THE TASK
+Return:
+1. Summary of what changed
+2. Files changed
+3. What was intentionally preserved
+4. Before/after flow explanation
+5. Risks or follow-up items
+6. Confirmation of typecheck/test status
+
+TASK
+Eliminate the duplicate getDecryptedSecrets implementation in tenantIntegrations without changing behavior.
+
+GOAL
+Remove ambiguous active code debt and establish one canonical implementation path for secret decryption behavior.
+
+REQUIRED STEPS
+- Audit the tenant integrations module(s) and identify duplicate method definitions or duplicate code paths, especially getDecryptedSecrets.
+- Determine which implementation should remain canonical based on actual usage and correctness.
+- Consolidate to one canonical signature and implementation path.
+- Preserve existing callers via compatibility-safe updates if needed.
+- Add focused tests around:
+  - encrypted storage path
+  - decrypted read path
+  - missing/partial secret cases
+  - failure behavior
+- Confirm there is no runtime ambiguity after consolidation.
+
+OUT OF SCOPE
+- No redesign of the integrations system
+- No secret storage strategy rewrite
+- No unrelated cleanup
+
+SUCCESS CRITERIA
+- Duplicate implementation is removed safely
+- One canonical getDecryptedSecrets path exists
+- Focused tests cover expected behavior
+- App Docs updated for tenant integrations secret flow
