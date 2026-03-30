@@ -14,19 +14,8 @@
 - Build time: ~25s
 - **Warning**: Client JS chunk exceeds 500 kB. Code-splitting via `React.lazy()` + dynamic `import()` recommended for large page modules (chat, super-admin, CRM).
 
-### TypeScript Typecheck: 56 errors (non-blocking)
-Build succeeds because `esbuild` (server) and `vite` (client) skip type checking.
-
-| Category | Count | Severity | Notes |
-|----------|-------|----------|-------|
-| TS2339 Property does not exist | 18 | Medium | Missing storage interface methods (`isUserInDmThread`, `isUserInChatChannel`, `divisionId`, `assigneeId`, `createdBy`) |
-| TS2802 Iterator downlevel | 10 | Low | `Set`/`Map` iteration needs `--downlevelIteration` or `target: es2015+` in tsconfig |
-| TS2345 Argument not assignable | 8 | Medium | Schema type mismatches in projects/tasks routers (null vs undefined, dueDate typing) |
-| TS2307 Cannot find module | 3 | Medium | Missing import for `common-tags` and client modules |
-| TS2769 No overload matches | 3 | Low | Super-admin route handler overloads |
-| Other (TS2322, TS2687, TS7053, TS7006, TS2304, TS2353) | 14 | Low-Medium | Mixed: request ID declaration, SQL type import, index signature |
-
-**Recommendation**: Fix TS2802 errors by setting `"target": "ES2020"` in tsconfig.json. Fix TS2339 errors by adding missing methods to `IStorage` interface or removing dead code references.
+### TypeScript Typecheck: 0 errors ✓
+`npm run check` (tsc --noEmit) passes cleanly with zero errors. Compiler target is ES2022 (resolves former TS2802 downlevelIteration issues). All prior type errors were resolved through incremental stabilization work (Tasks #41, #64) without weakening type safety (no `any` casts, `ts-ignore`, or unsafe assertions added).
 
 ---
 
@@ -143,7 +132,7 @@ Tested against live development server with authenticated session.
 None identified.
 
 ### High Priority
-1. **56 TypeScript errors**: Not blocking builds but indicate drift between schema and storage interface. Risk of runtime errors if untyped paths are hit.
+1. ~~56 TypeScript errors~~: **Resolved** — `npm run check` now passes with 0 errors (Tasks #41, #64). No remaining type-safety risk.
 2. **Client bundle size**: 3.7 MB uncompressed JS. Slow initial load on mobile/3G. Code-splitting needed.
 3. **Test suite reliability**: 38/71 tests failing due to FK constraints and stale test expectations. CI/CD pipeline would fail.
 

@@ -361,7 +361,7 @@ Note: The `/api/v1/projects/analytics/summary` (from `projectsDashboard.ts`) fet
 Post-merge re-validation confirming all sprint optimizations remain intact after the hardening pass (Task #34). This addendum verifies no regressions were introduced during the hardening and documentation consolidation work.
 
 ### Typecheck Status
-`npx tsc --noEmit` produces **246 errors across 82 files**, but **none are sprint regressions**. The errors span the full codebase and predate the performance sprint. The table below shows representative categories (not exhaustive — for the full list, run `npx tsc --noEmit`):
+`npx tsc --noEmit` previously produced 246 errors across 82 files (none were sprint regressions). **As of Task #64, all TypeScript errors have been resolved — `npm run check` now exits with 0 errors.** Compiler target is ES2022. The table below shows the categories that were present at the time of the original report (all now resolved):
 
 | Error Category | Example Files (representative) | Sprint Regression? | Notes |
 |---|---|---|---|

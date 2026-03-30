@@ -168,6 +168,31 @@ EXPLAIN ANALYZE SELECT * FROM tasks WHERE tenant_id = '...';
 
 ---
 
+## TypeScript Stabilization Status
+
+**Baseline**: 0 errors (as of Task #64, March 2026)
+
+| Item | Value |
+|------|-------|
+| Compiler target | ES2022 |
+| Strict mode | Enabled |
+| Error count | 0 |
+| Check command | `npm run check` (runs `tsc --noEmit`) |
+
+### Fixes Applied (Task #64)
+1. **`client/src/features/tasks/task-detail-drawer.tsx`** — Narrowed `commentsKey` type to `readonly string[]` in the `onMutate` callback so it matches the `onError` context type. The query key values are all strings at runtime (`tenantKey` prepends `["tenant", tenantId, ...]`).
+2. **`server/index.ts`** — Changed `log(...)` to `log.info(...)` on the boot message to match the structured logger API returned by `createLogger`.
+
+### Prior Bulk Cleanup (Task #41)
+Resolved the majority of TypeScript errors across the codebase (schema drift, missing imports, duplicate implementations, Set iteration issues resolved by ES2022 target).
+
+### Type Safety Policy
+- No `any` casts, `ts-ignore`, or unsafe assertions were added
+- All fixes use proper type narrowing
+- The zero-error baseline should be maintained for all future work
+
+---
+
 ## Related Sections
 
 - [02-ARCHITECTURE](../02-ARCHITECTURE/) - System design

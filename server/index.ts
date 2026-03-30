@@ -656,7 +656,7 @@ httpServer.listen(port, host, () => {
   appReady = true;
   const totalDuration = Date.now() - serverStartTime;
   console.log(`[startup] Phase 4/4: App READY in ${totalDuration}ms`);
-  log(`[boot] Application ready - running background diagnostics...`);
+  log.info(`[boot] Application ready - running background diagnostics...`);
   
   // ============================================================================
   // BACKGROUND TASKS: Run AFTER app is marked ready (non-blocking)

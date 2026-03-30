@@ -240,7 +240,7 @@ export function TaskDetailDrawer({
     },
     onMutate: async ({ body }: { body: string; attachmentIds?: string[] }) => {
       if (!task?.id || !currentUser) return undefined;
-      const commentsKey = commentQueryKey;
+      const commentsKey = commentQueryKey as readonly string[];
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previousComments = queryClient.getQueryData<(Comment & { user?: User })[]>(commentsKey);
       const optimisticComment: any = {

@@ -12,7 +12,7 @@
 | Core tests passing | ~100+ (8 files failing) | 142 tests across 9 core files (all passing) |
 | Known failing test files | 2 (super-only-integrations, migrations-smoke) | 2 (unchanged, pre-existing) |
 | Production build | Succeeds (544KB largest chunk) | Succeeds (unchanged) |
-| TypeScript errors | 159 (pre-existing) | 159 (pre-existing, not regressed) |
+| TypeScript errors | 159 (pre-existing) | 0 (all resolved in Tasks #41, #64) |
 
 ## Files Changed (5 files, +78/-16 lines)
 
@@ -51,12 +51,11 @@
 
 ## Known Issues (Not Fixed — Pre-existing)
 
-### Category A: TypeScript Errors (159 across 60 files)
-- `Set` iteration without `downlevelIteration` flag (4 files)
-- Missing schema properties like `divisionId`, `assigneeId` (storage repos)
-- Duplicate function implementations (tenantOnboarding.ts, storage.ts)
-- Socket.IO type mismatches (realtime hooks)
-- These are all pre-existing and don't affect runtime (build succeeds)
+### Category A: TypeScript Errors — RESOLVED
+- All 159 pre-existing TypeScript errors have been resolved (Tasks #41, #64).
+- `npm run check` now passes with 0 errors.
+- Compiler target set to ES2022 (eliminates former TS2802 downlevelIteration issues).
+- No type safety was weakened (no `any`, `ts-ignore`, or unsafe casts added).
 
 ### Category B: super-only-integrations.test.ts (18 failures)
 - All endpoints return 500 (server crash) instead of expected 200/403

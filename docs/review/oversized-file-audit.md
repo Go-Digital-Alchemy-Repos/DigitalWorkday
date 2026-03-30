@@ -9,7 +9,7 @@
 
 | Check          | Result                | Notes                                       |
 |----------------|----------------------|---------------------------------------------|
-| TypeScript     | 21 errors (pre-existing) | TS2802 (downlevelIteration), TS2339 (missing props), TS2393 (duplicate impls) |
+| TypeScript     | 0 errors ✓               | All prior errors resolved (Tasks #41, #64); compiler target ES2022 eliminates TS2802 |
 | Vite Build     | ✅ Success (25.17s)   | Largest chunk: skip-link 1,128 kB gzip 323 kB |
 | Test Suite     | 80 test files present | server/tests/*.test.ts                      |
 | Server Start   | ✅ Runs cleanly       | Schema checks pass, SLA evaluator scheduled |
