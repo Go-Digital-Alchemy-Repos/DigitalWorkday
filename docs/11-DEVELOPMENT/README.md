@@ -1,7 +1,7 @@
 # Development
 
 **Status:** Current  
-**Last Updated:** January 2026
+**Last Updated:** March 2026
 
 This section covers development practices, coding standards, and workflows.
 
@@ -190,6 +190,22 @@ Resolved the majority of TypeScript errors across the codebase (schema drift, mi
 - No `any` casts, `ts-ignore`, or unsafe assertions were added
 - All fixes use proper type narrowing
 - The zero-error baseline should be maintained for all future work
+
+### Typecheck Enforcement (Task #65, March 2026)
+
+**Enforcement Points:**
+
+| Gate | Location | Mechanism |
+|------|----------|-----------|
+| Post-merge | `scripts/post-merge.sh` | Runs `npm run check` after `npm install`; `set -e` aborts on failure |
+| Production build | `script/build.ts` | Runs `tsc --noEmit` before client/server bundling; build aborts on failure |
+
+**Zero-Error Baseline:** Established March 2026. The codebase compiles with zero TypeScript errors under strict mode.
+
+**Expectations for Future Work:**
+- All new code must pass `npm run check` with zero errors before merge
+- No `@ts-ignore`, `@ts-expect-error`, or blanket `any` casts to suppress errors
+- Type regressions introduced by new features must be fixed in the same change
 
 ---
 
