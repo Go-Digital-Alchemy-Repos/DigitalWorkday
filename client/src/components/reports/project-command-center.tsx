@@ -35,10 +35,15 @@ import {
 import { cn } from "@/lib/utils";
 import { buildHeaders , tenantKey } from "@/lib/queryClient";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
+
 import { MobileTabSelect } from "./mobile-tab-select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+function useStableDateParams(rangeDays: number): string {
+  return useMemo(() => buildDateParams(rangeDays), [rangeDays]);
+}
 
 function rfetch(url: string) {
   return fetch(url, { credentials: "include", headers: buildHeaders() });
@@ -155,10 +160,11 @@ interface ProjectOverviewData {
 
 function OverviewTab({ rangeDays }: { rangeDays: number }) {
   const reportLink = useReportLink();
+  const dateParams = useStableDateParams(rangeDays);
   const { data, isLoading } = useQuery<ProjectOverviewData>({
-    queryKey: tenantKey(["/api/reports/v2/project/overview", buildDateParams(rangeDays)]),
+    queryKey: tenantKey(["/api/reports/v2/project/overview", dateParams]),
     queryFn: async () => {
-      const res = await rfetch(`/api/reports/v2/project/overview?${buildDateParams(rangeDays)}`);
+      const res = await rfetch(`/api/reports/v2/project/overview?${dateParams}`);
       if (!res.ok) throw new Error("Failed to fetch overview");
       return res.json();
     },
@@ -622,10 +628,11 @@ interface ProjectTimeData {
 }
 
 function TimeTab({ rangeDays }: { rangeDays: number }) {
+  const dateParams = useStableDateParams(rangeDays);
   const { data, isLoading } = useQuery<ProjectTimeData>({
-    queryKey: tenantKey(["/api/reports/v2/project/time", buildDateParams(rangeDays)]),
+    queryKey: tenantKey(["/api/reports/v2/project/time", dateParams]),
     queryFn: async () => {
-      const res = await rfetch(`/api/reports/v2/project/time?${buildDateParams(rangeDays)}`);
+      const res = await rfetch(`/api/reports/v2/project/time?${dateParams}`);
       if (!res.ok) throw new Error("Failed to fetch time data");
       return res.json();
     },
@@ -780,10 +787,11 @@ interface ProjectMilestoneData {
 }
 
 function ProgressTab({ rangeDays }: { rangeDays: number }) {
+  const dateParams = useStableDateParams(rangeDays);
   const overviewQuery = useQuery<ProjectOverviewData>({
-    queryKey: tenantKey(["/api/reports/v2/project/overview", buildDateParams(rangeDays)]),
+    queryKey: tenantKey(["/api/reports/v2/project/overview", dateParams]),
     queryFn: async () => {
-      const res = await rfetch(`/api/reports/v2/project/overview?${buildDateParams(rangeDays)}`);
+      const res = await rfetch(`/api/reports/v2/project/overview?${dateParams}`);
       if (!res.ok) throw new Error("Failed to fetch overview");
       return res.json();
     },
@@ -891,10 +899,11 @@ interface ProjectRiskData {
 }
 
 function RiskTab({ rangeDays }: { rangeDays: number }) {
+  const dateParams = useStableDateParams(rangeDays);
   const { data, isLoading } = useQuery<ProjectRiskData>({
-    queryKey: tenantKey(["/api/reports/v2/project/risk", buildDateParams(rangeDays)]),
+    queryKey: tenantKey(["/api/reports/v2/project/risk", dateParams]),
     queryFn: async () => {
-      const res = await rfetch(`/api/reports/v2/project/risk?${buildDateParams(rangeDays)}`);
+      const res = await rfetch(`/api/reports/v2/project/risk?${dateParams}`);
       if (!res.ok) throw new Error("Failed to fetch risk data");
       return res.json();
     },
