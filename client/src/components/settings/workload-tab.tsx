@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -135,27 +136,27 @@ export function WorkloadTab() {
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
 
   const { data: workloadData, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
-    queryKey: ["/api/v1/workload/tasks-by-employee"],
+    queryKey: tenantKey(["/api/v1/workload/tasks-by-employee"]),
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<WorkloadSummary>({
-    queryKey: ["/api/v1/workload/summary"],
+    queryKey: tenantKey(["/api/v1/workload/summary"]),
   });
 
   const { data: statusSummary } = useQuery<StatusSummary>({
-    queryKey: ["/api/v1/workload/by-status"],
+    queryKey: tenantKey(["/api/v1/workload/by-status"]),
   });
 
   const { data: prioritySummary } = useQuery<PrioritySummary>({
-    queryKey: ["/api/v1/workload/by-priority"],
+    queryKey: tenantKey(["/api/v1/workload/by-priority"]),
   });
 
   const { data: unassignedData } = useQuery<UnassignedTasksResponse>({
-    queryKey: ["/api/v1/workload/unassigned"],
+    queryKey: tenantKey(["/api/v1/workload/unassigned"]),
   });
 
   const { data: employeeTasks, isLoading: employeeTasksLoading } = useQuery<EmployeeTasksResponse>({
-    queryKey: ["/api/v1/workload/employee", selectedEmployee?.userId, "tasks", taskFilter],
+    queryKey: tenantKey(["/api/v1/workload/employee", selectedEmployee?.userId, "tasks", taskFilter]),
     queryFn: async () => {
       const res = await fetch(
         `/api/v1/workload/employee/${selectedEmployee?.userId}/tasks?filter=${taskFilter}`,

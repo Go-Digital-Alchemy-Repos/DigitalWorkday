@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,11 +37,11 @@ function AutoAssignCard() {
     defaultConversationAssigneeId: string | null;
     assignee: { id: string; name: string; role: string } | null;
   }>({
-    queryKey: ["/api/crm/conversation-settings"],
+    queryKey: tenantKey(["/api/crm/conversation-settings"]),
   });
 
   const { data: tenantUsers = [] } = useQuery<any[]>({
-    queryKey: ["/api/tenant/users"],
+    queryKey: tenantKey(["/api/tenant/users"]),
   });
 
   const staffUsers = tenantUsers.filter((u: any) => u.role !== "client");
@@ -54,7 +54,7 @@ function AutoAssignCard() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversation-settings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversation-settings"]) });
       toast({ title: "Auto-assign setting updated" });
     },
     onError: (error: Error) => {
@@ -145,7 +145,7 @@ const ROLE_LABELS: Record<string, string> = {
 function PermissionsMatrixCard() {
   const { toast } = useToast();
   const { data: settingsData, isLoading } = useQuery<{ tenantSettings: { messagePermissions?: MessagePermissions } | null }>({
-    queryKey: ["/api/v1/tenant/settings"],
+    queryKey: tenantKey(["/api/v1/tenant/settings"]),
   });
 
   const permissions: MessagePermissions = settingsData?.tenantSettings?.messagePermissions ?? DEFAULT_MESSAGE_PERMISSIONS;
@@ -156,8 +156,8 @@ function PermissionsMatrixCard() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/settings"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/message-permissions"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/settings"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/message-permissions"]) });
       toast({ title: "Permissions updated" });
     },
     onError: (error: Error) => {
@@ -263,7 +263,7 @@ function TemplateFormDialog({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/message-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/message-templates"]) });
       toast({ title: "Template created" });
       onOpenChange(false);
     },
@@ -278,7 +278,7 @@ function TemplateFormDialog({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/message-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/message-templates"]) });
       toast({ title: "Template updated" });
       onOpenChange(false);
     },
@@ -406,7 +406,7 @@ export function MessagesTab() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
-    queryKey: ["/api/crm/message-templates"],
+    queryKey: tenantKey(["/api/crm/message-templates"]),
   });
 
   const deleteMutation = useMutation({
@@ -414,7 +414,7 @@ export function MessagesTab() {
       await apiRequest("DELETE", `/api/crm/message-templates/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/message-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/message-templates"]) });
       toast({ title: "Template deleted" });
     },
     onError: (error: Error) => {
@@ -428,7 +428,7 @@ export function MessagesTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/message-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/message-templates"]) });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });

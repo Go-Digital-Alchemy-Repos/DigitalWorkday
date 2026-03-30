@@ -22,7 +22,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Lock, UserPlus, Trash2, Loader2, Search } from "lucide-react";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@shared/schema";
 
@@ -71,8 +72,8 @@ export function ShareModal({ type, itemId, isOpen, onClose }: ShareModalProps) {
   const [selectedRole, setSelectedRole] = useState<string>("editor");
 
   const accessQueryKey = type === "task"
-    ? ["/api/tasks", itemId, "access"]
-    : ["/api/projects", itemId, "access"];
+    ? tenantKey(queryKeys.tasks.access(itemId))
+    : tenantKey(queryKeys.projects.access(itemId));
 
   const { data: accessList = [], isLoading: accessLoading } = useQuery<AccessEntry[]>({
     queryKey: accessQueryKey,
@@ -80,7 +81,7 @@ export function ShareModal({ type, itemId, isOpen, onClose }: ShareModalProps) {
   });
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/tenant/users"],
+    queryKey: tenantKey(queryKeys.users.tenant),
     enabled: isOpen,
   });
 

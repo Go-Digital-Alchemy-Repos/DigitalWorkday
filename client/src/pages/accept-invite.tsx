@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { Loader2, Building2, CheckCircle, XCircle, AlertTriangle, Eye, EyeOff, Users } from "lucide-react";
 import { parseApiError } from "@/lib/parseApiError";
 
@@ -52,7 +52,7 @@ export default function AcceptInvitePage() {
   }, [params.token]);
 
   const { data: inviteData, isLoading: validating, error: validateError } = useQuery<InviteValidateResponse>({
-    queryKey: ["/api/v1/public/invites/validate", token],
+    queryKey: tenantKey(["/api/v1/public/invites/validate", token]),
     queryFn: async () => {
       const response = await fetch(`/api/v1/public/invites/validate?token=${token}`);
       if (!response.ok) {

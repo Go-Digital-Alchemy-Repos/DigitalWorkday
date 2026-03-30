@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -94,7 +95,7 @@ export default function SupportTickets() {
   if (searchQuery.trim()) queryParams.set("search", searchQuery.trim());
 
   const { data, isLoading } = useQuery<{ tickets: SupportTicket[]; total: number }>({
-    queryKey: ["/api/v1/support/tickets", queryParams.toString()],
+    queryKey: tenantKey(["/api/v1/support/tickets", queryParams.toString()]),
     queryFn: async () => {
       const res = await fetch(`/api/v1/support/tickets?${queryParams.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch tickets");

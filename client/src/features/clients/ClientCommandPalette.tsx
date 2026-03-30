@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { create } from 'zustand';
 import {
   CommandDialog,
@@ -108,7 +109,7 @@ export function ClientCommandPalette({
   const debouncedSearch = useDebounce(search, 250);
 
   const { data: searchResults } = useQuery<ClientSearchResult>({
-    queryKey: ["/api/clients", clientId, "search", { q: debouncedSearch }],
+    queryKey: tenantKey(["/api/clients", clientId, "search", { q: debouncedSearch }]),
     enabled: open && debouncedSearch.length >= 2,
   });
 

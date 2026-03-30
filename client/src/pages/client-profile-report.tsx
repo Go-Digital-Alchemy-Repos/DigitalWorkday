@@ -1,7 +1,7 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
-import { buildHeaders, queryClient, setActingTenantId, clearTenantScopedCaches } from "@/lib/queryClient";
+import { buildHeaders, queryClient, setActingTenantId, clearTenantScopedCaches , tenantKey } from "@/lib/queryClient";
 import {
   startOfDay,
   startOfWeek,
@@ -258,7 +258,7 @@ function TrackedTimeCard({ clientId }: { clientId: string }) {
   const endDate = end.toISOString();
 
   const { data: entries, isLoading, isError, refetch } = useQuery<TimeEntryRow[]>({
-    queryKey: ["/api/time-entries", { clientId, startDate, endDate }],
+    queryKey: tenantKey(["/api/time-entries", { clientId, startDate, endDate }]),
     queryFn: async () => {
       const params = new URLSearchParams({ clientId, startDate, endDate });
       const res = await fetch(`/api/time-entries?${params}`, { credentials: "include", headers: buildHeaders() });
@@ -394,7 +394,7 @@ export default function ClientProfileReportPage() {
   const range = searchParams.get("range") || "30d";
 
   const { data, isLoading, error, refetch } = useQuery<ClientProfileData>({
-    queryKey: ["/api/reports/v2/client", clientId, "profile", range],
+    queryKey: tenantKey(["/api/reports/v2/client", clientId, "profile", range]),
     queryFn: async () => {
       const res = await fetch(
         `/api/reports/v2/client/${clientId}/profile?range=${range}`,
@@ -414,7 +414,7 @@ export default function ClientProfileReportPage() {
       if (location.startsWith("/super-admin") && !window.location.pathname.startsWith("/super-admin/reports")) {
         setActingTenantId(null);
         clearTenantScopedCaches();
-        queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/features/flags"]) });
         sessionStorage.removeItem("superReports_activeTab");
         sessionStorage.removeItem("superReports_tenantId");
         sessionStorage.removeItem("superReports_embeddedView");

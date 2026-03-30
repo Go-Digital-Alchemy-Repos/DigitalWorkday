@@ -50,7 +50,8 @@ import {
 } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { ProjectDrawer } from "@/features/projects";
 import type { Project, Team, Workspace } from "@shared/schema";
 
@@ -73,15 +74,15 @@ export function AppSidebar() {
   const crmEnabled = useAnyCrmEnabled();
 
   const { data: workspace } = useQuery<Workspace>({
-    queryKey: ["/api/workspaces/current"],
+    queryKey: tenantKey(queryKeys.workspaces.current),
   });
 
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: tenantKey(queryKeys.projects.all),
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: tenantKey(queryKeys.teams.all),
   });
 
   const createProjectMutation = useMutation({
@@ -90,7 +91,7 @@ export function AppSidebar() {
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
     },
   });
 

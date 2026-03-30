@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -75,7 +75,7 @@ export function IntegrationsTab() {
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery<IntegrationsListResponse>({
-    queryKey: ["/api/v1/tenant/integrations"],
+    queryKey: tenantKey(["/api/v1/tenant/integrations"]),
   });
 
   const mailgunIntegration = data?.integrations?.find(i => i.provider === "mailgun");
@@ -124,7 +124,7 @@ export function IntegrationsTab() {
       return apiRequest("PUT", "/api/v1/tenant/integrations/mailgun", payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       setMailgunForm(prev => ({ ...prev, apiKey: "" }));
       toast({ title: "Mailgun settings saved successfully" });
     },
@@ -140,7 +140,7 @@ export function IntegrationsTab() {
       return await res.json();
     },
     onSuccess: (response: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       if (response.success) {
         toast({ title: "Mailgun test successful" });
       } else {
@@ -159,7 +159,7 @@ export function IntegrationsTab() {
     onSuccess: () => {
       setShowTestEmailDialog(false);
       setTestEmailAddress("");
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       toast({ title: "Test email sent successfully", description: "Check your inbox for the test email." });
     },
     onError: (err: any) => {
@@ -188,7 +188,7 @@ export function IntegrationsTab() {
       return apiRequest("PUT", "/api/v1/tenant/integrations/r2", payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       setR2Form(prev => ({ ...prev, accessKeyId: "", secretAccessKey: "" }));
       toast({ title: "Cloudflare R2 settings saved successfully" });
     },
@@ -204,7 +204,7 @@ export function IntegrationsTab() {
       return await res.json();
     },
     onSuccess: (response: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       if (response.success) {
         toast({ title: "Cloudflare R2 test successful" });
       } else {
@@ -230,7 +230,7 @@ export function IntegrationsTab() {
       return apiRequest("PUT", "/api/v1/tenant/integrations/openai", payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       setOpenaiForm(prev => ({ ...prev, apiKey: "" }));
       toast({ title: "OpenAI settings saved successfully" });
     },
@@ -246,7 +246,7 @@ export function IntegrationsTab() {
       return await res.json();
     },
     onSuccess: (response: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
       if (response.success) {
         toast({ title: response.message || "OpenAI test successful" });
       } else {

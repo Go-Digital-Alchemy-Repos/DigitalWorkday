@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, tenantKey } from "@/lib/queryClient";
 import { invalidateTimeEntries, broadcastTimeEntryChanged } from "@/lib/queryKeys";
 
 interface LogTimeOnCompleteDialogProps {

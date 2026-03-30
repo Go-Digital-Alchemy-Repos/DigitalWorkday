@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -76,12 +77,12 @@ export function StartTimerDrawer({
   }, []);
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(queryKeys.clients.all),
     enabled: open,
   });
 
   const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/clients", clientId, "projects"],
+    queryKey: tenantKey(queryKeys.clients.projects(clientId!)),
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && open,
   });
@@ -99,7 +100,7 @@ export function StartTimerDrawer({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       broadcastTimerUpdate();
       toast({ title: "Timer started" });
       onOpenChange(false);
@@ -112,7 +113,7 @@ export function StartTimerDrawer({
           description: "You already have an active timer. Stop it before starting a new one.", 
           variant: "destructive" 
         });
-        queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
         onOpenChange(false);
       } else {
         toast({ title: "Failed to start timer", description: error.message, variant: "destructive" });

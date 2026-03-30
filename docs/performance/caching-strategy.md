@@ -141,12 +141,15 @@ These defaults mean that after a successful fetch, the data is considered fresh 
 
 ### Per-Query Overrides
 
-Some queries override the defaults:
+Queries override the default `staleTime` using `STALE_TIMES` constants. See the STALE_TIMES table below for all tiers. Common overrides:
 
-| Query | `staleTime` | Reason |
+| Query Domain | `STALE_TIMES` Tier | Reason |
 |-------|-------------|--------|
-| Projects analytics summary | 30,000ms (30s) | More aggressive staleness than the 60s default because analytics are expensive and shown prominently |
-| Feature flags | 300,000ms (5 min) | Flags change rarely; no need to refetch frequently |
+| Active timer, time tracking | `realtime` (10s) | Must reflect near-real-time state |
+| Presence, polling queries | `fast` (30s) | Short polling intervals for near-live data |
+| Report command centers | `reports` (2 min) | Expensive aggregations that change slowly |
+| Feature flags, theme, settings | `slow` (5 min) | Configuration data that changes rarely |
+| AI summaries | `static` (Infinity) | Generated content that won't change |
 
 ### Query Key Architecture
 
@@ -155,18 +158,49 @@ All keys are centralized in `client/src/lib/queryKeys.ts`:
 ```typescript
 export const queryKeys = {
   clients: {
-    all: ["/api/clients"],                    // Full client list
-    minimal: ["/api/clients", { fields: "minimal" }], // Dropdown-only fields
-    detail: (id) => ["/api/clients", id],     // Single full client
-    hierarchy: ["/api/v1/clients/hierarchy/list"], // Thin hierarchy list
-    stagesSummary: ["/api/v1/clients/stages/summary"], // Pipeline counts
+    all: ["/api/clients"],
+    minimal: ["/api/clients", { fields: "minimal" }],
+    detail: (id) => ["/api/clients", id],
+    hierarchy: ["/api/v1/clients/hierarchy/list"],
+    stagesSummary: ["/api/v1/clients/stages/summary"],
   },
   tasks: {
-    my: ["/api/tasks/my"],           // Task list (with filter params appended)
-    detail: (id) => ["/api/tasks", id], // Full task detail
-    // ...
+    my: ["/api/tasks/my"],
+    all: ["/api/tasks"],
+    detail: (id) => ["/api/tasks", id],
+    childTasks: (id) => ["/api/tasks", id, "child-tasks"],
+    subtasks: (id) => ["/api/tasks", id, "subtasks"],
   },
-  // ...
+  projects: {
+    all: ["/api/projects"],
+    v1: ["/api/v1/projects"],
+    detail: (id) => ["/api/projects", id],
+    members: (id) => ["/api/projects", id, "members"],
+    tasks: (id) => ["/api/projects", id, "tasks"],
+    sections: (id) => ["/api/projects", id, "sections"],
+  },
+  users: {
+    all: ["/api/users"],
+    me: ["/api/users/me"],
+    uiPreferences: ["/api/users/me/ui-preferences"],
+  },
+  teams: { all: ["/api/teams"] },
+  timeEntries: {
+    all: ["/api/time-entries"],
+    byTask: (taskId) => ["/api/time-entries", { taskId }],
+  },
+  notifications: { all: ["/api/notifications"] },
+  reports: { ... },
+  settings: { ... },
+  crm: { ... },
+  features: { all: ["/api/features/flags"] },
+  presence: { all: ["/api/v1/presence"] },
+  billing: { ... },
+  assets: { ... },
+  workspaces: {
+    all: ["/api/workspaces"],
+    current: ["/api/workspaces/current"],
+  },
 };
 ```
 
@@ -175,42 +209,90 @@ export const queryKeys = {
 - Each payload shape has its own key (thin vs full are never mixed)
 - Hierarchical keys use arrays for proper prefix-based invalidation
 
-### Cache Invalidation Strategy
+### Tenant-Scoped Query Keys: `tenantKey()`
 
-#### The `invalidateTaskCaches` Helper
-
-Located in `client/src/lib/queryKeys.ts`, this function consolidates task-related cache invalidation:
+To prevent cross-tenant cache leaks during super-admin impersonation, all tenant-scoped `useQuery` / `invalidateQueries` calls wrap their query key with `tenantKey()`:
 
 ```typescript
-export function invalidateTaskCaches(qc: QueryClient, opts: {
-  projectId?: string | null;
-  taskId?: string | null;
-  parentTaskId?: string | null;
-  includeProjectLists?: boolean;
-}): void {
-  qc.invalidateQueries({ queryKey: queryKeys.tasks.my });
-  qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 
-  if (opts.taskId) {
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(opts.taskId) });
-  }
-  if (opts.projectId) {
-    qc.invalidateQueries({ queryKey: queryKeys.projects.sections(opts.projectId) });
-    qc.invalidateQueries({ queryKey: queryKeys.projects.tasks(opts.projectId) });
-  }
-  if (opts.parentTaskId) {
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(opts.parentTaskId) });
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.childTasks(opts.parentTaskId) });
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(opts.parentTaskId) });
-  }
-  if (opts.includeProjectLists) {
-    qc.invalidateQueries({ queryKey: queryKeys.projects.all });
-    qc.invalidateQueries({ queryKey: queryKeys.projects.v1 });
-  }
+const { data } = useQuery({
+  queryKey: tenantKey(queryKeys.projects.all),
+  staleTime: STALE_TIMES.standard,
+});
+```
+
+**How `tenantKey` works**:
+
+```typescript
+export function tenantKey(key: readonly unknown[]): readonly unknown[] {
+  const tid = getEffectiveTenantId();
+  if (!tid) return key;
+  const prefix = key[0];
+  if (typeof prefix === "string" && prefix.startsWith(SUPER_SCOPE_PREFIX)) return key;
+  return ["tenant", tid, ...key];
 }
 ```
 
-**Before this helper existed**, task mutations had 3–5 scattered `invalidateQueries` calls across `task-detail-drawer`, `subtask-detail-drawer`, `ai-project-planner`, `use-create-task`, and `project.tsx`. Now invalidation logic is auditable from a single location.
+- Prepends `["tenant", <effectiveTenantId>, ...]` to every query key
+- Super-admin routes (`/api/v1/super/...`) are automatically excluded
+- System-global routes (`/api/v1/system/features`) should NOT be wrapped
+- When `effectiveTenantId` is `null` (no tenant context), the key is returned as-is
+
+**Setting the tenant context**:
+
+```typescript
+import { setEffectiveTenantId } from "@/lib/queryClient";
+
+setEffectiveTenantId(tenantId);
+```
+
+This is called in `tenant-context-gate.tsx` when the user logs in or when a super-admin impersonates a tenant.
+
+### STALE_TIMES Constants
+
+All `staleTime` values use standardized constants from `client/src/lib/queryClient.ts`:
+
+| Constant | Value | Use Case |
+|----------|-------|----------|
+| `STALE_TIMES.realtime` | 10,000ms (10s) | Active timers, real-time data |
+| `STALE_TIMES.fast` | 30,000ms (30s) | Presence, polling intervals |
+| `STALE_TIMES.standard` | 60,000ms (1 min) | Default for most queries |
+| `STALE_TIMES.reports` | 120,000ms (2 min) | Report command centers, analytics |
+| `STALE_TIMES.slow` | 300,000ms (5 min) | Feature flags, theme, settings |
+| `STALE_TIMES.static` | `Infinity` | AI summaries, rarely-changing data |
+
+### Cache Invalidation Strategy
+
+#### Domain Invalidation Helpers
+
+Located in `client/src/lib/queryKeys.ts`, these helpers consolidate cache invalidation by domain:
+
+**`invalidateTaskCaches(qc, opts)`** — Tasks, sections, project lists:
+```typescript
+invalidateTaskCaches(qc, {
+  projectId: "proj-123",
+  taskId: "task-456",
+  parentTaskId: "task-parent",
+  includeProjectLists: true,
+});
+```
+
+**`invalidateClientCaches(qc, opts)`** — Client list, hierarchy, stages, detail:
+```typescript
+invalidateClientCaches(qc, { clientId: "client-789" });
+```
+
+**`invalidateTimeEntryCaches(qc, opts)`** — Time entries list, task-specific entries:
+```typescript
+invalidateTimeEntryCaches(qc, { taskId: "task-456" });
+```
+
+**`invalidateProjectCaches(qc, opts)`** — Project list, detail, members:
+```typescript
+invalidateProjectCaches(qc, { projectId: "proj-123" });
+```
 
 #### Mutation → Invalidation Table
 
@@ -222,10 +304,12 @@ export function invalidateTaskCaches(qc: QueryClient, opts: {
 | Create/update/delete task | `tasks.my`, `tasks.all`, `projects.sections(pid)`, `projects.tasks(pid)` |
 | Create/update project | `projects.all` (resets pagination via `resetPagination()`) |
 | Toggle project pin | `projects.all` |
+| Start/stop timer | `timeEntries.all`, `activeTimer` |
+| Log time on complete | `timeEntries.all`, `timeEntries.byTask(tid)` |
 
 #### Tenant Context Switch
 
-When a super user switches tenant context, `clearTenantScopedCaches()` invalidates all queries with tenant-scoped prefixes (20+ prefixes including `/api/v1/clients`, `/api/tasks`, `/api/projects`, etc.). This prevents stale data from the previous tenant appearing in the new context.
+When a super user switches tenant context, `clearTenantScopedCaches()` invalidates all queries with tenant-scoped prefixes. Because all queries now use `tenantKey()`, switching the effective tenant ID via `setEffectiveTenantId()` and clearing caches prevents any stale cross-tenant data from appearing.
 
 ---
 

@@ -29,7 +29,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , STALE_TIMES } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 
@@ -245,7 +245,7 @@ export function AiFocusSummaryCard({ rangeStart, rangeEnd }: AiFocusSummaryCardP
       }
       return res.json();
     },
-    staleTime: 60 * 60 * 1000,
+    staleTime: STALE_TIMES.static,
     retry: false,
   });
 

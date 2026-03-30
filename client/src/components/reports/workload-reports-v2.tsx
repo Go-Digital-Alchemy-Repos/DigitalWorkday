@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -120,7 +121,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     pagination: { total: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/workload/team", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/workload/team", rangeDays]),
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/team?${buildQueryParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed to load team data");
@@ -263,7 +264,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   const { data: teamData } = useQuery<{ team: TeamMember[] }>({
-    queryKey: ["/api/reports/v2/workload/team", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/workload/team", rangeDays]),
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/team?${buildQueryParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
@@ -278,7 +279,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
     topProjects: Array<{ projectId: string; projectName: string; hoursTracked: number; taskCount: number }>;
     overdueTaskSample: Array<{ id: string; title: string; dueDate: string; priority: string; projectName: string }>;
   }>({
-    queryKey: ["/api/reports/v2/workload/users", selectedUserId, rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/workload/users", selectedUserId, rangeDays]),
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/users/${selectedUserId}?${buildQueryParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");
@@ -439,7 +440,7 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
     }>;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/workload/capacity", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/workload/capacity", rangeDays]),
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/capacity?${buildQueryParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");
@@ -547,7 +548,7 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
     totalChecked: number;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/workload/risk", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/workload/risk", rangeDays]),
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/risk?${buildQueryParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");

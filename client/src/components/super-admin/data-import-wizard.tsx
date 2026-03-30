@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import {
   Upload,
   FileSpreadsheet,
@@ -256,8 +256,8 @@ export function DataImportWizard({ tenantId, tenantSlug, apiBasePath }: DataImpo
       queryClient.invalidateQueries({ queryKey: [`${basePath}/clients`] });
       queryClient.invalidateQueries({ queryKey: [`${basePath}/users`] });
       queryClient.invalidateQueries({ queryKey: [`${basePath}/projects`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects"]) });
     } catch (err: any) {
       if (isJobLostError(err)) {
         handleJobLost();

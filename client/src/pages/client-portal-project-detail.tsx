@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { useParams, Link } from "wouter";
 import { RichTextRenderer, getPreviewText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,7 +102,7 @@ export default function ClientPortalProjectDetail() {
   const { id } = useParams<{ id: string }>();
 
   const { data, isLoading, error } = useQuery<ProjectData>({
-    queryKey: ["/api/client-portal/projects", id],
+    queryKey: tenantKey(["/api/client-portal/projects", id]),
     enabled: !!id,
   });
 

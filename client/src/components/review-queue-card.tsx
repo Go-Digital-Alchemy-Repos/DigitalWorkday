@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { formatDistanceToNow } from "date-fns";
 import { ClipboardCheck, ChevronRight, CheckCircle2 } from "lucide-react";
@@ -111,9 +112,9 @@ export function ReviewQueueCard({ onTaskClick }: ReviewQueueCardProps) {
   const { enableTaskReviewQueue } = useFeatureFlags();
 
   const { data, isLoading } = useQuery<ReviewQueueResponse>({
-    queryKey: ["/api/dashboard/review-queue"],
+    queryKey: tenantKey(["/api/dashboard/review-queue"]),
     enabled: enableTaskReviewQueue,
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
   });
 
   if (!enableTaskReviewQueue) return null;

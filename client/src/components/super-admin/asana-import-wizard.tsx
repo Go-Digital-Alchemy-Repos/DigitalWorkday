@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -316,9 +316,9 @@ export function AsanaImportWizard({ tenantId, apiBasePath }: AsanaImportWizardPr
           if (!apiBasePath) {
             queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId] });
           }
-          queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/clients"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects"]) });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients"]) });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/clients"]) });
           return;
         }
         setTimeout(poll, 2000);

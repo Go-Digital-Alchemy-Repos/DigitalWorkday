@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { useThemeSync } from "@/hooks/use-theme-sync";
 import { getStorageUrl } from "@/lib/storageUrl";
 
@@ -82,8 +83,8 @@ function lightenHSL(hsl: string, amount: number): string {
 
 export function useTenantTheme() {
   const { data } = useQuery<TenantSettingsResponse>({
-    queryKey: ["/api/v1/tenant/branding"],
-    staleTime: 1000 * 60 * 5,
+    queryKey: tenantKey(["/api/v1/tenant/branding"]),
+    staleTime: STALE_TIMES.slow,
     retry: false,
   });
 

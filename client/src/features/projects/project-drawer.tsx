@@ -3,6 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import {
   Form,
@@ -73,17 +75,17 @@ export function ProjectDrawer({
   const [activeTab, setActiveTab] = useState("overview");
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(queryKeys.clients.all),
     enabled: open,
   });
 
   const { data: users } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: open,
   });
 
   const { data: existingMembers } = useQuery<(ProjectMember & { user?: User })[]>({
-    queryKey: ["/api/projects", project?.id, "members"],
+    queryKey: tenantKey(queryKeys.projects.members(project?.id!)),
     enabled: open && mode === "edit" && !!project?.id,
   });
 

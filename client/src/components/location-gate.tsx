@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { useAuthSafe } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,8 +35,8 @@ function LocationCheck({ children }: { children: React.ReactNode }) {
     lng: number | null;
     updatedAt: string | null;
   }>({
-    queryKey: ["/api/v1/me/location"],
-    staleTime: 30_000,
+    queryKey: tenantKey(["/api/v1/me/location"]),
+    staleTime: STALE_TIMES.fast,
   });
 
   const updateLocationMutation = useMutation({
@@ -44,7 +44,7 @@ function LocationCheck({ children }: { children: React.ReactNode }) {
       return apiRequest("POST", "/api/v1/me/location", coords);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/me/location"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/me/location"]) });
       toast({ title: "Location shared successfully" });
     },
     onError: () => {

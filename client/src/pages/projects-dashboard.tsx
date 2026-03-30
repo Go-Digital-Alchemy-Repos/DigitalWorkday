@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
@@ -155,7 +155,7 @@ export default function ProjectsDashboard() {
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
     queryKey: tenantKey(queryKeys.projects.analyticsSummary),
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
     enabled: !!projectPage,
   });
 

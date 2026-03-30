@@ -38,7 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -112,7 +112,7 @@ export function ReassignmentSuggestionsCard({ projectId, limit = 5, className }:
 
   const { data, isLoading, refetch, isFetching } = useQuery<SuggestionResult>({
     queryKey,
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
     refetchOnWindowFocus: false,
   });
 
@@ -130,8 +130,8 @@ export function ReassignmentSuggestionsCard({ projectId, limit = 5, className }:
       });
       setConfirmSuggestion(null);
       queryClient.invalidateQueries({ queryKey });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/reports"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/reports"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports"]) });
     },
     onError: () => {
       toast({ title: "Failed to apply reassignment", variant: "destructive" });

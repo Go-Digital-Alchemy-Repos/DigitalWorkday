@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -159,12 +159,12 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   });
 
   const { data: portalUsers = [], isLoading: usersLoading } = useQuery<ClientUser[]>({
-    queryKey: ["/api/clients", clientId, "users"],
+    queryKey: tenantKey(["/api/clients", clientId, "users"]),
     enabled: !!clientId,
   });
 
   const { data: contacts = [] } = useQuery<ClientContact[]>({
-    queryKey: ["/api/clients", clientId, "contacts"],
+    queryKey: tenantKey(["/api/clients", clientId, "contacts"]),
     enabled: !!clientId,
   });
 
@@ -176,7 +176,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     },
     onSuccess: () => {
       toast({ title: "Portal user created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "users"]) });
       handleCloseAddUser();
     },
     onError: (error: Error) => {
@@ -200,7 +200,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     },
     onSuccess: () => {
       toast({ title: "Portal user updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "users"]) });
       handleCloseEditUser();
     },
     onError: (error: Error) => {
@@ -218,7 +218,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     },
     onSuccess: () => {
       toast({ title: "Access revoked" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "users"]) });
       setUserToRevoke(null);
     },
     onError: (error: Error) => {

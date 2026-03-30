@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ export function ClientQuickBooksCard({ clientId }: { clientId: string }) {
   if (!flags.enableQuickbooksClientMapping || !isAdmin) return null;
 
   const { data: mapping, isLoading } = useQuery<ClientMapping>({
-    queryKey: ["/api/integrations/quickbooks/client-mappings", clientId],
+    queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings", clientId]),
     enabled: flags.enableQuickbooksClientMapping && isAdmin,
   });
 

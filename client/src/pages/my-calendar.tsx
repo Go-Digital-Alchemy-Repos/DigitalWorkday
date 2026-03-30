@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
 import { Link } from "wouter";
@@ -101,7 +101,7 @@ export default function MyCalendarPage() {
   const [timeEntryDrawerOpen, setTimeEntryDrawerOpen] = useState(false);
   
   const { data: calendarData, isLoading, error } = useQuery<MyCalendarDataResponse>({
-    queryKey: ["/api/my-calendar/events", dateRange.start, dateRange.end],
+    queryKey: tenantKey(["/api/my-calendar/events", dateRange.start, dateRange.end]),
     queryFn: async () => {
       const params = new URLSearchParams({
         start: dateRange.start,
@@ -119,7 +119,7 @@ export default function MyCalendarPage() {
     },
     onSuccess: () => {
       toast({ title: "Timer started" });
-      queryClient.invalidateQueries({ queryKey: ["/api/active-timer"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/active-timer"]) });
     },
     onError: (error: Error) => {
       toast({ 

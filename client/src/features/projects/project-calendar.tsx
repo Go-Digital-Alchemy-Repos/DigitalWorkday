@@ -24,7 +24,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import type { TaskWithRelations, Tag, User, Section } from "@shared/schema";
 
 interface CalendarEvent {
@@ -102,12 +103,12 @@ export function ProjectCalendar({
   });
 
   const { data: tasks = [] } = useQuery<TaskWithRelations[]>({
-    queryKey: ["/api/projects", projectId, "tasks"],
+    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
     enabled: !!projectId,
   });
 
   const { data: tags = [] } = useQuery<Tag[]>({
-    queryKey: ["/api/workspaces", "demo-workspace-id", "tags"],
+    queryKey: tenantKey(["/api/workspaces", "demo-workspace-id", "tags"]),
     queryFn: async () => {
       const response = await fetch("/api/workspaces/demo-workspace-id/tags");
       if (!response.ok) throw new Error("Failed to fetch tags");
@@ -132,9 +133,9 @@ export function ProjectCalendar({
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.calendarEvents(projectId!)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(projectId!)) });
     },
     onError: () => {
       toast({
@@ -142,7 +143,7 @@ export function ProjectCalendar({
         description: "Could not update the task date. Please try again.",
         variant: "destructive",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.calendarEvents(projectId!)) });
     },
   });
 

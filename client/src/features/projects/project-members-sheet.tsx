@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,12 +46,12 @@ export function ProjectMembersSheet({
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: members = [], isLoading: membersLoading } = useQuery<MemberWithUser[]>({
-    queryKey: ["/api/projects", project.id, "members"],
+    queryKey: tenantKey(queryKeys.projects.members(project.id)),
     enabled: open && !!project.id,
   });
 
   const { data: tenantUsers = [], isLoading: usersLoading } = useQuery<TenantUser[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: open,
   });
 
@@ -76,7 +77,7 @@ export function ProjectMembersSheet({
       return apiRequest("POST", `/api/projects/${project.id}/members`, { userId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "members"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.members(project.id)) });
       toast({ title: "Member added to project" });
     },
     onError: (error: any) => {
@@ -90,7 +91,7 @@ export function ProjectMembersSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}/members/${userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "members"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.members(project.id)) });
       toast({ title: "Member removed from project" });
     },
     onError: (error: any) => {

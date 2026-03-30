@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,22 +128,22 @@ export function QuickBooksMappingTab() {
   const [qbSearch, setQbSearch] = useState("");
 
   const connectionQuery = useQuery<ConnectionStatus>({
-    queryKey: ["/api/integrations/quickbooks/status"],
+    queryKey: tenantKey(["/api/integrations/quickbooks/status"]),
     enabled: flags.enableQuickbooksSync,
   });
 
   const mappingsQuery = useQuery<{ mappings: MappingItem[]; total: number }>({
-    queryKey: ["/api/integrations/quickbooks/client-mappings", { status: statusFilter !== "all" ? statusFilter : undefined, search: search || undefined }],
+    queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings", { status: statusFilter !== "all" ? statusFilter : undefined, search: search || undefined }]),
     enabled: flags.enableQuickbooksClientMapping && connectionQuery.data?.connected === true,
   });
 
   const qbCustomersQuery = useQuery<{ customers: QBOCustomer[]; totalCount: number }>({
-    queryKey: ["/api/integrations/quickbooks/customers", { search: qbSearch || undefined }],
+    queryKey: tenantKey(["/api/integrations/quickbooks/customers", { search: qbSearch || undefined }]),
     enabled: linkDialogOpen && connectionQuery.data?.connected === true,
   });
 
   const suggestionsQuery = useQuery<{ suggestions: MappingSuggestion[] }>({
-    queryKey: ["/api/integrations/quickbooks/client-mappings", selectedClientId!, "suggestions"],
+    queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings", selectedClientId!, "suggestions"]),
     enabled: !!selectedClientId && linkDialogOpen && flags.enableQuickbooksMappingSuggestions,
   });
 
@@ -159,7 +159,7 @@ export function QuickBooksMappingTab() {
   const disconnectMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/integrations/quickbooks/disconnect"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/quickbooks"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/integrations/quickbooks"]) });
       toast({ title: "Disconnected from QuickBooks" });
     },
   });
@@ -172,7 +172,7 @@ export function QuickBooksMappingTab() {
         method: "manual",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/quickbooks/client-mappings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings"]) });
       setLinkDialogOpen(false);
       toast({ title: "Client linked to QuickBooks customer" });
     },
@@ -183,7 +183,7 @@ export function QuickBooksMappingTab() {
     mutationFn: (clientId: string) =>
       apiRequest("POST", `/api/integrations/quickbooks/client-mappings/${clientId}/unlink`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/quickbooks/client-mappings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings"]) });
       toast({ title: "Client unlinked" });
     },
     onError: (err: any) => toast({ title: "Unlink failed", description: err.message, variant: "destructive" }),
@@ -193,7 +193,7 @@ export function QuickBooksMappingTab() {
     mutationFn: (params: { clientId: string; locked: boolean }) =>
       apiRequest("POST", `/api/integrations/quickbooks/client-mappings/${params.clientId}/lock`, { locked: params.locked }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/quickbooks/client-mappings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings"]) });
     },
   });
 
@@ -201,7 +201,7 @@ export function QuickBooksMappingTab() {
     mutationFn: (clientId: string) =>
       apiRequest("POST", `/api/integrations/quickbooks/client-mappings/${clientId}/create-customer`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/quickbooks/client-mappings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings"]) });
       toast({ title: "Customer created in QuickBooks and linked" });
     },
     onError: (err: any) => toast({ title: "Create failed", description: err.message, variant: "destructive" }),
@@ -211,7 +211,7 @@ export function QuickBooksMappingTab() {
     mutationFn: (clientId: string) =>
       apiRequest("POST", `/api/integrations/quickbooks/client-mappings/${clientId}/sync-update`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/quickbooks/client-mappings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/integrations/quickbooks/client-mappings"]) });
       toast({ title: "Sync completed" });
     },
     onError: (err: any) => toast({ title: "Sync failed", description: err.message, variant: "destructive" }),

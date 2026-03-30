@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -68,11 +68,11 @@ export function TenantIntegrationsTab() {
   const [s3Initialized, setS3Initialized] = useState(false);
 
   const { data: integrations, isLoading } = useQuery<{ integrations: IntegrationSummary[] }>({
-    queryKey: ["/api/v1/tenant/integrations"],
+    queryKey: tenantKey(["/api/v1/tenant/integrations"]),
   });
 
   const { data: mailgunIntegration } = useQuery<any>({
-    queryKey: ["/api/v1/tenant/integrations", "mailgun"],
+    queryKey: tenantKey(["/api/v1/tenant/integrations", "mailgun"]),
     queryFn: async () => {
       const res = await fetch("/api/v1/tenant/integrations/mailgun", { credentials: "include" });
       if (!res.ok) {
@@ -84,7 +84,7 @@ export function TenantIntegrationsTab() {
   });
 
   const { data: s3Integration } = useQuery<any>({
-    queryKey: ["/api/v1/tenant/integrations", "s3"],
+    queryKey: tenantKey(["/api/v1/tenant/integrations", "s3"]),
     queryFn: async () => {
       const res = await fetch("/api/v1/tenant/integrations/s3", { credentials: "include" });
       if (!res.ok) {
@@ -122,8 +122,8 @@ export function TenantIntegrationsTab() {
       return apiRequest("PUT", "/api/v1/tenant/integrations/mailgun", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations", "mailgun"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations", "mailgun"]) });
       toast({ title: "Mailgun configuration saved" });
       setMailgunData(prev => ({ ...prev, apiKey: "" }));
     },
@@ -143,7 +143,7 @@ export function TenantIntegrationsTab() {
       } else {
         toast({ title: response.message || "Test failed", variant: "destructive" });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
     },
     onError: () => {
       toast({ title: "Failed to test Mailgun", variant: "destructive" });
@@ -155,8 +155,8 @@ export function TenantIntegrationsTab() {
       return apiRequest("PUT", "/api/v1/tenant/integrations/s3", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations", "s3"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations", "s3"]) });
       toast({ title: "S3 configuration saved" });
       setS3Data(prev => ({ ...prev, accessKeyId: "", secretAccessKey: "" }));
     },
@@ -176,7 +176,7 @@ export function TenantIntegrationsTab() {
       } else {
         toast({ title: response.message || "Test failed", variant: "destructive" });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/integrations"]) });
     },
     onError: () => {
       toast({ title: "Failed to test S3", variant: "destructive" });

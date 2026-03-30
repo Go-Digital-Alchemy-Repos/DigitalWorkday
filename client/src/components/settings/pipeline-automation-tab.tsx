@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -221,11 +221,11 @@ export function PipelineAutomationTab() {
   const [showEventsLog, setShowEventsLog] = useState(false);
 
   const rulesQuery = useQuery<ClientStageAutomationRule[]>({
-    queryKey: ["/api/v1/automation/client-stage-rules"],
+    queryKey: tenantKey(["/api/v1/automation/client-stage-rules"]),
   });
 
   const eventsQuery = useQuery<ClientStageAutomationEvent[]>({
-    queryKey: ["/api/v1/automation/client-stage-events"],
+    queryKey: tenantKey(["/api/v1/automation/client-stage-events"]),
     enabled: showEventsLog,
   });
 
@@ -235,7 +235,7 @@ export function PipelineAutomationTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/automation/client-stage-rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/automation/client-stage-rules"]) });
       toast({ title: "Rule created", description: "Automation rule has been created successfully." });
       closeSheet();
     },
@@ -250,7 +250,7 @@ export function PipelineAutomationTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/automation/client-stage-rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/automation/client-stage-rules"]) });
       toast({ title: "Rule updated", description: "Automation rule has been updated." });
       closeSheet();
     },
@@ -264,7 +264,7 @@ export function PipelineAutomationTab() {
       await apiRequest("DELETE", `/api/v1/automation/client-stage-rules/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/automation/client-stage-rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/automation/client-stage-rules"]) });
       toast({ title: "Rule deleted", description: "Automation rule has been removed." });
       setDeleteRuleId(null);
     },
@@ -279,7 +279,7 @@ export function PipelineAutomationTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/automation/client-stage-rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/automation/client-stage-rules"]) });
     },
     onError: (err: any) => {
       toast({ title: "Failed to toggle rule", description: err.message, variant: "destructive" });

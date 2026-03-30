@@ -2,7 +2,7 @@ import { useParams, useLocation, Link } from "wouter";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { buildHeaders, queryClient, setActingTenantId, clearTenantScopedCaches } from "@/lib/queryClient";
+import { buildHeaders, queryClient, setActingTenantId, clearTenantScopedCaches, tenantKey, apiRequest } from "@/lib/queryClient";
 import { 
   ChevronLeft, 
   Users, 
@@ -62,7 +62,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProfileData {
@@ -509,7 +508,7 @@ export default function EmployeeProfileReportPage() {
   const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
 
   const { data, isLoading, error, refetch } = useQuery<ProfileData>({
-    queryKey: ["/api/reports/v2/employee", employeeId, "profile", range],
+    queryKey: tenantKey(["/api/reports/v2/employee", employeeId, "profile", range]),
     queryFn: async () => {
       const res = await fetch(
         `/api/reports/v2/employee/${employeeId}/profile?range=${range}`,
@@ -529,7 +528,7 @@ export default function EmployeeProfileReportPage() {
       if (location.startsWith("/super-admin") && !window.location.pathname.startsWith("/super-admin/reports")) {
         setActingTenantId(null);
         clearTenantScopedCaches();
-        queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/features/flags"]) });
         sessionStorage.removeItem("superReports_activeTab");
         sessionStorage.removeItem("superReports_tenantId");
         sessionStorage.removeItem("superReports_embeddedView");

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -95,7 +95,7 @@ export function ProfileTab() {
   const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<TenantInfo>({
-    queryKey: ["/api/v1/tenant/me"],
+    queryKey: tenantKey(["/api/v1/tenant/me"]),
   });
 
   useEffect(() => {
@@ -113,8 +113,8 @@ export function ProfileTab() {
       return apiRequest("PATCH", "/api/v1/tenant/settings", settings);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/me"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/settings"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/me"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/settings"]) });
       toast({ title: "Profile settings saved successfully" });
     },
     onError: () => {

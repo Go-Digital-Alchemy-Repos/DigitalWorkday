@@ -31,7 +31,7 @@ import {
   Send,
   CheckCircle,
 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -183,8 +183,8 @@ function BillingApprovalQueueCard() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: queue = [], isLoading } = useQuery<PendingApprovalEntry[]>({
-    queryKey: ["/api/billing/pending-approval"],
-    staleTime: 30_000,
+    queryKey: tenantKey(["/api/billing/pending-approval"]),
+    staleTime: STALE_TIMES.fast,
     refetchOnWindowFocus: false,
   });
 
@@ -193,7 +193,7 @@ function BillingApprovalQueueCard() {
     onSuccess: (_data, ids) => {
       toast({ title: `${ids.length} time ${ids.length === 1 ? "entry" : "entries"} approved` });
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["/api/billing/pending-approval"] });
+      qc.invalidateQueries({ queryKey: tenantKey(["/api/billing/pending-approval"]) });
     },
     onError: () => toast({ title: "Failed to approve entries", variant: "destructive" }),
   });
@@ -203,7 +203,7 @@ function BillingApprovalQueueCard() {
     onSuccess: (_data, ids) => {
       toast({ title: `${ids.length} time ${ids.length === 1 ? "entry" : "entries"} rejected` });
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["/api/billing/pending-approval"] });
+      qc.invalidateQueries({ queryKey: tenantKey(["/api/billing/pending-approval"]) });
     },
     onError: () => toast({ title: "Failed to reject entries", variant: "destructive" }),
   });
@@ -399,14 +399,14 @@ function LowMarginClientsCard() {
   const [threshold, setThreshold] = useState("20");
 
   const { data: clients = [], isLoading } = useQuery<LowMarginClient[]>({
-    queryKey: ["/api/analytics/client-profitability", threshold],
+    queryKey: tenantKey(["/api/analytics/client-profitability", threshold]),
     queryFn: async () => {
       const params = new URLSearchParams({ marginThreshold: threshold });
       const res = await fetch(`/api/analytics/client-profitability?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load profitability data");
       return res.json();
     },
-    staleTime: 60_000,
+    staleTime: STALE_TIMES.standard,
     refetchOnWindowFocus: false,
   });
 
@@ -540,20 +540,20 @@ function InvoiceDraftsCard() {
   });
 
   const { data: drafts = [], isLoading } = useQuery<InvoiceDraft[]>({
-    queryKey: ["/api/billing/invoice-drafts"],
-    staleTime: 30_000,
+    queryKey: tenantKey(["/api/billing/invoice-drafts"]),
+    staleTime: STALE_TIMES.fast,
     refetchOnWindowFocus: false,
   });
 
   const { data: clients = [] } = useQuery<ClientOption[]>({
-    queryKey: ["/api/clients"],
-    staleTime: 60_000,
+    queryKey: tenantKey(["/api/clients"]),
+    staleTime: STALE_TIMES.standard,
     select: (data: any[]) => data.map((c) => ({ id: c.id, name: c.name })),
   });
 
   const { data: allProjects = [] } = useQuery<ProjectOption[]>({
-    queryKey: ["/api/projects"],
-    staleTime: 60_000,
+    queryKey: tenantKey(["/api/projects"]),
+    staleTime: STALE_TIMES.standard,
     select: (data: any[]) => data.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId })),
   });
 
@@ -563,8 +563,8 @@ function InvoiceDraftsCard() {
     mutationFn: (id: string) => apiRequest("POST", `/api/billing/invoice-drafts/${id}/export`, {}),
     onSuccess: () => {
       toast({ title: "Invoice draft exported — time entries marked as Invoiced" });
-      qc.invalidateQueries({ queryKey: ["/api/billing/invoice-drafts"] });
-      qc.invalidateQueries({ queryKey: ["/api/billing/pending-approval"] });
+      qc.invalidateQueries({ queryKey: tenantKey(["/api/billing/invoice-drafts"]) });
+      qc.invalidateQueries({ queryKey: tenantKey(["/api/billing/pending-approval"]) });
     },
     onError: (err: any) => toast({ title: err?.message || "Failed to export draft", variant: "destructive" }),
   });
@@ -573,7 +573,7 @@ function InvoiceDraftsCard() {
     mutationFn: (id: string) => apiRequest("POST", `/api/billing/invoice-drafts/${id}/cancel`, {}),
     onSuccess: () => {
       toast({ title: "Invoice draft cancelled" });
-      qc.invalidateQueries({ queryKey: ["/api/billing/invoice-drafts"] });
+      qc.invalidateQueries({ queryKey: tenantKey(["/api/billing/invoice-drafts"]) });
     },
     onError: (err: any) => toast({ title: err?.message || "Failed to cancel draft", variant: "destructive" }),
   });
@@ -594,7 +594,7 @@ function InvoiceDraftsCard() {
         notes: form.notes || undefined,
       });
       toast({ title: "Invoice draft generated" });
-      qc.invalidateQueries({ queryKey: ["/api/billing/invoice-drafts"] });
+      qc.invalidateQueries({ queryKey: tenantKey(["/api/billing/invoice-drafts"]) });
       setDialogOpen(false);
       setForm({ clientId: "", projectId: "", startDate: "", endDate: new Date().toISOString().slice(0, 10), defaultRate: "0", notes: "" });
     } catch (err: any) {
@@ -874,7 +874,7 @@ function formatSeconds(seconds: number): string {
 
 function BillableTasksCard() {
   const { data: tasks = [], isLoading } = useQuery<BillableTask[]>({
-    queryKey: ["/api/billing/billable-tasks/completed"],
+    queryKey: tenantKey(["/api/billing/billable-tasks/completed"]),
   });
 
   return (
@@ -973,8 +973,8 @@ export default function PmPortfolioDashboard() {
   }, [activeTab, showBillingTab, showInsightsTab]);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<PmPortfolioResult>({
-    queryKey: ["/api/reports/pm/portfolio"],
-    staleTime: 60_000,
+    queryKey: tenantKey(["/api/reports/pm/portfolio"]),
+    staleTime: STALE_TIMES.standard,
     refetchOnWindowFocus: false,
   });
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -106,7 +107,7 @@ function LoadingSkeleton() {
 export default function TaskAnalytics() {
   const [days, setDays] = useState(30);
   const { data, isLoading } = useQuery<TaskAnalyticsData>({
-    queryKey: ["/api/v1/reports/tasks/analytics", { days }],
+    queryKey: tenantKey(["/api/v1/reports/tasks/analytics", { days }]),
   });
 
   if (isLoading || !data) return <LoadingSkeleton />;

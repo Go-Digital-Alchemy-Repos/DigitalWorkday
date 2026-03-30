@@ -21,7 +21,7 @@ import {
   Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { buildHeaders } from "@/lib/queryClient";
+import { buildHeaders, tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
@@ -85,8 +85,8 @@ function formatAnalyticsHours(hours: number) {
 
 function ClientSummaryCards() {
   const { data, isLoading } = useQuery<ClientAnalyticsSummary>({
-    queryKey: ["/api/v1/reports/clients/analytics"],
-    staleTime: 2 * 60 * 1000,
+    queryKey: tenantKey(["/api/v1/reports/clients/analytics"]),
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading || !data) return (
@@ -220,13 +220,13 @@ function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
 
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientOverviewItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/overview", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/overview", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const sortedClients = useMemo(() => {
@@ -386,13 +386,13 @@ function ActivityTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
   const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/activity", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/activity", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -456,13 +456,13 @@ function TimeTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFil
   const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/time", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/time", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -535,13 +535,13 @@ function TasksTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFi
   const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/tasks", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/tasks", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -628,13 +628,13 @@ function SlaTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilt
   const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/sla", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/sla", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -718,13 +718,13 @@ function RiskTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFil
   const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/risk", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/risk", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays, filterParams)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -869,13 +869,13 @@ function HealthTab({ rangeDays, filters }: { rangeDays: number; filters: ClientF
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/client/health-index", rangeDays, filterParams],
+    queryKey: tenantKey(["/api/reports/v2/client/health-index", rangeDays, filterParams]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/client/health-index?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const sorted = useMemo(() => {
@@ -1125,13 +1125,13 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
     explanations: string[];
     horizonWeeks: number;
   }>({
-    queryKey: ["/api/reports/v2/forecasting/client-risk-trend", horizonWeeks],
+    queryKey: tenantKey(["/api/reports/v2/forecasting/client-risk-trend", horizonWeeks]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/forecasting/client-risk-trend?weeks=${horizonWeeks}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
   });
 
   if (isLoading) {
@@ -1306,7 +1306,7 @@ interface StageSummaryItem {
 
 function PipelineTab() {
   const { data: stageSummary, isLoading } = useQuery<StageSummaryItem[]>({
-    queryKey: ["/api/v1/clients/stages/summary"],
+    queryKey: tenantKey(["/api/v1/clients/stages/summary"]),
   });
 
   const totalClients = useMemo(() => {
@@ -1498,13 +1498,13 @@ export function ClientCommandCenter() {
   const flags = useFeatureFlags();
 
   const { data: filterOptions } = useQuery<{ industries: string[]; tags: string[] }>({
-    queryKey: ["/api/reports/v2/client/filter-options"],
+    queryKey: tenantKey(["/api/reports/v2/client/filter-options"]),
     queryFn: async () => {
       const res = await rfetch("/api/reports/v2/client/filter-options");
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
   });
 
   const filters: ClientFilters = useMemo(() => ({

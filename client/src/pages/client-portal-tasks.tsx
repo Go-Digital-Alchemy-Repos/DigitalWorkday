@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,7 +90,7 @@ export default function ClientPortalTasks() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   
   const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+    queryKey: tenantKey(["/api/client-portal/dashboard"]),
   });
 
   const filteredTasks = useMemo(() => {

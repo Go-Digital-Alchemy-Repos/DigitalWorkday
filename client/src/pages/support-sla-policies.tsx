@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, ArrowLeft, Loader2, ShieldAlert, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 interface SlaPolicy {
@@ -155,7 +155,7 @@ export default function SupportSlaPolicies() {
   const [deleteConfirm, setDeleteConfirm] = useState<SlaPolicy | null>(null);
 
   const { data: policies, isLoading } = useQuery<SlaPolicy[]>({
-    queryKey: ["/api/v1/support/sla-policies"],
+    queryKey: tenantKey(["/api/v1/support/sla-policies"]),
   });
 
   const deleteMutation = useMutation({
@@ -163,7 +163,7 @@ export default function SupportSlaPolicies() {
       return apiRequest("DELETE", `/api/v1/support/sla-policies/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/sla-policies"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/sla-policies"]) });
       toast({ title: "Policy deleted" });
       setDeleteConfirm(null);
     },
@@ -173,7 +173,7 @@ export default function SupportSlaPolicies() {
   });
 
   const handleSaved = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/v1/support/sla-policies"] });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/sla-policies"]) });
     setShowForm(false);
     setEditingPolicy(undefined);
   };

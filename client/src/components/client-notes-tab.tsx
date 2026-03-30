@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -312,16 +312,16 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
 
   // Fetch notes
   const { data: notesData, isLoading: notesLoading } = useQuery<{ ok: boolean; notes: ClientNote[] }>({
-    queryKey: ["/api/clients", clientId, "notes"],
+    queryKey: tenantKey(["/api/clients", clientId, "notes"]),
   });
 
   // Fetch categories
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery<{ ok: boolean; categories: NoteCategory[] }>({
-    queryKey: ["/api/clients", clientId, "notes", "categories"],
+    queryKey: tenantKey(["/api/clients", clientId, "notes", "categories"]),
   });
 
   const { data: versionHistoryData, isLoading: versionHistoryLoading } = useQuery<VersionHistoryResponse>({
-    queryKey: ["/api/clients", clientId, "notes", historyNote?.id, "versions"],
+    queryKey: tenantKey(["/api/clients", clientId, "notes", historyNote?.id, "versions"]),
     enabled: !!historyNote && drawerMode === "history",
   });
 
@@ -353,7 +353,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       return apiRequest("DELETE", `/api/clients/${clientId}/notes/${noteId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes"]) });
       setDeleteNote(null);
       toast({ title: "Note deleted", description: "The note has been removed." });
     },
@@ -369,7 +369,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       return apiRequest("POST", `/api/clients/${clientId}/notes/categories`, data);
     },
     onSuccess: (res: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes", "categories"]) });
       closeCategoryDialog();
       toast({ title: "Category created", description: "Your category has been saved." });
       
@@ -389,8 +389,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       return apiRequest("PUT", `/api/clients/${clientId}/notes/categories/${categoryId}`, { name, color });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes", "categories"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes"]) });
       closeCategoryDialog();
       toast({ title: "Category updated", description: "Your changes have been saved." });
     },
@@ -405,8 +405,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       return apiRequest("DELETE", `/api/clients/${clientId}/notes/categories/${categoryId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes", "categories"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes"]) });
       setDeleteCategory(null);
       toast({ title: "Category deleted", description: "The category has been removed." });
     },
@@ -531,7 +531,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         if (noteId && noteAttachments.length > 0) {
           await uploadAttachmentsForNote(noteId);
         }
-        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes"]) });
         closeDrawer();
         toast({ title: "Note created", description: "Your note has been saved." });
       } else if (drawerMode === "edit" && editingNote) {
@@ -544,9 +544,9 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         if (noteAttachments.length > 0) {
           await uploadAttachmentsForNote(editingNote.id);
         }
-        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes"]) });
         if (historyNote) {
-          queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", historyNote.id, "versions"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "notes", historyNote.id, "versions"]) });
         }
         closeDrawer();
         toast({ title: "Note updated", description: "Your changes have been saved." });

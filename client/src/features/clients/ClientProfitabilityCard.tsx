@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -86,7 +87,7 @@ export function ClientProfitabilityCard({ clientId }: { clientId: string }) {
   if (endDate) params.set("endDate", endDate);
 
   const { data, isLoading, isError } = useQuery<ProfitabilityData>({
-    queryKey: ["/api/analytics/client-profitability", clientId, range],
+    queryKey: tenantKey(["/api/analytics/client-profitability", clientId, range]),
     queryFn: async () => {
       const res = await fetch(`/api/analytics/client-profitability/${clientId}?${params.toString()}`, {
         credentials: "include",
@@ -94,7 +95,7 @@ export function ClientProfitabilityCard({ clientId }: { clientId: string }) {
       if (!res.ok) throw new Error("Failed to load profitability data");
       return res.json();
     },
-    staleTime: 60_000,
+    staleTime: STALE_TIMES.standard,
     refetchOnWindowFocus: false,
   });
 

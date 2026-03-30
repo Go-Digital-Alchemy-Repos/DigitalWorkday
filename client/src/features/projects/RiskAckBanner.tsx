@@ -37,7 +37,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { formatDistanceToNow } from "date-fns";
@@ -142,7 +142,7 @@ export function RiskAckBanner({ projectId, projectName, className, onOpenTask, o
   const [nextCheckInDate, setNextCheckInDate] = useState("");
 
   const { data: status, isLoading } = useQuery<RiskAckStatus>({
-    queryKey: ["/api/projects", projectId, "risk-ack", "status"],
+    queryKey: tenantKey(["/api/projects", projectId, "risk-ack", "status"]),
     queryFn: async () => {
       const resp = await fetch(`/api/projects/${projectId}/risk-ack/status`, {
         credentials: "include",
@@ -152,7 +152,7 @@ export function RiskAckBanner({ projectId, projectName, className, onOpenTask, o
     },
     enabled: enableRiskAckWorkflow && !!projectId,
     refetchOnWindowFocus: false,
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const ackMutation = useMutation({
@@ -165,7 +165,7 @@ export function RiskAckBanner({ projectId, projectName, className, onOpenTask, o
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["/api/projects", projectId, "risk-ack", "status"],
+        queryKey: tenantKey(["/api/projects", projectId, "risk-ack", "status"]),
       });
       setAckDialogOpen(false);
       setMitigationNote("");

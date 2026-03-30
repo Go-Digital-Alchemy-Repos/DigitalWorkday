@@ -2,6 +2,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +97,7 @@ export function CreateProjectDialog({
   const selectedClientId = form.watch("clientId");
 
   const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: open,
   });
 

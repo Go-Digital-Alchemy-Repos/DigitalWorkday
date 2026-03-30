@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import { Link } from "wouter";
 import { TimeTrackingContent } from "./time-tracking";
 
@@ -295,7 +295,7 @@ export default function MyTimePage() {
   }, [location]);
   
   const { data: stats, isLoading, error } = useQuery<MyTimeStats>({
-    queryKey: ["/api/time-entries/my/stats"],
+    queryKey: tenantKey(["/api/time-entries/my/stats"]),
   });
   
   const startTimerMutation = useMutation({
@@ -304,7 +304,8 @@ export default function MyTimePage() {
     },
     onSuccess: () => {
       toast({ title: "Timer started" });
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/timer/current"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/time-entries/my/stats"]) });
     },
     onError: (error: Error) => {
       toast({ 
@@ -331,7 +332,7 @@ export default function MyTimePage() {
           <CardContent className="pt-6">
             <p className="text-destructive" data-testid="text-error-message">Failed to load time statistics. Please try again.</p>
             <p className="text-sm text-muted-foreground mt-2" data-testid="text-error-detail">{error.message}</p>
-            <Button variant="outline" className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] })} data-testid="button-retry-stats">
+            <Button variant="outline" className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: tenantKey(["/api/time-entries/my/stats"]) })} data-testid="button-retry-stats">
               Retry
             </Button>
           </CardContent>

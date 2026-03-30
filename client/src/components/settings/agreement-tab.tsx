@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,12 +37,12 @@ export function AgreementTab() {
   const { toast } = useToast();
 
   const { data: agreementState, isLoading } = useQuery<AgreementState>({
-    queryKey: ["/api/v1/tenant/agreement"],
+    queryKey: tenantKey(["/api/v1/tenant/agreement"]),
     refetchOnWindowFocus: false,
   });
 
   const { data: acceptance } = useQuery<UserAcceptance>({
-    queryKey: ["/api/v1/me/agreement/status"],
+    queryKey: tenantKey(["/api/v1/me/agreement/status"]),
     enabled: !!agreementState?.active,
     refetchOnWindowFocus: false,
   });

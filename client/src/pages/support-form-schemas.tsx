@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, ArrowLeft, Loader2, FileText, GripVertical, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 interface FormField {
@@ -244,7 +244,7 @@ export default function SupportFormSchemas() {
   const [deleteConfirm, setDeleteConfirm] = useState<TicketFormSchema | null>(null);
 
   const { data: schemas, isLoading } = useQuery<TicketFormSchema[]>({
-    queryKey: ["/api/v1/support/form-schemas"],
+    queryKey: tenantKey(["/api/v1/support/form-schemas"]),
   });
 
   const deleteMutation = useMutation({
@@ -252,7 +252,7 @@ export default function SupportFormSchemas() {
       return apiRequest("DELETE", `/api/v1/support/form-schemas/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/form-schemas"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/form-schemas"]) });
       toast({ title: "Form schema deleted" });
       setDeleteConfirm(null);
     },
@@ -262,7 +262,7 @@ export default function SupportFormSchemas() {
   });
 
   const handleSaved = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/v1/support/form-schemas"] });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/form-schemas"]) });
     setShowEditor(false);
     setEditingSchema(undefined);
   };

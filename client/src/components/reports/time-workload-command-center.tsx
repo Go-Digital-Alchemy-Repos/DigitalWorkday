@@ -20,7 +20,7 @@ import { ReportCommandCenterLayout, buildDateParams } from "./report-command-cen
 import { MobileTabSelect } from "./mobile-tab-select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
-import { buildHeaders } from "@/lib/queryClient";
+import { buildHeaders, tenantKey, STALE_TIMES } from "@/lib/queryClient";
 
 async function rfetch(url: string) {
   const res = await fetch(url, { credentials: "include", headers: buildHeaders() });
@@ -97,7 +97,7 @@ function SortIcon({ field, sortBy, sortDir }: { field: string; sortBy: string; s
 // Overview Tab
 function OverviewTab({ rangeDays }: { rangeDays: number }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/reports/v2/workload/team", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/workload/team", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/workload/team?${buildDateParams(rangeDays)}`),
   });
 
@@ -196,12 +196,12 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const { data: teamData, isLoading: teamLoading } = useQuery({
-    queryKey: ["/api/reports/v2/workload/team", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/workload/team", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/workload/team?${buildDateParams(rangeDays)}`),
   });
 
   const { data: userData, isLoading: userLoading } = useQuery({
-    queryKey: ["/api/reports/v2/workload/users", selectedUserId, rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/workload/users", selectedUserId, rangeDays]),
     queryFn: () => rfetch(`/api/reports/v2/workload/users/${selectedUserId}?${buildDateParams(rangeDays)}`),
     enabled: !!selectedUserId,
   });
@@ -332,7 +332,7 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
 // Capacity Tab
 function CapacityTab({ rangeDays }: { rangeDays: number }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/reports/v2/workload/capacity", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/workload/capacity", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/workload/capacity?${buildDateParams(rangeDays)}`),
   });
 
@@ -390,22 +390,22 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
   const dateParams = buildDateParams(rangeDays);
   
   const summaryQuery = useQuery({
-    queryKey: ["/api/reports/v2/time/summary", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/time/summary", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/time/summary?${dateParams}`),
   });
 
   const byProjectQuery = useQuery({
-    queryKey: ["/api/reports/v2/time/by-project", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/time/by-project", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/time/by-project?${dateParams}`),
   });
 
   const byUserQuery = useQuery({
-    queryKey: ["/api/reports/v2/time/by-user", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/time/by-user", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/time/by-user?${dateParams}`),
   });
 
   const trendQuery = useQuery({
-    queryKey: ["/api/reports/v2/time/trend", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/time/trend", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/time/trend?${dateParams}`),
   });
 
@@ -494,7 +494,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
 // Risk Tab
 function RiskTab({ rangeDays }: { rangeDays: number }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/reports/v2/workload/risk", { rangeDays }],
+    queryKey: tenantKey(["/api/reports/v2/workload/risk", { rangeDays }]),
     queryFn: () => rfetch(`/api/reports/v2/workload/risk?${buildDateParams(rangeDays)}`),
   });
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { formatDistanceToNow } from "date-fns";
@@ -82,12 +82,12 @@ function NewRequestDialog({
   const [selectedClientId, setSelectedClientId] = useState<string>("");
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<PortalTemplate[]>({
-    queryKey: ["/api/crm/portal/message-templates"],
+    queryKey: tenantKey(["/api/crm/portal/message-templates"]),
     enabled: open,
   });
 
   const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<PortalDashboard>({
-    queryKey: ["/api/portal/dashboard"],
+    queryKey: tenantKey(["/api/portal/dashboard"]),
     enabled: open,
   });
 
@@ -105,7 +105,7 @@ function NewRequestDialog({
       return res.json();
     },
     onSuccess: (data: { id: string }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/portal/conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/portal/conversations"]) });
       toast({ title: "Request submitted" });
       onOpenChange(false);
       resetState();
@@ -411,7 +411,7 @@ function ConversationThread({
   const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data, isLoading } = useQuery<ConversationDetail>({
-    queryKey: ["/api/crm/conversations", conversationId, "messages"],
+    queryKey: tenantKey(["/api/crm/conversations", conversationId, "messages"]),
     queryFn: async () => {
       const res = await fetch(`/api/crm/conversations/${conversationId}/messages`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load messages");
@@ -427,8 +427,8 @@ function ConversationThread({
     },
     onSuccess: () => {
       setReplyText("");
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", conversationId, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/portal/conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", conversationId, "messages"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/portal/conversations"]) });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -566,12 +566,12 @@ export default function ClientPortalMessages() {
   const [newRequestOpen, setNewRequestOpen] = useState(false);
 
   const { data: conversations = [], isLoading } = useQuery<ConversationSummary[]>({
-    queryKey: ["/api/crm/portal/conversations"],
+    queryKey: tenantKey(["/api/crm/portal/conversations"]),
     enabled: crmFlags.clientMessaging,
   });
 
   const { data: currentUser } = useQuery<{ id: string }>({
-    queryKey: ["/api/auth/me"],
+    queryKey: tenantKey(["/api/auth/me"]),
     queryFn: async () => {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (!res.ok) throw new Error("Not authenticated");

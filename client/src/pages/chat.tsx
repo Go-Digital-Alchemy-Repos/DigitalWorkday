@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
+import { queryClient, apiRequest, ApiError , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, ChatAIAssist, ConvertToTaskAction, SlashCommandDropdown, getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand, type ReadByUser } from "@/features/chat";
 
 const LazyChatContextPanel = lazy(() =>
@@ -426,25 +426,25 @@ export default function ChatPage() {
   }
 
   const { data: channels = [], isLoading: isLoadingChannels, isError: isChannelsError, refetch: refetchChannels } = useQuery<ChatChannel[]>({
-    queryKey: ["/api/v1/chat/channels"],
+    queryKey: tenantKey(["/api/v1/chat/channels"]),
   });
 
   const { data: dmThreads = [], isLoading: isLoadingDmThreads, isError: isDmThreadsError, refetch: refetchDmThreads } = useQuery<ChatDmThread[]>({
-    queryKey: ["/api/v1/chat/dm"],
+    queryKey: tenantKey(["/api/v1/chat/dm"]),
   });
 
   const channelMessagesQuery = useQuery<ChatMessage[]>({
-    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "messages", { limit: String(MESSAGES_PAGE_SIZE) }],
+    queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel?.id, "messages", { limit: String(MESSAGES_PAGE_SIZE) }]),
     enabled: !!selectedChannel,
   });
 
   const dmMessagesQuery = useQuery<ChatMessage[]>({
-    queryKey: ["/api/v1/chat/dm", selectedDm?.id, "messages", { limit: String(MESSAGES_PAGE_SIZE) }],
+    queryKey: tenantKey(["/api/v1/chat/dm", selectedDm?.id, "messages", { limit: String(MESSAGES_PAGE_SIZE) }]),
     enabled: !!selectedDm,
   });
 
   const pinnedMessagesQuery = useQuery<any[]>({
-    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "pins"],
+    queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel?.id, "pins"]),
     enabled: !!selectedChannel,
   });
   const pinnedMessages = pinnedMessagesQuery.data ?? [];
@@ -461,7 +461,7 @@ export default function ChatPage() {
 
   const debouncedSearchQuery = useDebounce(searchQuery, 250);
   const searchResultsQuery = useQuery<{ messages: SearchResult[]; total: number }>({
-    queryKey: ["/api/v1/chat/search", debouncedSearchQuery],
+    queryKey: tenantKey(["/api/v1/chat/search", debouncedSearchQuery]),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearchQuery) params.set("q", debouncedSearchQuery);
@@ -474,7 +474,7 @@ export default function ChatPage() {
   });
 
   const mentionableUsersQuery = useQuery<MentionableUser[]>({
-    queryKey: ["/api/v1/chat/users/mentionable", selectedChannel?.id, selectedDm?.id, mentionQuery],
+    queryKey: tenantKey(["/api/v1/chat/users/mentionable", selectedChannel?.id, selectedDm?.id, mentionQuery]),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedChannel?.id) params.set("channelId", selectedChannel.id);
@@ -490,7 +490,7 @@ export default function ChatPage() {
 
   // Team panel: fetch all tenant users
   const { data: teamUsers = [], isLoading: isLoadingTeamUsers } = useQuery<TeamUser[]>({
-    queryKey: ["/api/v1/chat/users", "team", teamSearchQuery],
+    queryKey: tenantKey(["/api/v1/chat/users", "team", teamSearchQuery]),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (teamSearchQuery) params.set("search", teamSearchQuery);
@@ -504,7 +504,7 @@ export default function ChatPage() {
 
   // Separate query for Start Chat drawer to avoid cache conflicts
   const { data: startChatUsers = [], isLoading: isLoadingStartChatUsers } = useQuery<TeamUser[]>({
-    queryKey: ["/api/v1/chat/users", "startChat", startChatSearchQuery],
+    queryKey: tenantKey(["/api/v1/chat/users", "startChat", startChatSearchQuery]),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (startChatSearchQuery) params.set("search", startChatSearchQuery);
@@ -559,7 +559,7 @@ export default function ChatPage() {
 
   // Channel members query for the members drawer and context panel
   const { data: channelMembers = [], refetch: refetchChannelMembers } = useQuery<ChannelMember[]>({
-    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "members"],
+    queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel?.id, "members"]),
     enabled: !!selectedChannel && (membersDrawerOpen || contextPanelOpen),
   });
 
@@ -595,7 +595,7 @@ export default function ChatPage() {
       if (userId === user?.id) {
         setMembersDrawerOpen(false);
         setSelectedChannel(null);
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       }
       toast({ title: "Member removed" });
     },
@@ -615,7 +615,7 @@ export default function ChatPage() {
       return apiRequest("POST", "/api/v1/chat/dm", { userIds });
     },
     onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/dm"]) });
       setSelectedTeamUsers(new Set());
       setSidebarTab("chats");
       // Select the newly created/returned DM
@@ -648,7 +648,7 @@ export default function ChatPage() {
       return { channel, addMembersFailed };
     },
     onSuccess: (result: { channel: any; addMembersFailed: boolean }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       setSelectedTeamUsers(new Set());
       setCreateGroupDialogOpen(false);
       setNewGroupName("");
@@ -765,7 +765,7 @@ export default function ChatPage() {
       setStartChatDrawerOpen(false);
       
       // Refetch to get full thread with members (refetchQueries waits for completion)
-      await queryClient.refetchQueries({ queryKey: ["/api/v1/chat/dm"] });
+      await queryClient.refetchQueries({ queryKey: tenantKey(["/api/v1/chat/dm"]) });
       
       // After refetch, find and select the new DM from the updated cache
       if (result && result.id) {
@@ -803,7 +803,7 @@ export default function ChatPage() {
       return { channel, addMembersFailed };
     },
     onSuccess: (result: { channel: any; addMembersFailed: boolean }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       setStartChatSelectedUsers(new Set());
       setStartChatSearchQuery("");
       setStartChatGroupName("");
@@ -1295,9 +1295,9 @@ export default function ChatPage() {
   const activeTargetType = selectedChannel ? "channel" : selectedDm ? "dm" : null;
   const activeTargetId = selectedChannel?.id ?? selectedDm?.id ?? null;
   const { data: initialReceipts } = useQuery<ReadReceipt[]>({
-    queryKey: ["/api/v1/chat/reads", activeTargetType, activeTargetId],
+    queryKey: tenantKey(["/api/v1/chat/reads", activeTargetType, activeTargetId]),
     enabled: !!activeTargetType && !!activeTargetId,
-    staleTime: 30_000,
+    staleTime: STALE_TIMES.fast,
   });
 
   useEffect(() => {
@@ -1322,9 +1322,9 @@ export default function ChatPage() {
         // On reconnect, only refetch the active channel/DM messages for performance
         // Avoid invalidating the entire channel/DM list to prevent unnecessary re-renders
         if (selectedChannel) {
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "messages"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "messages"]) });
         } else if (selectedDm) {
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm", selectedDm.id, "messages"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/dm", selectedDm.id, "messages"]) });
         }
       }
     });
@@ -1443,8 +1443,8 @@ export default function ChatPage() {
       }
       
       // Invalidate conversation list to update last message preview
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/dm"]) });
     };
 
     const handleMessageUpdated = (payload: ChatMessageUpdatedPayload) => {
@@ -1476,23 +1476,23 @@ export default function ChatPage() {
     const handleMemberJoined = (payload: ChatMemberJoinedPayload) => {
       // Refresh channel members if currently viewing this channel's members
       if (payload.targetType === 'channel' && selectedChannel && payload.targetId === selectedChannel.id) {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "members"]) });
       }
       // Refresh channel list in case user was added to a new channel
       if (payload.targetType === 'channel') {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       }
     };
 
     const handleMemberLeft = (payload: ChatMemberLeftPayload) => {
       // Refresh channel members if currently viewing this channel's members
       if (payload.targetType === 'channel' && selectedChannel && payload.targetId === selectedChannel.id) {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "members"]) });
         // If current user was removed, deselect and show notification
         if (payload.userId === user?.id) {
           setSelectedChannel(null);
           setMembersDrawerOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
           toast({
             title: "Removed from channel",
             description: "You've been removed from this chat.",
@@ -1502,7 +1502,7 @@ export default function ChatPage() {
       }
       // Refresh channel list
       if (payload.targetType === 'channel') {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       }
     };
 
@@ -1510,21 +1510,21 @@ export default function ChatPage() {
     const handleMemberAdded = (payload: ChatMemberAddedPayload) => {
       if (payload.targetType === 'channel' && selectedChannel && payload.targetId === selectedChannel.id) {
         // Invalidate members list to refresh with new member
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "members"]) });
       }
     };
 
     // Handle member removed (richer info, emitted to channel room)
     const handleMemberRemoved = (payload: ChatMemberRemovedPayload) => {
       if (payload.targetType === 'channel' && selectedChannel && payload.targetId === selectedChannel.id) {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "members"]) });
         // If current user was removed, deselect and navigate out with message
         if (payload.userId === user?.id) {
           // Leave the socket room immediately
           leaveChatRoom('channel', selectedChannel.id);
           setSelectedChannel(null);
           setMembersDrawerOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
           toast({
             title: "Removed from channel",
             description: "You have been removed from this channel and can no longer access it.",
@@ -1604,7 +1604,7 @@ export default function ChatPage() {
         });
         const parentId = (payload.message as any).parentMessageId;
         if (parentId) {
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/messages", parentId, "thread"] });
+          queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/messages", parentId, "thread"]) });
         }
       }
     };
@@ -1622,7 +1622,7 @@ export default function ChatPage() {
 
     const handlePinChange = () => {
       if (selectedChannel) {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "pins"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "pins"]) });
       }
     };
     socket.on(CHAT_EVENTS.MESSAGE_PINNED as any, handlePinChange);
@@ -1649,7 +1649,7 @@ export default function ChatPage() {
       return apiRequest("POST", "/api/v1/chat/channels", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       setCreateChannelOpen(false);
       setNewChannelName("");
       setNewChannelPrivate(false);
@@ -1773,7 +1773,7 @@ export default function ChatPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
       setSelectedChannel(null);
       toast({ title: "Channel deleted" });
     },
@@ -1791,7 +1791,7 @@ export default function ChatPage() {
       return apiRequest("POST", `/api/v1/chat/channels/${channelId}/join`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels/my"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels/my"]) });
     },
   });
 
@@ -1800,8 +1800,8 @@ export default function ChatPage() {
       return apiRequest("POST", "/api/v1/chat/reads", { targetType, targetId, lastReadMessageId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/dm"]) });
     },
   });
 
@@ -1896,7 +1896,7 @@ export default function ChatPage() {
     },
     onSuccess: (data) => {
       setConvertedTask(data.task);
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/tasks"]) });
       toast({ title: "Task Created", description: `"${data.task.title}" has been created` });
     },
     onError: (error: Error) => {
@@ -1910,7 +1910,7 @@ export default function ChatPage() {
       return apiRequest("POST", `/api/v1/chat/channels/${selectedChannel.id}/pins`, { messageId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "pins"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel?.id, "pins"]) });
       toast({ title: "Message pinned" });
     },
     onError: (error: Error) => {
@@ -1924,7 +1924,7 @@ export default function ChatPage() {
       return apiRequest("DELETE", `/api/v1/chat/channels/${selectedChannel.id}/pins`, { messageId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "pins"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel?.id, "pins"]) });
       toast({ title: "Message unpinned" });
     },
     onError: (error: Error) => {
@@ -2148,7 +2148,7 @@ export default function ChatPage() {
 
       if (selectedChannel) {
         queryClient.invalidateQueries({
-          queryKey: ["/api/v1/chat/channels", selectedChannel.id, "messages"],
+          queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel.id, "messages"]),
         });
       }
     },

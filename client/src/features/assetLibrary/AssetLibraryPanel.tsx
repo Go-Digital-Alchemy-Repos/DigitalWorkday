@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
@@ -174,13 +175,13 @@ function formatDate(dateStr: string): string {
 
 function AssetImagePreview({ assetId, title }: { assetId: string; title: string }) {
   const { data, isLoading, isError } = useQuery<{ url: string }>({
-    queryKey: ["/api/v1/assets", assetId, "download-url"],
+    queryKey: tenantKey(queryKeys.assets.downloadUrl(assetId)),
     queryFn: async () => {
       const res = await fetch(`/api/v1/assets/${assetId}/download`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to get preview URL");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
     retry: 1,
   });
 
@@ -211,13 +212,13 @@ function AssetGridThumbnail({ asset, onSelect, onDownload, onRename, onDelete, o
   const iconColor = getFileIconColor(asset.mimeType);
 
   const { data: previewData } = useQuery<{ url: string }>({
-    queryKey: ["/api/v1/assets", asset.id, "download-url"],
+    queryKey: tenantKey(queryKeys.assets.downloadUrl(asset.id)),
     queryFn: async () => {
       const res = await fetch(`/api/v1/assets/${asset.id}/download`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to get preview URL");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
     retry: 1,
     enabled: isImage,
   });
@@ -554,7 +555,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const foldersQuery = useQuery<AssetFolder[]>({
-    queryKey: ["/api/v1/assets/folders", { clientId }],
+    queryKey: tenantKey(["/api/v1/assets/folders", { clientId }]),
     queryFn: async () => {
       const res = await fetch(`/api/v1/assets/folders?clientId=${clientId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load folders");
@@ -564,13 +565,13 @@ export function AssetLibraryPanel({ clientId }: Props) {
   });
 
   const assetsQuery = useQuery<{ items: Asset[]; nextCursor: string | null; hasMore: boolean }>({
-    queryKey: ["/api/v1/assets", {
+    queryKey: tenantKey(["/api/v1/assets", {
       clientId,
       folderId: currentFolderId,
       q: searchQuery || undefined,
       sourceType: sourceFilter !== "all" ? sourceFilter : undefined,
       visibility: visibilityFilter !== "all" ? visibilityFilter : undefined,
-    }],
+    }]),
     queryFn: async () => {
       const params = new URLSearchParams({ clientId });
       if (currentFolderId) params.set("folderId", currentFolderId);
@@ -587,14 +588,14 @@ export function AssetLibraryPanel({ clientId }: Props) {
 
   const tenantId = user?.tenantId;
   const tenantDefaultsQuery = useQuery<TenantDefaultsClientView>({
-    queryKey: ["/api/v1/tenants", tenantId, "default-docs", "client-view"],
+    queryKey: tenantKey(["/api/v1/tenants", tenantId, "default-docs", "client-view"]),
     queryFn: async () => {
       const res = await fetch(`/api/v1/tenants/${tenantId}/default-docs/client-view`);
       if (!res.ok) throw new Error("Failed to load tenant defaults");
       return res.json();
     },
     enabled: !!tenantId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
   });
 
   const tenantDefaultDocs = tenantDefaultsQuery.data?.documents ?? [];
@@ -648,7 +649,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets/folders", { clientId }]) });
       setCreateFolderOpen(false);
       setNewFolderName("");
       toast({ title: "Folder created" });
@@ -663,7 +664,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("PATCH", `/api/v1/assets/folders/${id}`, { name });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets/folders", { clientId }]) });
       setRenameFolderId(null);
       toast({ title: "Folder renamed" });
     },
@@ -674,7 +675,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("DELETE", `/api/v1/assets/folders/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets/folders", { clientId }]) });
       toast({ title: "Folder deleted" });
     },
     onError: (err: any) => {
@@ -687,7 +688,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("PATCH", `/api/v1/assets/${id}`, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets"]) });
       setEditAssetId(null);
       toast({ title: "Asset updated" });
     },
@@ -698,7 +699,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("DELETE", `/api/v1/assets/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets"]) });
       setSelectedAsset(null);
       toast({ title: "Asset deleted" });
     },
@@ -738,7 +739,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets"]) });
       toast({ title: `${files.length} file(s) uploaded` });
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -797,7 +798,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("PUT", "/api/v1/assets/folders/reorder", { updates });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/assets/folders", { clientId }]) });
     },
   });
 

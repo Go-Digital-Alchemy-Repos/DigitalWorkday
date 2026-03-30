@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 
 interface ClientInfo {
   id: string;
@@ -55,7 +56,7 @@ export function ClientPortalSidebar() {
   const crmFlags = useCrmFlags();
 
   const { data: dashboardData } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+    queryKey: tenantKey(["/api/client-portal/dashboard"]),
   });
 
   const isActiveRoute = (url: string) => {

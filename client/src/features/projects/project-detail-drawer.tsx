@@ -40,7 +40,8 @@ import {
   Lock,
   Share2,
 } from "lucide-react";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -126,40 +127,40 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const { data: projectDetails, isLoading } = useQuery<Project>({
-    queryKey: ["/api/projects", project?.id],
+    queryKey: tenantKey(queryKeys.projects.detail(project?.id!)),
     enabled: !!project?.id && open,
   });
 
   const { data: tasks } = useQuery<TaskWithRelations[]>({
-    queryKey: ["/api/projects", project?.id, "tasks"],
+    queryKey: tenantKey(queryKeys.projects.tasks(project?.id!)),
     enabled: !!project?.id && open,
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(queryKeys.clients.all),
     enabled: open,
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: tenantKey(queryKeys.teams.all),
     enabled: open,
   });
 
   const { data: tenantUsers = [] } = useQuery<Array<{ id: string; firstName?: string | null; lastName?: string | null; email: string }>>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: open,
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalytics>({
-    queryKey: ["/api/v1/projects", project?.id, "analytics"],
+    queryKey: tenantKey(queryKeys.projects.analytics(project?.id!)),
     enabled: !!project?.id && open && activeTab === "insights",
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
   });
 
   const { data: forecast, isLoading: forecastLoading } = useQuery<ProjectForecast>({
-    queryKey: ["/api/v1/projects", project?.id, "forecast"],
+    queryKey: tenantKey(queryKeys.projects.forecast(project?.id!)),
     enabled: !!project?.id && open && activeTab === "forecast",
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
   });
 
   const [budgetInput, setBudgetInput] = useState<string>("");
@@ -169,8 +170,8 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
       return apiRequest("PATCH", `/api/projects/${project?.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects", project?.id, "forecast"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(project?.id!)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.forecast(project?.id!)) });
     },
   });
 

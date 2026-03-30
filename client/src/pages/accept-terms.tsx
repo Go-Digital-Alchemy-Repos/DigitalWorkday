@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Loader2, FileText, CheckCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface AgreementStatus {
@@ -30,7 +30,7 @@ export default function AcceptTermsPage() {
   const [hasCheckedTerms, setHasCheckedTerms] = useState(false);
 
   const { data: agreementStatus, isLoading, error, refetch } = useQuery<AgreementStatus>({
-    queryKey: ["/api/v1/me/agreement/status"],
+    queryKey: tenantKey(["/api/v1/me/agreement/status"]),
     refetchOnWindowFocus: true,
   });
 
@@ -40,7 +40,7 @@ export default function AcceptTermsPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/me/agreement/status"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/me/agreement/status"]) });
       toast({
         title: "Agreement accepted",
         description: "Thank you for accepting the terms. You can now continue using the application.",

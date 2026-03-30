@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
-import { buildHeaders } from "@/lib/queryClient";
+import { buildHeaders, tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
@@ -105,13 +105,13 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/overview", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/overview", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const totals = useMemo(() => {
@@ -316,13 +316,13 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
     pagination: { total: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/workload", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/workload", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/workload?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -416,13 +416,13 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
     pagination: { total: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/time", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/time", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/time?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -508,13 +508,13 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
     }>;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/capacity", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/capacity", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/capacity?${buildDateParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -621,13 +621,13 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
     totalChecked: number;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/risk", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/risk", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/risk?${buildDateParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   if (isLoading) return (
@@ -716,13 +716,13 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("__all__");
 
   const { data: teamData } = useQuery<{ employees: Array<{ userId: string; firstName: string | null; lastName: string | null; email: string }> }>({
-    queryKey: ["/api/reports/v2/employee/overview", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/overview", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const trendsUrl = selectedUserId && selectedUserId !== "__all__"
@@ -734,13 +734,13 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
     userId: string | null;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/trends", rangeDays, selectedUserId],
+    queryKey: tenantKey(["/api/reports/v2/employee/trends", rangeDays, selectedUserId]),
     queryFn: async () => {
       const res = await rfetch(trendsUrl);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   return (
@@ -867,13 +867,13 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/performance", rangeDays],
+    queryKey: tenantKey(["/api/reports/v2/employee/performance", rangeDays]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/employee/performance?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const sorted = useMemo(() => {
@@ -1149,13 +1149,13 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
     explanations: string[];
     horizonWeeks: number;
   }>({
-    queryKey: ["/api/reports/v2/forecasting/capacity-overload", horizonWeeks],
+    queryKey: tenantKey(["/api/reports/v2/forecasting/capacity-overload", horizonWeeks]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/forecasting/capacity-overload?weeks=${horizonWeeks}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
   });
 
   const { data: projData, isLoading: projLoading } = useQuery<{
@@ -1164,13 +1164,13 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
     dataQualityFlags: string[];
     explanations: string[];
   }>({
-    queryKey: ["/api/reports/v2/forecasting/project-deadline-risk", horizonWeeks],
+    queryKey: tenantKey(["/api/reports/v2/forecasting/project-deadline-risk", horizonWeeks]),
     queryFn: async () => {
       const res = await rfetch(`/api/reports/v2/forecasting/project-deadline-risk?weeks=${horizonWeeks}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
   });
 
   const formatWeekLabel = (w: string) => {

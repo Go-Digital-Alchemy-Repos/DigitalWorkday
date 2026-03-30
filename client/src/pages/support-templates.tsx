@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, MessageSquareText, Zap, Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 interface CannedReply {
@@ -219,11 +219,11 @@ export default function SupportTemplates() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "reply" | "macro"; id: string; title: string } | null>(null);
 
   const { data: replies = [], isLoading: repliesLoading } = useQuery<CannedReply[]>({
-    queryKey: ["/api/v1/support/canned-replies"],
+    queryKey: tenantKey(["/api/v1/support/canned-replies"]),
   });
 
   const { data: macros = [], isLoading: macrosLoading } = useQuery<Macro[]>({
-    queryKey: ["/api/v1/support/macros"],
+    queryKey: tenantKey(["/api/v1/support/macros"]),
   });
 
   const deleteMutation = useMutation({
@@ -234,8 +234,8 @@ export default function SupportTemplates() {
     },
     onSuccess: () => {
       toast({ title: "Deleted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/canned-replies"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/macros"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/canned-replies"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/macros"]) });
       setDeleteTarget(null);
     },
     onError: (err) => {
@@ -246,13 +246,13 @@ export default function SupportTemplates() {
   const handleReplySaved = () => {
     setShowReplyDialog(false);
     setEditingReply(undefined);
-    queryClient.invalidateQueries({ queryKey: ["/api/v1/support/canned-replies"] });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/canned-replies"]) });
   };
 
   const handleMacroSaved = () => {
     setShowMacroDialog(false);
     setEditingMacro(undefined);
-    queryClient.invalidateQueries({ queryKey: ["/api/v1/support/macros"] });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/macros"]) });
   };
 
   return (

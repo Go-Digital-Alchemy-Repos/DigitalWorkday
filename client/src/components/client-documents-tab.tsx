@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +94,7 @@ export function ClientDocumentsTab({ clientId }: ClientDocumentsTabProps) {
   const [uploading, setUploading] = useState(false);
 
   const { data: docsData, isLoading: docsLoading } = useQuery<{ ok: boolean; documents: ClientDocument[] }>({
-    queryKey: ["/api/clients", clientId, "documents"],
+    queryKey: tenantKey(["/api/clients", clientId, "documents"]),
   });
 
   const updateDocMutation = useMutation({
@@ -102,7 +102,7 @@ export function ClientDocumentsTab({ clientId }: ClientDocumentsTabProps) {
       return apiRequest("PATCH", `/api/clients/${clientId}/documents/${docId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "documents"]) });
       setEditingDoc(null);
       setDisplayName("");
       setDescription("");
@@ -118,7 +118,7 @@ export function ClientDocumentsTab({ clientId }: ClientDocumentsTabProps) {
       return apiRequest("DELETE", `/api/clients/${clientId}/documents/${docId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "documents"]) });
       setDeleteDoc(null);
       toast({ title: "Document deleted", description: "The document has been removed." });
     },
@@ -159,7 +159,7 @@ export function ClientDocumentsTab({ clientId }: ClientDocumentsTabProps) {
         throw new Error(data.error?.message || data.message || "Failed to upload document");
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/clients", clientId, "documents"]) });
       setUploadDialogOpen(false);
       setSelectedFile(null);
       setDisplayName("");

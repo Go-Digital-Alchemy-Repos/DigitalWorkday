@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { AvatarGroup } from "@/components/avatar-group";
 import { cn } from "@/lib/utils";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import type { User, WorkspaceMember } from "@shared/schema";
 
 interface MultiSelectWatchersProps {
@@ -40,7 +40,7 @@ export function MultiSelectWatchers({
   const [search, setSearch] = useState("");
 
   const { data: workspaceMembers = [] } = useQuery<(WorkspaceMember & { user?: User })[]>({
-    queryKey: ["/api/workspaces", workspaceId, "members"],
+    queryKey: tenantKey(["/api/workspaces", workspaceId, "members"]),
     enabled: !!workspaceId,
   });
 
@@ -49,8 +49,8 @@ export function MultiSelectWatchers({
       await apiRequest("POST", `/api/tasks/${taskId}/watchers`, { userId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId, "watchers"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/tasks", taskId]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/tasks", taskId, "watchers"]) });
       onWatcherChange?.();
     },
   });
@@ -60,8 +60,8 @@ export function MultiSelectWatchers({
       await apiRequest("DELETE", `/api/tasks/${taskId}/watchers/${userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId, "watchers"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/tasks", taskId]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/tasks", taskId, "watchers"]) });
       onWatcherChange?.();
     },
   });

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Search, X, Building2, FolderKanban, CheckSquare, Users, UserCircle, MessageSquare, Loader2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ export function GlobalSearchBar() {
   const isMobile = useIsMobile();
 
   const { data: results, isLoading, isError } = useQuery<SearchResults>({
-    queryKey: ["/api/search", { q: debouncedSearch, limit: "8" }],
+    queryKey: tenantKey(["/api/search", { q: debouncedSearch, limit: "8" }]),
     enabled: debouncedSearch.length >= 2,
     retry: 1,
     placeholderData: (prev) => prev,

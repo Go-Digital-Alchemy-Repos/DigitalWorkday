@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,17 +59,17 @@ export default function TeamDetailPage() {
   const [memberToRemove, setMemberToRemove] = useState<TeamMemberWithUser | null>(null);
 
   const { data: team, isLoading: teamLoading } = useQuery<Team>({
-    queryKey: ["/api/teams", teamId],
+    queryKey: tenantKey(["/api/teams", teamId]),
     enabled: !!teamId,
   });
 
   const { data: teamMembers = [], isLoading: membersLoading } = useQuery<TeamMemberWithUser[]>({
-    queryKey: ["/api/teams", teamId, "members"],
+    queryKey: tenantKey(["/api/teams", teamId, "members"]),
     enabled: !!teamId,
   });
 
   const { data: teamProjects = [] } = useQuery<Project[]>({
-    queryKey: ["/api/projects", { teamId }],
+    queryKey: tenantKey(["/api/projects", { teamId }]),
     enabled: !!teamId,
   });
 
@@ -78,8 +78,8 @@ export default function TeamDetailPage() {
       return apiRequest("PATCH", `/api/teams/${teamId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/teams", teamId] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams", teamId]) });
       toast({ title: "Team updated successfully" });
       setEditTeamOpen(false);
     },
@@ -93,7 +93,7 @@ export default function TeamDetailPage() {
       return apiRequest("DELETE", `/api/teams/${teamId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
       toast({ title: "Team deleted successfully" });
       navigate("/settings/teams");
     },
@@ -107,7 +107,7 @@ export default function TeamDetailPage() {
       return apiRequest("DELETE", `/api/teams/${teamId}/members/${userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams", teamId, "members"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams", teamId, "members"]) });
       toast({ title: "Member removed from team" });
       setRemoveMemberDialogOpen(false);
       setMemberToRemove(null);

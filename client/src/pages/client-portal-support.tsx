@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,7 +70,7 @@ export default function ClientPortalSupport() {
   const [, navigate] = useLocation();
 
   const { data, isLoading } = useQuery<{ tickets: SupportTicket[]; total: number }>({
-    queryKey: ["/api/v1/portal/support/tickets", { status: statusFilter !== "all" ? statusFilter : undefined }],
+    queryKey: tenantKey(["/api/v1/portal/support/tickets", { status: statusFilter !== "all" ? statusFilter : undefined }]),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);

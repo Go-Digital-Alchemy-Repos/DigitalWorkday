@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, tenantKey, STALE_TIMES, queryClient } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,8 +50,8 @@ export function ChatAIAssist({
   const [copied, setCopied] = useState(false);
 
   const aiStatusQuery = useQuery<{ aiChatEnabled: boolean; aiAvailable: boolean; ready: boolean }>({
-    queryKey: ["/api/v1/chat/ai/status"],
-    staleTime: 60000,
+    queryKey: tenantKey(["/api/v1/chat/ai/status"]),
+    staleTime: STALE_TIMES.standard,
   });
 
   const summarizeMutation = useMutation({
@@ -353,8 +353,8 @@ export function ConvertToTaskAction({
   const { toast } = useToast();
 
   const aiStatusQuery = useQuery<{ aiChatEnabled: boolean; aiAvailable: boolean; ready: boolean }>({
-    queryKey: ["/api/v1/chat/ai/status"],
-    staleTime: 60000,
+    queryKey: tenantKey(["/api/v1/chat/ai/status"]),
+    staleTime: STALE_TIMES.standard,
   });
 
   const convertMutation = useMutation({
@@ -371,7 +371,7 @@ export function ConvertToTaskAction({
         title: "Task Created",
         description: `"${data.task.title}" has been created`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.all) });
       onConverted?.(data.task);
     },
     onError: (err: Error) => {

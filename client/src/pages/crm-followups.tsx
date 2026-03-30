@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { formatErrorForToast } from "@/lib/parseApiError";
@@ -287,12 +287,12 @@ export default function CrmFollowupsPage() {
   const [selectedDate, setSelectedDate] = useState("");
 
   const { data, isLoading } = useQuery<FollowUpsData>({
-    queryKey: ["/api/crm/followups"],
+    queryKey: tenantKey(["/api/crm/followups"]),
     enabled: crmFlags.client360,
   });
 
   const { data: users = [] } = useQuery<UserOption[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(["/api/users"]),
     enabled: crmFlags.client360,
   });
 
@@ -301,7 +301,7 @@ export default function CrmFollowupsPage() {
       await apiRequest("POST", "/api/crm/bulk-update", payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/followups"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/followups"]) });
       setSelectedIds(new Set());
       toast({ title: "Updated", description: "Bulk update applied successfully." });
     },

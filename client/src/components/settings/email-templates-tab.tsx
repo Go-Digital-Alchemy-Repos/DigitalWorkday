@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import {
   Loader2, Save, RotateCcw, Eye, Mail, Code, FileText, Variable, Copy, Check,
   KeyRound, AtSign, UserPlus, ClipboardList, Sparkles, ShieldAlert, ShieldCheck,

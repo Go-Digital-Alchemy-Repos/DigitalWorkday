@@ -14,6 +14,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, us
 import { useAuthSafe } from '@/lib/auth';
 import { getSocket, isSocketConnected, onConnectionChange } from '@/lib/realtime/socket';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { STALE_TIMES, tenantKey } from '@/lib/queryClient';
 import { PRESENCE_EVENTS, type PresenceState, type PresenceStatus, type PresenceUpdatePayload, type PresenceBulkUpdatePayload } from '@shared/events';
 
 // Re-export for convenience
@@ -47,7 +48,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       // On reconnect, invalidate presence query to ensure fresh data
       // This supplements the BULK_UPDATE the server sends
       if (connected) {
-        queryClient.invalidateQueries({ queryKey: ['/api/v1/presence'] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(['/api/v1/presence']) });
       }
     });
     return cleanup;
@@ -55,9 +56,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   // Fetch initial presence data
   const { data: initialPresence } = useQuery<PresenceState[]>({
-    queryKey: ['/api/v1/presence'],
+    queryKey: tenantKey(['/api/v1/presence']),
     enabled: !!user,
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
     refetchOnWindowFocus: false,
   });
 

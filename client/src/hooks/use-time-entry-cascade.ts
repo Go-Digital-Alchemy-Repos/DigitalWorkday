@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface CascadeOptions {
   enabled?: boolean;
@@ -21,18 +23,18 @@ export function useTimeEntryCascade(options: CascadeOptions = {}) {
   const [subtaskId, setSubtaskId] = useState<string | null>(initialValues?.subtaskId ?? null);
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(queryKeys.clients.all),
     enabled,
   });
 
   const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; clientId?: string | null }>>({
-    queryKey: ["/api/clients", clientId, "projects"],
+    queryKey: tenantKey(queryKeys.clients.projects(clientId!)),
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && enabled,
   });
 
   const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
-    queryKey: ["/api/projects", projectId, "tasks"],
+    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
     queryFn: () => fetch(`/api/projects/${projectId}/tasks`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!projectId && enabled,
   });

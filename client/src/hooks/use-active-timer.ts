@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { apiRequest } from "@/lib/queryClient";
-import { invalidateTimeEntries, optimisticInsertTimeEntryBroad, type CachedTimeEntry } from "@/lib/queryKeys";
+import { apiRequest, tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys, invalidateTimeEntries, optimisticInsertTimeEntryBroad, type CachedTimeEntry } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 
 export interface ActiveTimer {
@@ -24,13 +24,11 @@ export interface ActiveTimer {
   task?: { id: string; title: string } | null;
 }
 
-// Explicit timer UI states for clear user feedback
 export type TimerUIState = "idle" | "running" | "paused" | "stopping" | "error";
 
-const TIMER_QUERY_KEY = "/api/timer/current";
 const BROADCAST_CHANNEL_NAME = "active-timer-sync";
-const RUNNING_REFETCH_INTERVAL = 30000; // 30 seconds
-const PAUSED_REFETCH_INTERVAL = 60000; // 60 seconds
+const RUNNING_REFETCH_INTERVAL = 30000;
+const PAUSED_REFETCH_INTERVAL = 60000;
 
 export function useActiveTimer() {
   const { user } = useAuth();
@@ -41,15 +39,17 @@ export function useActiveTimer() {
 
   const isEligible = user && user.role !== "super_user";
 
+  const timerQueryKey = tenantKey(queryKeys.timer.current);
+
   const {
     data: timer,
     isLoading,
     error,
     refetch,
   } = useQuery<ActiveTimer | null>({
-    queryKey: [TIMER_QUERY_KEY],
+    queryKey: timerQueryKey,
     enabled: !!isEligible,
-    staleTime: 10000,
+    staleTime: STALE_TIMES.realtime,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     retry: 3,
@@ -57,26 +57,23 @@ export function useActiveTimer() {
   });
 
   const invalidateTimer = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: [TIMER_QUERY_KEY] });
-  }, [queryClient]);
+    queryClient.invalidateQueries({ queryKey: timerQueryKey });
+  }, [queryClient, timerQueryKey]);
 
   const broadcastTimerUpdate = useCallback((eventType: "timer-state-change" | "time-entry-changed" = "timer-state-change") => {
     if (broadcastChannelRef.current) {
       try {
         broadcastChannelRef.current.postMessage({ type: "timer-updated", eventType });
       } catch {
-        // BroadcastChannel may fail in some environments
       }
     }
     try {
       localStorage.setItem("timer-sync", JSON.stringify({ eventType, ts: Date.now() }));
       localStorage.removeItem("timer-sync");
     } catch {
-      // localStorage may be unavailable
     }
   }, []);
 
-  // Setup BroadcastChannel for cross-tab sync
   useEffect(() => {
     if (!isEligible) return;
 
@@ -91,10 +88,8 @@ export function useActiveTimer() {
         }
       };
     } catch {
-      // BroadcastChannel not supported
     }
 
-    // Fallback: listen to localStorage events
     const handleStorageEvent = (event: StorageEvent) => {
       if (event.key === "timer-sync") {
         invalidateTimer();
@@ -117,7 +112,6 @@ export function useActiveTimer() {
     };
   }, [isEligible, invalidateTimer, queryClient]);
 
-  // Periodic refetch based on timer status
   useEffect(() => {
     if (!isEligible || !timer) return;
 
@@ -132,7 +126,6 @@ export function useActiveTimer() {
     return () => clearInterval(intervalId);
   }, [isEligible, timer?.status, refetch]);
 
-  // Show recovery toast on app boot if timer exists
   useEffect(() => {
     if (timer && !hasShownRecoveryToast.current && !isLoading) {
       const sessionKey = `timer-recovered-${timer.id}`;
@@ -149,7 +142,6 @@ export function useActiveTimer() {
     }
   }, [timer, isLoading, toast]);
 
-  // Start timer mutation
   const startMutation = useMutation({
     mutationFn: async (data: {
       clientId?: string | null;
@@ -172,14 +164,13 @@ export function useActiveTimer() {
       broadcastTimerUpdate();
     },
     onError: (error: Error) => {
-      // Handle 409 - timer already running
       if (error.message === "TIMER_ALREADY_RUNNING") {
         toast({
           title: "Timer already running",
           description: "You already have an active timer. Stop it before starting a new one.",
           variant: "destructive",
         });
-        invalidateTimer(); // Refresh to show existing timer
+        invalidateTimer();
       } else {
         toast({
           title: "Failed to start timer",
@@ -190,7 +181,6 @@ export function useActiveTimer() {
     },
   });
 
-  // Pause timer mutation (checks response.ok for no silent failures)
   const pauseMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/timer/pause");
@@ -203,11 +193,10 @@ export function useActiveTimer() {
       return response.json();
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
-      const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
+      await queryClient.cancelQueries({ queryKey: timerQueryKey });
+      const previousTimer = queryClient.getQueryData<ActiveTimer | null>(timerQueryKey);
       
       if (previousTimer) {
-        // Calculate elapsed seconds to match server-side pause behavior
         let newElapsedSeconds = previousTimer.elapsedSeconds;
         if (previousTimer.status === "running" && previousTimer.lastStartedAt) {
           const lastStarted = new Date(previousTimer.lastStartedAt).getTime();
@@ -215,7 +204,7 @@ export function useActiveTimer() {
           newElapsedSeconds += Math.floor((now - lastStarted) / 1000);
         }
         
-        queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], {
+        queryClient.setQueryData<ActiveTimer | null>(timerQueryKey, {
           ...previousTimer,
           status: "paused",
           elapsedSeconds: newElapsedSeconds,
@@ -229,7 +218,7 @@ export function useActiveTimer() {
     },
     onError: (error, _, context) => {
       if (context?.previousTimer) {
-        queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
+        queryClient.setQueryData(timerQueryKey, context.previousTimer);
       }
       toast({
         title: "Failed to pause timer",
@@ -239,7 +228,6 @@ export function useActiveTimer() {
     },
   });
 
-  // Resume timer mutation (checks response.ok for no silent failures)
   const resumeMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/timer/resume");
@@ -252,11 +240,11 @@ export function useActiveTimer() {
       return response.json();
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
-      const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
+      await queryClient.cancelQueries({ queryKey: timerQueryKey });
+      const previousTimer = queryClient.getQueryData<ActiveTimer | null>(timerQueryKey);
       
       if (previousTimer) {
-        queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], {
+        queryClient.setQueryData<ActiveTimer | null>(timerQueryKey, {
           ...previousTimer,
           status: "running",
           lastStartedAt: new Date().toISOString(),
@@ -270,7 +258,7 @@ export function useActiveTimer() {
     },
     onError: (error, _, context) => {
       if (context?.previousTimer) {
-        queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
+        queryClient.setQueryData(timerQueryKey, context.previousTimer);
       }
       toast({
         title: "Failed to resume timer",
@@ -280,7 +268,6 @@ export function useActiveTimer() {
     },
   });
 
-  // Stop timer mutation (does NOT clear timer on error)
   const stopMutation = useMutation({
     mutationFn: async (data: {
       clientId?: string | null;
@@ -301,9 +288,9 @@ export function useActiveTimer() {
       return response.json();
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
-      const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
-      queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], null);
+      await queryClient.cancelQueries({ queryKey: timerQueryKey });
+      const previousTimer = queryClient.getQueryData<ActiveTimer | null>(timerQueryKey);
+      queryClient.setQueryData<ActiveTimer | null>(timerQueryKey, null);
       return { previousTimer };
     },
     onSuccess: (responseData, variables) => {
@@ -336,7 +323,7 @@ export function useActiveTimer() {
     },
     onError: (error: Error, _, context) => {
       if (context?.previousTimer) {
-        queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
+        queryClient.setQueryData(timerQueryKey, context.previousTimer);
       }
       toast({
         title: "Failed to save time entry",
@@ -348,7 +335,6 @@ export function useActiveTimer() {
     },
   });
 
-  // Delete timer without saving (checks response.ok for no silent failures)
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("DELETE", "/api/timer/current");
@@ -361,9 +347,9 @@ export function useActiveTimer() {
       return response.json();
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
-      const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
-      queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], null);
+      await queryClient.cancelQueries({ queryKey: timerQueryKey });
+      const previousTimer = queryClient.getQueryData<ActiveTimer | null>(timerQueryKey);
+      queryClient.setQueryData<ActiveTimer | null>(timerQueryKey, null);
       return { previousTimer };
     },
     onSuccess: () => {
@@ -372,7 +358,7 @@ export function useActiveTimer() {
     },
     onError: (error: Error, _, context) => {
       if (context?.previousTimer) {
-        queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
+        queryClient.setQueryData(timerQueryKey, context.previousTimer);
       }
       toast({
         title: "Failed to discard timer",
@@ -384,7 +370,6 @@ export function useActiveTimer() {
     },
   });
 
-  // Compute explicit UI state for clear feedback
   const computeUIState = (): TimerUIState => {
     if (stopMutation.isPending || deleteMutation.isPending) return "stopping";
     if (error || stopMutation.isError) return "error";

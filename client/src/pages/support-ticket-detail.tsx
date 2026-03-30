@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 
@@ -139,11 +139,11 @@ export default function SupportTicketDetail() {
   const [macroPreview, setMacroPreview] = useState<Macro | null>(null);
 
   const { data: cannedReplies = [] } = useQuery<CannedReply[]>({
-    queryKey: ["/api/v1/support/canned-replies"],
+    queryKey: tenantKey(["/api/v1/support/canned-replies"]),
   });
 
   const { data: macros = [] } = useQuery<Macro[]>({
-    queryKey: ["/api/v1/support/macros"],
+    queryKey: tenantKey(["/api/v1/support/macros"]),
   });
 
   const applyMacroMutation = useMutation({
@@ -155,8 +155,8 @@ export default function SupportTicketDetail() {
     },
     onSuccess: () => {
       setMacroPreview(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets", params.id]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets"]) });
       toast({ title: "Macro applied" });
     },
     onError: (error) => {
@@ -165,7 +165,7 @@ export default function SupportTicketDetail() {
   });
 
   const { data: ticket, isLoading } = useQuery<TicketDetail>({
-    queryKey: ["/api/v1/support/tickets", params.id],
+    queryKey: tenantKey(["/api/v1/support/tickets", params.id]),
     queryFn: async () => {
       const res = await fetch(`/api/v1/support/tickets/${params.id}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch ticket");
@@ -182,7 +182,7 @@ export default function SupportTicketDetail() {
     },
     onSuccess: () => {
       setReplyText("");
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets", params.id]) });
       toast({ title: isInternal ? "Internal note added" : "Reply sent" });
     },
     onError: (error) => {
@@ -195,8 +195,8 @@ export default function SupportTicketDetail() {
       return apiRequest("PATCH", `/api/v1/support/tickets/${params.id}`, { status: newStatus });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets", params.id]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets"]) });
       toast({ title: "Status updated" });
     },
     onError: (error) => {
@@ -209,7 +209,7 @@ export default function SupportTicketDetail() {
       return apiRequest("PATCH", `/api/v1/support/tickets/${params.id}`, { priority: newPriority });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets", params.id]) });
       toast({ title: "Priority updated" });
     },
     onError: (error) => {
@@ -222,7 +222,7 @@ export default function SupportTicketDetail() {
       return apiRequest("PATCH", `/api/v1/support/tickets/${params.id}`, { assignedToUserId: user?.id });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/support/tickets", params.id]) });
       toast({ title: "Ticket assigned to you" });
     },
     onError: (error) => {

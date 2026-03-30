@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 
 export interface CrmFlags {
   client360: boolean;
@@ -22,8 +24,8 @@ const ALL_OFF: CrmFlags = {
 
 export function useCrmFlags(): CrmFlags {
   const { data } = useQuery<CrmFlags>({
-    queryKey: ["/api/crm/flags"],
-    staleTime: 5 * 60 * 1000,
+    queryKey: tenantKey(queryKeys.crm.flags),
+    staleTime: STALE_TIMES.slow,
     refetchOnWindowFocus: false,
   });
   return data ?? ALL_OFF;

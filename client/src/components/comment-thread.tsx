@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
 import { CommentAttachments, type CommentAttachmentMeta } from "@/components/comments/CommentAttachments";
 import { CommentDropzone } from "@/components/uploads/CommentDropzone";
@@ -145,7 +146,7 @@ export function CommentThread({
   });
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/tenant/users"],
+    queryKey: tenantKey(["/api/tenant/users"]),
     enabled: !users || users.length === 0,
   });
 

@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 
 interface ClientInfo {
   id: string;
@@ -55,11 +55,11 @@ export default function ClientPortalSupportNew() {
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
 
   const { data: dashboardData } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+    queryKey: tenantKey(["/api/client-portal/dashboard"]),
   });
 
   const { data: formSchema } = useQuery<FormSchemaData | null>({
-    queryKey: ["/api/v1/portal/support/form-schemas", category],
+    queryKey: tenantKey(["/api/v1/portal/support/form-schemas", category]),
     enabled: !!category,
   });
 
@@ -88,7 +88,7 @@ export default function ClientPortalSupportNew() {
     },
     onSuccess: async (res) => {
       const ticket = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/portal/support/tickets"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/portal/support/tickets"]) });
       toast({ title: "Ticket created", description: "Your support ticket has been submitted." });
       navigate(`/portal/support/${ticket.id}`);
     },

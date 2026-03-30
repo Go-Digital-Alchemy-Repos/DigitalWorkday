@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { invalidateTimeEntries, optimisticInsertTimeEntryBroad, type CachedTimeEntry } from "@/lib/queryKeys";
+import { apiRequest, tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys, invalidateTimeEntries, optimisticInsertTimeEntryBroad, type CachedTimeEntry } from "@/lib/queryKeys";
 import { richTextToPlainText } from "@/lib/richtext/richText";
 import { Play, Pause, Square, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ export function GlobalActiveTimer() {
   const { data: timer, isLoading: timerLoading, refetch: refetchTimer } = useQuery<ActiveTimer | null>({
     queryKey: [TIMER_QUERY_KEY],
     enabled: isEligible,
-    staleTime: 10000,
+    staleTime: STALE_TIMES.realtime,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     retry: 3,
@@ -85,12 +85,12 @@ export function GlobalActiveTimer() {
   });
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(queryKeys.clients.all),
     enabled: isEligible,
   });
 
   const { data: allProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
-    queryKey: ["/api/projects"],
+    queryKey: tenantKey(queryKeys.projects.all),
     enabled: isEligible,
   });
 

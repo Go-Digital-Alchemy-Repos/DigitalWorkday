@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Mail, RefreshCw, Send, AlertCircle, CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -63,7 +63,7 @@ export function EmailLogsTab() {
   const limit = 20;
 
   const statsQuery = useQuery<{ ok: boolean; data: EmailStats }>({
-    queryKey: ["/api/v1/tenant/email-logs/stats"],
+    queryKey: tenantKey(["/api/v1/tenant/email-logs/stats"]),
   });
 
   const logsQuery = useQuery<{ ok: boolean; data: EmailLog[]; total: number }>({
@@ -79,8 +79,8 @@ export function EmailLogsTab() {
     },
     onSuccess: () => {
       toast({ title: "Email queued for resend" });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/email-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/email-logs/stats"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/email-logs"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/email-logs/stats"]) });
     },
     onError: (error: any) => {
       toast({
@@ -102,8 +102,8 @@ export function EmailLogsTab() {
   };
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/email-logs"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/email-logs/stats"] });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/email-logs"]) });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/email-logs/stats"]) });
   };
 
   return (

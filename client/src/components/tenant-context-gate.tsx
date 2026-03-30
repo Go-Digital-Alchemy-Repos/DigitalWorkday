@@ -19,7 +19,7 @@ import { useAppMode } from "@/hooks/useAppMode";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, RefreshCw, LogOut } from "lucide-react";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError , STALE_TIMES } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { 
   getValidRestoreUrl, 
@@ -69,7 +69,7 @@ export function TenantContextGate({ children }: TenantContextGateProps) {
     queryKey: [`/api/v1/tenant/context?_t=${effectiveTenantId}`],
     enabled: !!effectiveTenantId,
     retry: 2,
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
   });
   
   // Determine if tenant context is loaded and valid

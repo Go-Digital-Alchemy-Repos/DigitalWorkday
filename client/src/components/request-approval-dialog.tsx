@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -63,7 +63,7 @@ export function RequestApprovalDialog({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "approvals"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "approvals"]) });
       toast({ title: "Approval request sent", description: "The client will be notified." });
       onOpenChange(false);
       setTitle("");
@@ -177,7 +177,7 @@ export function RequestApprovalFromClientDialog({
   const [dueAt, setDueAt] = useState("");
 
   const { data: clients = [] } = useQuery<ClientOption[]>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(["/api/clients"]),
     enabled: open,
     select: (data: any) => {
       if (Array.isArray(data)) return data;
@@ -199,7 +199,7 @@ export function RequestApprovalFromClientDialog({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients"]) });
       toast({ title: "Approval request sent", description: "The client will be notified." });
       onOpenChange(false);
       setTitle("");

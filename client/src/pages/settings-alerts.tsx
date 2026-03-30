@@ -17,7 +17,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Pencil, Trash2, Bell, ShieldAlert, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 const RULE_TYPES = [
@@ -257,12 +257,12 @@ export default function AlertRulesPage() {
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
 
   const { data: rulesData, isLoading: rulesLoading } = useQuery<{ rules: AlertRule[] }>({
-    queryKey: ["/api/reports/v2/alerts/rules"],
+    queryKey: tenantKey(["/api/reports/v2/alerts/rules"]),
     enabled: flags.enableAlertAutomation,
   });
 
   const { data: eventsData, isLoading: eventsLoading } = useQuery<{ events: AlertEvent[]; total: number }>({
-    queryKey: ["/api/reports/v2/alerts/events"],
+    queryKey: tenantKey(["/api/reports/v2/alerts/events"]),
     queryFn: async () => {
       const res = await fetch("/api/reports/v2/alerts/events?limit=50");
       if (!res.ok) throw new Error("Failed");
@@ -275,7 +275,7 @@ export default function AlertRulesPage() {
     mutationFn: (values: AlertRuleFormValues) =>
       apiRequest("POST", "/api/reports/v2/alerts/rules", values),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/v2/alerts/rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports/v2/alerts/rules"]) });
       toast({ title: "Alert rule created" });
       setSheetOpen(false);
     },
@@ -286,7 +286,7 @@ export default function AlertRulesPage() {
     mutationFn: ({ id, values }: { id: string; values: Partial<AlertRuleFormValues> }) =>
       apiRequest("PATCH", `/api/reports/v2/alerts/rules/${id}`, values),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/v2/alerts/rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports/v2/alerts/rules"]) });
       toast({ title: "Alert rule updated" });
       setSheetOpen(false);
       setEditingRule(null);
@@ -297,7 +297,7 @@ export default function AlertRulesPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/reports/v2/alerts/rules/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/v2/alerts/rules"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports/v2/alerts/rules"]) });
       toast({ title: "Alert rule deleted" });
     },
     onError: () => toast({ title: "Failed to delete rule", variant: "destructive" }),
@@ -306,7 +306,7 @@ export default function AlertRulesPage() {
   const acknowledgeMutation = useMutation({
     mutationFn: (id: string) => apiRequest("PATCH", `/api/reports/v2/alerts/events/${id}/acknowledge`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/v2/alerts/events"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports/v2/alerts/events"]) });
       toast({ title: "Event acknowledged" });
     },
     onError: () => toast({ title: "Failed to acknowledge", variant: "destructive" }),

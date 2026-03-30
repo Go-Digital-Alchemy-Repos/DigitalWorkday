@@ -47,7 +47,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { cn } from "@/lib/utils";
 import type { TaskWithRelations } from "@shared/schema";
@@ -185,12 +186,12 @@ export function WhatIfSimulator({ open, onOpenChange, projectId, projectName }: 
   const [isSaving, setIsSaving] = useState(false);
 
   const { data: tasks = [] } = useQuery<TaskWithRelations[]>({
-    queryKey: ["/api/projects", projectId, "tasks"],
+    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
     enabled: open && !!projectId,
   });
 
   const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: open,
   });
 
@@ -305,8 +306,8 @@ export function WhatIfSimulator({ open, onOpenChange, projectId, projectName }: 
 
       await Promise.allSettled(mutations);
 
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(projectId!)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
 
       toast({
         title: "Changes applied",

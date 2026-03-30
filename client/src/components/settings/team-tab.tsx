@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +107,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
   const { toast } = useToast();
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(["/api/users"]),
     select: (data) => [...data].sort((a, b) => {
       const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim() || a.email || "";
       const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim() || b.email || "";
@@ -116,16 +116,16 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: tenantKey(["/api/teams"]),
   });
 
   const { data: invitations } = useQuery<Invitation[]>({
-    queryKey: ["/api/invitations"],
+    queryKey: tenantKey(["/api/invitations"]),
     enabled: isAdmin,
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(["/api/clients"]),
     enabled: isAdmin,
   });
 
@@ -134,7 +134,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("POST", "/api/users", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       toast({ title: "User created successfully" });
     },
     onError: () => {
@@ -147,7 +147,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("PATCH", `/api/users/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       toast({ title: "User updated successfully" });
     },
     onError: () => {
@@ -160,7 +160,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("POST", "/api/teams", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
       toast({ title: "Team created successfully" });
     },
     onError: () => {
@@ -173,7 +173,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("PATCH", `/api/teams/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
       toast({ title: "Team updated successfully" });
     },
     onError: () => {
@@ -186,7 +186,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("DELETE", `/api/teams/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
       toast({ title: "Team deleted successfully" });
     },
     onError: () => {
@@ -199,8 +199,8 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("POST", `/api/teams/${teamId}/members`, { userId });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/teams/${variables.teamId}/members`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams", variables.teamId, "members"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
       toast({ title: "Member added to team" });
       setAddMemberDialogOpen(false);
       setSelectedUserId("");
@@ -215,8 +215,8 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("DELETE", `/api/teams/${teamId}/members/${userId}`);
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/teams/${variables.teamId}/members`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams", variables.teamId, "members"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams"]) });
       toast({ title: "Member removed from team" });
     },
     onError: () => {
@@ -230,7 +230,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/invitations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/invitations"]) });
       if (data?.inviteLink) {
         setLastInviteLink(data.inviteLink);
         navigator.clipboard.writeText(data.inviteLink);
@@ -249,7 +249,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("DELETE", `/api/invitations/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/invitations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/invitations"]) });
       toast({ title: "Invitation revoked" });
     },
   });
@@ -259,7 +259,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("PATCH", `/api/users/${id}`, { isActive });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       toast({ title: "User status updated" });
     },
   });
@@ -269,7 +269,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
       return apiRequest("POST", `/api/users/${id}/reset-password`, { password, mustChangeOnNextLogin });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       setResetPasswordDialogOpen(false);
       setResetPasswordUser(null);
       setNewPassword("");
@@ -413,7 +413,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
     setSelectedTeamForMember(team);
     setSelectedUserId("");
     setAddMemberDialogOpen(true);
-    queryClient.invalidateQueries({ queryKey: [`/api/teams/${team.id}/members`] });
+    queryClient.invalidateQueries({ queryKey: tenantKey(["/api/teams", team.id, "members"]) });
   };
 
   const handleAddMember = () => {
@@ -873,7 +873,7 @@ function TeamWithMembers({
   users?: User[];
 }) {
   const { data: members, isLoading } = useQuery<TeamMemberWithUser[]>({
-    queryKey: [`/api/teams/${team.id}/members`],
+    queryKey: tenantKey(["/api/teams", team.id, "members"]),
     enabled: isExpanded,
   });
 
@@ -1019,7 +1019,7 @@ function AddMemberDialog({
   isPending: boolean;
 }) {
   const { data: existingMembers } = useQuery<TeamMemberWithUser[]>({
-    queryKey: [`/api/teams/${team?.id}/members`],
+    queryKey: tenantKey(["/api/teams", team?.id, "members"]),
     enabled: open && !!team,
   });
 

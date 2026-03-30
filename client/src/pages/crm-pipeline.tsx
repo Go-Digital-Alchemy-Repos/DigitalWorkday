@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { formatErrorForToast } from "@/lib/parseApiError";
@@ -289,7 +289,7 @@ export default function CrmPipelinePage() {
   });
 
   const { data: users = [] } = useQuery<UserOption[]>({
-    queryKey: ["/api/users"],
+    queryKey: tenantKey(["/api/users"]),
     enabled: crmFlags.client360,
   });
 
@@ -306,12 +306,12 @@ export default function CrmPipelinePage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/pipeline"]) });
     },
     onError: (error) => {
       const { title, description } = formatErrorForToast(error);
       toast({ title, description, variant: "destructive" });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/pipeline"]) });
     },
   });
 

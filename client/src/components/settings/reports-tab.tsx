@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,11 +54,11 @@ interface WorkloadSummary {
 
 function WorkloadContent() {
   const { data: workloadData, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
-    queryKey: ["/api/v1/workload/tasks-by-employee"],
+    queryKey: tenantKey(["/api/v1/workload/tasks-by-employee"]),
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<WorkloadSummary>({
-    queryKey: ["/api/v1/workload/summary"],
+    queryKey: tenantKey(["/api/v1/workload/summary"]),
   });
 
   const handleExportWorkloadCSV = () => {
@@ -364,23 +365,23 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
   const tabDefaultValue = defaultTab === "time" ? "time-tracking" : defaultTab || "time-tracking";
 
   const { data: timeEntries } = useQuery<TimeEntryWithRelations[]>({
-    queryKey: ["/api/time-entries"],
+    queryKey: tenantKey(["/api/time-entries"]),
   });
 
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: tenantKey(["/api/projects"]),
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: tenantKey(["/api/teams"]),
   });
 
   const { data: workspaceMembers } = useQuery<(WorkspaceMember & { user?: UserType })[]>({
-    queryKey: ["/api/workspace-members"],
+    queryKey: tenantKey(["/api/workspace-members"]),
   });
 
   const { data: timeSummary } = useQuery<any>({
-    queryKey: ["/api/time-entries/summary", { groupBy }],
+    queryKey: tenantKey(["/api/time-entries/summary", { groupBy }]),
   });
 
   const totalSeconds = timeEntries?.reduce((acc, entry) => acc + (entry.durationSeconds || 0), 0) || 0;

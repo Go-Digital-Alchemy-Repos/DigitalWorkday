@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getSocket } from "@/lib/realtime/socket";
@@ -117,22 +117,22 @@ export function GlobalChatDrawer() {
   const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data: channels = [] } = useQuery<ChatChannel[]>({
-    queryKey: ["/api/v1/chat/channels"],
+    queryKey: tenantKey(["/api/v1/chat/channels"]),
     enabled: isOpen,
   });
 
   const { data: dmThreads = [] } = useQuery<ChatDmThread[]>({
-    queryKey: ["/api/v1/chat/dm"],
+    queryKey: tenantKey(["/api/v1/chat/dm"]),
     enabled: isOpen,
   });
 
   const channelMessagesQuery = useQuery<ChatMessage[]>({
-    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "messages"],
+    queryKey: tenantKey(["/api/v1/chat/channels", selectedChannel?.id, "messages"]),
     enabled: !!selectedChannel && isOpen,
   });
 
   const dmMessagesQuery = useQuery<ChatMessage[]>({
-    queryKey: ["/api/v1/chat/dm", selectedDm?.id, "messages"],
+    queryKey: tenantKey(["/api/v1/chat/dm", selectedDm?.id, "messages"]),
     enabled: !!selectedDm && isOpen,
   });
 
@@ -266,7 +266,7 @@ export function GlobalChatDrawer() {
       return apiRequest("POST", `/api/v1/chat/channels/${channelId}/join`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels/my"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels/my"]) });
     },
   });
 
@@ -297,8 +297,8 @@ export function GlobalChatDrawer() {
       return apiRequest("POST", "/api/v1/chat/reads", { targetType, targetId, lastReadMessageId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/channels"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/chat/dm"]) });
     },
   });
 

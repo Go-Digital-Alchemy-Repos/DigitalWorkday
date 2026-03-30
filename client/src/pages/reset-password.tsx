@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { Loader2, KeyRound, CheckCircle, XCircle, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { parseApiError } from "@/lib/parseApiError";
 
@@ -33,7 +33,7 @@ export default function ResetPasswordPage() {
   }, []);
 
   const { data: tokenData, isLoading: validating, error: validateError } = useQuery<ValidateResponse>({
-    queryKey: ["/api/v1/auth/reset-password/validate", token],
+    queryKey: tenantKey(["/api/v1/auth/reset-password/validate", token]),
     queryFn: async () => {
       const response = await fetch(`/api/v1/auth/reset-password/validate?token=${token}`);
       if (!response.ok) {

@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys"
-import { tenantKey } from "@/lib/queryClient";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 
 interface PrefetchOptions {
   staleTime?: number;
@@ -13,7 +13,7 @@ export function usePrefetchTask() {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const prefetch = useCallback((taskId: string, options: PrefetchOptions = {}) => {
-    const { staleTime = 30000, delay = 100 } = options;
+    const { staleTime = STALE_TIMES.fast, delay = 100 } = options;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -42,7 +42,7 @@ export function usePrefetchProject() {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const prefetch = useCallback((projectId: string, options: PrefetchOptions = {}) => {
-    const { staleTime = 30000, delay = 100 } = options;
+    const { staleTime = STALE_TIMES.fast, delay = 100 } = options;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -71,7 +71,7 @@ export function usePrefetchClient() {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const prefetch = useCallback((clientId: string, options: PrefetchOptions = {}) => {
-    const { staleTime = 30000, delay = 100 } = options;
+    const { staleTime = STALE_TIMES.fast, delay = 100 } = options;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);

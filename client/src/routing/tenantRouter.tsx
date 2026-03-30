@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TenantSidebar } from "@/components/tenant-sidebar";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
@@ -221,7 +222,7 @@ function MobileHeaderMenu() {
   const { toggleDrawer } = useChatDrawer();
   const { mode, setMode, resolvedTheme } = useTheme();
   const { data: workspace } = useQuery<Workspace>({
-    queryKey: ["/api/workspaces/current"],
+    queryKey: tenantKey(["/api/workspaces/current"]),
   });
   
   return (
@@ -291,9 +292,9 @@ export function TenantLayout() {
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
   const { data: activeTimerData } = useQuery<{ id: string } | null>({
-    queryKey: ["/api/timer/current"],
+    queryKey: tenantKey(["/api/timer/current"]),
     enabled: isMobile,
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
   });
   const hasActiveTimer = isMobile && !!activeTimerData;
   

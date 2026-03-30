@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { formatErrorForToast } from "@/lib/parseApiError";
@@ -1323,7 +1323,7 @@ export function ApprovalsTab({ clientId }: { clientId: string }) {
   const [approvalSearch, setApprovalSearch] = useState("");
 
   const { data: approvals = [], isLoading } = useQuery<ApprovalItem[]>({
-    queryKey: ["/api/crm/clients", clientId, "approvals"],
+    queryKey: tenantKey(["/api/crm/clients", clientId, "approvals"]),
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/crm/clients/${clientId}/approvals`);
       return res.json();
@@ -1453,7 +1453,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user";
 
   const { data: permsData } = useQuery<{ permissions: any; effective: EffectivePermissions }>({
-    queryKey: ["/api/crm/message-permissions"],
+    queryKey: tenantKey(["/api/crm/message-permissions"]),
   });
   const canClose = permsData?.effective?.closeThread ?? isAdmin;
   const canChangePriority = permsData?.effective?.changePriority ?? isAdmin;
@@ -1504,7 +1504,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   }, [statusFilter, priorityFilter, typeFilter, dateFrom, dateTo, assignedFilter]);
 
   const { data: tenantUsers = [] } = useQuery<any[]>({
-    queryKey: ["/api/tenant/users"],
+    queryKey: tenantKey(["/api/tenant/users"]),
   });
 
   const staffUsers = useMemo(() =>
@@ -1512,7 +1512,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   [tenantUsers]);
 
   const { data: convoResponse, isLoading } = useQuery<{ conversations: any[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>({
-    queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter, debouncedSearch, statusFilter, priorityFilter, typeFilter, sortBy, dateFrom, dateTo, page],
+    queryKey: tenantKey(["/api/crm/clients", clientId, "conversations", assignedFilter, debouncedSearch, statusFilter, priorityFilter, typeFilter, sortBy, dateFrom, dateTo, page]),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (assignedFilter !== "all") params.set("assigned", assignedFilter);
@@ -1534,7 +1534,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   const pagination = convoResponse?.pagination;
 
   const { data: counts } = useQuery<{ allOpen: number; assignedToMe: number; unassigned: number; unread: number }>({
-    queryKey: ["/api/crm/clients", clientId, "conversations", "counts"],
+    queryKey: tenantKey(["/api/crm/clients", clientId, "conversations", "counts"]),
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations/counts`);
       return res.json();
@@ -1547,8 +1547,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations", "counts"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations", "counts"]) });
     },
   });
 
@@ -1558,7 +1558,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   };
 
   const { data: threadData } = useQuery<any>({
-    queryKey: ["/api/crm/conversations", selectedConvoId, "messages"],
+    queryKey: tenantKey(["/api/crm/conversations", selectedConvoId, "messages"]),
     queryFn: async () => {
       const res = await fetch(`/api/crm/conversations/${selectedConvoId}/messages`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load messages");
@@ -1581,8 +1581,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       setNewPriority("normal");
       setNewType("everyday");
       setSelectedConvoId(convo.id);
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations", "counts"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations", "counts"]) });
       toast({ title: "Conversation started" });
     },
     onError: (error: Error) => {
@@ -1597,8 +1597,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
     },
     onSuccess: () => {
       setReplyText("");
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", selectedConvoId, "messages"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -1611,8 +1611,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", selectedConvoId, "messages"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
       toast({ title: "Assignee updated" });
     },
     onError: (error: Error) => {
@@ -1626,8 +1626,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", selectedConvoId, "messages"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -1640,8 +1640,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", selectedConvoId, "messages"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
       toast({ title: "Thread closed" });
     },
     onError: (error: Error) => {
@@ -1655,8 +1655,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", selectedConvoId, "messages"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
       toast({ title: "Thread reopened" });
     },
     onError: (error: Error) => {
@@ -1665,7 +1665,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   });
 
   const { data: mergeCandidates = [] } = useQuery<any[]>({
-    queryKey: ["/api/crm/clients", clientId, "conversations/merge-candidates", selectedConvoId],
+    queryKey: tenantKey(["/api/crm/clients", clientId, "conversations/merge-candidates", selectedConvoId]),
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations/merge-candidates?exclude=${selectedConvoId}`);
       return res.json();
@@ -1682,8 +1682,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       setShowMergeDialog(false);
       setMergeTargetId("");
       setSelectedConvoId(data.primaryId);
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", data.primaryId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/clients", clientId, "conversations"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/crm/conversations", data.primaryId, "messages"]) });
       toast({ title: "Threads merged", description: data.message });
     },
     onError: (error: Error) => {

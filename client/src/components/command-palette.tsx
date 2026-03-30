@@ -19,6 +19,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
 import {
   Command,
   CommandDialog,
@@ -60,7 +61,7 @@ export function CommandPalette({ onNewTask, onNewProject, onStartTimer }: Comman
   const debouncedSearch = useDebounce(search, 200);
 
   const { data: searchResults, isLoading, isError } = useQuery<SearchResult>({
-    queryKey: ["/api/search", { q: debouncedSearch }],
+    queryKey: tenantKey(["/api/search", { q: debouncedSearch }]),
     enabled: debouncedSearch.length >= 2,
     retry: 1,
   });

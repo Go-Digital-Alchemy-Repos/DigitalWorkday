@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -259,15 +259,15 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
   const [deleteCategory, setDeleteCategory] = useState<NoteCategory | null>(null);
 
   const { data: notesData, isLoading: notesLoading } = useQuery<{ ok: boolean; notes: ProjectNote[] }>({
-    queryKey: ["/api/projects", projectId, "notes"],
+    queryKey: tenantKey(["/api/projects", projectId, "notes"]),
   });
 
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery<{ ok: boolean; categories: NoteCategory[] }>({
-    queryKey: ["/api/projects", projectId, "notes", "categories"],
+    queryKey: tenantKey(["/api/projects", projectId, "notes", "categories"]),
   });
 
   const { data: versionHistoryData, isLoading: versionHistoryLoading } = useQuery<VersionHistoryResponse>({
-    queryKey: ["/api/projects", projectId, "notes", historyNote?.id, "versions"],
+    queryKey: tenantKey(["/api/projects", projectId, "notes", historyNote?.id, "versions"]),
     enabled: !!historyNote && drawerMode === "history",
   });
 
@@ -276,7 +276,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       return apiRequest("POST", `/api/projects/${projectId}/notes`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes"]) });
       closeDrawer();
       toast({ title: "Note created", description: "Your note has been saved." });
     },
@@ -291,9 +291,9 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       return apiRequest("PUT", `/api/projects/${projectId}/notes/${noteId}`, { body, category, categoryId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes"]) });
       if (historyNote) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes", historyNote.id, "versions"] });
+        queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes", historyNote.id, "versions"]) });
       }
       closeDrawer();
       toast({ title: "Note updated", description: "Your changes have been saved." });
@@ -309,7 +309,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       return apiRequest("DELETE", `/api/projects/${projectId}/notes/${noteId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes"]) });
       setDeleteNote(null);
       toast({ title: "Note deleted", description: "The note has been removed." });
     },
@@ -324,7 +324,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       return apiRequest("POST", `/api/projects/${projectId}/notes/categories`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes", "categories"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes", "categories"]) });
       closeCategoryDialog();
       toast({ title: "Category created", description: "Your category has been saved." });
     },
@@ -339,8 +339,8 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       return apiRequest("PUT", `/api/projects/${projectId}/notes/categories/${categoryId}`, { name, color });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes", "categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes", "categories"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes"]) });
       closeCategoryDialog();
       toast({ title: "Category updated", description: "Your changes have been saved." });
     },
@@ -355,8 +355,8 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       return apiRequest("DELETE", `/api/projects/${projectId}/notes/categories/${categoryId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes", "categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes", "categories"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/projects", projectId, "notes"]) });
       setDeleteCategory(null);
       toast({ title: "Category deleted", description: "The category has been removed." });
     },

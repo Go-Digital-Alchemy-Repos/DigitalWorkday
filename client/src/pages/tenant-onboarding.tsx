@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Building2, Palette, Mail, CheckCircle2, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
 import { ColorPicker } from "@/components/ui/color-picker";
 
@@ -83,7 +83,7 @@ export default function TenantOnboarding() {
   });
 
   const { data: tenantInfo, isLoading, error } = useQuery<TenantInfo>({
-    queryKey: ["/api/v1/tenant/me"],
+    queryKey: tenantKey(["/api/v1/tenant/me"]),
   });
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function TenantOnboarding() {
       return apiRequest("PATCH", "/api/v1/tenant/settings", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/me"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/me"]) });
     },
     onError: (error: Error) => {
       toast({
@@ -130,8 +130,8 @@ export default function TenantOnboarding() {
         title: "Welcome!",
         description: "Your workspace is now ready to use.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/me"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/me"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/auth/me"]) });
       setLocation("/");
     },
     onError: (error: Error) => {

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { apiRequest , tenantKey } from "@/lib/queryClient";
+import { apiRequest , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 
 interface Phase {
@@ -78,7 +78,7 @@ export function AIProjectPlanner({
       if (!res.ok) return { enabled: false };
       return res.json();
     },
-    staleTime: 60000,
+    staleTime: STALE_TIMES.standard,
   });
 
   const generatePlanMutation = useMutation({

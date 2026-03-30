@@ -12,6 +12,9 @@ export const queryKeys = {
     context: (id: string) => ["/api/projects", id, "context"] as const,
     members: (id: string) => ["/api/projects", id, "members"] as const,
     milestones: (id: string) => [`/api/projects/${id}/milestones`] as const,
+    access: (id: string) => ["/api/projects", id, "access"] as const,
+    analytics: (id: string) => ["/api/v1/projects", id, "analytics"] as const,
+    forecast: (id: string) => ["/api/v1/projects", id, "forecast"] as const,
     unassigned: (search?: string) =>
       search
         ? (["/api/projects/unassigned", search] as const)
@@ -24,19 +27,11 @@ export const queryKeys = {
     all: ["/api/tasks"] as const,
     my: ["/api/tasks/my"] as const,
     detail: (id: string) => ["/api/tasks", id] as const,
-    /**
-     * Subtasks are simple checklist items nested under a task.
-     * They use the `/api/tasks/:id/subtasks` endpoint.
-     */
     subtasks: (id: string) => ["/api/tasks", id, "subtasks"] as const,
-    /**
-     * Child tasks are full task records that have a parent-child relationship.
-     * They use the `/api/tasks/:id/childtasks` endpoint.
-     * Canonical: use `childTasks` for full nested tasks; use `subtasks` for lightweight checklist items.
-     */
     childTasks: (id: string) => ["/api/tasks", id, "childtasks"] as const,
     comments: (id: string) => ["/api/tasks", id, "comments"] as const,
     timeEntries: (id: string) => ["/api/tasks", id, "time-entries"] as const,
+    access: (id: string) => ["/api/tasks", id, "access"] as const,
     attachments: (projectId: string, taskId: string) =>
       ["/api/projects", projectId, "tasks", taskId, "attachments"] as const,
   },
@@ -54,6 +49,8 @@ export const queryKeys = {
     detail: (id: string) => ["/api/clients", id] as const,
     notes: (id: string) => ["/api/clients", id, "notes"] as const,
     portalUsers: (id: string) => ["/api/clients", id, "users"] as const,
+    projects: (id: string) => ["/api/clients", id, "projects"] as const,
+    search: (id: string, q: string) => ["/api/clients", id, "search", { q }] as const,
     crmSummary: (id: string) => [`/api/crm/clients/${id}/summary`] as const,
     hierarchy: ["/api/v1/clients/hierarchy/list"] as const,
     stagesSummary: ["/api/v1/clients/stages/summary"] as const,
@@ -66,11 +63,13 @@ export const queryKeys = {
   users: {
     all: ["/api/users"] as const,
     tenant: ["/api/tenant/users"] as const,
+    uiPreferences: ["/api/users/me/ui-preferences"] as const,
   },
 
   workspaces: {
     current: ["/api/workspaces/current"] as const,
     tags: (id: string) => ["/api/workspaces", id, "tags"] as const,
+    members: (id: string) => ["/api/workspaces", id, "members"] as const,
   },
 
   timer: {
@@ -119,6 +118,38 @@ export const queryKeys = {
   tenant: {
     me: ["/api/v1/tenant/me"] as const,
     integrations: ["/api/v1/tenant/integrations"] as const,
+    settings: ["/api/v1/tenant/settings"] as const,
+    branding: ["/api/v1/tenant/branding"] as const,
+  },
+
+  features: {
+    flags: ["/api/features/flags"] as const,
+    system: ["/api/v1/system/features"] as const,
+  },
+
+  crm: {
+    flags: ["/api/crm/flags"] as const,
+  },
+
+  presence: {
+    all: ["/api/v1/presence"] as const,
+  },
+
+  reports: {
+    clientsAnalytics: ["/api/v1/reports/clients/analytics"] as const,
+    pmPortfolio: ["/api/reports/pm/portfolio"] as const,
+    workloadTeam: (rangeDays: number) => ["/api/reports/v2/workload/team", { rangeDays }] as const,
+  },
+
+  billing: {
+    pendingApproval: ["/api/billing/pending-approval"] as const,
+    invoiceDrafts: ["/api/billing/invoice-drafts"] as const,
+    billableTasksCompleted: ["/api/billing/billable-tasks/completed"] as const,
+    clientProfitability: (threshold: number) => ["/api/analytics/client-profitability", threshold] as const,
+  },
+
+  assets: {
+    downloadUrl: (id: string) => ["/api/v1/assets", id, "download-url"] as const,
   },
 
   superAdmin: {
@@ -375,32 +406,19 @@ export function invalidateTimeEntries(
   } = {},
 ): void {
   if (opts.dateFilter) {
-    qc.invalidateQueries({ queryKey: timeEntryQueryKeyForFilter(opts.dateFilter) });
+    qc.invalidateQueries({ queryKey: tenantKey(timeEntryQueryKeyForFilter(opts.dateFilter) as string[]) });
   } else {
-    qc.invalidateQueries({ queryKey: queryKeys.timeEntries.all });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.all as unknown as string[]) });
   }
 
   if (opts.includeStats !== false) {
-    qc.invalidateQueries({ queryKey: queryKeys.timeEntries.myStats });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.myStats as unknown as string[]) });
   }
 
   if (opts.taskId) {
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.timeEntries(opts.taskId) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.timeEntries(opts.taskId) as unknown as string[]) });
   }
 }
-
-/**
- * Invalidate all task-related caches after a task mutation.
- *
- * Consolidates the repeated 3–5 line invalidation pattern that appears
- * in task-detail-drawer, subtask-detail-drawer, ai-project-planner,
- * use-create-task, and project.tsx.
- *
- * @param qc - QueryClient instance
- * @param opts.projectId - invalidate project sections/tasks if provided
- * @param opts.taskId - invalidate specific task detail if provided
- * @param opts.parentTaskId - invalidate parent task + child tasks if provided
- */
 export function invalidateTaskCaches(
   qc: QueryClient,
   opts: {
@@ -430,5 +448,75 @@ export function invalidateTaskCaches(
 
   if (opts.includeProjectLists) {
     qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+  }
+}
+
+export function invalidateClientCaches(
+  qc: QueryClient,
+  opts: {
+    clientId?: string | null;
+    includeNotes?: boolean;
+    includeCrmSummary?: boolean;
+  } = {},
+): void {
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.all) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.minimal) });
+
+  if (opts.clientId) {
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.detail(opts.clientId)) });
+    if (opts.includeNotes) {
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.notes(opts.clientId)) });
+    }
+    if (opts.includeCrmSummary) {
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.crmSummary(opts.clientId)) });
+    }
+  }
+
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.hierarchy) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.stagesSummary) });
+}
+
+export function invalidateTimeEntryCaches(
+  qc: QueryClient,
+  opts: {
+    taskId?: string | null;
+    includeTimer?: boolean;
+  } = {},
+): void {
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.all) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.myStats) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.paginated) });
+
+  if (opts.taskId) {
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.byTask(opts.taskId)) });
+  }
+
+  if (opts.includeTimer) {
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
+  }
+}
+
+export function invalidateProjectCaches(
+  qc: QueryClient,
+  opts: {
+    projectId?: string | null;
+    includeTasks?: boolean;
+    includeMembers?: boolean;
+  } = {},
+): void {
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.withCounts) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.analyticsSummary) });
+
+  if (opts.projectId) {
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(opts.projectId)) });
+    if (opts.includeTasks) {
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(opts.projectId)) });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(opts.projectId)) });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.calendarEvents(opts.projectId)) });
+    }
+    if (opts.includeMembers) {
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.members(opts.projectId)) });
+    }
   }
 }

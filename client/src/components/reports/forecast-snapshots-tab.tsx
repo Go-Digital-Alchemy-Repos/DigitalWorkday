@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES, apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,6 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Camera, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 const SNAPSHOT_TYPES = [
@@ -54,13 +54,13 @@ export function ForecastSnapshotsTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data, isLoading } = useQuery<{ snapshots: ForecastSnapshot[]; total: number; hasMore: boolean }>({
-    queryKey: ["/api/reports/v2/forecasting/snapshots"],
+    queryKey: tenantKey(["/api/reports/v2/forecasting/snapshots"]),
     queryFn: async () => {
       const res = await fetch("/api/reports/v2/forecasting/snapshots?limit=20");
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.reports,
   });
 
   const form = useForm<SnapshotFormValues>({
@@ -75,7 +75,7 @@ export function ForecastSnapshotsTab() {
     mutationFn: (values: SnapshotFormValues) =>
       apiRequest("POST", "/api/reports/v2/forecasting/snapshots", values),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/v2/forecasting/snapshots"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports/v2/forecasting/snapshots"]) });
       toast({ title: "Snapshot created" });
       setDialogOpen(false);
       form.reset();

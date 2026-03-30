@@ -55,7 +55,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import type { Section, Tag as TagType } from "@shared/schema";
 
 const createTaskSchema = z.object({
@@ -164,7 +165,7 @@ export function TaskCreateDrawer({
   });
 
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
-    queryKey: ["/api/workspaces", workspaceId, "tags"],
+    queryKey: tenantKey(queryKeys.workspaces.tags(workspaceId!)),
     enabled: !!workspaceId && open,
   });
 
@@ -174,7 +175,7 @@ export function TaskCreateDrawer({
       return res.json() as Promise<TagType>;
     },
     onSuccess: (newTag: TagType) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", workspaceId, "tags"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.workspaces.tags(workspaceId!)) });
       setSelectedTagIds(prev => [...prev, newTag.id]);
       setIsCreatingTag(false);
       setNewTagName("");

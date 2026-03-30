@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { useCreateTask } from "@/hooks/use-create-task";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,12 +44,12 @@ export function TaskSelectorWithCreate({
   const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
-    queryKey: ["/api/projects", projectId, "tasks"],
+    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
     enabled: !!projectId,
   });
 
   const { data: sections = [] } = useQuery<Section[]>({
-    queryKey: ["/api/projects", projectId, "sections"],
+    queryKey: tenantKey(queryKeys.projects.sections(projectId!)),
     enabled: !!projectId && createOpen,
   });
 

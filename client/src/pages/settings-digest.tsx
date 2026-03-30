@@ -15,7 +15,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient , tenantKey } from "@/lib/queryClient";
 
 const DAYS_OF_WEEK = [
   { value: "1", label: "Monday" },
@@ -79,7 +79,7 @@ export default function DigestConfigPage() {
   const [previewData, setPreviewData] = useState<DigestPreview | null>(null);
 
   const { data: scheduleData, isLoading } = useQuery<{ schedule: DigestSchedule | null }>({
-    queryKey: ["/api/reports/v2/digest/schedule"],
+    queryKey: tenantKey(["/api/reports/v2/digest/schedule"]),
     queryFn: async () => {
       const res = await fetch("/api/reports/v2/digest/schedule");
       if (!res.ok) throw new Error("Failed");
@@ -113,7 +113,7 @@ export default function DigestConfigPage() {
     mutationFn: (values: DigestScheduleValues) =>
       apiRequest("PUT", "/api/reports/v2/digest/schedule", values),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/v2/digest/schedule"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/reports/v2/digest/schedule"]) });
       toast({ title: "Digest schedule saved" });
     },
     onError: () => toast({ title: "Failed to save schedule", variant: "destructive" }),

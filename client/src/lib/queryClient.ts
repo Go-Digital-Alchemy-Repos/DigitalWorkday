@@ -363,6 +363,7 @@ export const STALE_TIMES = {
   realtime: 10_000,
   fast: 30_000,
   standard: 60_000,
+  reports: 120_000,
   slow: 5 * 60_000,
   static: Infinity,
 } as const;

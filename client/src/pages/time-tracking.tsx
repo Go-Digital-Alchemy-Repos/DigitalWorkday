@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
 import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { queryKeys, invalidateTimeEntries, broadcastTimeEntryChanged, optimisticRemoveTimeEntry, optimisticUpdateTimeEntry, optimisticInsertTimeEntry, rollbackTimeEntryCache, timeEntryQueryKeyForFilter, entryMatchesDateFilter, type TimeEntryDateFilter, type CachedTimeEntry } from "@/lib/queryKeys";
 import { 
   Clock, Play, Pause, Square, Plus, Download, Filter, 
@@ -161,22 +161,22 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
   const [stopClientId, setStopClientId] = useState<string | null>(null);
 
   const { data: timer, isLoading } = useQuery<ActiveTimer | null>({
-    queryKey: ["/api/timer/current"],
+    queryKey: tenantKey(["/api/timer/current"]),
   });
 
   const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/projects"],
+    queryKey: tenantKey(["/api/projects"]),
   });
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(["/api/clients"]),
   });
 
   const startMutation = useMutation({
     mutationFn: (data: { clientId?: string; projectId?: string; description?: string }) =>
       apiRequest("POST", "/api/timer/start", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/timer/current"]) });
       toast({ title: "Timer started" });
     },
     onError: (error: Error) => {
@@ -187,7 +187,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
   const pauseMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/timer/pause"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/timer/current"]) });
       toast({ title: "Timer paused" });
     },
   });
@@ -195,7 +195,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
   const resumeMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/timer/resume"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/timer/current"]) });
       toast({ title: "Timer resumed" });
     },
   });
@@ -204,13 +204,13 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
     mutationFn: (data: { discard?: boolean; scope?: string; description?: string; taskId?: string | null; clientId?: string | null }) =>
       apiRequest("POST", "/api/timer/stop", data),
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ["/api/timer/current"] });
+      await queryClient.cancelQueries({ queryKey: tenantKey(["/api/timer/current"]) });
       const previousTimer = queryClient.getQueryData(["/api/timer/current"]);
       queryClient.setQueryData(["/api/timer/current"], null);
       return { previousTimer };
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/timer/current"]) });
       if (!variables.discard) {
         invalidateTimeEntries(queryClient, {});
       }
@@ -238,7 +238,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
     mutationFn: (data: { clientId?: string | null; projectId?: string | null; description?: string | null }) =>
       apiRequest("PATCH", "/api/timer/current", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/timer/current"]) });
     },
   });
 
@@ -1712,7 +1712,7 @@ function ReportsSummary() {
   if (endDate) queryParams.set("endDate", endDate);
 
   const { data: summary, isLoading } = useQuery<ReportSummary>({
-    queryKey: ["/api/time-entries/report/summary", dateRange],
+    queryKey: tenantKey(["/api/time-entries/report/summary", dateRange]),
     queryFn: () => 
       fetch(`/api/time-entries/report/summary?${queryParams.toString()}`).then(r => r.json()),
   });
@@ -1821,8 +1821,8 @@ export function TimeTrackingContent() {
   const [manualEntryDrawerOpen, setManualEntryDrawerOpen] = useState(false);
 
   const { data: timer, refetch: refetchTimer } = useQuery<ActiveTimer | null>({
-    queryKey: ["/api/timer/current"],
-    staleTime: 10000,
+    queryKey: tenantKey(["/api/timer/current"]),
+    staleTime: STALE_TIMES.realtime,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });

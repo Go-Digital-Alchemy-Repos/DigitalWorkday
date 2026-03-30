@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import type { TaskWithRelations } from "@shared/schema";
 
@@ -31,9 +32,9 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
   const [taskIdToOpen, setTaskIdToOpen] = useState<string | null>(null);
 
   const { data: task, isLoading, isError } = useQuery<TaskWithRelations>({
-    queryKey: ["/api/tasks", taskIdToOpen],
+    queryKey: tenantKey(["/api/tasks", taskIdToOpen]),
     enabled: !!taskIdToOpen,
-    staleTime: 30000,
+    staleTime: STALE_TIMES.fast,
   });
 
   const openTask = useCallback((taskId: string) => {

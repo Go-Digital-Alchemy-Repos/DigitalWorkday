@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import type { TaskAttachmentWithUser } from "@shared/schema";
 
 interface AttachmentUploaderProps {
@@ -163,11 +163,11 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
   const [isDragOver, setIsDragOver] = useState(false);
 
   const { data: config } = useQuery<AttachmentConfig>({
-    queryKey: ["/api/attachments/config"],
+    queryKey: tenantKey(["/api/attachments/config"]),
   });
 
   const { data: attachments = [], isLoading } = useQuery<TaskAttachmentWithUser[]>({
-    queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"],
+    queryKey: tenantKey(["/api/projects", projectId, "tasks", taskId, "attachments"]),
     enabled: !!taskId && !!projectId,
   });
 
@@ -209,7 +209,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
       setUploadingFiles(prev => prev.filter(f => f.id !== uploadId));
       
       queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
+        queryKey: tenantKey(["/api/projects", projectId, "tasks", taskId, "attachments"]) 
       });
 
       onUploadSuccess?.();
@@ -326,7 +326,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
+        queryKey: tenantKey(["/api/projects", projectId, "tasks", taskId, "attachments"]) 
       });
       onDeleteSuccess?.();
       toast({

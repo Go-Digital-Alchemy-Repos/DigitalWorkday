@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,8 +76,8 @@ export default function UserProfilePage() {
     },
     onSuccess: async () => {
       await refetch();
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/user"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/auth/me"]) });
     },
     onError: () => {
       toast({ title: "Failed to update avatar", variant: "destructive" });
@@ -407,7 +407,7 @@ function LocationSharingCard() {
     lng: number | null;
     updatedAt: string | null;
   }>({
-    queryKey: ["/api/v1/me/location"],
+    queryKey: tenantKey(["/api/v1/me/location"]),
   });
 
   const updateLocationMutation = useMutation({
@@ -415,7 +415,7 @@ function LocationSharingCard() {
       return apiRequest("POST", "/api/v1/me/location", coords);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/me/location"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/me/location"]) });
     },
   });
 

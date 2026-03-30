@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -297,7 +297,7 @@ export default function TemplatesPage() {
   const isAdmin = user?.role === "admin" || user?.role === "super_user" || user?.role === "tenant_owner";
 
   const { data: templates = [], isLoading } = useQuery<ProjectTemplate[]>({
-    queryKey: ["/api/project-templates"],
+    queryKey: tenantKey(["/api/project-templates"]),
   });
 
   const createMutation = useMutation({
@@ -305,7 +305,7 @@ export default function TemplatesPage() {
       return apiRequest("POST", "/api/project-templates", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/project-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/project-templates"]) });
       toast({ title: "Template created", description: "Your project template has been saved." });
       setIsDialogOpen(false);
       setEditingTemplate(undefined);
@@ -320,7 +320,7 @@ export default function TemplatesPage() {
       return apiRequest("PATCH", `/api/project-templates/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/project-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/project-templates"]) });
       toast({ title: "Template updated", description: "Your changes have been saved." });
       setIsDialogOpen(false);
       setEditingTemplate(undefined);
@@ -335,7 +335,7 @@ export default function TemplatesPage() {
       return apiRequest("DELETE", `/api/project-templates/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/project-templates"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/project-templates"]) });
       toast({ title: "Template deleted", description: "The template has been removed." });
     },
     onError: () => {

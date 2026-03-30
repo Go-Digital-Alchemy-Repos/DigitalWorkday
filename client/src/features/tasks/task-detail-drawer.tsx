@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey, STALE_TIMES } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
@@ -144,7 +144,7 @@ export function TaskDetailDrawer({
     queryKey: tenantKey(queryKeys.tasks.detail(taskProp?.id!)),
     enabled: !!taskProp?.id && open,
     initialData: taskProp || undefined,
-    staleTime: 5000,
+    staleTime: STALE_TIMES.realtime,
   });
   const task = liveTask || taskProp;
 
@@ -507,7 +507,7 @@ export function TaskDetailDrawer({
     },
     enabled: !!task?.projectId && open,
     retry: 1,
-    staleTime: 60000,
+    staleTime: STALE_TIMES.standard,
   });
 
   const canQuickStartTimer = !task?.projectId || (projectContext && projectContext.clientId);

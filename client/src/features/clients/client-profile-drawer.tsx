@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { richTextToPlainText } from "@/lib/richtext/richText";
 import { formatDistanceToNow, format } from "date-fns";
 import { Link } from "wouter";
@@ -333,7 +334,7 @@ function ProjectsTab({ client }: { client: ClientWithContacts }) {
 
 function FilesTab({ clientId }: { clientId: string }) {
   const { data: documents, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/v1/clients", clientId, "documents"],
+    queryKey: tenantKey(["/api/v1/clients", clientId, "documents"]),
     enabled: !!clientId,
   });
 
@@ -439,7 +440,7 @@ function QuickNotePanel({
       setNoteContent("");
       setNoteTitle("");
       onClose();
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/clients", clientId, "notes"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.notes(clientId!)) });
     },
     onError: () => {
       toast({ title: "Failed to save note", variant: "destructive" });
@@ -488,7 +489,7 @@ export function ClientProfileDrawer({
   const [showQuickNote, setShowQuickNote] = useState(false);
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
-    queryKey: ["/api/clients", clientId],
+    queryKey: tenantKey(queryKeys.clients.detail(clientId!)),
     enabled: !!clientId && open,
   });
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,7 +114,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       return apiRequest("PATCH", `/api/users/${user!.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       toast({ title: "User updated successfully" });
       setIsEditing(false);
     },
@@ -128,7 +128,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       return apiRequest("PATCH", `/api/users/${user!.id}`, { isActive });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       toast({ title: user?.isActive ? "User deactivated" : "User activated" });
     },
     onError: () => {
@@ -147,7 +147,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       toast({ title: "Password reset successfully" });
       setNewPassword("");
       setShowResetPassword(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
     },
     onError: () => {
       toast({ title: "Failed to reset password", variant: "destructive" });
@@ -182,7 +182,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/users"]) });
       toast({ title: "User deleted permanently" });
       onClose();
     },

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { STALE_TIMES } from "@/lib/queryClient";
 
 interface FeatureStatus {
   enabled: boolean;
@@ -36,7 +37,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
   const { data, isLoading } = useQuery<FeaturesResponse>({
     queryKey: ["/api/v1/system/features"],
     enabled: !hasChecked,
-    staleTime: 5 * 60 * 1000,
+    staleTime: STALE_TIMES.slow,
     refetchOnWindowFocus: false,
     retry: false,
   });

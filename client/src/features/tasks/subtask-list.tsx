@@ -12,7 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import type { Subtask, User, WorkspaceMember } from "@shared/schema";
 
@@ -81,18 +82,18 @@ function SubtaskListInner({
   const [showLogTimeDialog, setShowLogTimeDialog] = useState(false);
 
   const { data: workspaceMembers = [] } = useQuery<(WorkspaceMember & { user?: User })[]>({
-    queryKey: ["/api/workspaces", workspaceId, "members"],
+    queryKey: tenantKey(queryKeys.workspaces.members(workspaceId!)),
     enabled: !!workspaceId,
   });
 
   const { data: aiStatus } = useQuery<{ enabled: boolean }>({
-    queryKey: ["/api/v1/ai/status"],
+    queryKey: tenantKey(queryKeys.ai.status),
     queryFn: async () => {
       const res = await fetch("/api/v1/ai/status", { credentials: "include" });
       if (!res.ok) return { enabled: false };
       return res.json();
     },
-    staleTime: 60000,
+    staleTime: STALE_TIMES.standard,
   });
 
   const aiSuggestMutation = useMutation({
@@ -143,7 +144,7 @@ function SubtaskListInner({
       return apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.detail(taskId)) });
       onSubtaskUpdate?.();
     },
   });

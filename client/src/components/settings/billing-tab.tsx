@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { 
   CreditCard, 
   ExternalLink, 
@@ -55,11 +55,11 @@ export function BillingTab() {
   const [isEditingEmail, setIsEditingEmail] = useState(false);
 
   const { data: billingInfo, isLoading: billingLoading } = useQuery<BillingInfo>({
-    queryKey: ["/api/v1/tenant/billing"],
+    queryKey: tenantKey(["/api/v1/tenant/billing"]),
   });
 
   const { data: invoicesData, isLoading: invoicesLoading } = useQuery<{ invoices: Invoice[]; hasMore: boolean }>({
-    queryKey: ["/api/v1/tenant/billing/invoices"],
+    queryKey: tenantKey(["/api/v1/tenant/billing/invoices"]),
     enabled: billingInfo?.stripeCustomerIdPresent ?? false,
   });
 
@@ -69,7 +69,7 @@ export function BillingTab() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/billing"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/billing"]) });
       toast({ title: "Billing initialized successfully" });
     },
     onError: (error: any) => {
@@ -104,7 +104,7 @@ export function BillingTab() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/billing"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/v1/tenant/billing"]) });
       setIsEditingEmail(false);
       toast({ title: "Billing email updated" });
     },

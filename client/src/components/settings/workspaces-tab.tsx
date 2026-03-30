@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,11 +52,11 @@ export function WorkspacesTab() {
   const { toast } = useToast();
 
   const { data: currentWorkspace } = useQuery<Workspace>({
-    queryKey: ["/api/workspaces/current"],
+    queryKey: tenantKey(["/api/workspaces/current"]),
   });
 
   const { data: workspaces } = useQuery<Workspace[]>({
-    queryKey: ["/api/workspaces"],
+    queryKey: tenantKey(["/api/workspaces"]),
   });
 
   const createWorkspaceMutation = useMutation({
@@ -64,7 +64,7 @@ export function WorkspacesTab() {
       return apiRequest("POST", "/api/workspaces", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/workspaces"]) });
       setCreateOpen(false);
       toast({ title: "Workspace created successfully" });
     },
@@ -78,8 +78,8 @@ export function WorkspacesTab() {
       return apiRequest("PATCH", `/api/workspaces/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/workspaces"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/workspaces/current"]) });
       setEditOpen(false);
       setEditingWorkspace(null);
       toast({ title: "Workspace updated successfully" });
@@ -94,8 +94,8 @@ export function WorkspacesTab() {
       return apiRequest("DELETE", `/api/workspaces/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/current"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/workspaces"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/workspaces/current"]) });
       setDeleteTarget(null);
       toast({ title: "Workspace deleted successfully" });
     },

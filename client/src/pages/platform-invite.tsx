@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { Loader2, Shield, CheckCircle, XCircle, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { parseApiError } from "@/lib/parseApiError";
 
@@ -52,7 +52,7 @@ export default function PlatformInvitePage() {
   }, []);
 
   const { data: inviteData, isLoading: verifying, error: verifyError } = useQuery<InviteVerifyResponse>({
-    queryKey: ["/api/v1/auth/platform-invite/verify", token],
+    queryKey: tenantKey(["/api/v1/auth/platform-invite/verify", token]),
     queryFn: async () => {
       const response = await fetch(`/api/v1/auth/platform-invite/verify?token=${token}`);
       if (!response.ok) {

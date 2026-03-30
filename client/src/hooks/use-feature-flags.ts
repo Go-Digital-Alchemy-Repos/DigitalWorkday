@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { tenantKey, STALE_TIMES } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 
 export interface FeatureFlags {
   assetLibraryV2: boolean;
@@ -88,8 +90,8 @@ const ALL_OFF: FeatureFlags = {
 
 export function useFeatureFlags(): FeatureFlags {
   const { data } = useQuery<FeatureFlags>({
-    queryKey: ["/api/features/flags"],
-    staleTime: 5 * 60 * 1000,
+    queryKey: tenantKey(queryKeys.features.flags),
+    staleTime: STALE_TIMES.slow,
     refetchOnWindowFocus: false,
   });
   return data ?? ALL_OFF;

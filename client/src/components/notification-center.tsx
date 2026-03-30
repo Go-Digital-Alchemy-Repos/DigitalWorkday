@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, tenantKey } from "@/lib/queryClient";
 import { getSocket } from "@/lib/realtime/socket";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -459,7 +459,7 @@ export function NotificationCenter() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery<PaginatedResponse>({
-    queryKey: ["/api/notifications", filterTab],
+    queryKey: tenantKey(["/api/notifications", filterTab]),
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams(queryParams);
       if (pageParam) params.set("cursor", pageParam as string);
@@ -481,7 +481,7 @@ export function NotificationCenter() {
   }, [notifications, groupingEnabled]);
 
   const { data: unreadData } = useQuery<{ count: number }>({
-    queryKey: ["/api/notifications/unread-count"],
+    queryKey: tenantKey(["/api/notifications/unread-count"]),
     refetchInterval: 30000,
   });
   const unreadCount = unreadData?.count ?? 0;
@@ -536,7 +536,7 @@ export function NotificationCenter() {
   };
 
   const { data: preferences = defaultPreferences, isLoading: preferencesLoading } = useQuery<NotificationPreferences>({
-    queryKey: ["/api/notifications/preferences"],
+    queryKey: tenantKey(["/api/notifications/preferences"]),
   });
 
   const markAsReadMutation = useMutation({
@@ -544,8 +544,8 @@ export function NotificationCenter() {
       await apiRequest("PATCH", `/api/notifications/${notificationId}/read`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     },
   });
 
@@ -554,8 +554,8 @@ export function NotificationCenter() {
       await apiRequest("POST", "/api/notifications/mark-all-read");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
       toast({ title: "All notifications marked as read" });
     },
   });
@@ -565,8 +565,8 @@ export function NotificationCenter() {
       await apiRequest("PATCH", `/api/notifications/${notificationId}/dismiss`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     },
   });
 
@@ -575,8 +575,8 @@ export function NotificationCenter() {
       await apiRequest("POST", "/api/notifications/dismiss-all");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
       toast({ title: "All notifications dismissed" });
     },
   });
@@ -586,8 +586,8 @@ export function NotificationCenter() {
       await apiRequest("POST", "/api/notifications/group/read", { dedupeKey });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     },
   });
 
@@ -596,8 +596,8 @@ export function NotificationCenter() {
       await apiRequest("POST", "/api/notifications/group/dismiss", { dedupeKey });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     },
   });
 
@@ -606,7 +606,7 @@ export function NotificationCenter() {
       await apiRequest("PATCH", "/api/notifications/preferences", updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/preferences"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/preferences"]) });
     },
   });
 
@@ -641,8 +641,8 @@ export function NotificationCenter() {
           });
         }, 3000);
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
       chatSounds.play("notification");
 
       // Build a click handler that navigates to the notification target
@@ -667,18 +667,18 @@ export function NotificationCenter() {
     };
 
     const handleNotificationRead: ServerToClientEvents["notification:read"] = () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     };
 
     const handleNotificationAllRead: ServerToClientEvents["notification:allRead"] = () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     };
 
     const handleNotificationDeleted: ServerToClientEvents["notification:deleted"] = () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications"]) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(["/api/notifications/unread-count"]) });
     };
 
     socket.on("notification:new", handleNewNotification);

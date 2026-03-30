@@ -67,7 +67,8 @@ import {
 } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, tenantKey } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { CreateProjectDialog } from "@/features/projects";
 import { TeamDrawer } from "@/features/teams";
 import { Badge } from "@/components/ui/badge";
@@ -167,7 +168,7 @@ export function TenantSidebar() {
   const [projectsLimit, setProjectsLimit] = useState(10);
 
   const { data: unreadCount = 0 } = useQuery<number>({
-    queryKey: ["/api/v1/chat/unread-count"],
+    queryKey: tenantKey(["/api/v1/chat/unread-count"]),
     refetchInterval: 30000,
   });
 
@@ -183,19 +184,19 @@ export function TenantSidebar() {
   const { enablePmPortfolioDashboard } = useFeatureFlags();
 
   const { data: workspace } = useQuery<Workspace>({
-    queryKey: ["/api/workspaces/current"],
+    queryKey: tenantKey(queryKeys.workspaces.current),
   });
 
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: tenantKey(queryKeys.projects.all),
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: tenantKey(queryKeys.teams.all),
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+    queryKey: tenantKey(queryKeys.clients.all),
   });
 
   const getClientName = (clientId: string | null) => {
@@ -206,7 +207,7 @@ export function TenantSidebar() {
 
 
   const { data: uiPrefs } = useQuery<UiPreferences>({
-    queryKey: ["/api/users/me/ui-preferences"],
+    queryKey: tenantKey(queryKeys.users.uiPreferences),
   });
 
   const saveOrderMutation = useMutation({
@@ -216,7 +217,7 @@ export function TenantSidebar() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/me/ui-preferences"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.users.uiPreferences) });
     },
   });
 
@@ -326,7 +327,7 @@ export function TenantSidebar() {
       return apiRequest("POST", "/api/projects", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       setCreateProjectOpen(false);
     },
   });
@@ -340,7 +341,7 @@ export function TenantSidebar() {
       return apiRequest("POST", "/api/teams", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.teams.all) });
       setCreateTeamOpen(false);
       toast({ title: "Team created successfully" });
     },
