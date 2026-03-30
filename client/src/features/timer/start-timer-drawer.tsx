@@ -77,7 +77,7 @@ export function StartTimerDrawer({
   }, []);
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.all),
+    queryKey: tenantKey(queryKeys.clients.minimal),
     enabled: open,
   });
 

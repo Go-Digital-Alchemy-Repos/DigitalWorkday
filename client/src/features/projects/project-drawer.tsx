@@ -75,7 +75,7 @@ export function ProjectDrawer({
   const [activeTab, setActiveTab] = useState("overview");
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: tenantKey(queryKeys.clients.all),
+    queryKey: tenantKey(queryKeys.clients.minimal),
     enabled: open,
   });
 

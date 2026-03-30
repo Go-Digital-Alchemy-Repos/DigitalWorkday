@@ -165,11 +165,11 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
   });
 
   const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: tenantKey(["/api/projects"]),
+    queryKey: tenantKey(["/api/projects", { fields: "picker" }]),
   });
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(["/api/clients"]),
+    queryKey: tenantKey(["/api/clients", { fields: "minimal" }]),
   });
 
   const startMutation = useMutation({

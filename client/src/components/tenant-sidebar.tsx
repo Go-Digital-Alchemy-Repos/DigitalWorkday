@@ -196,7 +196,7 @@ export function TenantSidebar() {
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: tenantKey(queryKeys.clients.all),
+    queryKey: tenantKey(queryKeys.clients.minimal),
   });
 
   const getClientName = (clientId: string | null) => {

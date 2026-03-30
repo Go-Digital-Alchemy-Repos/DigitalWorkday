@@ -177,7 +177,7 @@ export function RequestApprovalFromClientDialog({
   const [dueAt, setDueAt] = useState("");
 
   const { data: clients = [] } = useQuery<ClientOption[]>({
-    queryKey: tenantKey(["/api/clients"]),
+    queryKey: tenantKey(["/api/clients", { fields: "minimal" }]),
     enabled: open,
     select: (data: any) => {
       if (Array.isArray(data)) return data;

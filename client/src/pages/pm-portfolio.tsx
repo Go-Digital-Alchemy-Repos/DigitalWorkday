@@ -546,13 +546,13 @@ function InvoiceDraftsCard() {
   });
 
   const { data: clients = [] } = useQuery<ClientOption[]>({
-    queryKey: tenantKey(["/api/clients"]),
+    queryKey: tenantKey(["/api/clients", { fields: "minimal" }]),
     staleTime: STALE_TIMES.standard,
-    select: (data: any[]) => data.map((c) => ({ id: c.id, name: c.name })),
+    select: (data: any[]) => data.map((c) => ({ id: c.id, name: c.displayName || c.companyName || c.name })),
   });
 
   const { data: allProjects = [] } = useQuery<ProjectOption[]>({
-    queryKey: tenantKey(["/api/projects"]),
+    queryKey: tenantKey(["/api/projects", { fields: "picker" }]),
     staleTime: STALE_TIMES.standard,
     select: (data: any[]) => data.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId })),
   });

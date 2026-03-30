@@ -4,6 +4,7 @@ import { tenantKey } from "./queryClient";
 export const queryKeys = {
   projects: {
     all: ["/api/projects"] as const,
+    picker: ["/api/projects", { fields: "picker" }] as const,
     detail: (id: string) => ["/api/projects", id] as const,
     sections: (id: string) => ["/api/projects", id, "sections"] as const,
     tasks: (id: string) => ["/api/projects", id, "tasks"] as const,

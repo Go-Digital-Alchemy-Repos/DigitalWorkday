@@ -163,7 +163,14 @@ router.get("/projects", async (req: Request, res: Response) => {
         
         const parsedLimit = Math.min(parseInt(limit) || 100, 200);
         
-        const selectColumns = fields === 'minimal'
+        const selectColumns = fields === 'picker'
+          ? {
+              id: projects.id,
+              name: projects.name,
+              clientId: projects.clientId,
+              status: projects.status,
+            }
+          : fields === 'minimal'
           ? {
               id: projects.id,
               name: projects.name,
@@ -242,6 +249,11 @@ router.get("/projects", async (req: Request, res: Response) => {
           p.name.toLowerCase().includes(searchLower) ||
           (p.description && p.description.toLowerCase().includes(searchLower))
         );
+      }
+
+      const { fields: legacyFields } = req.query as Record<string, string>;
+      if (legacyFields === 'picker') {
+        return res.json(projectList.map(p => ({ id: p.id, name: p.name, clientId: p.clientId, status: p.status })));
       }
 
       if (includeCounts === 'true' && projectList.length > 0) {

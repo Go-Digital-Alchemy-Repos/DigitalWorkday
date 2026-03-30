@@ -137,7 +137,7 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: tenantKey(queryKeys.clients.all),
+    queryKey: tenantKey(queryKeys.clients.minimal),
     enabled: open,
   });
 

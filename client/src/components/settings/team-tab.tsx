@@ -125,7 +125,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: tenantKey(["/api/clients"]),
+    queryKey: tenantKey(["/api/clients", { fields: "minimal" }]),
     enabled: isAdmin,
   });
 

@@ -23,7 +23,7 @@ export function useTimeEntryCascade(options: CascadeOptions = {}) {
   const [subtaskId, setSubtaskId] = useState<string | null>(initialValues?.subtaskId ?? null);
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.all),
+    queryKey: tenantKey(queryKeys.clients.minimal),
     enabled,
   });
 

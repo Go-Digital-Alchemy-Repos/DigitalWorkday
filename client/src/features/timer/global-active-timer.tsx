@@ -85,12 +85,12 @@ export function GlobalActiveTimer() {
   });
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.all),
+    queryKey: tenantKey(queryKeys.clients.minimal),
     enabled: isEligible,
   });
 
   const { data: allProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
-    queryKey: tenantKey(queryKeys.projects.all),
+    queryKey: tenantKey(queryKeys.projects.picker),
     enabled: isEligible,
   });
 

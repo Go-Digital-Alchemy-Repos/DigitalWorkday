@@ -35,7 +35,8 @@ The complete entity with all nested relations loaded. Used when the user is acti
 | DTO | Endpoint | Used By | Key Fields Included | Fields Excluded |
 |-----|----------|---------|--------------------|--------------------|
 | `ClientListItem` | `GET /api/v1/clients/hierarchy/list` | Clients list page | id, companyName, displayName, status, stage, industry, tags, email, phone, website, parentClientId, depth, parentName, contactCount, projectCount, openTasksCount, totalHoursWorked, lastActivityAt, needsAttention, createdAt | notes, description, addresses, contacts[], projects[] |
-| `fields=minimal` clients | `GET /api/clients?fields=minimal` | Project filter dropdowns | id, companyName, displayName, status, parentClientId | Everything else |
+| `fields=minimal` clients | `GET /api/clients?fields=minimal` | All client picker/selector UIs (timer drawers, time tracking, project drawers, cascade hooks, team settings, request approval, tenant sidebar, PM portfolio) | id, companyName, displayName, status, parentClientId | Everything else |
+| `fields=picker` projects | `GET /api/projects?fields=picker` | All project picker/selector UIs (global timer, time tracking, PM portfolio) | id, name, clientId, status | Everything else |
 | `ProjectWithCounts` | `GET /api/projects?fields=minimal&includeCounts=true` | Projects dashboard | id, name, clientId, status, dates, color, teamId, stickyAt, visibility, description, taskCounts { total, completed } | sections[], members[], team, client relations |
 | `TaskListItem` | `GET /api/tasks/my?view=list` | My Tasks list | id, title, status, priority, dueDate, dueBucket, projectId, projectName, projectColor, clientName, isPersonal, assignees (userId+name), tags (id+name), commentCount, subtaskCount, subtaskCompletedCount, createdAt, updatedAt | comments[], subtasks[], attachments[], full assignee User objects, full tag objects |
 | `TaskListItem` | `GET /api/projects/:id/tasks?fields=list` | Project tasks list | Same as My Tasks list item; batched via `getProjectTaskListItems()` hydrator (no N+1). Default returns full `TaskWithRelations[]` for backward compatibility. | Same as above |
@@ -134,8 +135,10 @@ useQuery({ queryKey: ["/api/clients"] }); // expects minimal objects elsewhere
 ```typescript
 // GOOD: Distinct keys per shape
 useQuery({ queryKey: queryKeys.clients.all });     // full
-useQuery({ queryKey: queryKeys.clients.minimal });  // slim
+useQuery({ queryKey: queryKeys.clients.minimal });  // slim (picker dropdowns)
 useQuery({ queryKey: queryKeys.clients.hierarchy }); // hierarchy list
+useQuery({ queryKey: queryKeys.projects.all });     // full
+useQuery({ queryKey: queryKeys.projects.picker });  // slim (picker dropdowns: id, name, clientId, status)
 ```
 
 ### 5. Adding Nested Relations to Thin DTOs
