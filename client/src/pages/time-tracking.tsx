@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { 
   Clock, Play, Pause, Square, Plus, Download, Filter, 
   ChevronDown, Timer, Calendar, BarChart3, Trash2, Edit2, MoreHorizontal, X, Loader2
@@ -102,7 +103,26 @@ type TimeEntry = {
   project?: { id: string; name: string };
   task?: { id: string; title: string };
   user?: { id: string; name: string; email: string };
+  userName?: string | null;
+  clientName?: string | null;
+  projectName?: string | null;
+  taskTitle?: string | null;
 };
+
+function getEntryClientName(entry: TimeEntry): string | null {
+  if (entry.client) return entry.client.displayName || entry.client.companyName;
+  return entry.clientName ?? null;
+}
+
+function getEntryProjectName(entry: TimeEntry): string | null {
+  if (entry.project) return entry.project.name;
+  return entry.projectName ?? null;
+}
+
+function getEntryTaskTitle(entry: TimeEntry): string | null {
+  if (entry.task) return entry.task.title;
+  return entry.taskTitle ?? null;
+}
 
 type ReportSummary = {
   totalSeconds: number;
@@ -1261,8 +1281,9 @@ const TimeEntriesList = memo(function TimeEntriesList() {
   if (startDate) queryParams.set("startDate", startDate);
   if (endDate) queryParams.set("endDate", endDate);
 
+  queryParams.set("fields", "list");
   const { data: entries = [], isLoading } = useQuery<TimeEntry[]>({
-    queryKey: ["/api/time-entries", dateFilter],
+    queryKey: [...queryKeys.timeEntries.list, dateFilter],
     queryFn: () => 
       fetch(`/api/time-entries?${queryParams.toString()}`).then(r => r.json()),
   });
@@ -1343,15 +1364,15 @@ const TimeEntriesList = memo(function TimeEntriesList() {
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-            {entry.client && (
-              <span>{entry.client.displayName || entry.client.companyName}</span>
+            {getEntryClientName(entry) && (
+              <span>{getEntryClientName(entry)}</span>
             )}
-            {entry.client && entry.project && <span>·</span>}
-            {entry.project && <span>{entry.project.name}</span>}
-            {entry.task && (
+            {getEntryClientName(entry) && getEntryProjectName(entry) && <span>·</span>}
+            {getEntryProjectName(entry) && <span>{getEntryProjectName(entry)}</span>}
+            {getEntryTaskTitle(entry) && (
               <>
                 <span>·</span>
-                <span>{entry.task.title}</span>
+                <span>{getEntryTaskTitle(entry)}</span>
               </>
             )}
           </div>
@@ -1475,15 +1496,15 @@ const TimeEntriesList = memo(function TimeEntriesList() {
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                              {entry.client && (
-                                <span>{entry.client.displayName || entry.client.companyName}</span>
+                              {getEntryClientName(entry) && (
+                                <span>{getEntryClientName(entry)}</span>
                               )}
-                              {entry.client && entry.project && <span>·</span>}
-                              {entry.project && <span>{entry.project.name}</span>}
-                              {entry.task && (
+                              {getEntryClientName(entry) && getEntryProjectName(entry) && <span>·</span>}
+                              {getEntryProjectName(entry) && <span>{getEntryProjectName(entry)}</span>}
+                              {getEntryTaskTitle(entry) && (
                                 <>
                                   <span>·</span>
-                                  <span>{entry.task.title}</span>
+                                  <span>{getEntryTaskTitle(entry)}</span>
                                 </>
                               )}
                             </div>

@@ -38,6 +38,9 @@ The complete entity with all nested relations loaded. Used when the user is acti
 | `fields=minimal` clients | `GET /api/clients?fields=minimal` | Project filter dropdowns | id, companyName, displayName, status, parentClientId | Everything else |
 | `ProjectWithCounts` | `GET /api/projects?fields=minimal&includeCounts=true` | Projects dashboard | id, name, clientId, status, dates, color, teamId, stickyAt, visibility, description, taskCounts { total, completed } | sections[], members[], team, client relations |
 | `TaskListItem` | `GET /api/tasks/my?view=list` | My Tasks list | id, title, status, priority, dueDate, dueBucket, projectId, projectName, projectColor, clientName, isPersonal, assignees (userId+name), tags (id+name), commentCount, subtaskCount, subtaskCompletedCount, createdAt, updatedAt | comments[], subtasks[], attachments[], full assignee User objects, full tag objects |
+| `TaskListItem` | `GET /api/projects/:id/tasks?fields=list` | Project tasks list | Same as My Tasks list item; batched via `getProjectTaskListItems()` hydrator (no N+1). Default returns full `TaskWithRelations[]` for backward compatibility. | Same as above |
+| `TimeEntryListItem` | `GET /api/time-entries?fields=list` | Time tracking list | id, workspaceId, userId, clientId, projectId, taskId, title, description, startTime, endTime, durationSeconds, scope, isManual, createdAt + flat userName, clientName, projectName, taskTitle | Nested client/project/task/user objects |
+| `TimeEntryListItem` | `GET /api/time-entries/my?fields=list` | My time entries list | Same as above, scoped to current user | Same as above |
 | Stage summary | `GET /api/v1/clients/stages/summary` | Clients pipeline bar | stage, clientCount, projectCount | N/A (aggregate endpoint) |
 
 ### Full Payloads in the Current Codebase

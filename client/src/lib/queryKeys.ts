@@ -7,6 +7,7 @@ export const queryKeys = {
     detail: (id: string) => ["/api/projects", id] as const,
     sections: (id: string) => ["/api/projects", id, "sections"] as const,
     tasks: (id: string) => ["/api/projects", id, "tasks"] as const,
+    tasksList: (id: string) => ["/api/projects", id, "tasks", { fields: "list" }] as const,
     calendarEvents: (id: string) => ["/api/projects", id, "calendar-events"] as const,
     context: (id: string) => ["/api/projects", id, "context"] as const,
     members: (id: string) => ["/api/projects", id, "members"] as const,
@@ -78,6 +79,7 @@ export const queryKeys = {
 
   timeEntries: {
     all: ["/api/time-entries"] as const,
+    list: ["/api/time-entries", { fields: "list" }] as const,
     myStats: ["/api/time-entries/my/stats"] as const,
     byTask: (taskId: string) => ["/api/time-entries", { taskId }] as const,
   },

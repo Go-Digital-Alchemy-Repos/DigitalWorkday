@@ -24,9 +24,17 @@ router.get("/time-entries", async (req, res) => {
     const t0 = Date.now();
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
-    const { userId, clientId, projectId, taskId, scope, startDate, endDate } = req.query;
+    const { userId, clientId, projectId, taskId, scope, startDate, endDate, fields } = req.query;
 
-    const filters: any = {};
+    const filters: {
+      userId?: string;
+      clientId?: string;
+      projectId?: string;
+      taskId?: string;
+      scope?: "in_scope" | "out_of_scope";
+      startDate?: Date;
+      endDate?: Date;
+    } = {};
     if (userId) filters.userId = userId as string;
     if (clientId) filters.clientId = clientId as string;
     if (projectId) filters.projectId = projectId as string;
@@ -35,16 +43,22 @@ router.get("/time-entries", async (req, res) => {
     if (startDate) filters.startDate = new Date(startDate as string);
     if (endDate) filters.endDate = new Date(endDate as string);
 
+    const useListMode = fields === "list";
+
     let entries;
     if (tenantId && isStrictMode()) {
-      entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, filters);
+      entries = useListMode
+        ? await storage.getTimeEntriesByTenantFlat(tenantId, workspaceId, filters)
+        : await storage.getTimeEntriesByTenant(tenantId, workspaceId, filters);
     } else {
-      entries = await storage.getTimeEntriesByWorkspace(workspaceId, filters);
-      if (isSoftMode() && entries.some(e => !e.tenantId)) {
+      entries = useListMode
+        ? await storage.getTimeEntriesByWorkspaceFlat(workspaceId, filters)
+        : await storage.getTimeEntriesByWorkspace(workspaceId, filters);
+      if (isSoftMode() && entries.some((e) => !e.tenantId)) {
         addTenancyWarningHeader(res, "Results include entries with legacy null tenantId");
       }
     }
-    perfLog("GET /time-entries", `${entries.length} entries in ${Date.now() - t0}ms (batched)`);
+    perfLog("GET /time-entries", `${entries.length} entries in ${Date.now() - t0}ms (batched${useListMode ? ', flat' : ''})`);
     res.json(entries);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/time-entries", req);
@@ -56,13 +70,19 @@ router.get("/time-entries/my", async (req, res) => {
     const tenantId = getEffectiveTenantId(req);
     const userId = getCurrentUserId(req);
     const workspaceId = getCurrentWorkspaceId(req);
+    const fields = req.query.fields as string | undefined;
+    const useListMode = fields === "list";
     
     let entries;
     if (tenantId && isStrictMode()) {
-      entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, { userId });
+      entries = useListMode
+        ? await storage.getTimeEntriesByTenantFlat(tenantId, workspaceId, { userId })
+        : await storage.getTimeEntriesByTenant(tenantId, workspaceId, { userId });
     } else {
-      entries = await storage.getTimeEntriesByUser(userId, workspaceId);
-      if (isSoftMode() && entries.some(e => !e.tenantId)) {
+      entries = useListMode
+        ? await storage.getTimeEntriesByUserFlat(userId, workspaceId)
+        : await storage.getTimeEntriesByUser(userId, workspaceId);
+      if (isSoftMode() && entries.some((e) => !e.tenantId)) {
         addTenancyWarningHeader(res, "Results include entries with legacy null tenantId");
       }
     }

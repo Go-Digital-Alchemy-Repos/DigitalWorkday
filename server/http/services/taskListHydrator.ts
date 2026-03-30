@@ -443,3 +443,143 @@ function emptySummary(): TaskListSummary {
     completedThisWeek: 0,
   };
 }
+
+export async function getProjectTaskListItems(
+  projectId: string,
+  includeArchived: boolean,
+): Promise<TaskListItem[]> {
+  const conditions: any[] = [
+    eq(tasks.projectId, projectId),
+    eq(tasks.isPersonal, false),
+  ];
+  if (!includeArchived) {
+    conditions.push(isNull(tasks.archivedAt));
+  }
+
+  const baseTasks = await db.select()
+    .from(tasks)
+    .where(and(...conditions))
+    .orderBy(asc(tasks.orderIndex));
+
+  if (baseTasks.length === 0) return [];
+
+  const taskIds = baseTasks.map(t => t.id);
+
+  const [assigneeRows, tagRows, commentCounts, childTaskCounts, subtaskCounts] = await Promise.all([
+    db.select({
+      taskId: taskAssignees.taskId,
+      userId: taskAssignees.userId,
+      userName: users.name,
+    })
+      .from(taskAssignees)
+      .leftJoin(users, eq(taskAssignees.userId, users.id))
+      .where(inArray(taskAssignees.taskId, taskIds)),
+
+    db.select({
+      taskId: taskTags.taskId,
+      tagId: tags.id,
+      tagName: tags.name,
+      tagColor: tags.color,
+    })
+      .from(taskTags)
+      .leftJoin(tags, eq(taskTags.tagId, tags.id))
+      .where(inArray(taskTags.taskId, taskIds)),
+
+    db.select({
+      taskId: comments.taskId,
+      count: sql<number>`count(*)::int`.as('count'),
+    })
+      .from(comments)
+      .where(inArray(comments.taskId, taskIds))
+      .groupBy(comments.taskId),
+
+    db.select({
+      parentTaskId: tasks.parentTaskId,
+      count: sql<number>`count(*)::int`.as('count'),
+    })
+      .from(tasks)
+      .where(inArray(tasks.parentTaskId, taskIds))
+      .groupBy(tasks.parentTaskId),
+
+    db.select({
+      taskId: subtasks.taskId,
+      count: sql<number>`count(*)::int`.as('count'),
+      completedCount: sql<number>`count(*) filter (where ${subtasks.completed} = true)::int`.as('completedCount'),
+    })
+      .from(subtasks)
+      .where(inArray(subtasks.taskId, taskIds))
+      .groupBy(subtasks.taskId),
+  ]);
+
+  const assigneesByTask = new Map<string, { userId: string; name: string }[]>();
+  for (const row of assigneeRows) {
+    if (!assigneesByTask.has(row.taskId)) assigneesByTask.set(row.taskId, []);
+    assigneesByTask.get(row.taskId)!.push({
+      userId: row.userId,
+      name: row.userName || 'Unknown',
+    });
+  }
+
+  const tagsByTask = new Map<string, { id: string; name: string; color: string | null }[]>();
+  for (const row of tagRows) {
+    if (!tagsByTask.has(row.taskId)) tagsByTask.set(row.taskId, []);
+    if (row.tagId) {
+      tagsByTask.get(row.taskId)!.push({
+        id: row.tagId,
+        name: row.tagName || '',
+        color: row.tagColor,
+      });
+    }
+  }
+
+  const commentCountByTask = new Map<string, number>();
+  for (const row of commentCounts) {
+    if (row.taskId) commentCountByTask.set(row.taskId, row.count);
+  }
+
+  const childTaskCountByTask = new Map<string, number>();
+  for (const row of childTaskCounts) {
+    if (row.parentTaskId) childTaskCountByTask.set(row.parentTaskId, row.count);
+  }
+
+  const subtaskCountByTask = new Map<string, { count: number; completedCount: number }>();
+  for (const row of subtaskCounts) {
+    subtaskCountByTask.set(row.taskId, { count: row.count, completedCount: row.completedCount });
+  }
+
+  return baseTasks.map(task => {
+    const taskAssigneeList = assigneesByTask.get(task.id) ?? [];
+    return {
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      projectId: task.projectId,
+      projectName: null,
+      clientName: null,
+      sectionId: task.sectionId,
+      parentTaskId: task.parentTaskId,
+      isPersonal: task.isPersonal,
+      visibility: task.visibility,
+      createdBy: task.createdBy,
+      orderIndex: task.orderIndex,
+      personalSectionId: task.personalSectionId,
+      personalSortOrder: task.personalSortOrder,
+      archivedAt: task.archivedAt,
+      milestoneId: task.milestoneId,
+      needsPmReview: task.needsPmReview,
+      isBillable: task.isBillable,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      subtaskCount: subtaskCountByTask.get(task.id)?.count ?? 0,
+      completedSubtaskCount: subtaskCountByTask.get(task.id)?.completedCount ?? 0,
+      commentCount: commentCountByTask.get(task.id) ?? 0,
+      assigneeCount: taskAssigneeList.length,
+      childTaskCount: childTaskCountByTask.get(task.id) ?? 0,
+      assignees: taskAssigneeList,
+      tags: tagsByTask.get(task.id) ?? [],
+      dueBucket: computeDueBucket(task.dueDate),
+    };
+  });
+}

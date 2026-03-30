@@ -2,12 +2,23 @@ import {
   type TimeEntry, type InsertTimeEntry,
   type ActiveTimer, type InsertActiveTimer,
   type TimeEntryWithRelations, type ActiveTimerWithRelations,
+  type TimeEntryListItem,
   type User, type Client, type Project, type Task,
   timeEntries, activeTimers, users, clients, projects, tasks,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
+
+type TimeEntryFilters = {
+  userId?: string;
+  clientId?: string;
+  projectId?: string;
+  taskId?: string;
+  scope?: 'in_scope' | 'out_of_scope';
+  startDate?: Date;
+  endDate?: Date;
+};
 
 function collectUniqueIds(entries: TimeEntry[], field: keyof TimeEntry): string[] {
   const ids = new Set<string>();
@@ -48,55 +59,78 @@ async function batchEnrichEntries(entries: TimeEntry[]): Promise<TimeEntryWithRe
   });
 }
 
+async function batchFlattenEntries(entries: TimeEntry[]): Promise<TimeEntryListItem[]> {
+  if (entries.length === 0) return [];
+
+  const userIds = collectUniqueIds(entries, "userId");
+  const clientIds = collectUniqueIds(entries, "clientId");
+  const projectIds = collectUniqueIds(entries, "projectId");
+  const taskIds = collectUniqueIds(entries, "taskId");
+
+  const [userList, clientList, projectList, taskList] = await Promise.all([
+    userIds.length > 0 ? db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds)) : [],
+    clientIds.length > 0 ? db.select({ id: clients.id, companyName: clients.companyName }).from(clients).where(inArray(clients.id, clientIds)) : [],
+    projectIds.length > 0 ? db.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, projectIds)) : [],
+    taskIds.length > 0 ? db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(inArray(tasks.id, taskIds)) : [],
+  ]);
+
+  const userMap = new Map(userList.map(u => [u.id, u.name]));
+  const clientMap = new Map(clientList.map(c => [c.id, c.companyName]));
+  const projectMap = new Map(projectList.map(p => [p.id, p.name]));
+  const taskMap = new Map(taskList.map(t => [t.id, t.title]));
+
+  return entries.map(entry => ({
+    ...entry,
+    userName: entry.userId ? userMap.get(entry.userId) ?? null : null,
+    clientName: entry.clientId ? clientMap.get(entry.clientId) ?? null : null,
+    projectName: entry.projectId ? projectMap.get(entry.projectId) ?? null : null,
+    taskTitle: entry.taskId ? taskMap.get(entry.taskId) ?? null : null,
+  }));
+}
+
 export class TimeTrackingRepository {
   async getTimeEntry(id: string): Promise<TimeEntry | undefined> {
     const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, id));
     return entry || undefined;
   }
 
-  async getTimeEntriesByWorkspace(workspaceId: string, filters?: {
-    userId?: string;
-    clientId?: string;
-    projectId?: string;
-    taskId?: string;
-    scope?: 'in_scope' | 'out_of_scope';
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<TimeEntryWithRelations[]> {
-    let conditions = [eq(timeEntries.workspaceId, workspaceId)];
-    
-    if (filters?.userId) {
-      conditions.push(eq(timeEntries.userId, filters.userId));
-    }
-    if (filters?.clientId) {
-      conditions.push(eq(timeEntries.clientId, filters.clientId));
-    }
-    if (filters?.projectId) {
-      conditions.push(eq(timeEntries.projectId, filters.projectId));
-    }
-    if (filters?.taskId) {
-      conditions.push(eq(timeEntries.taskId, filters.taskId));
-    }
-    if (filters?.scope) {
-      conditions.push(eq(timeEntries.scope, filters.scope));
-    }
-    if (filters?.startDate) {
-      conditions.push(gte(timeEntries.startTime, filters.startDate));
-    }
-    if (filters?.endDate) {
-      conditions.push(lte(timeEntries.startTime, filters.endDate));
-    }
+  private buildFilterConditions(baseConditions: any[], filters?: TimeEntryFilters) {
+    const conditions = [...baseConditions];
+    if (filters?.userId) conditions.push(eq(timeEntries.userId, filters.userId));
+    if (filters?.clientId) conditions.push(eq(timeEntries.clientId, filters.clientId));
+    if (filters?.projectId) conditions.push(eq(timeEntries.projectId, filters.projectId));
+    if (filters?.taskId) conditions.push(eq(timeEntries.taskId, filters.taskId));
+    if (filters?.scope) conditions.push(eq(timeEntries.scope, filters.scope));
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+    return conditions;
+  }
 
-    const entries = await db.select()
+  private async fetchRawEntries(conditions: any[]): Promise<TimeEntry[]> {
+    return db.select()
       .from(timeEntries)
       .where(and(...conditions))
       .orderBy(desc(timeEntries.startTime));
+  }
 
+  async getTimeEntriesByWorkspace(workspaceId: string, filters?: TimeEntryFilters): Promise<TimeEntryWithRelations[]> {
+    const conditions = this.buildFilterConditions([eq(timeEntries.workspaceId, workspaceId)], filters);
+    const entries = await this.fetchRawEntries(conditions);
     return batchEnrichEntries(entries);
+  }
+
+  async getTimeEntriesByWorkspaceFlat(workspaceId: string, filters?: TimeEntryFilters): Promise<TimeEntryListItem[]> {
+    const conditions = this.buildFilterConditions([eq(timeEntries.workspaceId, workspaceId)], filters);
+    const entries = await this.fetchRawEntries(conditions);
+    return batchFlattenEntries(entries);
   }
 
   async getTimeEntriesByUser(userId: string, workspaceId: string): Promise<TimeEntryWithRelations[]> {
     return this.getTimeEntriesByWorkspace(workspaceId, { userId });
+  }
+
+  async getTimeEntriesByUserFlat(userId: string, workspaceId: string): Promise<TimeEntryListItem[]> {
+    return this.getTimeEntriesByWorkspaceFlat(workspaceId, { userId });
   }
 
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
@@ -173,48 +207,22 @@ export class TimeTrackingRepository {
     return entry || undefined;
   }
 
-  async getTimeEntriesByTenant(tenantId: string, workspaceId: string, filters?: {
-    userId?: string;
-    clientId?: string;
-    projectId?: string;
-    taskId?: string;
-    scope?: 'in_scope' | 'out_of_scope';
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<TimeEntryWithRelations[]> {
-    let conditions = [
+  async getTimeEntriesByTenant(tenantId: string, workspaceId: string, filters?: TimeEntryFilters): Promise<TimeEntryWithRelations[]> {
+    const conditions = this.buildFilterConditions([
       eq(timeEntries.tenantId, tenantId),
-      eq(timeEntries.workspaceId, workspaceId)
-    ];
-    
-    if (filters?.userId) {
-      conditions.push(eq(timeEntries.userId, filters.userId));
-    }
-    if (filters?.clientId) {
-      conditions.push(eq(timeEntries.clientId, filters.clientId));
-    }
-    if (filters?.projectId) {
-      conditions.push(eq(timeEntries.projectId, filters.projectId));
-    }
-    if (filters?.taskId) {
-      conditions.push(eq(timeEntries.taskId, filters.taskId));
-    }
-    if (filters?.scope) {
-      conditions.push(eq(timeEntries.scope, filters.scope));
-    }
-    if (filters?.startDate) {
-      conditions.push(gte(timeEntries.startTime, filters.startDate));
-    }
-    if (filters?.endDate) {
-      conditions.push(lte(timeEntries.startTime, filters.endDate));
-    }
-
-    const entries = await db.select()
-      .from(timeEntries)
-      .where(and(...conditions))
-      .orderBy(desc(timeEntries.startTime));
-
+      eq(timeEntries.workspaceId, workspaceId),
+    ], filters);
+    const entries = await this.fetchRawEntries(conditions);
     return batchEnrichEntries(entries);
+  }
+
+  async getTimeEntriesByTenantFlat(tenantId: string, workspaceId: string, filters?: TimeEntryFilters): Promise<TimeEntryListItem[]> {
+    const conditions = this.buildFilterConditions([
+      eq(timeEntries.tenantId, tenantId),
+      eq(timeEntries.workspaceId, workspaceId),
+    ], filters);
+    const entries = await this.fetchRawEntries(conditions);
+    return batchFlattenEntries(entries);
   }
 
   async createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry> {

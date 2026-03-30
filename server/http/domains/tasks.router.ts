@@ -59,7 +59,7 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../../routes/helpers";
 import { config } from "../../config";
 import { getTasksByUserBatched } from "../services/taskBatchHydrator";
-import { getTaskListItemsByUser, getFilteredTaskListItems } from "../services/taskListHydrator";
+import { getTaskListItemsByUser, getFilteredTaskListItems, getProjectTaskListItems } from "../services/taskListHydrator";
 import {
   insertTaskSchema,
   updateTaskSchema,
@@ -98,11 +98,25 @@ router.get("/projects/:projectId/tasks", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req) ?? "";
     const includeArchived = req.query.includeArchived === "true" && isSuperUser(req);
-    let projectTasks = await (storage as any).getTasksByProject(req.params.projectId, includeArchived);
+    const fields = req.query.fields as string | undefined;
+
+    if (fields === "list") {
+      let taskListItems = await getProjectTaskListItems(req.params.projectId, includeArchived);
+      if (config.features.enablePrivateTasks) {
+        const accessibleIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+        const accessibleSet = new Set(accessibleIds);
+        taskListItems = taskListItems.filter(t =>
+          t.visibility !== 'private' || accessibleSet.has(t.id)
+        );
+      }
+      return res.json(taskListItems);
+    }
+
+    let projectTasks = await storage.getTasksByProject(req.params.projectId, includeArchived);
     if (config.features.enablePrivateTasks) {
       const accessibleIds = await getAccessiblePrivateTaskIds(userId, tenantId);
       const accessibleSet = new Set(accessibleIds);
-      projectTasks = projectTasks.filter((t: any) =>
+      projectTasks = projectTasks.filter(t =>
         t.visibility !== 'private' || accessibleSet.has(t.id)
       );
     }

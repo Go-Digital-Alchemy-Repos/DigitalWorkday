@@ -48,6 +48,7 @@ import {
   type TimeEntry, type InsertTimeEntry,
   type ActiveTimer, type InsertActiveTimer,
   type TimeEntryWithRelations, type ActiveTimerWithRelations,
+  type TimeEntryListItem,
   type Invitation, type InsertInvitation,
   type AppSetting,
   type ClientUserAccess, type InsertClientUserAccess,
@@ -306,6 +307,16 @@ export interface IStorage {
     endDate?: Date;
   }): Promise<TimeEntryWithRelations[]>;
   getTimeEntriesByUser(userId: string, workspaceId: string): Promise<TimeEntryWithRelations[]>;
+  getTimeEntriesByWorkspaceFlat(workspaceId: string, filters?: {
+    userId?: string;
+    clientId?: string;
+    projectId?: string;
+    taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope';
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<TimeEntryListItem[]>;
+  getTimeEntriesByUserFlat(userId: string, workspaceId: string): Promise<TimeEntryListItem[]>;
   createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry>;
   updateTimeEntry(id: string, entry: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
   deleteTimeEntry(id: string): Promise<void>;
@@ -389,6 +400,15 @@ export interface IStorage {
     startDate?: Date;
     endDate?: Date;
   }): Promise<TimeEntryWithRelations[]>;
+  getTimeEntriesByTenantFlat(tenantId: string, workspaceId: string, filters?: {
+    userId?: string;
+    clientId?: string;
+    projectId?: string;
+    taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope';
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<TimeEntryListItem[]>;
   createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry>;
   updateTimeEntryWithTenant(id: string, tenantId: string, entry: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
   deleteTimeEntryWithTenant(id: string, tenantId: string): Promise<boolean>;
@@ -2295,6 +2315,68 @@ export class DatabaseStorage implements IStorage {
     return this.getTimeEntriesByWorkspace(workspaceId, { userId });
   }
 
+  private buildTimeEntryConditions(baseConditions: any[], filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }) {
+    const conditions = [...baseConditions];
+    if (filters?.userId) conditions.push(eq(timeEntries.userId, filters.userId));
+    if (filters?.clientId) conditions.push(eq(timeEntries.clientId, filters.clientId));
+    if (filters?.projectId) conditions.push(eq(timeEntries.projectId, filters.projectId));
+    if (filters?.taskId) conditions.push(eq(timeEntries.taskId, filters.taskId));
+    if (filters?.scope) conditions.push(eq(timeEntries.scope, filters.scope));
+    if (filters?.startDate) conditions.push(gte(timeEntries.startTime, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(timeEntries.startTime, filters.endDate));
+    return conditions;
+  }
+
+  private async fetchAndFlattenEntries(conditions: any[]): Promise<TimeEntryListItem[]> {
+    const entries = await db.select()
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(desc(timeEntries.startTime));
+
+    if (entries.length === 0) return [];
+
+    const collectIds = (field: keyof TimeEntry) => {
+      const ids = new Set<string>();
+      for (const e of entries) { const v = e[field]; if (typeof v === "string" && v) ids.add(v); }
+      return Array.from(ids);
+    };
+
+    const [userList, clientList, projectList, taskList] = await Promise.all([
+      collectIds("userId").length > 0 ? db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, collectIds("userId"))) : [],
+      collectIds("clientId").length > 0 ? db.select({ id: clients.id, companyName: clients.companyName }).from(clients).where(inArray(clients.id, collectIds("clientId"))) : [],
+      collectIds("projectId").length > 0 ? db.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, collectIds("projectId"))) : [],
+      collectIds("taskId").length > 0 ? db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(inArray(tasks.id, collectIds("taskId"))) : [],
+    ]);
+
+    const userMap = new Map(userList.map(u => [u.id, u.name]));
+    const clientMap = new Map(clientList.map(c => [c.id, c.companyName]));
+    const projectMap = new Map(projectList.map(p => [p.id, p.name]));
+    const taskMap = new Map(taskList.map(t => [t.id, t.title]));
+
+    return entries.map(entry => ({
+      ...entry,
+      userName: entry.userId ? userMap.get(entry.userId) ?? null : null,
+      clientName: entry.clientId ? clientMap.get(entry.clientId) ?? null : null,
+      projectName: entry.projectId ? projectMap.get(entry.projectId) ?? null : null,
+      taskTitle: entry.taskId ? taskMap.get(entry.taskId) ?? null : null,
+    }));
+  }
+
+  async getTimeEntriesByWorkspaceFlat(workspaceId: string, filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }): Promise<TimeEntryListItem[]> {
+    const conditions = this.buildTimeEntryConditions([eq(timeEntries.workspaceId, workspaceId)], filters);
+    return this.fetchAndFlattenEntries(conditions);
+  }
+
+  async getTimeEntriesByUserFlat(userId: string, workspaceId: string): Promise<TimeEntryListItem[]> {
+    return this.getTimeEntriesByWorkspaceFlat(workspaceId, { userId });
+  }
+
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
     assertInsertHasTenantId(entry, "time_entries");
     const [created] = await db.insert(timeEntries).values(entry).returning();
@@ -3267,6 +3349,17 @@ export class DatabaseStorage implements IStorage {
     }
     
     return result;
+  }
+
+  async getTimeEntriesByTenantFlat(tenantId: string, workspaceId: string, filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }): Promise<TimeEntryListItem[]> {
+    const conditions = this.buildTimeEntryConditions([
+      eq(timeEntries.tenantId, tenantId),
+      eq(timeEntries.workspaceId, workspaceId),
+    ], filters);
+    return this.fetchAndFlattenEntries(conditions);
   }
 
   async createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry> {

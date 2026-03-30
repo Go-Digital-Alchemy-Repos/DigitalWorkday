@@ -95,7 +95,7 @@ import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { useProjectSocket } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth";
-import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
+import type { Project, SectionWithTasks, TaskWithRelations, TaskListItem, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 import { Link } from "wouter";
 import { usePromptDialog } from "@/components/prompt-dialog";
 import {
@@ -179,8 +179,9 @@ export default function ProjectPage() {
     enabled: !!projectId,
   });
 
-  const { data: tasks } = useQuery<TaskWithRelations[]>({
-    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
+  const { data: tasks } = useQuery<TaskListItem[]>({
+    queryKey: tenantKey(queryKeys.projects.tasksList(projectId!)),
+    queryFn: () => fetch(`/api/projects/${projectId}/tasks?fields=list`, { credentials: "include" }).then(r => r.json()),
     enabled: !!projectId,
   });
   
@@ -208,11 +209,22 @@ export default function ProjectPage() {
 
   useEffect(() => {
     if (deepLinkHandled || sectionsLoading || selectedTask || !urlTaskId) return;
-    const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
-    const found = allTasks.find(t => t.id === urlTaskId) || tasks?.find(t => t.id === urlTaskId);
-    if (found) {
-      setSelectedTask(found);
+    const allSectionTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
+    const fullMatch = allSectionTasks.find(t => t.id === urlTaskId);
+    if (fullMatch) {
+      setSelectedTask(fullMatch);
       setDeepLinkHandled(true);
+      return;
+    }
+    const thinMatch = tasks?.find(t => t.id === urlTaskId);
+    if (thinMatch) {
+      fetch(`/api/tasks/${urlTaskId}`, { credentials: "include" })
+        .then(r => r.ok ? r.json() : null)
+        .then(full => {
+          if (full) setSelectedTask(full);
+          setDeepLinkHandled(true);
+        })
+        .catch(() => setDeepLinkHandled(true));
       return;
     }
     if (linkedTask) {
@@ -572,11 +584,26 @@ export default function ProjectPage() {
     });
   };
 
-  const handleTaskSelect = (task: TaskWithRelations) => {
-    setSelectedTask(task);
+  const handleTaskSelect = (task: TaskWithRelations | TaskListItem) => {
     const url = new URL(window.location.href);
     url.searchParams.set('task', task.id);
     window.history.replaceState({}, '', url.pathname + url.search);
+    if ('comments' in task || 'subtasks' in task || 'attachments' in task) {
+      setSelectedTask(task as TaskWithRelations);
+    } else {
+      fetch(`/api/tasks/${task.id}`, { credentials: "include" })
+        .then(r => r.ok ? r.json() : null)
+        .then(full => {
+          if (full) {
+            setSelectedTask(full);
+          } else {
+            toast({ title: "Could not load task details", variant: "destructive" });
+          }
+        })
+        .catch(() => {
+          toast({ title: "Could not load task details", variant: "destructive" });
+        });
+    }
   };
 
   const handleCloseTaskDrawer = () => {
@@ -1152,9 +1179,9 @@ export default function ProjectPage() {
               url.searchParams.set('task', taskId);
               window.history.replaceState({}, '', url.pathname + url.search);
               const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
-              const found = allTasks.find(t => t.id === taskId) || tasks?.find(t => t.id === taskId);
-              if (found) {
-                setSelectedTask(found);
+              const fullMatch = allTasks.find(t => t.id === taskId);
+              if (fullMatch) {
+                setSelectedTask(fullMatch);
               } else {
                 fetch(`/api/tasks/${taskId}`, { credentials: "include" })
                   .then(r => r.ok ? r.json() : null)

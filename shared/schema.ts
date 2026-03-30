@@ -3429,6 +3429,13 @@ export type TimeEntryWithRelations = TimeEntry & {
   task?: Task;
 };
 
+export type TimeEntryListItem = TimeEntry & {
+  userName: string | null;
+  clientName: string | null;
+  projectName: string | null;
+  taskTitle: string | null;
+};
+
 export type ActiveTimerWithRelations = ActiveTimer & {
   user?: User;
   client?: Client;

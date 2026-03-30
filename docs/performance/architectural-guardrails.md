@@ -22,6 +22,8 @@
 | Clients | `ClientListItem` via `/api/v1/clients/hierarchy/list` | `ClientWithContacts` via `/api/clients/:id` |
 | Projects | `ProjectWithCounts` via `/api/projects?fields=minimal` | `ProjectWithRelations` via `/api/projects/:id` |
 | My Tasks | `TaskListItem` via `/api/tasks/my?view=list` | `TaskWithRelations` via `/api/tasks/:id` |
+| Project Tasks | `TaskListItem` via `/api/projects/:id/tasks?fields=list` (batched hydrator) | `TaskWithRelations[]` via `/api/projects/:id/tasks` (default) |
+| Time Entries | `TimeEntryListItem` via `/api/time-entries?fields=list` | Full `TimeEntry` with nested objects via `/api/time-entries` (no `fields` param) |
 
 **See also**: [Thin vs Full Payload Strategy](./thin-vs-full-payload-strategy.md)
 
