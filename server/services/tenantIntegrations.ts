@@ -76,7 +76,14 @@ export interface AsanaSecretConfig {
 }
 
 type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | OpenAIPublicConfig | AsanaPublicConfig;
-type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | OpenAISecretConfig | AsanaSecretConfig;
+export interface QuickBooksSecretConfig {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  tokenType: string;
+}
+
+type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | OpenAISecretConfig | AsanaSecretConfig | QuickBooksSecretConfig;
 
 interface SecretMaskedInfo {
   apiKeyMasked?: string | null;
@@ -318,7 +325,7 @@ export class TenantIntegrationService {
     }
 
     if (input.secretConfig) {
-      const hasNewSecret = Object.values(input.secretConfig).some(v => v && v.trim() !== "");
+      const hasNewSecret = Object.values(input.secretConfig).some(v => v && (typeof v === "string" ? v.trim() !== "" : true));
       if (hasNewSecret) {
         const existingSecrets: SecretConfig = this._decryptSecretConfig(configEncrypted, provider) ?? {};
         const newSecrets: SecretConfig = {

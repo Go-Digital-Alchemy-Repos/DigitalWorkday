@@ -2,7 +2,7 @@ import { db } from "../../db";
 import { tenantIntegrations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { encryptValue } from "../../lib/encryption";
-import { TenantIntegrationService } from "../../services/tenantIntegrations";
+import { TenantIntegrationService, QuickBooksSecretConfig } from "../../services/tenantIntegrations";
 
 const QBO_AUTH_BASE = "https://appcenter.intuit.com/connect/oauth2";
 const QBO_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
@@ -125,19 +125,12 @@ async function storeTokens(tenantId: string, tokens: QuickBooksTokens, _userId?:
 
 const qbIntegrationService = new TenantIntegrationService();
 
-interface QuickBooksSecretData {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-  tokenType: string;
-}
-
 export async function getStoredTokens(tenantId: string): Promise<QuickBooksTokens | null> {
   try {
-    const result = await qbIntegrationService.getIntegrationWithSecrets(tenantId, "quickbooks");
+    const result = await qbIntegrationService.getIntegrationDetailedSecrets<QuickBooksSecretConfig>(tenantId, "quickbooks");
     if (!result?.secretConfig) return null;
 
-    const secrets = result.secretConfig as unknown as QuickBooksSecretData;
+    const secrets = result.secretConfig;
     const publicConfig = result.publicConfig as QuickBooksPublicConfig | null;
     return {
       access_token: secrets.accessToken,
