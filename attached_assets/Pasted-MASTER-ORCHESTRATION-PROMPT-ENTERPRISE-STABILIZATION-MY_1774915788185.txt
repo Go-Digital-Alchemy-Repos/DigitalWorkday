@@ -1,0 +1,549 @@
+MASTER ORCHESTRATION PROMPT — ENTERPRISE STABILIZATION + MY TIME PERFORMANCE + PLATFORM HARDENING
+
+GLOBAL IMPLEMENTATION GUARDRAILS — APPLY TO THIS ENTIRE PROMPT EXACTLY
+
+You are working in a production-minded multi-tenant application. This is a NON-DESTRUCTIVE implementation sprint. Your job is to improve stability, performance, cache correctness, observability, and documentation without changing business behavior, UX expectations, route contracts, auth rules, tenant isolation, or architectural intent unless this prompt explicitly directs a compatibility-safe improvement.
+
+MANDATORY RULES
+- Do not remove existing functionality.
+- Do not delete routes, services, components, hooks, schemas, DTOs, query paths, or modules unless this prompt explicitly instructs you to do so.
+- Do not perform broad cleanup refactors, renames, folder moves, or architecture rewrites outside the exact scope of this prompt.
+- Do not change authentication behavior.
+- Do not change tenant scoping or permissions behavior.
+- Do not change visible UI behavior except where a minor loading-state or regression-safe improvement is required by this prompt.
+- Do not silently change API response shapes. If a new shape is needed, introduce it additively via a new DTO, endpoint mode, endpoint variant, or compatibility adapter.
+- Do not break backward compatibility for existing consumers.
+- Do not touch unrelated modules.
+- Do not convert this sprint into a generalized modernization pass.
+- Do not skip App Docs updates for completed work.
+
+REQUIRED APPROACH
+- Prefer additive, incremental implementation over replacement.
+- Prefer small, reviewable diffs.
+- Prefer compatibility-safe migrations where risk exists.
+- Prioritize correctness and delivery safety before aggressive optimization.
+- Prefer SQL-first aggregation for stats/report workloads where safe.
+- Prefer lightweight list DTOs for list screens and lazy-loaded detail DTOs for drawers/detail views.
+- Reuse existing utilities and patterns where sensible instead of inventing parallel systems.
+- Keep business logic and data semantics intact.
+- When risk is high, implement the safest partial step and document the blocker clearly instead of forcing a risky migration.
+
+MEASUREMENT + VERIFICATION RULES
+- Before changing behavior, inspect the current code path, request flow, DTO shape, invalidation behavior, and query strategy.
+- After each phase, verify:
+  - typecheck passes for the touched area, or the explicit TS objective for that phase is met
+  - affected pages/routes still render correctly
+  - auth and tenant scoping remain intact
+  - filters/search/pagination still work where applicable
+  - loading states remain sane
+  - no duplicate requests were introduced
+  - no stale-cross-tenant cache regressions were introduced
+  - no compatibility drift was introduced
+- Where performance changes are made, capture before/after notes for:
+  - request count
+  - payload size
+  - query count if available
+  - SQL vs in-memory aggregation
+  - broad vs targeted invalidation
+  - eager vs lazy detail loading
+- If something cannot be safely completed in the current phase, stop at the safest compatible checkpoint, document the reason, and continue only with other safe work in-scope.
+
+DOCUMENTATION RULES
+- Update App Docs at the end of each completed phase, not only at the end of the whole sprint.
+- Maintain consistency with existing App Docs structure and style.
+- For every completed implementation, document:
+  - what changed
+  - what was preserved
+  - any new DTO / endpoint mode / endpoint variant / query-key or invalidation convention
+  - compatibility notes
+  - tradeoffs
+  - follow-up recommendations
+- Do not leave docs as TODOs if the code change is complete.
+
+WORKING STYLE
+- Execute this master prompt in ordered phases with internal checkpoints.
+- At the end of each phase:
+  1. summarize what changed
+  2. list files changed
+  3. state what was intentionally preserved
+  4. note any blockers or deferred items
+  5. confirm docs updated for that phase
+- Do not jump ahead if the current phase is incomplete or unstable.
+- Do not do speculative extra work outside the current phase.
+
+FINAL RESPONSE FORMAT AT THE END OF THE ENTIRE MASTER PROMPT
+Return:
+1. Phase-by-phase summary
+2. Files changed by phase
+3. Regressions found and fixed
+4. Before/after architecture and request-flow summary
+5. Documentation sections created/updated
+6. Remaining hotspots / follow-up items
+7. Confirmation of typecheck / CI / test status
+
+OBJECTIVE
+
+Execute the following full roadmap in order to improve the app’s reliability, My Time performance, platform consistency, and enterprise readiness.
+
+===============================================================================
+PHASE 1 — STABILIZE THE PLATFORM
+===============================================================================
+
+PHASE 1A — TYPECHECK AUDIT + DOMAIN BURN-DOWN
+TASK
+Audit the current TypeScript failure surface, organize a domain-based burn-down plan, and fix the safest high-confidence issues first.
+
+GOAL
+Move the codebase toward a fully green typecheck so future performance and architecture work are safe.
+
+REQUIRED STEPS
+- Inspect tsconfig, package scripts, CI config if present, and current npm run check output.
+- Categorize TypeScript errors by domain, such as:
+  - chat
+  - reports
+  - storage
+  - super-admin
+  - time tracking
+  - shared UI/components
+- Group errors by class, such as:
+  - null/undefined safety
+  - invalid imports/exports
+  - stale prop typing
+  - DTO/type drift
+  - generic mismatches
+  - union narrowing issues
+- Produce a clear burn-down plan grouped by domain and error class.
+- Fix the safest, most localized issues first.
+- Do not broadly introduce any, ts-ignore, or unsafe casts unless unavoidable and documented narrowly.
+
+SUCCESS CRITERIA
+- A clear TypeScript error inventory exists
+- A domain-based burn-down strategy exists
+- The first safe batch of fixes is implemented
+- App Docs updated with TypeScript stabilization status
+
+PHASE 1B — SET EXPLICIT TS TARGET + RESOLVE COMPILER DRIFT
+TASK
+Set an explicit TypeScript target and resolve resulting compiler/config drift safely.
+
+GOAL
+Eliminate ambiguous downlevel behavior and align TS output with the real runtime/build environment.
+
+REQUIRED STEPS
+- Inspect current tsconfig and build/runtime assumptions.
+- Set an explicit compilerOptions.target to the safest modern target supported by the runtime, such as ES2020 or ES2022 if appropriate.
+- Review related compiler options only where required for correctness.
+- Re-run typecheck and identify fallout caused by:
+  - downlevelIteration assumptions
+  - iterable behavior
+  - regex/language target mismatches
+  - language feature assumptions
+- Resolve fallout in the safest, most localized way.
+- Validate compatibility with the actual build/start environment.
+
+SUCCESS CRITERIA
+- TypeScript target is explicit
+- Compiler drift is reduced
+- Resulting fallout is addressed safely
+- App Docs updated with TS target rationale
+
+PHASE 1C — DRIVE npm run check TO GREEN + ENFORCE IN CI
+TASK
+Complete stabilization by driving npm run check to green and enforcing it in CI.
+
+GOAL
+Make green typecheck a non-negotiable delivery gate.
+
+REQUIRED STEPS
+- Continue fixing remaining TypeScript issues in safe domain-based batches.
+- Prioritize minimal, correct fixes.
+- Once green, update CI so npm run check is required.
+- If CI already exists, add or strengthen the required check without disrupting unrelated jobs.
+- Add a lightweight documented error-budget / burn-down expectation for future sprints.
+
+SUCCESS CRITERIA
+- npm run check passes
+- CI requires npm run check
+- Typecheck becomes a delivery gate
+- App Docs updated with CI/typecheck policy
+
+PHASE 1D — REMOVE DUPLICATE getDecryptedSecrets SAFELY
+TASK
+Eliminate the duplicate getDecryptedSecrets implementation in tenantIntegrations without changing behavior.
+
+GOAL
+Remove obvious code-level defect surface before deeper optimization work.
+
+REQUIRED STEPS
+- Audit tenant integration modules and identify duplicate getDecryptedSecrets implementations or duplicate code paths.
+- Determine which implementation should remain canonical based on actual usage and correctness.
+- Consolidate to one canonical signature and implementation path.
+- Preserve existing callers via compatibility-safe updates if needed.
+- Add focused tests around:
+  - encrypted storage path
+  - decrypted read path
+  - missing/partial secret cases
+  - failure behavior
+
+SUCCESS CRITERIA
+- Duplicate implementation is removed safely
+- One canonical getDecryptedSecrets path exists
+- Focused tests cover expected behavior
+- App Docs updated
+
+CHECKPOINT AFTER PHASE 1
+- Confirm typecheck status
+- Confirm CI gate status
+- Confirm no auth/tenant regressions
+- Confirm Phase 1 docs are updated before moving on
+
+===============================================================================
+PHASE 2 — MY TIME PERFORMANCE WORKSTREAM
+===============================================================================
+
+PHASE 2A — SQL-BASED MY TIME STATS
+TASK
+Refactor /api/time-entries/my/stats so it no longer loads broad entry sets and computes totals in application loops.
+
+GOAL
+Reduce p95 latency and improve scalability for My Time stats.
+
+REQUIRED STEPS
+- Audit the current implementation of /api/time-entries/my/stats.
+- Identify current in-memory aggregation logic.
+- Replace it with SQL aggregate queries for:
+  - today totals
+  - week totals
+  - month totals
+  - billable totals where applicable
+  - unbillable totals where applicable
+  - pre-computed buckets already needed by the response
+- Preserve current response semantics and auth/tenant behavior.
+
+SUCCESS CRITERIA
+- /api/time-entries/my/stats becomes SQL-first where practical
+- In-memory aggregation is materially reduced
+- Existing behavior remains intact
+- App Docs updated
+
+PHASE 2B — ADD PAGINATION TO /api/time-entries + INCREMENTAL LOADING
+TASK
+Add pagination controls to /api/time-entries and update My Time to use incremental loading safely.
+
+GOAL
+Prevent broad unbounded time-entry fetches from degrading performance.
+
+REQUIRED STEPS
+- Audit current /api/time-entries backend filter support and frontend usage.
+- Add additive pagination using cursor+limit or offset+limit.
+- Preserve existing filters and semantics via compatibility-safe changes.
+- Update My Time UI to default to recent windows where appropriate and load older entries incrementally.
+- Keep loading states sensible.
+
+SUCCESS CRITERIA
+- /api/time-entries supports pagination
+- My Time uses incremental loading safely
+- Large initial payloads are reduced
+- App Docs updated
+
+PHASE 2C — LIGHTWEIGHT TIME ENTRY LIST DTO + LAZY DETAIL HYDRATION
+TASK
+Refactor My Time list loading so list rows use a lightweight DTO and full related objects load only when needed for edit/drawer/detail.
+
+GOAL
+Reduce query cost and payload size for My Time list rendering.
+
+REQUIRED STEPS
+- Audit current repository/service path for time-entry list loading.
+- Identify where full related user/client/project/task objects are enriched for every row.
+- Introduce an additive lightweight list DTO / lean row projection for list rendering.
+- Preserve full detail loading for edit, drawer open, or other detail interactions.
+- Update frontend usage so list screens use lean rows and detail interactions lazy-load full detail.
+
+SUCCESS CRITERIA
+- My Time list uses lightweight rows
+- Full detail remains available on demand
+- Payload size and over-hydration are reduced
+- App Docs updated
+
+PHASE 2D — OPTIMISTIC MY TIME MUTATIONS + SCOPED INVALIDATION
+TASK
+Reduce My Time invalidation blast radius by replacing broad invalidation patterns with optimistic updates and narrowly scoped invalidation.
+
+GOAL
+Improve perceived responsiveness and reduce unnecessary refetch churn.
+
+REQUIRED STEPS
+- Audit current My Time mutations and identify broad invalidations.
+- Refactor toward:
+  - optimistic cache patching where safe
+  - invalidating only the active filtered key or narrow dependent keys
+  - preserving correctness for visible list state and stats
+- Keep tenant isolation and query-key correctness intact.
+
+SUCCESS CRITERIA
+- Broad invalidation is materially reduced
+- Mutation-to-UI responsiveness improves
+- No stale-data correctness regressions
+- App Docs updated
+
+PHASE 2E — LIGHTWEIGHT PICKER ENDPOINTS FOR TIME TRACKING
+TASK
+Stop using heavy list endpoints like /api/clients in time-tracking picker contexts by introducing dedicated lightweight picker endpoints for clients, projects, and tasks.
+
+GOAL
+Reduce picker query cost and payload size for time-tracking flows.
+
+REQUIRED STEPS
+- Audit current timer and My Time picker usage.
+- Identify where heavy endpoints are used only to populate selector options.
+- Add additive lightweight picker endpoints or modes that return only fields needed for selectors, such as:
+  - id
+  - display label
+  - minimal parent linkage if required for cascading
+- Update picker consumers to use the lightweight endpoints/modes.
+- Preserve selector UX and cascade behavior.
+
+SUCCESS CRITERIA
+- Picker flows no longer depend on heavy payloads where avoidable
+- Selector payloads are materially smaller
+- Existing behavior remains intact
+- App Docs updated
+
+CHECKPOINT AFTER PHASE 2
+- Verify My Time screens still function correctly
+- Verify stats correctness against prior behavior
+- Verify pagination, pickers, and optimistic updates are stable
+- Confirm Phase 2 docs are updated before moving on
+
+===============================================================================
+PHASE 3 — PLATFORM HARDENING
+===============================================================================
+
+PHASE 3A — STANDARDIZE LIST DTO VS DETAIL DTO ACROSS KEY DOMAINS
+TASK
+Standardize a list DTO vs detail DTO strategy across key domains so list screens stop over-fetching heavy relational payloads.
+
+GOAL
+Apply one consistent pattern to clients, projects, tasks, and time entries.
+
+REQUIRED STEPS
+- Audit current list/detail response shapes in:
+  - clients
+  - projects
+  - tasks
+  - time entries
+- Identify where list screens still receive over-hydrated payloads by default.
+- Define and implement additive list DTO / detail DTO or mode patterns where safe.
+- Preserve current detail behavior via lazy-loaded full detail paths.
+- Document when to use list DTOs vs detail DTOs and anti-patterns to avoid.
+
+SUCCESS CRITERIA
+- A consistent list-vs-detail strategy exists in touched domains
+- Over-hydrated list responses are reduced
+- Backward compatibility is preserved
+- App Docs updated
+
+PHASE 3B — TENANT-NAMESPACED QUERY KEYS + CACHE HARDENING
+TASK
+Tighten cache strategy by introducing tenant-namespaced query keys and reducing broad invalidation patterns in touched flows.
+
+GOAL
+Improve isolation, reduce stale-cross-tenant risk, and make invalidation more intentional.
+
+REQUIRED STEPS
+- Audit current query key patterns in touched domains.
+- Move to explicit tenant-aware key shapes, such as:
+  - ["tenant", tenantId, ...domainSegments]
+  - or an equivalent consistent tenant-first strategy
+- Update invalidation helpers and touched query consumers accordingly.
+- Reduce broad invalidateQueries patterns in favor of targeted invalidation and optimistic updates where safe.
+- Preserve current behavior.
+
+SUCCESS CRITERIA
+- Touched flows use tenant-aware query namespacing
+- Cross-tenant stale risk is reduced
+- Invalidations are more targeted
+- App Docs updated
+
+PHASE 3C — CANONICAL ENDPOINT / QUERY-KEY CONSOLIDATION
+TASK
+Improve API/domain consistency by defining canonical endpoints per read model and safely beginning consolidation of overlapping endpoint families and query key helpers.
+
+GOAL
+Reduce contract drift, invalidation confusion, and maintenance overhead.
+
+REQUIRED STEPS
+- Audit overlapping endpoint usage for similar domains.
+- Determine canonical endpoint per read model for touched areas.
+- Create a clear deprecation plan for legacy-equivalent routes.
+- Centralize query key factories and invalidation helpers where safe.
+- Implement the first safe consolidation step without breaking compatibility.
+
+SUCCESS CRITERIA
+- Canonical endpoints are defined for touched read models
+- First safe consolidation step is implemented
+- Compatibility is preserved
+- App Docs updated
+
+PHASE 3D — ENABLE STAGING PROFILING + KPI INSTRUMENTATION
+TASK
+Turn on profiling in staging by default and improve KPI visibility for critical routes.
+
+GOAL
+Make enterprise stability measurable with hard route-level performance indicators.
+
+REQUIRED STEPS
+- Inspect existing perf instrumentation hooks and flags such as enablePerfProfiling.
+- Enable profiling in staging by default while keeping production-safe behavior intact.
+- Ensure critical routes can capture, where feasible:
+  - p50/p95/p99 latency
+  - payload size
+  - DB query counts
+- Focus especially on:
+  - My Time
+  - tasks
+  - clients
+  - projects
+  - stats/report endpoints
+- Keep deep debug behavior gated appropriately.
+
+SUCCESS CRITERIA
+- Staging profiling is enabled by default
+- KPI visibility improves for critical routes
+- App Docs updated
+
+PHASE 3E — SCHEDULER / WORKER SEPARATION PLAN + SAFE FIRST EXTRACTION
+TASK
+Improve enterprise operational posture by planning and safely beginning separation of schedulers from the API process.
+
+GOAL
+Move toward separate worker processes/queues without risky infrastructure churn.
+
+REQUIRED STEPS
+- Audit current scheduler startup and route mount process interactions.
+- Identify which schedulers currently start in the API process.
+- Produce a safe separation plan for running them as separate workers/queues.
+- If feasible in this phase, implement the first safe extraction step, such as:
+  - isolating scheduler bootstrapping behind an explicit worker entry
+  - separating startup wiring
+  - adding configuration flags for API-only vs worker-enabled startup
+- Preserve current production behavior unless a compatibility-safe flag-based split is implemented.
+
+SUCCESS CRITERIA
+- A clear scheduler/worker separation path exists
+- First safe extraction step is implemented if feasible
+- API and scheduler concerns are more cleanly separated
+- App Docs updated
+
+CHECKPOINT AFTER PHASE 3
+- Verify touched domains remain stable
+- Verify profiling is active in staging
+- Verify no stale-cross-tenant cache issues are introduced
+- Confirm Phase 3 docs are updated before final validation
+
+===============================================================================
+FINAL PHASE — FULL VALIDATION + REGRESSION TRIAGE + COMPLETE APP DOCS SYNC
+===============================================================================
+
+TASK
+Perform a full validation, regression-triage, and documentation-sync pass across all completed work in this master sprint.
+
+GOAL
+Leave the app stable, measurable, and fully documented for the next sprint.
+
+VALIDATE THE FOLLOWING
+
+1. Stability
+- Confirm npm run check passes.
+- Confirm CI enforces typecheck.
+- Confirm TS target is explicit and compatible.
+- Confirm duplicate getDecryptedSecrets implementation is removed safely and tested.
+
+2. List/detail DTO strategy
+- Confirm touched domains use list-safe DTOs where intended.
+- Confirm full detail loads lazily where intended.
+- Confirm backward compatibility is preserved.
+
+3. My Time
+- Confirm /api/time-entries/my/stats uses SQL-first aggregation where intended.
+- Confirm /api/time-entries supports pagination.
+- Confirm My Time uses incremental loading safely.
+- Confirm My Time list uses lightweight rows.
+- Confirm picker endpoints are lightweight and in use.
+- Confirm mutation invalidation is targeted and optimistic where appropriate.
+
+4. Cache hardening
+- Confirm tenant-aware query key namespacing is active in touched flows.
+- Confirm no obvious stale-cross-tenant cache issues exist.
+
+5. API/domain consistency
+- Confirm canonical endpoint guidance exists for touched read models.
+- Confirm first safe consolidation step did not break compatibility.
+
+6. Observability / ops
+- Confirm staging profiling is enabled by default.
+- Confirm KPI instrumentation improved.
+- Confirm scheduler/worker separation plan is documented and any initial extraction step is stable.
+
+REQUIRED STEPS
+- Inspect all updated code paths from this sprint.
+- Compare actual behavior to intended design.
+- Capture before/after notes where meaningful:
+  - request count
+  - payload size
+  - query count if available
+  - SQL vs in-memory aggregation
+  - broad vs targeted invalidation
+  - eager vs lazy detail loading
+- Fix only confirmed regressions or obvious implementation gaps.
+- Do not introduce new broad refactors.
+
+MANDATORY FULL APP DOCS REVIEW + UPDATE
+
+You MUST create or update docs for at least:
+- TypeScript Stabilization Status
+- Typecheck CI/CD Policy
+- Compiler Target / Runtime Compatibility
+- Tenant Integration Secret Handling
+- List DTO vs Detail DTO Strategy
+- SQL-First Aggregation Strategy
+- My Time Stats Aggregation
+- Paginated Time Entries Contract
+- Time Entry List DTO vs Detail DTO
+- My Time Targeted Cache Invalidation
+- Lightweight Picker Endpoint Guidance
+- Tenant-Aware Query Key Strategy
+- Canonical Endpoint / Deprecation Guidance
+- Staging Profiling / KPI Visibility
+- Scheduler / Worker Separation Plan
+- Sprint Summary + Remaining Follow-Ups
+
+EACH DOC ENTRY SHOULD INCLUDE
+- Purpose / overview
+- Before vs after behavior
+- Technical implementation notes
+- API / endpoint / DTO / query-key impacts
+- Frontend usage guidance
+- Backward compatibility notes
+- Constraints / tradeoffs
+- Future follow-up recommendations where appropriate
+
+FINAL SUCCESS METRICS TO CHECK AGAINST
+- npm run check: 0 errors
+- My Time /api/time-entries/my/stats p95 < 250–400ms at target tenant size, if measurable in current environment
+- Time entries list initial payload reduced by >50%, if measurable in current environment
+- Mutation-to-UI-update latency < 150ms perceived via optimistic UI where applicable
+- Zero obvious stale-cross-tenant cache incidents in touched flows after namespaced query keys
+
+SUCCESS CRITERIA
+- Completed work is validated as safe
+- Regressions are fixed minimally
+- App Docs fully reflect the current codebase state
+- Remaining hotspots are clearly documented
+
+NOW EXECUTE THIS MASTER PROMPT PHASE BY PHASE.
+Do not skip phases.
+Do not jump ahead.
+Do not expand scope beyond what is written here.
+At each checkpoint, summarize, verify stability, update docs, then continue.
