@@ -49,6 +49,7 @@ import whatIfRouter from "./domains/whatif.router";
 import riskAckRouter from "./domains/risk-ack.router";
 import billingRouter from "./domains/billing.router";
 import quickbooksRouter from "./domains/quickbooks.router";
+import pickersRouter from "./domains/pickers.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -395,6 +396,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "quickbooks",
     description: "QuickBooks Online integration: OAuth, customer mapping, sync, suggestions.",
+  },
+  {
+    path: "/api",
+    router: pickersRouter,
+    policy: "authTenant",
+    domain: "pickers",
+    description: "Lightweight picker endpoints returning {id, label} for dropdowns.",
   },
   {
     path: "/api",

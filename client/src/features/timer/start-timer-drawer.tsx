@@ -180,7 +180,7 @@ export function StartTimerDrawer({
               <SelectItem value="none">No client</SelectItem>
               {clients.map((client) => (
                 <SelectItem key={client.id} value={client.id}>
-                  {client.displayName || client.companyName}
+                  {client.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -201,7 +201,7 @@ export function StartTimerDrawer({
               <SelectItem value="none">No project</SelectItem>
               {clientProjects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
-                  {project.name}
+                  {project.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -230,7 +230,7 @@ export function StartTimerDrawer({
                 <SelectItem value="none">No subtask</SelectItem>
                 {subtasks.map((st) => (
                   <SelectItem key={st.id} value={st.id}>
-                    {st.title}
+                    {st.label}
                   </SelectItem>
                 ))}
               </SelectContent>

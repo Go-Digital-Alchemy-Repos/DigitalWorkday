@@ -44,6 +44,12 @@ export const queryKeys = {
     comments: (id: string) => [`/api/subtasks/${id}/comments`] as const,
   },
 
+  pickers: {
+    clients: ["/api/v1/pickers/clients"] as const,
+    projects: (clientId: string) => ["/api/v1/pickers/projects", { clientId }] as const,
+    tasks: (projectId: string) => ["/api/v1/pickers/tasks", { projectId }] as const,
+  },
+
   clients: {
     all: ["/api/clients"] as const,
     minimal: ["/api/clients", { fields: "minimal" }] as const,

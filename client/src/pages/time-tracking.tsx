@@ -164,12 +164,14 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
     queryKey: tenantKey(["/api/timer/current"]),
   });
 
-  const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: tenantKey(["/api/projects", { fields: "picker" }]),
+  const { data: projects = [] } = useQuery<Array<{ id: string; label: string; clientId?: string | null }>>({
+    queryKey: tenantKey(queryKeys.pickers.projects(timer?.clientId || "__all__")),
+    queryFn: () => fetch(timer?.clientId ? `/api/v1/pickers/projects?clientId=${timer.clientId}` : "/api/v1/pickers/projects", { credentials: "include" }).then(r => r.json()),
   });
 
-  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(["/api/clients", { fields: "minimal" }]),
+  const { data: clients = [] } = useQuery<Array<{ id: string; label: string }>>({
+    queryKey: tenantKey(queryKeys.pickers.clients),
+    queryFn: () => fetch("/api/v1/pickers/clients", { credentials: "include" }).then(r => r.json()),
   });
 
   const startMutation = useMutation({
@@ -404,7 +406,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
                   <SelectItem value="none">No client</SelectItem>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.displayName || client.companyName}
+                      {client.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -423,7 +425,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
                   <SelectItem value="none">No project</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
-                      {project.name}
+                      {project.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -475,7 +477,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.displayName || client.companyName}
+                      {client.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -772,7 +774,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
               <SelectContent>
                 {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
-                    {client.displayName || client.companyName}
+                    {client.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -794,7 +796,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
                 <SelectItem value="none">No project</SelectItem>
                 {clientProjects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
-                    {project.name}
+                    {project.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -822,7 +824,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
                   <SelectItem value="none">No subtask</SelectItem>
                   {subtasks.map((st) => (
                     <SelectItem key={st.id} value={st.id}>
-                      {st.title}
+                      {st.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1103,7 +1105,7 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
                   <SelectItem value="none">No client</SelectItem>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.displayName || client.companyName}
+                      {client.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1127,7 +1129,7 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
                   <SelectItem value="none">No project</SelectItem>
                   {clientProjects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
-                      {project.name}
+                      {project.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1157,7 +1159,7 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
                     <SelectItem value="none">No subtask</SelectItem>
                     {subtasks.map((st) => (
                       <SelectItem key={st.id} value={st.id}>
-                        {st.title}
+                        {st.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

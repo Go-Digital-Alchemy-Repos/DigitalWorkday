@@ -39,8 +39,8 @@ interface TimeEntryDrawerProps {
   entry?: TimeEntryData | null;
   isLoading?: boolean;
   mode: "create" | "edit";
-  clients?: Array<{ id: string; companyName: string; displayName: string | null }>;
-  projects?: Array<{ id: string; name: string; clientId?: string | null }>;
+  clients?: Array<{ id: string; label: string }>;
+  projects?: Array<{ id: string; label: string; clientId?: string | null }>;
 }
 
 export function TimeEntryDrawer({
@@ -246,7 +246,7 @@ export function TimeEntryDrawer({
                 <SelectItem value="none">No client</SelectItem>
                 {displayClients.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.displayName || c.companyName}
+                    {c.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -267,7 +267,7 @@ export function TimeEntryDrawer({
                 <SelectItem value="none">No project</SelectItem>
                 {displayProjects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name}
+                    {p.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -297,7 +297,7 @@ export function TimeEntryDrawer({
                 <SelectItem value="none">No subtask</SelectItem>
                 {subtasks.map((st) => (
                   <SelectItem key={st.id} value={st.id}>
-                    {st.title}
+                    {st.label}
                   </SelectItem>
                 ))}
               </SelectContent>

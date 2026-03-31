@@ -3,6 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 
+interface PickerItem {
+  id: string;
+  label: string;
+}
+
+interface PickerTask extends PickerItem {
+  projectId: string | null;
+  parentTaskId: string | null;
+  status: string;
+}
+
 interface CascadeOptions {
   enabled?: boolean;
   onChange?: () => void;
@@ -22,20 +33,21 @@ export function useTimeEntryCascade(options: CascadeOptions = {}) {
   const [taskId, setTaskId] = useState<string | null>(initialValues?.taskId ?? null);
   const [subtaskId, setSubtaskId] = useState<string | null>(initialValues?.subtaskId ?? null);
 
-  const { data: clients = [], isFetched: clientsFetched } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.minimal),
+  const { data: clients = [], isFetched: clientsFetched } = useQuery<PickerItem[]>({
+    queryKey: tenantKey(queryKeys.pickers.clients),
+    queryFn: () => fetch("/api/v1/pickers/clients", { credentials: "include" }).then(r => r.json()),
     enabled,
   });
 
-  const { data: clientProjects = [], isFetched: projectsFetched } = useQuery<Array<{ id: string; name: string; clientId?: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.projects(clientId!)),
-    queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
+  const { data: clientProjects = [], isFetched: projectsFetched } = useQuery<Array<{ id: string; label: string; clientId?: string | null }>>({
+    queryKey: tenantKey(queryKeys.pickers.projects(clientId!)),
+    queryFn: () => fetch(`/api/v1/pickers/projects?clientId=${clientId}`, { credentials: "include" }).then(r => r.json()),
     enabled: !!clientId && enabled,
   });
 
-  const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
-    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
-    queryFn: () => fetch(`/api/projects/${projectId}/tasks`, { credentials: "include" }).then((r) => r.json()),
+  const { data: projectTasks = [] } = useQuery<PickerTask[]>({
+    queryKey: tenantKey(queryKeys.pickers.tasks(projectId!)),
+    queryFn: () => fetch(`/api/v1/pickers/tasks?projectId=${projectId}`, { credentials: "include" }).then(r => r.json()),
     enabled: !!projectId && enabled,
   });
 

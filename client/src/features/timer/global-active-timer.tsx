@@ -84,19 +84,17 @@ export function GlobalActiveTimer() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   });
 
-  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: tenantKey(queryKeys.clients.minimal),
+  const { data: clients = [] } = useQuery<Array<{ id: string; label: string }>>({
+    queryKey: tenantKey(queryKeys.pickers.clients),
+    queryFn: () => fetch("/api/v1/pickers/clients", { credentials: "include" }).then(r => r.json()),
     enabled: isEligible,
   });
 
-  const { data: allProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
-    queryKey: tenantKey(queryKeys.projects.picker),
-    enabled: isEligible,
+  const { data: filteredProjects = [] } = useQuery<Array<{ id: string; label: string; clientId?: string | null }>>({
+    queryKey: tenantKey(queryKeys.pickers.projects(stopClientId || "__none__")),
+    queryFn: () => fetch(`/api/v1/pickers/projects?clientId=${stopClientId}`, { credentials: "include" }).then(r => r.json()),
+    enabled: isEligible && !!stopClientId,
   });
-
-  const filteredProjects = stopClientId
-    ? allProjects.filter((p) => p.clientId === stopClientId)
-    : [];
 
   const invalidateTimer = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: [TIMER_QUERY_KEY] });
@@ -514,7 +512,7 @@ export function GlobalActiveTimer() {
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.displayName || client.companyName}
+                      {client.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -537,7 +535,7 @@ export function GlobalActiveTimer() {
                   <SelectItem value="none">No project</SelectItem>
                   {filteredProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name}
+                      {p.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
