@@ -520,6 +520,7 @@ export function invalidateProjectCaches(
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.picker) });
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.withCounts) });
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.analyticsSummary) });
+  qc.invalidateQueries({ queryKey: tenantKey(["/api/v1/pickers/projects"]) });
 
   if (opts.projectId) {
     qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(opts.projectId)) });
