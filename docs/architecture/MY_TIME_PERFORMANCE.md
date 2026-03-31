@@ -73,4 +73,5 @@ Mutation flow: `onMutate` → optimistic cache update → server request → `on
 | `client/src/features/timer/global-active-timer.tsx` | Global active timer panel |
 | `client/src/components/time-entry-drawer.tsx` | Reusable time entry drawer |
 | `server/storage/timeTracking.repo.ts` | Time tracking repository with batch hydration |
+| `client/src/features/tasks/task-selector-with-create.tsx` | Task selector using picker endpoint |
 | `server/http/domains/time/entries.routes.ts` | Time entry routes with `fields=list` support |

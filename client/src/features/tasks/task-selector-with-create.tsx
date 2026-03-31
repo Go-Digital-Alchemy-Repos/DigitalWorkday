@@ -22,7 +22,15 @@ import {
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
-import type { Task, Section } from "@shared/schema";
+import type { Section } from "@shared/schema";
+
+interface PickerTask {
+  id: string;
+  label: string;
+  projectId: string | null;
+  parentTaskId: string | null;
+  status: string;
+}
 
 interface TaskSelectorWithCreateProps {
   projectId: string | null;
@@ -43,8 +51,13 @@ export function TaskSelectorWithCreate({
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
-    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<PickerTask[]>({
+    queryKey: tenantKey(queryKeys.pickers.tasks(projectId!)),
+    queryFn: async () => {
+      const r = await fetch(`/api/v1/pickers/tasks?projectId=${projectId}`, { credentials: "include" });
+      if (!r.ok) throw new Error(`Failed to fetch tasks: ${r.status}`);
+      return r.json();
+    },
     enabled: !!projectId,
   });
 
@@ -118,7 +131,7 @@ export function TaskSelectorWithCreate({
           )}
           {openTasks.map((task) => (
             <SelectItem key={task.id} value={task.id}>
-              {task.title}
+              {task.label}
             </SelectItem>
           ))}
           {!tasksLoading && openTasks.length === 0 && projectId && (

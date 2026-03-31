@@ -445,6 +445,7 @@ export function invalidateTaskCaches(
   if (opts.projectId) {
     qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(opts.projectId)) });
     qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(opts.projectId)) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.pickers.tasks(opts.projectId)) });
   }
 
   if (opts.parentTaskId) {
