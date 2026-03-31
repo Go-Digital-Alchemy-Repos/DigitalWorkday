@@ -386,6 +386,33 @@ export class TenantIntegrationService {
     };
   }
 
+  async getIntegrationDetailedSecrets<T extends SecretConfig = SecretConfig>(
+    tenantId: string | null,
+    provider: IntegrationProvider,
+  ): Promise<{
+    id: string;
+    status: string;
+    publicConfig: PublicConfig | null;
+    secretConfig: T | null;
+    hasEncryptedData: boolean;
+    encryptionAvailable: boolean;
+  } | null> {
+    const integration = await this._fetchIntegrationRow(tenantId, provider);
+    if (!integration) {
+      return null;
+    }
+    const hasEncryptedData = !!integration.configEncrypted;
+    const encryptionAvailable = isEncryptionAvailable();
+    return {
+      id: integration.id,
+      status: integration.status,
+      publicConfig: integration.configPublic as PublicConfig | null,
+      secretConfig: this._decryptSecretConfig<T>(integration.configEncrypted, provider),
+      hasEncryptedData,
+      encryptionAvailable,
+    };
+  }
+
   async testIntegration(tenantId: string | null, provider: IntegrationProvider): Promise<{ success: boolean; message: string }> {
     const integration = await this.getIntegration(tenantId, provider);
     

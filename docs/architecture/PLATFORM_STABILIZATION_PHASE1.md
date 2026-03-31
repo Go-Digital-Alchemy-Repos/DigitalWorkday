@@ -20,9 +20,14 @@ The TypeScript codebase was already clean prior to this sprint. No errors needed
 - All changes must pass typecheck before merge
 - The `check` script is defined in `package.json` and runs the full TypeScript compiler in `--noEmit` mode
 
-### Enforcement
-- Typecheck runs as part of pre-merge validation
-- Future sprints should maintain zero-error baseline
+### Enforcement Mechanism
+- **Build-time enforcement**: `npm run build` (used by Railway deployment) runs `npm run check` as a prerequisite. TypeScript errors block deployment.
+- **Agent-level enforcement**: The Replit agent code review process validates `npm run check` passes before approving changes.
+- **No standalone CI pipeline**: This project does not use GitHub Actions, CircleCI, or similar external CI systems. Enforcement is via the deployment pipeline and agent validation.
+- **Developer responsibility**: Run `npm run check` locally before committing. The zero-error baseline must be maintained.
+
+### Future Recommendation
+- If a dedicated CI pipeline is introduced (e.g., GitHub Actions), add `npm run check` as a required status check on the main branch.
 
 ---
 
@@ -71,11 +76,25 @@ Three specialized provider resolvers manually duplicated the decrypt logic from 
 Each file independently imported `db`, `tenantIntegrations`, `decryptValue`, and `isEncryptionAvailable`, creating parallel decrypt paths with inconsistent error handling.
 
 ### After (Canonical Service)
-All three resolvers now use `TenantIntegrationService.getIntegrationWithSecrets()` as their single decrypt path:
+All three resolvers now use `TenantIntegrationService` methods as their single decrypt path:
 
-- **AI Provider**: `integrationService.getIntegrationWithSecrets(tenantId, "openai")` — returns both publicConfig (for enabled/model checks) and secretConfig (for API key)
-- **Storage Provider**: `integrationService.getIntegrationWithSecrets(tenantId, "r2")` — returns publicConfig + secretConfig, validated by existing `isValidS3Config()` 
-- **QuickBooks Auth**: `qbIntegrationService.getIntegrationWithSecrets(tenantId, "quickbooks")` — returns publicConfig (realmId) + secretConfig (tokens)
+- **AI Provider**: `integrationService.getIntegrationDetailedSecrets<OpenAISecretConfig>(tenantId, "openai")` — returns integration ID, status, publicConfig, secretConfig, and decrypt status flags. Throws `AIDecryptionError` if encrypted data exists but decryption fails (preserving original error semantics). Returns integration row ID as `sourceId` (preserving telemetry identity).
+- **Storage Provider**: `integrationService.getIntegrationDetailedSecrets<S3SecretConfig>(tenantId, "r2")` — checks `status === "configured"` (preserving original status filter), throws `StorageEncryptionNotAvailableError` when encryption unavailable, throws `StorageDecryptionError` on decrypt failure. Returns integration row ID as `integrationId`.
+- **QuickBooks Auth**: `qbIntegrationService.getIntegrationWithSecrets(tenantId, "quickbooks")` — returns publicConfig (realmId) + secretConfig (tokens), returns null on any failure.
+
+### New API: `getIntegrationDetailedSecrets()`
+Added to `TenantIntegrationService` to support provider resolvers that need both secrets and error discrimination:
+```typescript
+getIntegrationDetailedSecrets<T>(tenantId, provider) → {
+  id: string;               // integration row ID
+  status: string;            // integration status
+  publicConfig: PublicConfig | null;
+  secretConfig: T | null;
+  hasEncryptedData: boolean;  // whether configEncrypted column has data
+  encryptionAvailable: boolean; // whether APP_ENCRYPTION_KEY is set
+} | null
+```
+This allows callers to distinguish "no integration found" (null) from "integration exists but decrypt failed" (`hasEncryptedData && !secretConfig`) from "encryption not available" (`!encryptionAvailable`).
 
 ### Type Changes
 - `IntegrationProvider` union type expanded: `"quickbooks"` added to support canonical service path for QuickBooks
@@ -83,8 +102,9 @@ All three resolvers now use `TenantIntegrationService.getIntegrationWithSecrets(
 
 ### Behavior Preservation
 - All hierarchical fallback chains (tenant → system → env) remain unchanged
-- Error handling semantics preserved: AI throws on DB schema issues, storage validates config completeness, QuickBooks returns null on any failure
-- The canonical `_decryptSecretConfig` returns null on corrupt data (same as previous catch blocks)
+- **AI Provider**: Throws `AIDecryptionError` on decrypt failure (same as before). Returns integration row ID as `sourceId` (same as before). DB schema error fallback preserved.
+- **Storage Provider**: Throws `StorageDecryptionError` on decrypt failure (same as before). Throws `StorageEncryptionNotAvailableError` when encryption unavailable (same as before). Status filter (`configured` only) preserved.
+- **QuickBooks Auth**: Returns null on any failure (same as before).
 - All existing callers continue to work identically
 
 ### Test Coverage

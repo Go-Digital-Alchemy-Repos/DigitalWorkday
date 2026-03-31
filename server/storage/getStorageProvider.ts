@@ -96,15 +96,29 @@ async function getIntegrationConfig(tenantId: string | null, _provider: string =
   secretConfig: S3SecretConfig | null;
   integrationId: string;
 } | null> {
-  const result = await integrationService.getIntegrationWithSecrets(tenantId, "r2");
+  const result = await integrationService.getIntegrationDetailedSecrets<S3SecretConfig>(tenantId, "r2");
   if (!result) {
     return null;
   }
 
+  if (result.status !== "configured") {
+    return null;
+  }
+
+  if (result.hasEncryptedData && !result.encryptionAvailable) {
+    console.error(`[StorageProvider] Encryption not available for integration ${result.id}`);
+    throw new StorageEncryptionNotAvailableError();
+  }
+
+  if (result.hasEncryptedData && !result.secretConfig) {
+    console.error(`[StorageProvider] Failed to decrypt secrets for integration ${result.id}`);
+    throw new StorageDecryptionError(result.id);
+  }
+
   return {
     publicConfig: result.publicConfig as S3PublicConfig | null,
-    secretConfig: result.secretConfig as S3SecretConfig | null,
-    integrationId: tenantId ?? "system",
+    secretConfig: result.secretConfig,
+    integrationId: result.id,
   };
 }
 

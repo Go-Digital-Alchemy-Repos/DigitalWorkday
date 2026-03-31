@@ -78,7 +78,7 @@ async function getIntegrationConfig(tenantId: string | null): Promise<{
   const nullResult = { config: null, source, sourceId: null };
 
   try {
-    const result = await integrationService.getIntegrationWithSecrets(tenantId, "openai");
+    const result = await integrationService.getIntegrationDetailedSecrets<OpenAISecretConfig>(tenantId, "openai");
     if (!result) {
       return nullResult;
     }
@@ -88,7 +88,16 @@ async function getIntegrationConfig(tenantId: string | null): Promise<{
       return nullResult;
     }
 
-    const secretConfig = result.secretConfig as OpenAISecretConfig | null;
+    if (!result.encryptionAvailable && result.hasEncryptedData) {
+      return nullResult;
+    }
+
+    if (result.hasEncryptedData && !result.secretConfig) {
+      debugLog("Failed to decrypt AI config", { tenantId });
+      throw new AIDecryptionError(result.id);
+    }
+
+    const secretConfig = result.secretConfig;
     if (!secretConfig?.apiKey) {
       return nullResult;
     }
@@ -102,9 +111,10 @@ async function getIntegrationConfig(tenantId: string | null): Promise<{
         temperature: parseFloat(publicConfig.temperature || "0.7"),
       },
       source,
-      sourceId: tenantId,
+      sourceId: result.id,
     };
   } catch (dbError: unknown) {
+    if (dbError instanceof AIDecryptionError) throw dbError;
     const message = dbError instanceof Error ? dbError.message : String(dbError);
     if (message.includes("does not exist") || message.includes("column")) {
       debugLog("Database schema issue", { tenantId, error: message });
