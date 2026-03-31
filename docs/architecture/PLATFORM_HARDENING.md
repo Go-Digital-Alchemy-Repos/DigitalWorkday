@@ -33,7 +33,7 @@ Picker: `GET /api/v1/pickers/clients` → `{id, label}`
 | `fields` param | Shape |
 |---|---|
 | *(omitted)* | Full project with all columns |
-| `list` | `{id, name, clientId, status, color, teamId, projectManagerId, createdAt, updatedAt, stickyAt, visibility, budget, budgetHours}` |
+| `list` | `{id, name, clientId, status, color, teamId, projectManagerId, createdAt, updatedAt, stickyAt, visibility, budgetMinutes}` |
 | `minimal` | Same as list + `workspaceId, tenantId, description` |
 | `picker` | `{id, name, clientId, status}` |
 

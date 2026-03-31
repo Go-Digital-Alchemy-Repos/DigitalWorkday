@@ -192,8 +192,7 @@ router.get("/projects", async (req: Request, res: Response) => {
             updatedAt: projects.updatedAt,
             stickyAt: projects.stickyAt,
             visibility: projects.visibility,
-            budget: projects.budget,
-            budgetHours: projects.budgetHours,
+            budgetMinutes: projects.budgetMinutes,
           })
             .from(projects)
             .where(whereClause)

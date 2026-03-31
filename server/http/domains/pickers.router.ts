@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { createApiRouter } from "../routerFactory";
 import { db } from "../../db";
 import { clients, projects, tasks } from "@shared/schema";
-import { eq, and, ne, ilike, asc, SQL } from "drizzle-orm";
+import { eq, and, ne, ilike, asc, sql, SQL } from "drizzle-orm";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId } from "../../routes/helpers";
 import { handleRouteError } from "../../lib/errors";
@@ -19,7 +19,7 @@ router.get("/v1/pickers/clients", async (req: Request, res: Response) => {
       displayName: clients.displayName,
     })
       .from(clients)
-      .where(eq(clients.tenantId, tenantId))
+      .where(sql`${clients.tenantId} = ${tenantId}`)
       .orderBy(asc(clients.companyName));
 
     const result = rows.map(r => ({
@@ -39,9 +39,9 @@ router.get("/v1/pickers/projects", async (req: Request, res: Response) => {
     const { clientId, search } = req.query as Record<string, string | undefined>;
 
     const conditions: SQL[] = [
-      eq(projects.tenantId, tenantId),
+      sql`${projects.tenantId} = ${tenantId}`,
       ne(projects.status, "archived"),
-      projectVisibilityFilter(userId, tenantId),
+      projectVisibilityFilter(userId, tenantId!),
     ];
     if (clientId) conditions.push(eq(projects.clientId, clientId));
     if (search) conditions.push(ilike(projects.name, `%${search}%`));
@@ -69,10 +69,10 @@ router.get("/v1/pickers/tasks", async (req: Request, res: Response) => {
     if (!projectId) return res.json([]);
 
     const conditions: SQL[] = [
-      eq(tasks.tenantId, tenantId),
+      sql`${tasks.tenantId} = ${tenantId}`,
       eq(tasks.projectId, projectId),
       ne(tasks.status, "done"),
-      taskVisibilityFilter(userId, tenantId),
+      taskVisibilityFilter(userId, tenantId!),
     ];
     if (search) conditions.push(ilike(tasks.title, `%${search}%`));
 
