@@ -16,10 +16,7 @@
  * - Tenant isolation enforced
  */
 
-import { db } from "../db";
-import { tenantIntegrations, IntegrationStatus } from "@shared/schema";
-import { eq, and, isNull } from "drizzle-orm";
-import { decryptValue, isEncryptionAvailable } from "../lib/encryption";
+import { TenantIntegrationService } from "../services/tenantIntegrations";
 import { S3Client } from "@aws-sdk/client-s3";
 
 /**
@@ -92,43 +89,22 @@ export class StorageEncryptionNotAvailableError extends Error {
   }
 }
 
-async function getIntegrationConfig(tenantId: string | null, provider: string = "r2"): Promise<{
+const integrationService = new TenantIntegrationService();
+
+async function getIntegrationConfig(tenantId: string | null, _provider: string = "r2"): Promise<{
   publicConfig: S3PublicConfig | null;
   secretConfig: S3SecretConfig | null;
   integrationId: string;
 } | null> {
-  const condition = tenantId 
-    ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider), eq(tenantIntegrations.status, IntegrationStatus.CONFIGURED))
-    : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider), eq(tenantIntegrations.status, IntegrationStatus.CONFIGURED));
-
-  const [integration] = await db
-    .select()
-    .from(tenantIntegrations)
-    .where(condition)
-    .limit(1);
-
-  if (!integration) {
+  const result = await integrationService.getIntegrationWithSecrets(tenantId, "r2");
+  if (!result) {
     return null;
   }
 
-  let secretConfig: S3SecretConfig | null = null;
-  if (integration.configEncrypted) {
-    if (!isEncryptionAvailable()) {
-      console.error(`[StorageProvider] Encryption not available for integration ${integration.id}`);
-      throw new StorageEncryptionNotAvailableError();
-    }
-    try {
-      secretConfig = JSON.parse(decryptValue(integration.configEncrypted)) as S3SecretConfig;
-    } catch (err) {
-      console.error(`[StorageProvider] Failed to decrypt secrets for integration ${integration.id}:`, err);
-      throw new StorageDecryptionError(integration.id);
-    }
-  }
-
   return {
-    publicConfig: integration.configPublic as S3PublicConfig | null,
-    secretConfig,
-    integrationId: integration.id,
+    publicConfig: result.publicConfig as S3PublicConfig | null,
+    secretConfig: result.secretConfig as S3SecretConfig | null,
+    integrationId: tenantId ?? "system",
   };
 }
 

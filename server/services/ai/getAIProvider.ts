@@ -13,10 +13,7 @@
  * - Tenant isolation enforced
  */
 
-import { db } from "../../db";
-import { tenantIntegrations, IntegrationStatus } from "@shared/schema";
-import { eq, and, isNull } from "drizzle-orm";
-import { decryptValue, isEncryptionAvailable } from "../../lib/encryption";
+import { TenantIntegrationService } from "../tenantIntegrations";
 import OpenAI from "openai";
 
 export interface AIConfig {
@@ -64,78 +61,54 @@ function debugLog(message: string, data?: Record<string, any>) {
 export class AIDecryptionError extends Error {
   code = "AI_DECRYPTION_FAILED";
   
-  constructor(integrationId: string) {
-    super(`Failed to decrypt AI credentials for integration ${integrationId}. Check APP_ENCRYPTION_KEY configuration.`);
+  constructor(context: string) {
+    super(`Failed to decrypt AI credentials for ${context}. Check APP_ENCRYPTION_KEY configuration.`);
     this.name = "AIDecryptionError";
   }
 }
+
+const integrationService = new TenantIntegrationService();
 
 async function getIntegrationConfig(tenantId: string | null): Promise<{
   config: AIConfig | null;
   source: "tenant" | "system";
   sourceId: string | null;
 }> {
-  const condition = tenantId
-    ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, "openai"))
-    : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, "openai"));
+  const source: "tenant" | "system" = tenantId ? "tenant" : "system";
+  const nullResult = { config: null, source, sourceId: null };
 
   try {
-    const [integration] = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition)
-      .limit(1);
-
-    if (!integration) {
-      return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
+    const result = await integrationService.getIntegrationWithSecrets(tenantId, "openai");
+    if (!result) {
+      return nullResult;
     }
 
-    // Treat CONFIGURED or integrations with a stored secret + enabled flag as usable.
-    // This handles stale NOT_CONFIGURED status from pre-fix records in production.
-    const publicConfig = integration.configPublic as OpenAIPublicConfig | null;
+    const publicConfig = result.publicConfig as OpenAIPublicConfig | null;
     if (!publicConfig?.enabled) {
-      return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
+      return nullResult;
     }
 
-    const isEffectivelyConfigured =
-      integration.status === IntegrationStatus.CONFIGURED ||
-      (integration.configEncrypted && publicConfig?.enabled);
-
-    if (!isEffectivelyConfigured) {
-      return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
+    const secretConfig = result.secretConfig as OpenAISecretConfig | null;
+    if (!secretConfig?.apiKey) {
+      return nullResult;
     }
 
-    if (!integration.configEncrypted || !isEncryptionAvailable()) {
-      return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
-    }
-
-    try {
-      const secretConfig = JSON.parse(decryptValue(integration.configEncrypted)) as OpenAISecretConfig;
-      
-      if (!secretConfig.apiKey) {
-        return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
-      }
-
-      return {
-        config: {
-          enabled: publicConfig.enabled,
-          model: publicConfig.model || "gpt-4o-mini",
-          apiKey: secretConfig.apiKey,
-          maxTokens: publicConfig.maxTokens || 2000,
-          temperature: parseFloat(publicConfig.temperature || "0.7"),
-        },
-        source: tenantId ? "tenant" : "system",
-        sourceId: integration.id,
-      };
-    } catch (decryptError) {
-      debugLog("Failed to decrypt AI config", { tenantId, error: String(decryptError) });
-      throw new AIDecryptionError(integration.id);
-    }
+    return {
+      config: {
+        enabled: publicConfig.enabled,
+        model: publicConfig.model || "gpt-4o-mini",
+        apiKey: secretConfig.apiKey,
+        maxTokens: publicConfig.maxTokens || 2000,
+        temperature: parseFloat(publicConfig.temperature || "0.7"),
+      },
+      source,
+      sourceId: tenantId,
+    };
   } catch (dbError: unknown) {
     const message = dbError instanceof Error ? dbError.message : String(dbError);
     if (message.includes("does not exist") || message.includes("column")) {
       debugLog("Database schema issue", { tenantId, error: message });
-      return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
+      return nullResult;
     }
     throw dbError;
   }

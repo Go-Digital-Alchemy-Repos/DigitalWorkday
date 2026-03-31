@@ -5,7 +5,7 @@ import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryp
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana";
+export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana" | "quickbooks";
 
 interface MailgunPublicConfig {
   domain: string;
