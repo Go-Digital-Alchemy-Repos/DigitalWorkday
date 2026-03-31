@@ -4,6 +4,7 @@ import { db } from "../../db";
 import { clients, projects, tasks } from "@shared/schema";
 import { eq, and, ne, ilike, asc, SQL } from "drizzle-orm";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
+import { getCurrentUserId } from "../../routes/helpers";
 import { handleRouteError } from "../../lib/errors";
 import { projectVisibilityFilter, taskVisibilityFilter } from "../../lib/privateVisibility";
 
@@ -12,7 +13,6 @@ const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 router.get("/v1/pickers/clients", async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.json([]);
     const rows = await db.select({
       id: clients.id,
       label: clients.companyName,
@@ -35,9 +35,7 @@ router.get("/v1/pickers/clients", async (req: Request, res: Response) => {
 router.get("/v1/pickers/projects", async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.json([]);
-    const userId = (req as any).user?.id;
-    if (!userId) return res.json([]);
+    const userId = getCurrentUserId(req);
     const { clientId, search } = req.query as Record<string, string | undefined>;
 
     const conditions: SQL[] = [
@@ -66,9 +64,7 @@ router.get("/v1/pickers/projects", async (req: Request, res: Response) => {
 router.get("/v1/pickers/tasks", async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.json([]);
-    const userId = (req as any).user?.id;
-    if (!userId) return res.json([]);
+    const userId = getCurrentUserId(req);
     const { projectId, search } = req.query as Record<string, string | undefined>;
     if (!projectId) return res.json([]);
 
