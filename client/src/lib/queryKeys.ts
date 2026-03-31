@@ -4,6 +4,7 @@ import { tenantKey } from "./queryClient";
 export const queryKeys = {
   projects: {
     all: ["/api/projects"] as const,
+    list: ["/api/projects", { fields: "list" }] as const,
     picker: ["/api/projects", { fields: "picker" }] as const,
     detail: (id: string) => ["/api/projects", id] as const,
     sections: (id: string) => ["/api/projects", id, "sections"] as const,
@@ -52,6 +53,7 @@ export const queryKeys = {
 
   clients: {
     all: ["/api/clients"] as const,
+    list: ["/api/clients", { fields: "list" }] as const,
     minimal: ["/api/clients", { fields: "minimal" }] as const,
     detail: (id: string) => ["/api/clients", id] as const,
     notes: (id: string) => ["/api/clients", id, "notes"] as const,
@@ -468,6 +470,7 @@ export function invalidateClientCaches(
   } = {},
 ): void {
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.all) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.list) });
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.minimal) });
 
   if (opts.clientId) {
@@ -513,6 +516,8 @@ export function invalidateProjectCaches(
   } = {},
 ): void {
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.list) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.picker) });
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.withCounts) });
   qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.analyticsSummary) });
 

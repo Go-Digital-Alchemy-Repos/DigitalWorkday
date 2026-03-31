@@ -15,6 +15,7 @@ import {
   insertProjectSchema,
   updateClientSchema,
   updateClientContactSchema,
+  clients as clientsTable,
   clientNotes,
   clientNoteVersions,
   clientNoteCategories,
@@ -113,6 +114,23 @@ router.get("/clients", async (req, res) => {
     if (fields === "minimal" && tenantId) {
       const minimalClients = await storage.getClientsMinimal(tenantId);
       return res.json(minimalClients);
+    }
+
+    if (fields === "list" && tenantId) {
+      const rows = await db.select({
+        id: clientsTable.id,
+        companyName: clientsTable.companyName,
+        displayName: clientsTable.displayName,
+        status: clientsTable.status,
+        stage: clientsTable.stage,
+        parentClientId: clientsTable.parentClientId,
+        tenantId: clientsTable.tenantId,
+        createdAt: clientsTable.createdAt,
+      })
+        .from(clientsTable)
+        .where(eq(clientsTable.tenantId, tenantId))
+        .orderBy(sql`${clientsTable.companyName} asc`);
+      return res.json(rows);
     }
 
     if (tenantId) {

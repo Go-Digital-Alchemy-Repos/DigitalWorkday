@@ -179,6 +179,27 @@ router.get("/projects", async (req: Request, res: Response) => {
             .orderBy(order)
             .limit(parsedLimit)
             .offset(parsedOffset);
+        } else if (fields === 'list') {
+          projectList = await db.select({
+            id: projects.id,
+            name: projects.name,
+            clientId: projects.clientId,
+            status: projects.status,
+            color: projects.color,
+            teamId: projects.teamId,
+            projectManagerId: projects.projectManagerId,
+            createdAt: projects.createdAt,
+            updatedAt: projects.updatedAt,
+            stickyAt: projects.stickyAt,
+            visibility: projects.visibility,
+            budget: projects.budget,
+            budgetHours: projects.budgetHours,
+          })
+            .from(projects)
+            .where(whereClause)
+            .orderBy(order)
+            .limit(parsedLimit)
+            .offset(parsedOffset);
         } else if (fields === 'minimal') {
           projectList = await db.select({
             id: projects.id,
