@@ -44,14 +44,17 @@ When `limit` is omitted, returns a flat array for backward compatibility. Fronte
 
 The summary statistics (total hours, billable/unbillable split, by-client, by-project) are computed via SQL `SUM`/`GROUP BY` directly in `timeTrackingRepo`, not in application code. This eliminates fetching all entries just to compute totals.
 
-### Targeted Cache Invalidation
+### Optimistic Mutations & Targeted Cache Invalidation
 
-Optimistic update/delete/insert helpers in `queryKeys.ts`:
+All three My Time mutation paths (create, update, delete) use optimistic cache updates with rollback on error. Helpers in `queryKeys.ts`:
 
-- `optimisticUpdateTimeEntry(qc, entryId, updater)` — updates entry in-place across paginated + non-paginated caches
-- `optimisticDeleteTimeEntry(qc, entryId)` — removes entry from caches immediately
-- `optimisticInsertTimeEntry(qc, newEntry, dateFilter)` — inserts into correct cache position
-- `invalidateTimeEntries(qc, { dateFilter })` — scoped invalidation per date filter
+- `optimisticUpdateTimeEntry(qc, entryId, dateFilter, data)` — updates entry in-place across paginated + non-paginated caches via `onMutate` in EditTimeEntryDrawer
+- `optimisticRemoveTimeEntry(qc, entryId, dateFilter)` — removes entry from caches immediately via `onMutate` in TimeEntriesList delete and EditTimeEntryDrawer delete
+- `optimisticInsertTimeEntry(qc, optimisticEntry, dateFilter)` — inserts into correct cache position via `onMutate` in ManualEntryDialog
+- `rollbackTimeEntryCache(qc, dateFilter, prev)` — restores previous cache state on `onError`
+- `invalidateTimeEntries(qc, { dateFilter })` — scoped invalidation per active date filter, called in `onSuccess` after optimistic update lands
+
+Mutation flow: `onMutate` → optimistic cache update → server request → `onSuccess` (scoped invalidation + broadcast) or `onError` (rollback). This provides instant UI feedback while ensuring eventual consistency.
 
 ### Cascade Hook
 
