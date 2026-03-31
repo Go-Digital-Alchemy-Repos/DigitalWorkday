@@ -1342,7 +1342,7 @@ const TimeEntriesList = memo(function TimeEntriesList() {
   const { data: flatEntries = [], isLoading: isFlatLoading } = useQuery<TimeEntry[]>({
     queryKey: [...queryKeys.timeEntries.list, dateFilter],
     queryFn: () =>
-      fetch(`/api/time-entries?${flatQueryParams}`).then(r => r.json()),
+      fetch(`/api/time-entries/my?${flatQueryParams}`).then(r => r.json()),
     enabled: !usePaginated,
   });
 
@@ -1365,8 +1365,8 @@ const TimeEntriesList = memo(function TimeEntriesList() {
     queryKey: [...queryKeys.timeEntries.paginated, dateFilter],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const url = pageParam
-        ? `/api/time-entries?${paginatedQueryParams}&cursor=${encodeURIComponent(pageParam)}`
-        : `/api/time-entries?${paginatedQueryParams}`;
+        ? `/api/time-entries/my?${paginatedQueryParams}&cursor=${encodeURIComponent(pageParam)}`
+        : `/api/time-entries/my?${paginatedQueryParams}`;
       const res = await fetch(url);
       return res.json() as Promise<{ items: TimeEntry[]; hasMore: boolean; nextCursor: string | null; totalCount: number }>;
     },
