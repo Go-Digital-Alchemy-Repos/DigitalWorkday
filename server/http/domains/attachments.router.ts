@@ -42,7 +42,9 @@ const presignRequestSchema = z.object({
 router.get("/attachments/config", async (req, res) => {
   try {
     const user = req.user as any;
-    const tenantId = user?.tenantId || (req as any).tenant?.effectiveTenantId || null;
+    const tenantId = user?.role === "super_user"
+      ? (req as any).tenant?.effectiveTenantId || user?.tenantId || null
+      : user?.tenantId || (req as any).tenant?.effectiveTenantId || null;
 
     const storageStatus = await getStorageStatus(tenantId);
 

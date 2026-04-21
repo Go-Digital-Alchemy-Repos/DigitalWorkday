@@ -260,4 +260,33 @@ describe("Tenancy Enforcement", () => {
       expect(response.status).toBe(200);
     });
   });
+
+  describe("getEffectiveTenantId", () => {
+    it("returns a regular user's own tenant", () => {
+      const req = {
+        user: { id: "user-1", role: UserRole.ADMIN, tenantId: "tenant-user" },
+        tenant: { effectiveTenantId: "tenant-other" },
+      } as any;
+
+      expect(getEffectiveTenantId(req)).toBe("tenant-user");
+    });
+
+    it("prefers effective tenant context for super user impersonation", () => {
+      const req = {
+        user: { id: "super-1", role: UserRole.SUPER_USER, tenantId: "tenant-own" },
+        tenant: { effectiveTenantId: "tenant-impersonated" },
+      } as any;
+
+      expect(getEffectiveTenantId(req)).toBe("tenant-impersonated");
+    });
+
+    it("falls back to the super user's own tenant when no impersonation is active", () => {
+      const req = {
+        user: { id: "super-2", role: UserRole.SUPER_USER, tenantId: "tenant-own" },
+        tenant: { effectiveTenantId: null },
+      } as any;
+
+      expect(getEffectiveTenantId(req)).toBe("tenant-own");
+    });
+  });
 });

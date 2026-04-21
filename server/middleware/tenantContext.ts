@@ -120,11 +120,19 @@ export function requireSuperUser(req: Request, res: Response, next: NextFunction
 }
 
 export function getEffectiveTenantId(req: Request): string | null {
-  // If the user has a tenantId (is a regular user), always return it
-  if (req.user?.tenantId) {
-    return req.user.tenantId;
+  const user = req.user as any;
+  const isSuperUser = user?.role === UserRole.SUPER_USER;
+
+  // Super users should honor impersonation/session-derived tenant context first.
+  if (isSuperUser) {
+    return req.tenant?.effectiveTenantId || user?.tenantId || null;
   }
-  // Otherwise return the effective tenantId from middleware (impersonation, etc.)
+
+  // Regular users are always scoped to their own tenant.
+  if (user?.tenantId) {
+    return user.tenantId;
+  }
+
   return req.tenant?.effectiveTenantId || null;
 }
 

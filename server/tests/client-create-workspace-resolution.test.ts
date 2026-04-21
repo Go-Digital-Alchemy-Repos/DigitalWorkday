@@ -97,4 +97,51 @@ describe("Client creation workspace resolution", () => {
     expect(response.body.error?.message).toContain("No workspace found for tenant");
     expect(response.body.error?.code).toBe("INTERNAL_ERROR");
   });
+
+  it("lets a super user with their own tenant impersonate another tenant via X-Tenant-Id", async () => {
+    const tenantA = await createTestTenant({ name: `Super Tenant A ${Date.now()}` });
+    const tenantB = await createTestTenant({ name: `Super Tenant B ${Date.now()}` });
+    tenantIds.push(tenantA.id, tenantB.id);
+
+    await createTestWorkspace({
+      tenantId: tenantA.id,
+      isPrimary: true,
+      name: "Tenant A Workspace",
+    });
+    const workspaceB = await createTestWorkspace({
+      tenantId: tenantB.id,
+      isPrimary: true,
+      name: "Tenant B Workspace",
+    });
+
+    const superUser = await createTestUser({
+      email: `super-impersonation-${Date.now()}@example.com`,
+      role: UserRole.SUPER_USER,
+      tenantId: tenantA.id,
+    });
+
+    const app = createAuthenticatedApp({
+      id: superUser.id,
+      tenantId: tenantA.id,
+      role: superUser.role,
+    });
+
+    const createResponse = await request(app)
+      .post("/api/clients")
+      .set("X-Tenant-Id", tenantB.id)
+      .send({ companyName: "Impersonated Tenant Client" });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.tenantId).toBe(tenantB.id);
+    expect(createResponse.body.workspaceId).toBe(workspaceB.id);
+
+    const listResponse = await request(app)
+      .get("/api/clients")
+      .set("X-Tenant-Id", tenantB.id);
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listResponse.body)).toBe(true);
+    expect(listResponse.body.some((client: { id: string }) => client.id === createResponse.body.id)).toBe(true);
+    expect(listResponse.body.every((client: { tenantId: string }) => client.tenantId === tenantB.id)).toBe(true);
+  });
 });

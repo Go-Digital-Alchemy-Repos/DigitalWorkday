@@ -44,7 +44,10 @@ function validateTenantAccess(req: Request, tenantId: string): boolean {
 
 function getEffectiveTenantId(req: Request): string | null {
   const user = req.user as any;
-  return user?.tenantId || (req as any).tenant?.effectiveTenantId || null;
+  const isSuperUser = user?.role === UserRole.SUPER_USER;
+  return isSuperUser
+    ? (req as any).tenant?.effectiveTenantId || user?.tenantId || null
+    : user?.tenantId || (req as any).tenant?.effectiveTenantId || null;
 }
 
 function generateDocStorageKey(tenantId: string, fileName: string): string {

@@ -30,7 +30,10 @@ const router = createApiRouter({
 
 function getEffectiveTenantId(req: Request): string | null {
   const user = req.user as any;
-  return user?.tenantId || (req as any).tenant?.effectiveTenantId || null;
+  const isSuperUser = user?.role === "super_user";
+  return isSuperUser
+    ? (req as any).tenant?.effectiveTenantId || user?.tenantId || null
+    : user?.tenantId || (req as any).tenant?.effectiveTenantId || null;
 }
 
 async function validateClientBelongsToTenant(clientId: string, tenantId: string) {
