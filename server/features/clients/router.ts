@@ -23,6 +23,7 @@ import {
 import { UserRole } from "@shared/schema";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
+import { getCurrentWorkspaceIdOrThrow } from "../../routes/helpers";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -184,7 +185,9 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    const workspaceId = getCurrentWorkspaceId(req);
+    const workspaceId = tenantId
+      ? await getCurrentWorkspaceIdOrThrow(req)
+      : getCurrentWorkspaceId(req);
     
     const data = insertClientSchema.parse({
       ...req.body,

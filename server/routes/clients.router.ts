@@ -24,6 +24,7 @@ import {
 import {
   getCurrentUserId,
   getCurrentWorkspaceId,
+  getCurrentWorkspaceIdOrThrow,
   isSuperUser,
 } from "./helpers";
 import {
@@ -155,8 +156,10 @@ router.get("/clients/:id", async (req, res) => {
 router.post("/clients", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    const workspaceId = getCurrentWorkspaceId(req);
     const requestId = req.requestId || "unknown";
+    const workspaceId = tenantId
+      ? await getCurrentWorkspaceIdOrThrow(req)
+      : getCurrentWorkspaceId(req);
     
     console.log(`[POST /api/clients] requestId=${requestId}, tenantId=${tenantId}, workspaceId=${workspaceId}, body:`, JSON.stringify(req.body));
     
