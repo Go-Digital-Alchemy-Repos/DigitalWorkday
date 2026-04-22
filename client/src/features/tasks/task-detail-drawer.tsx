@@ -1238,7 +1238,7 @@ export function TaskDetailDrawer({
           <FormFieldWrapper label="Description" className="overflow-hidden">
             <div className="max-w-full overflow-hidden">
               <RichTextEditor
-                key={`task-description-${task.id}`}
+                key={`task-description-${task.id}-${task.updatedAt ? new Date(task.updatedAt).getTime() : "static"}`}
                 value={description}
                 onChange={handleDescriptionChange}
                 onBlur={handleDescriptionBlur}

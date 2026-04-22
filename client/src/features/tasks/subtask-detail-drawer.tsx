@@ -810,7 +810,7 @@ export function SubtaskDetailDrawer({
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
                 <RichTextEditor
-                  key={`subtask-description-${subtask.id}`}
+                  key={`subtask-description-${subtask.id}-${subtask.updatedAt ? new Date(subtask.updatedAt).getTime() : "static"}`}
                   value={description}
                   onChange={handleDescriptionChange}
                   placeholder="Add a description... Type @ to mention someone"

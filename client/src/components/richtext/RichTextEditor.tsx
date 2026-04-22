@@ -479,13 +479,9 @@ export function RichTextEditor({
       const newDoc = serializeDocToString(getDocForEditor(value));
       
       if (currentDoc !== newDoc) {
-        const prevDoc = serializeDocToString(getDocForEditor(prevValueRef.current));
-        const isExternalChange = prevDoc !== newDoc;
-        if (isExternalChange || !editor.isFocused) {
-          suppressOnChangeRef.current = true;
-          editor.commands.setContent(getDocForEditor(value));
-          suppressOnChangeRef.current = false;
-        }
+        suppressOnChangeRef.current = true;
+        editor.commands.setContent(getDocForEditor(value), false);
+        suppressOnChangeRef.current = false;
       }
       prevValueRef.current = value;
     }
