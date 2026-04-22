@@ -12,7 +12,7 @@ import {
   clientDivisions, divisionMembers, projects, users,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, inArray, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNull, sql } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export class ClientsRepository {
@@ -77,10 +77,47 @@ export class ClientsRepository {
   }
 
   async deleteClient(id: string): Promise<void> {
-    await db.delete(clientInvites).where(eq(clientInvites.clientId, id));
-    await db.delete(clientContacts).where(eq(clientContacts.clientId, id));
-    await db.update(projects).set({ clientId: null }).where(eq(projects.clientId, id));
-    await db.delete(clients).where(eq(clients.id, id));
+    await db.transaction(async (tx) => {
+      const divisionRows = await tx.select({ id: clientDivisions.id })
+        .from(clientDivisions)
+        .where(eq(clientDivisions.clientId, id));
+      const divisionIds = divisionRows.map((row) => row.id);
+
+      await tx.execute(sql`UPDATE clients SET parent_client_id = NULL WHERE parent_client_id = ${id}`);
+      await tx.execute(sql`UPDATE invitations SET client_id = NULL WHERE client_id = ${id}`);
+      await tx.execute(sql`UPDATE support_tickets SET client_id = NULL WHERE client_id = ${id}`);
+      await tx.execute(sql`UPDATE time_entries SET client_id = NULL WHERE client_id = ${id}`);
+      await tx.execute(sql`UPDATE active_timers SET client_id = NULL WHERE client_id = ${id}`);
+      await tx.update(projects).set({ clientId: null }).where(eq(projects.clientId, id));
+
+      if (divisionIds.length > 0) {
+        await tx.update(projects).set({ divisionId: null }).where(inArray(projects.divisionId, divisionIds));
+        await tx.execute(sql`DELETE FROM division_members WHERE division_id IN (SELECT id FROM client_divisions WHERE client_id = ${id})`);
+      }
+
+      await tx.execute(sql`DELETE FROM approval_requests WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_conversation_reads WHERE conversation_id IN (SELECT id FROM client_conversations WHERE client_id = ${id})`);
+      await tx.execute(sql`DELETE FROM client_messages WHERE conversation_id IN (SELECT id FROM client_conversations WHERE client_id = ${id})`);
+      await tx.execute(sql`DELETE FROM client_conversations WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_note_attachments WHERE note_id IN (SELECT id FROM client_notes WHERE client_id = ${id})`);
+      await tx.execute(sql`DELETE FROM client_note_versions WHERE note_id IN (SELECT id FROM client_notes WHERE client_id = ${id})`);
+      await tx.execute(sql`DELETE FROM client_notes WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM asset_links WHERE asset_id IN (SELECT id FROM assets WHERE client_id = ${id})`);
+      await tx.execute(sql`DELETE FROM assets WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM asset_folders WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_documents WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_document_folders WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_document_categories WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_files WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_user_access WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM user_client_access WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_stage_automation_events WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_stage_history WHERE client_id = ${id}`);
+      await tx.execute(sql`DELETE FROM client_divisions WHERE client_id = ${id}`);
+      await tx.delete(clientInvites).where(eq(clientInvites.clientId, id));
+      await tx.delete(clientContacts).where(eq(clientContacts.clientId, id));
+      await tx.delete(clients).where(eq(clients.id, id));
+    });
   }
 
   async getClientContact(id: string): Promise<ClientContact | undefined> {

@@ -1895,13 +1895,147 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteClient(id: string): Promise<void> {
-    // Delete related contacts and invites first
-    await db.delete(clientInvites).where(eq(clientInvites.clientId, id));
-    await db.delete(clientContacts).where(eq(clientContacts.clientId, id));
-    // Update projects to remove client reference
-    await db.update(projects).set({ clientId: null }).where(eq(projects.clientId, id));
-    // Delete the client
-    await db.delete(clients).where(eq(clients.id, id));
+    await db.transaction(async (tx) => {
+      const divisionRows = await tx.select({ id: clientDivisions.id })
+        .from(clientDivisions)
+        .where(eq(clientDivisions.clientId, id));
+      const divisionIds = divisionRows.map((row) => row.id);
+
+      await tx.execute(sql`
+        UPDATE clients
+        SET parent_client_id = NULL
+        WHERE parent_client_id = ${id}
+      `);
+      await tx.execute(sql`
+        UPDATE invitations
+        SET client_id = NULL
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        UPDATE support_tickets
+        SET client_id = NULL
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        UPDATE time_entries
+        SET client_id = NULL
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        UPDATE active_timers
+        SET client_id = NULL
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        UPDATE projects
+        SET client_id = NULL
+        WHERE client_id = ${id}
+      `);
+
+      if (divisionIds.length > 0) {
+        await tx.update(projects).set({ divisionId: null }).where(inArray(projects.divisionId, divisionIds));
+        await tx.delete(divisionMembers).where(inArray(divisionMembers.divisionId, divisionIds));
+      }
+
+      await tx.execute(sql`
+        DELETE FROM approval_requests
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_conversation_reads
+        WHERE conversation_id IN (
+          SELECT id FROM client_conversations WHERE client_id = ${id}
+        )
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_messages
+        WHERE conversation_id IN (
+          SELECT id FROM client_conversations WHERE client_id = ${id}
+        )
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_conversations
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_note_attachments
+        WHERE note_id IN (
+          SELECT id FROM client_notes WHERE client_id = ${id}
+        )
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_note_versions
+        WHERE note_id IN (
+          SELECT id FROM client_notes WHERE client_id = ${id}
+        )
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_notes
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM asset_links
+        WHERE asset_id IN (
+          SELECT id FROM assets WHERE client_id = ${id}
+        )
+      `);
+      await tx.execute(sql`
+        DELETE FROM assets
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM asset_folders
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_documents
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_document_folders
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_document_categories
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_files
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_user_access
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM user_client_access
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_stage_automation_events
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_stage_history
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_divisions
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_invites
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM client_contacts
+        WHERE client_id = ${id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM clients
+        WHERE id = ${id}
+      `);
+    });
   }
 
   // =============================================================================
@@ -2776,11 +2910,8 @@ export class DatabaseStorage implements IStorage {
   async deleteClientWithTenant(id: string, tenantId: string): Promise<boolean> {
     const existing = await this.getClientByIdAndTenant(id, tenantId);
     if (!existing) return false;
-    
-    await db.delete(clientInvites).where(eq(clientInvites.clientId, id));
-    await db.delete(clientContacts).where(eq(clientContacts.clientId, id));
-    await db.update(projects).set({ clientId: null }).where(eq(projects.clientId, id));
-    await db.delete(clients).where(eq(clients.id, id));
+
+    await this.deleteClient(id);
     return true;
   }
 
