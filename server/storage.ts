@@ -1035,7 +1035,6 @@ export class DatabaseStorage implements IStorage {
     if (!task) return undefined;
 
     const assignees = await this.getTaskAssignees(id);
-    const watchers = await this.getTaskWatchers(id);
     const taskTagsList = await this.getTaskTags(id);
     const subtasksList = await this.getSubtasksByTask(id);
     const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
@@ -1046,7 +1045,6 @@ export class DatabaseStorage implements IStorage {
     return {
       ...task,
       assignees,
-      watchers,
       tags: taskTagsList,
       subtasks: subtasksList,
       childTasks: childTasksList,
@@ -1063,7 +1061,6 @@ export class DatabaseStorage implements IStorage {
     const result: TaskWithRelations[] = [];
     for (const task of childTasksList) {
       const assignees = await this.getTaskAssignees(task.id);
-      const watchers = await this.getTaskWatchers(task.id);
       const taskTagsList = await this.getTaskTags(task.id);
       const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
       const project = task.projectId ? await this.getProject(task.projectId) : undefined;
@@ -1071,7 +1068,6 @@ export class DatabaseStorage implements IStorage {
       result.push({
         ...task,
         assignees,
-        watchers,
         tags: taskTagsList,
         subtasks: [],
         childTasks: [],
@@ -1664,142 +1660,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectActivity(projectId: string, tenantId: string | null, limit: number = 50): Promise<ProjectActivityItem[]> {
-    const activityItems: ProjectActivityItem[] = [];
-    const userIds = new Set<string>();
-    const taskCache = new Map<string, { id: string; title: string }>();
+    const project = tenantId
+      ? await this.getProjectByIdAndTenant(projectId, tenantId)
+      : await this.getProject(projectId);
+    if (!project) return [];
 
-    // Build tenant filter conditions
-    const taskFilters = tenantId 
-      ? and(eq(tasks.projectId, projectId), eq(tasks.tenantId, tenantId))
-      : eq(tasks.projectId, projectId);
-
-    const timeEntryFilters = tenantId
-      ? and(eq(timeEntries.projectId, projectId), eq(timeEntries.tenantId, tenantId))
-      : eq(timeEntries.projectId, projectId);
-
-    // 1. Get ALL task IDs in this project (for comment lookup)
-    const allProjectTasks = await db.select({ id: tasks.id, title: tasks.title })
-      .from(tasks)
-      .where(taskFilters);
-    
-    const allTaskIds = allProjectTasks.map(t => t.id);
-    for (const t of allProjectTasks) {
-      taskCache.set(t.id, t);
-    }
-
-    // 2. Get recently created/updated tasks
-    const recentTasks = await db.select().from(tasks)
-      .where(taskFilters)
-      .orderBy(desc(tasks.createdAt))
+    const logs = await db.select().from(activityLog)
+      .where(
+        and(
+          eq(activityLog.workspaceId, project.workspaceId),
+          or(
+            and(eq(activityLog.entityType, "project"), eq(activityLog.entityId, projectId)),
+            sql`${activityLog.diffJson}->>'projectId' = ${projectId}`
+          )
+        )
+      )
+      .orderBy(desc(activityLog.createdAt))
       .limit(limit);
 
-    for (const task of recentTasks) {
-      if (task.createdBy) userIds.add(task.createdBy);
-      activityItems.push({
-        id: `task-created-${task.id}`,
-        type: "task_created",
-        timestamp: task.createdAt,
-        actorId: task.createdBy || "system",
-        actorName: "",
-        actorEmail: "",
-        actorAvatarUrl: null,
-        entityId: task.id,
-        entityTitle: task.title,
-      });
+    return logs.map((log) => {
+      const diff = (log.diffJson || {}) as Record<string, any>;
+      const clickEntityId = log.entityType === "subtask"
+        ? (diff.taskId as string | undefined) || log.entityId
+        : log.entityId;
 
-      // Add task_updated if updatedAt differs from createdAt by more than 1 minute
-      const timeDiff = task.updatedAt.getTime() - task.createdAt.getTime();
-      if (timeDiff > 60000) {
-        activityItems.push({
-          id: `task-updated-${task.id}-${task.updatedAt.getTime()}`,
-          type: "task_updated",
-          timestamp: task.updatedAt,
-          actorId: task.createdBy || "system",
-          actorName: "",
-          actorEmail: "",
-          actorAvatarUrl: null,
-          entityId: task.id,
-          entityTitle: task.title,
-        });
-      }
-    }
-
-    // 3. Get recent comments on ALL tasks in this project (not just recentTasks)
-    if (allTaskIds.length > 0) {
-      const recentComments = await db.select().from(comments)
-        .where(inArray(comments.taskId, allTaskIds))
-        .orderBy(desc(comments.createdAt))
-        .limit(limit);
-
-      for (const comment of recentComments) {
-        userIds.add(comment.userId);
-        const task = taskCache.get(comment.taskId);
-        activityItems.push({
-          id: `comment-${comment.id}`,
-          type: "comment_added",
-          timestamp: comment.createdAt,
-          actorId: comment.userId,
-          actorName: "",
-          actorEmail: "",
-          actorAvatarUrl: null,
-          entityId: comment.taskId,
-          entityTitle: task?.title || "Task",
-          metadata: { commentBody: comment.body.substring(0, 100) },
-        });
-      }
-    }
-
-    // 4. Get time entries for this project
-    const recentTimeEntries = await db.select().from(timeEntries)
-      .where(timeEntryFilters)
-      .orderBy(desc(timeEntries.startTime))
-      .limit(limit);
-
-    for (const entry of recentTimeEntries) {
-      userIds.add(entry.userId);
-      const task = entry.taskId ? taskCache.get(entry.taskId) : null;
-      activityItems.push({
-        id: `time-entry-${entry.id}`,
-        type: "time_logged",
-        timestamp: entry.createdAt,
-        actorId: entry.userId,
-        actorName: "",
-        actorEmail: "",
-        actorAvatarUrl: null,
-        entityId: entry.taskId || projectId,
-        entityTitle: task?.title || entry.description || "Time logged",
-        metadata: { durationSeconds: entry.durationSeconds },
-      });
-    }
-
-    // 5. Batch fetch all users
-    const userMap = new Map<string, { id: string; name: string; email: string; avatarUrl: string | null }>();
-    if (userIds.size > 0) {
-      const userList = await db.select({ id: users.id, name: users.name, email: users.email, avatarUrl: users.avatarUrl })
-        .from(users)
-        .where(inArray(users.id, Array.from(userIds)));
-      for (const u of userList) {
-        userMap.set(u.id, u);
-      }
-    }
-
-    // 6. Fill in actor details
-    for (const item of activityItems) {
-      if (item.actorId === "system") {
-        item.actorName = "System";
-        item.actorEmail = "";
-        item.actorAvatarUrl = null;
-      } else {
-        const user = userMap.get(item.actorId);
-        item.actorName = user?.name || "Unknown";
-        item.actorEmail = user?.email || "";
-        item.actorAvatarUrl = user?.avatarUrl || null;
-      }
-    }
-
-    // Sort all items by timestamp descending and limit
-    activityItems.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    return activityItems.slice(0, limit);
+      return {
+        id: log.id,
+        type: log.action,
+        timestamp: log.createdAt,
+        actorId: log.actorUserId,
+        actorName: (diff.actorName as string) || "Unknown",
+        actorEmail: (diff.actorEmail as string) || "",
+        actorAvatarUrl: (diff.actorAvatarUrl as string) || null,
+        entityId: clickEntityId,
+        entityTitle: (diff.entityTitle as string) || clickEntityId,
+        metadata: diff,
+      };
+    });
   }
 
   async getTaskAttachment(id: string): Promise<TaskAttachment | undefined> {

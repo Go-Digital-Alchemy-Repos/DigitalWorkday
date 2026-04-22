@@ -4,7 +4,8 @@ import multer from "multer";
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { AppError, handleRouteError } from "../../lib/errors";
-import { getCurrentUserId } from "../../routes/helpers";
+import { getCurrentUserId, getCurrentWorkspaceId } from "../../routes/helpers";
+import { logEntityActivity } from "../../lib/taskActivity";
 import {
   isS3Configured,
   validateFile,
@@ -212,6 +213,21 @@ router.post(
         projectId,
       );
 
+      await logEntityActivity({
+        storage,
+        workspaceId: (await storage.getProject(projectId))?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: getCurrentUserId(req),
+        entityType: "task",
+        entityId: taskId,
+        entityTitle: task.title,
+        action: "file_uploaded",
+        metadata: {
+          projectId,
+          fileName,
+          attachmentId: attachment.id,
+        },
+      }).catch(() => {});
+
       res.status(201).json({
         attachment: {
           id: attachment.id,
@@ -333,6 +349,21 @@ router.delete(
 
       emitAttachmentDeleted(attachmentId, taskId, null, projectId);
 
+      await logEntityActivity({
+        storage,
+        workspaceId: (await storage.getProject(projectId))?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: getCurrentUserId(req),
+        entityType: "task",
+        entityId: taskId,
+        entityTitle: (await storage.getTask(taskId))?.title || "Task",
+        action: "file_deleted",
+        metadata: {
+          projectId,
+          fileName: attachment.originalFileName,
+          attachmentId,
+        },
+      }).catch(() => {});
+
       res.status(204).send();
     } catch (error) {
       return handleRouteError(res, error, "DELETE /api/projects/:projectId/tasks/:taskId/attachments/:attachmentId", req);
@@ -437,6 +468,22 @@ router.post(
         projectId,
       );
 
+      await logEntityActivity({
+        storage,
+        workspaceId: (await storage.getProject(projectId))?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: getCurrentUserId(req),
+        entityType: "subtask",
+        entityId: subtaskId,
+        entityTitle: subtask.title,
+        action: "file_uploaded",
+        metadata: {
+          projectId,
+          taskId: task.id,
+          fileName,
+          attachmentId: attachment.id,
+        },
+      }).catch(() => {});
+
       res.status(201).json({
         attachment: {
           id: attachment.id,
@@ -504,6 +551,22 @@ router.delete(
       await storage.deleteTaskAttachment(attachmentId);
 
       emitAttachmentDeleted(attachmentId, attachment.taskId, subtaskId, projectId);
+
+      await logEntityActivity({
+        storage,
+        workspaceId: (await storage.getProject(projectId))?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: getCurrentUserId(req),
+        entityType: "subtask",
+        entityId: subtaskId,
+        entityTitle: (await storage.getSubtask(subtaskId))?.title || "Subtask",
+        action: "file_deleted",
+        metadata: {
+          projectId,
+          taskId: attachment.taskId,
+          fileName: attachment.originalFileName,
+          attachmentId,
+        },
+      }).catch(() => {});
 
       res.status(204).send();
     } catch (error) {

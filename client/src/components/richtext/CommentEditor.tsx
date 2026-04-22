@@ -116,8 +116,8 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             )}
             onMouseDown={(event) => {
               event.preventDefault();
+              selectUser(index);
             }}
-            onClick={() => selectUser(index)}
             data-testid={`mention-option-${user.id}`}
           >
             <span className="font-medium">{getMentionUserLabel(user)}</span>

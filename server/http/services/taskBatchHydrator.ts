@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { tasks, taskAssignees, taskWatchers, taskTags, tags, sections, projects } from "@shared/schema";
+import { tasks, taskAssignees, taskTags, tags, sections, projects } from "@shared/schema";
 import { eq, inArray, and, isNull } from "drizzle-orm";
 import type { TaskWithRelations, Subtask } from "@shared/schema";
 import { getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
@@ -53,9 +53,8 @@ export async function getTasksByUserBatched(userId: string, tenantId: string, in
 
   const taskIds = filteredTasks.map(t => t.id);
 
-  const [assigneeRows2, watcherRows, tagRows, subtaskRows] = await Promise.all([
+  const [assigneeRows2, tagRows, subtaskRows] = await Promise.all([
     db.select().from(taskAssignees).where(inArray(taskAssignees.taskId, taskIds)),
-    db.select().from(taskWatchers).where(inArray(taskWatchers.taskId, taskIds)),
     db.select({
       id: taskTags.id,
       taskId: taskTags.taskId,
@@ -86,12 +85,6 @@ export async function getTasksByUserBatched(userId: string, tenantId: string, in
     assigneesByTask.get(row.taskId)!.push(row);
   }
 
-  const watchersByTask = new Map<string, typeof taskWatchers.$inferSelect[]>();
-  for (const row of watcherRows) {
-    if (!watchersByTask.has(row.taskId)) watchersByTask.set(row.taskId, []);
-    watchersByTask.get(row.taskId)!.push(row);
-  }
-
   type TagRowWithTag = typeof taskTags.$inferSelect & { tag: typeof tags.$inferSelect | null };
   const tagsByTask = new Map<string, TagRowWithTag[]>();
   for (const row of tagRows) {
@@ -112,7 +105,6 @@ export async function getTasksByUserBatched(userId: string, tenantId: string, in
   const buildChildStub = (ct: typeof tasks.$inferSelect): TaskWithRelations => ({
     ...ct,
     assignees: [],
-    watchers: [],
     tags: [],
     subtasks: [] as Subtask[],
     childTasks: [],
@@ -123,7 +115,6 @@ export async function getTasksByUserBatched(userId: string, tenantId: string, in
   const result: TaskWithRelations[] = filteredTasks.map(task => ({
     ...task,
     assignees: assigneesByTask.get(task.id) ?? [],
-    watchers: watchersByTask.get(task.id) ?? [],
     tags: (tagsByTask.get(task.id) ?? []).map(r => ({
       id: r.id,
       taskId: r.taskId,

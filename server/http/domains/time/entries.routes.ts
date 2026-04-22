@@ -17,6 +17,7 @@ import {
 } from "./shared";
 import { perfLog } from "../../../lib/queryDebug";
 import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssignments";
+import { logEntityActivity } from "../../../lib/taskActivity";
 
 const router = Router();
 
@@ -278,6 +279,29 @@ router.post("/time-entries", async (req, res) => {
       },
       workspaceId,
     );
+
+    const entityType = entry.subtaskId ? "subtask" : entry.taskId ? "task" : null;
+    const entityId = entry.subtaskId || entry.taskId;
+    if (entityType && entityId) {
+      const entityTitle = entry.subtaskId
+        ? (await storage.getSubtask(entry.subtaskId))?.title || entry.description || "Subtask"
+        : (await storage.getTask(entry.taskId!))?.title || entry.description || "Task";
+      await logEntityActivity({
+        storage,
+        workspaceId,
+        actorUserId: userId,
+        entityType: entityType as "task" | "subtask",
+        entityId,
+        entityTitle,
+        action: "time_logged",
+        metadata: {
+          projectId: entry.projectId,
+          taskId: entry.taskId,
+          subtaskId: entry.subtaskId,
+          durationSeconds: entry.durationSeconds,
+        },
+      }).catch(() => {});
+    }
 
     res.status(201).json(entry);
   } catch (error) {

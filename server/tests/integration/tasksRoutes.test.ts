@@ -109,10 +109,6 @@ describe("Tasks Routes – Integration Tests", () => {
       expect(res.status).toBe(401);
     });
 
-    it("POST /api/tasks/:taskId/watchers rejects unauth via factory guard", async () => {
-      const res = await request(buildUnauthApp()).post("/api/tasks/tid/watchers").send({ userId: "u1" });
-      expect(res.status).toBe(401);
-    });
   });
 
   // =========================================================================
@@ -254,11 +250,6 @@ describe("Tasks Routes – Integration Tests", () => {
         .post("/api/tasks/tid/childtasks")
         .send({ title: "child" });
       expect([400, 404, 500]).toContain(res.status);
-    });
-
-    it("GET /api/tasks/:taskId/watchers resolves (not 404 routing)", async () => {
-      const res = await request(buildTenantApp()).get("/api/tasks/tid/watchers");
-      expect(res.status).not.toBe(404);
     });
 
     it("POST /api/v1/my-tasks/sections resolves (not 404 routing)", async () => {

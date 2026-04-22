@@ -25,11 +25,6 @@
  *     POST   /tasks/:taskId/assignees               — add assignee
  *     DELETE /tasks/:taskId/assignees/:userId        — remove assignee
  *
- *   Task Watchers:
- *     GET    /tasks/:taskId/watchers                — list watchers
- *     POST   /tasks/:taskId/watchers                — add watcher
- *     DELETE /tasks/:taskId/watchers/:userId         — remove watcher
- *
  *   Personal Task Sections (My Tasks):
  *     GET    /v1/my-tasks/sections                  — list personal sections
  *     POST   /v1/my-tasks/sections                  — create personal section
@@ -66,9 +61,11 @@ import {
   taskAccess,
 } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
+import { getTaskStatusLabel, isTaskDoneStatus, isTaskReviewStatus, normalizeTaskStatus } from "@shared/taskStatus";
 import { db } from "../../db";
 import { eq, and } from "drizzle-orm";
 import { canManageTaskAccess, canViewTask, getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
+import { logEntityActivity, logTaskCreated, logTaskFieldChanges } from "../../lib/taskActivity";
 import {
   emitTaskCreated,
   emitTaskUpdated,
@@ -81,11 +78,21 @@ import {
 import {
   notifyTaskAssigned,
   notifyTaskCompleted,
+  notifyTaskReviewApproved,
+  notifyTaskReviewRequested,
   notifyTaskStatusChanged,
 } from "../../features/notifications/notification.service";
 import { evaluateAutomation } from "../../features/automation/clientStageAutomation.service";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
+
+function isAssignedToTask(task: any, userId: string): boolean {
+  return Boolean(task?.assignees?.some((assignee: any) => assignee.userId === userId || assignee.user?.id === userId));
+}
+
+function canApproveReview(user: { role?: string | null } | undefined): boolean {
+  return hasTenantAdminAccess(user?.role);
+}
 
 // ---------------------------------------------------------------------------
 // Project-scoped task queries
@@ -581,6 +588,14 @@ router.post("/tasks", async (req, res) => {
     }
 
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
+    const createdProject = task.projectId ? await storage.getProject(task.projectId) : null;
+
+    await logTaskCreated(
+      storage,
+      userId,
+      createdProject?.workspaceId || getCurrentWorkspaceId(req),
+      task,
+    ).catch(() => {});
 
     if (taskWithRelations) {
       if (task.isPersonal && task.createdBy) {
@@ -638,6 +653,14 @@ router.post("/tasks/:taskId/childtasks", async (req, res) => {
 
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
+    const parentProject = parentTask.projectId ? await storage.getProject(parentTask.projectId) : null;
+    await logTaskCreated(
+      storage,
+      getCurrentUserId(req),
+      parentProject?.workspaceId || getCurrentWorkspaceId(req),
+      task,
+    ).catch(() => {});
+
     if (taskWithRelations && parentTask.projectId) {
       emitTaskCreated(parentTask.projectId, taskWithRelations as any);
     }
@@ -658,8 +681,12 @@ router.patch("/tasks/:id", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
+    const currentUser = await storage.getUser(userId);
     
     const taskBefore = await storage.getTaskWithRelations(req.params.id);
+    if (!taskBefore) {
+      return sendError(res, AppError.notFound("Task"), req);
+    }
     
     const updateData: any = { ...data };
     if (updateData.isPersonal === true) {
@@ -673,6 +700,32 @@ router.patch("/tasks/:id", async (req, res) => {
     }
     if (updateData.startDate !== undefined) {
       updateData.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
+    }
+    if (updateData.status !== undefined) {
+      const normalizedStatus = normalizeTaskStatus(updateData.status);
+      if (!normalizedStatus) {
+        return sendError(res, AppError.badRequest("Invalid task status"), req);
+      }
+      updateData.status = normalizedStatus;
+    }
+
+    const taskWasInReview = isTaskReviewStatus(taskBefore.status);
+    const taskIsAssignedToCurrentUser = isAssignedToTask(taskBefore, userId);
+    const currentUserCanApproveReview = canApproveReview(currentUser);
+
+    if (updateData.status === "in_review" && !taskWasInReview) {
+      if (!taskIsAssignedToCurrentUser && !currentUserCanApproveReview) {
+        return sendError(res, AppError.forbidden("Only assignees can send a task to review"), req);
+      }
+    }
+
+    if (taskWasInReview && updateData.status && updateData.status !== "in_review") {
+      if (!currentUserCanApproveReview) {
+        return sendError(res, AppError.forbidden("Only project managers and admins can approve a reviewed task"), req);
+      }
+      if (isTaskDoneStatus(updateData.status)) {
+        return sendError(res, AppError.badRequest("Reviewed tasks must be approved before they can be marked done"), req);
+      }
     }
     
     if (updateData.visibility !== undefined && config.features.enablePrivateTasks && tenantId) {
@@ -718,14 +771,42 @@ router.patch("/tasks/:id", async (req, res) => {
       emitTaskUpdated(task.id, task.projectId, task.parentTaskId, data);
     }
 
-    if (taskBefore && !task.isPersonal) {
-      const currentUser = await storage.getUser(userId);
+    if (!task.isPersonal) {
       const currentUserName = currentUser?.name || currentUser?.email || "Someone";
       const project = task.projectId ? await storage.getProject(task.projectId) : null;
       const projectName = project?.name || "Unknown project";
       const notificationContext = { tenantId, excludeUserId: userId };
+      const workspaceId = project?.workspaceId || getCurrentWorkspaceId(req);
+      const normalizedBeforeStatus = normalizeTaskStatus(taskBefore.status) || taskBefore.status;
+      const normalizedAfterStatus = normalizeTaskStatus(task.status) || task.status;
 
-      if (updateData.status === "completed" && taskBefore.status !== "completed") {
+      await logTaskFieldChanges(
+        storage,
+        userId,
+        workspaceId,
+        {
+          id: taskBefore.id,
+          title: taskBefore.title,
+          projectId: taskBefore.projectId,
+          status: normalizeTaskStatus(taskBefore.status) || taskBefore.status,
+          priority: taskBefore.priority,
+          dueDate: taskBefore.dueDate,
+          estimateMinutes: taskBefore.estimateMinutes,
+          description: taskBefore.description,
+        } as any,
+        {
+          id: task.id,
+          title: task.title,
+          projectId: task.projectId,
+          status: normalizeTaskStatus(task.status) || task.status,
+          priority: task.priority,
+          dueDate: task.dueDate,
+          estimateMinutes: task.estimateMinutes,
+          description: task.description,
+        } as any,
+      ).catch(() => {});
+
+      if (normalizedAfterStatus === "done" && !isTaskDoneStatus(taskBefore.status)) {
         const assignees = (taskWithRelations as any)?.assignees || [];
         for (const assignee of assignees) {
           if (assignee.id !== userId) {
@@ -761,7 +842,7 @@ router.patch("/tasks/:id", async (req, res) => {
           if (task.sectionId && section && task.projectId) {
             const projectTasks = await storage.getTasksByProject(task.projectId);
             const sectionTasks = projectTasks.filter(t => t.sectionId === task.sectionId);
-            const allComplete = sectionTasks.every(t => t.id === task.id ? true : t.status === "completed");
+            const allComplete = sectionTasks.every(t => t.id === task.id ? true : isTaskDoneStatus(t.status));
             if (allComplete && sectionTasks.length > 0) {
               evaluateAutomation({
                 tenantId,
@@ -781,7 +862,62 @@ router.patch("/tasks/:id", async (req, res) => {
         }
       }
 
-      if (updateData.status && updateData.status !== taskBefore.status && updateData.status !== "completed") {
+      if (!taskWasInReview && normalizedAfterStatus === "in_review") {
+        const reviewApprovers = tenantId
+          ? (await storage.getUsersByTenant(tenantId)).filter((candidate) => candidate.id !== userId && canApproveReview(candidate))
+          : [];
+        for (const approver of reviewApprovers) {
+          if (approver.id !== userId) {
+            notifyTaskReviewRequested(
+              approver.id,
+              task.id,
+              task.title,
+              currentUserName,
+              notificationContext
+            ).catch(() => {});
+          }
+        }
+
+        await logEntityActivity({
+          storage,
+          workspaceId,
+          actorUserId: userId,
+          entityType: "task",
+          entityId: task.id,
+          entityTitle: task.title,
+          action: "review_requested",
+          metadata: {
+            projectId: task.projectId,
+          },
+        }).catch(() => {});
+      } else if (taskWasInReview && normalizedBeforeStatus !== normalizedAfterStatus) {
+        const assignees = (taskWithRelations as any)?.assignees || [];
+        for (const assignee of assignees) {
+          if (assignee.id !== userId) {
+            notifyTaskReviewApproved(
+              assignee.id,
+              task.id,
+              task.title,
+              currentUserName,
+              notificationContext
+            ).catch(() => {});
+          }
+        }
+
+        await logEntityActivity({
+          storage,
+          workspaceId,
+          actorUserId: userId,
+          entityType: "task",
+          entityId: task.id,
+          entityTitle: task.title,
+          action: "review_approved",
+          metadata: {
+            projectId: task.projectId,
+            returnedStatus: normalizedAfterStatus,
+          },
+        }).catch(() => {});
+      } else if (updateData.status && normalizedBeforeStatus !== normalizedAfterStatus && normalizedAfterStatus !== "done") {
         const assignees = (taskWithRelations as any)?.assignees || [];
         for (const assignee of assignees) {
           if (assignee.id !== userId) {
@@ -789,7 +925,7 @@ router.patch("/tasks/:id", async (req, res) => {
               assignee.id,
               task.id,
               task.title,
-              updateData.status,
+              getTaskStatusLabel(normalizedAfterStatus),
               currentUserName,
               notificationContext
             ).catch(() => {});
@@ -951,14 +1087,29 @@ router.post("/tasks/:taskId/assignees", async (req, res) => {
       userId: assigneeUserId,
       tenantId: tenantId || undefined,
     });
+
+    const project = task.projectId
+      ? (tenantId
+        ? await storage.getProjectByIdAndTenant(task.projectId, tenantId)
+        : await storage.getProject(task.projectId))
+      : null;
+
+    await logEntityActivity({
+      storage,
+      workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
+      actorUserId: currentUserId,
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      action: "assigned",
+      metadata: {
+        projectId: task.projectId,
+        userId: assigneeUserId,
+      },
+    }).catch(() => {});
     
     if (assigneeUserId !== currentUserId && !task.isPersonal) {
       const currentUser = await storage.getUser(currentUserId);
-      const project = task.projectId 
-        ? (tenantId 
-          ? await storage.getProjectByIdAndTenant(task.projectId, tenantId)
-          : await storage.getProject(task.projectId)) 
-        : null;
       notifyTaskAssigned(
         assigneeUserId,
         task.id,
@@ -990,46 +1141,28 @@ router.delete("/tasks/:taskId/assignees/:userId", async (req, res) => {
     }
     
     await storage.removeTaskAssignee(req.params.taskId, req.params.userId);
+
+    const project = task.projectId
+      ? (tenantId
+        ? await storage.getProjectByIdAndTenant(task.projectId, tenantId)
+        : await storage.getProject(task.projectId))
+      : null;
+    await logEntityActivity({
+      storage,
+      workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
+      actorUserId: getCurrentUserId(req),
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      action: "unassigned",
+      metadata: {
+        projectId: task.projectId,
+        userId: req.params.userId,
+      },
+    }).catch(() => {});
     res.status(204).send();
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/tasks/:taskId/assignees/:userId", req);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Task Watchers
-// ---------------------------------------------------------------------------
-
-router.get("/tasks/:taskId/watchers", async (req, res) => {
-  try {
-    const watchers = await storage.getTaskWatchers(req.params.taskId);
-    res.json(watchers);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/tasks/:taskId/watchers", req);
-  }
-});
-
-router.post("/tasks/:taskId/watchers", async (req, res) => {
-  try {
-    const data = validateBody(req.body, addAssigneeSchema, res);
-    if (!data) return;
-    
-    const watcher = await storage.addTaskWatcher({
-      taskId: req.params.taskId,
-      userId: data.userId,
-    });
-    res.status(201).json(watcher);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/tasks/:taskId/watchers", req);
-  }
-});
-
-router.delete("/tasks/:taskId/watchers/:userId", async (req, res) => {
-  try {
-    await storage.removeTaskWatcher(req.params.taskId, req.params.userId);
-    res.status(204).send();
-  } catch (error) {
-    return handleRouteError(res, error, "DELETE /api/tasks/:taskId/watchers/:userId", req);
   }
 });
 

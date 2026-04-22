@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2, Pencil } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2, Pencil, Activity } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -41,11 +41,11 @@ import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
 import { AttachmentUploader } from "@/components/attachment-uploader";
+import { ActivityFeed } from "@/components/activity-feed";
 import { StatusBadge } from "@/components/status-badge";
 import { TagBadge } from "@/components/tag-badge";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
-import { MultiSelectWatchers } from "@/components/multi-select-watchers";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
@@ -170,6 +170,7 @@ export function TaskDetailDrawer({
   const isAdmin = hasTenantAdminAccess(currentUser?.role);
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(() => normalizeRichTextValue(task?.description));
   const [estimateMinutes, setEstimateMinutes] = useState<string>(
@@ -178,6 +179,7 @@ export function TaskDetailDrawer({
   const [selectedSubtask, setSelectedSubtask] = useState<any | null>(null);
   const [subtaskDrawerOpen, setSubtaskDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const closingRef = useRef(false);
 
   useEffect(() => {
@@ -778,22 +780,46 @@ export function TaskDetailDrawer({
     }
   };
 
+  const isTaskAssignee = Boolean(
+    task?.assignees?.some((assignee) => assignee.userId === currentUser?.id || assignee.user?.id === currentUser?.id)
+  );
+  const canSendToReview = Boolean(task && isTaskAssignee && task.status !== "in_review" && task.status !== "done");
+  const canApproveReview = Boolean(task && isAdmin && task.status === "in_review");
+
+  const handleSendToReview = async () => {
+    if (!task) return;
+    try {
+      await updateTaskStatusMutation.mutateAsync("in_review");
+      toast({ title: "Task sent to review", description: `"${task.title}" is ready for approval` });
+    } catch {
+      toast({ title: "Failed to send task to review", variant: "destructive" });
+    }
+  };
+
+  const handleApproveReview = async () => {
+    if (!task) return;
+    try {
+      await updateTaskStatusMutation.mutateAsync("in_progress");
+      toast({ title: "Review approved", description: `"${task.title}" returned to the assignee for final completion` });
+    } catch {
+      toast({ title: "Failed to approve review", variant: "destructive" });
+    }
+  };
+
   
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setDescription(normalizeRichTextValue(task.description));
+      setEditingDescription(!toPlainText(task.description).trim());
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
+      setShowHistory(false);
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
   const assigneeUsers = useMemo<Partial<User>[]>(
     () => task?.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [],
     [task?.assignees]
-  );
-  const watcherUsers = useMemo<Partial<User>[]>(
-    () => task?.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [],
-    [task?.watchers]
   );
   const taskTags = useMemo<TagType[]>(
     () => task?.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [],
@@ -938,6 +964,7 @@ export function TaskDetailDrawer({
       onUpdate?.(task.id, { description: description || null });
       markClean();
     }
+    setEditingDescription(false);
   };
 
 
@@ -1145,7 +1172,29 @@ export function TaskDetailDrawer({
                   Created by {creatorLabel}
                 </Badge>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setShowHistory((value) => !value)}
+                data-testid="button-task-history"
+              >
+                <Activity className="h-3.5 w-3.5 mr-1" />
+                {showHistory ? "Hide History" : "Task History"}
+              </Button>
             </div>
+
+            {showHistory && (
+              <div className="border rounded-lg overflow-hidden">
+                <ActivityFeed
+                  entityType="task"
+                  entityId={task.id}
+                  height="260px"
+                  emptyTitle="No task history yet"
+                  emptyDescription="Task activity will appear here as changes are made"
+                />
+              </div>
+            )}
 
             <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
               <FormFieldWrapper
@@ -1219,17 +1268,6 @@ export function TaskDetailDrawer({
                 />
               </FormFieldWrapper>
 
-              <FormFieldWrapper
-                label="Watchers"
-                labelIcon={<Eye className="h-3.5 w-3.5" />}
-              >
-                <MultiSelectWatchers
-                  taskId={task.id}
-                  watchers={watcherUsers}
-                  workspaceId={workspaceId}
-                  onWatcherChange={onRefresh}
-                />
-              </FormFieldWrapper>
             </div>
           </div>
 
@@ -1237,16 +1275,32 @@ export function TaskDetailDrawer({
 
           <FormFieldWrapper label="Description" className="overflow-hidden">
             <div className="max-w-full overflow-hidden">
-              <RichTextEditor
-                key={`task-description-${task.id}-${task.updatedAt ? new Date(task.updatedAt).getTime() : "static"}`}
-                value={description}
-                onChange={handleDescriptionChange}
-                onBlur={handleDescriptionBlur}
-                placeholder="Add a description... Type @ to mention someone"
-                minHeight="100px"
-                users={mentionUsers}
-                data-testid="textarea-description"
-              />
+              {editingDescription || !toPlainText(description).trim() ? (
+                <RichTextEditor
+                  key={`task-description-${task.id}-${task.updatedAt ? new Date(task.updatedAt).getTime() : "static"}`}
+                  value={description}
+                  onChange={handleDescriptionChange}
+                  onBlur={handleDescriptionBlur}
+                  placeholder="Add a description... Type @ to mention someone"
+                  minHeight="100px"
+                  users={mentionUsers}
+                  autoFocus
+                  data-testid="textarea-description"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingDescription(true)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-left transition-premium hover:border-ring/40"
+                  data-testid="button-edit-task-description"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>Click to edit</span>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </div>
+                  <RichTextRenderer value={description} />
+                </button>
+              )}
             </div>
           </FormFieldWrapper>
 
@@ -1589,7 +1643,7 @@ export function TaskDetailDrawer({
           showSave={true}
           onSave={saveAndClose}
           saveLabel="Save Task"
-          showComplete={task.status !== "done"}
+          showComplete={task.status !== "done" && task.status !== "in_review"}
           onMarkComplete={handleMarkAsComplete}
           completeDisabled={timeEntriesLoading || isCompletingTask}
           isCompleting={isCompletingTask}
@@ -1598,11 +1652,37 @@ export function TaskDetailDrawer({
           incompleteDisabled={isReopeningTask}
           isIncompleting={isReopeningTask}
           extraActions={
-            activeTimer && !isTimerOnThisTask ? (
-              <Badge variant="secondary" className="text-xs">
-                Timer running on another task
-              </Badge>
-            ) : undefined
+            <div className="flex items-center gap-2 flex-wrap">
+              {canSendToReview && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSendToReview}
+                  disabled={updateTaskStatusMutation.isPending}
+                  data-testid="button-send-task-to-review"
+                >
+                  <Eye className="h-4 w-4 mr-1.5" />
+                  Send to Review
+                </Button>
+              )}
+              {canApproveReview && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleApproveReview}
+                  disabled={updateTaskStatusMutation.isPending}
+                  data-testid="button-approve-task-review"
+                >
+                  <Check className="h-4 w-4 mr-1.5" />
+                  Approve Review
+                </Button>
+              )}
+              {activeTimer && !isTimerOnThisTask ? (
+                <Badge variant="secondary" className="text-xs">
+                  Timer running on another task
+                </Badge>
+              ) : null}
+            </div>
           }
           className="sticky bottom-0 z-10"
         />

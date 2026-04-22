@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Pencil } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Pencil, Activity, Eye } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RichTextEditor } from "@/components/richtext";
+import { RichTextEditor, RichTextRenderer, toPlainText } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -22,6 +22,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { PrioritySelector, type PriorityLevel } from "@/components/forms/priority-selector";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { CommentThread } from "@/components/comment-thread";
+import { ActivityFeed } from "@/components/activity-feed";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -34,6 +35,7 @@ import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 import {
   AlertDialog,
@@ -153,6 +155,7 @@ export function SubtaskDetailDrawer({
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
   const [description, setDescription] = useState<string>(() => normalizeRichTextValue(subtask?.description));
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -163,6 +166,7 @@ export function SubtaskDetailDrawer({
   const [localDueDate, setLocalDueDate] = useState<Date | null>(
     subtask?.dueDate ? new Date(subtask.dueDate) : null
   );
+  const [showHistory, setShowHistory] = useState(false);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntryListItem | null>(null);
   const [timeEntryTitle, setTimeEntryTitle] = useState("");
@@ -389,7 +393,9 @@ export function SubtaskDetailDrawer({
     if (subtask) {
       setTitle(subtask.title);
       setDescription(normalizeRichTextValue(subtask.description));
+      setEditingDescription(!toPlainText(subtask.description).trim());
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
+      setShowHistory(false);
     }
   }, [subtask?.id, subtask?.description, subtask?.title, subtask?.dueDate]);
 
@@ -506,6 +512,11 @@ export function SubtaskDetailDrawer({
   const assigneeUsers: Partial<User>[] = isActualSubtask 
     ? subtaskAssignees.map((a) => a.user).filter(Boolean) as Partial<User>[]
     : childTaskAssignees.map((a) => a.user).filter(Boolean) as Partial<User>[];
+  const isSubtaskAssignee = isActualSubtask
+    ? subtaskAssignees.some((assignee) => assignee.userId === currentUser?.id || assignee.user?.id === currentUser?.id)
+    : childTaskAssignees.some((assignee) => assignee.userId === currentUser?.id || assignee.user?.id === currentUser?.id);
+  const canSendToReview = Boolean(subtask && isSubtaskAssignee && subtask.status !== "in_review" && subtask.status !== "done");
+  const canApproveReview = Boolean(subtask && hasTenantAdminAccess(currentUser?.role) && subtask.status === "in_review");
 
   const assignedTagIds = new Set(
     isActualSubtask
@@ -519,6 +530,28 @@ export function SubtaskDetailDrawer({
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
+  };
+
+  const handleSendToReview = async () => {
+    if (!subtask) return;
+    try {
+      await apiRequest("PATCH", `/api/subtasks/${subtask.id}`, { status: "in_review" });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Subtask sent to review", description: `"${subtask.title}" is ready for approval` });
+    } catch (error: any) {
+      toast({ title: "Failed to send subtask to review", description: error?.message, variant: "destructive" });
+    }
+  };
+
+  const handleApproveReview = async () => {
+    if (!subtask) return;
+    try {
+      await apiRequest("PATCH", `/api/subtasks/${subtask.id}`, { status: "in_progress", completed: false });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Review approved", description: `"${subtask.title}" returned to the assignee for final completion` });
+    } catch (error: any) {
+      toast({ title: "Failed to approve subtask review", description: error?.message, variant: "destructive" });
+    }
   };
 
   const openTimeEntryEditor = (entry: TimeEntryListItem) => {
@@ -669,8 +702,30 @@ export function SubtaskDetailDrawer({
                         Created by {creatorLabel}
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => setShowHistory((value) => !value)}
+                      data-testid="button-subtask-history"
+                    >
+                      <Activity className="h-3.5 w-3.5 mr-1" />
+                      {showHistory ? "Hide History" : "Subtask History"}
+                    </Button>
                   </div>
                 ) : null}
+
+                {showHistory && isActualSubtask && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <ActivityFeed
+                      entityType="subtask"
+                      entityId={subtask.id}
+                      height="240px"
+                      emptyTitle="No subtask history yet"
+                      emptyDescription="Subtask activity will appear here as changes are made"
+                    />
+                  </div>
+                )}
 
                 <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                   <div className="space-y-2">
@@ -701,6 +756,7 @@ export function SubtaskDetailDrawer({
                       <SelectContent>
                         <SelectItem value="todo">To Do</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="in_review">In Review</SelectItem>
                         <SelectItem value="blocked">Blocked</SelectItem>
                         <SelectItem value="done">Done</SelectItem>
                       </SelectContent>
@@ -809,15 +865,31 @@ export function SubtaskDetailDrawer({
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
-                <RichTextEditor
-                  key={`subtask-description-${subtask.id}-${subtask.updatedAt ? new Date(subtask.updatedAt).getTime() : "static"}`}
-                  value={description}
-                  onChange={handleDescriptionChange}
-                  placeholder="Add a description... Type @ to mention someone"
-                  minHeight="100px"
-                  users={mentionUsers}
-                  data-testid="textarea-subtask-description"
-                />
+                {editingDescription || !toPlainText(description).trim() ? (
+                  <RichTextEditor
+                    key={`subtask-description-${subtask.id}-${subtask.updatedAt ? new Date(subtask.updatedAt).getTime() : "static"}`}
+                    value={description}
+                    onChange={handleDescriptionChange}
+                    placeholder="Add a description... Type @ to mention someone"
+                    minHeight="100px"
+                    users={mentionUsers}
+                    autoFocus
+                    data-testid="textarea-subtask-description"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingDescription(true)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-left transition-premium hover:border-ring/40"
+                    data-testid="button-edit-subtask-description"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>Click to edit</span>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </div>
+                    <RichTextRenderer value={description} />
+                  </button>
+                )}
               </div>
 
               <Separator />
@@ -1138,10 +1210,36 @@ export function SubtaskDetailDrawer({
           showSave={true}
           onSave={handleSaveAll}
           saveLabel="Save Subtask"
-          showComplete={isActualSubtask}
+          showComplete={isActualSubtask && subtask.status !== "in_review"}
           onMarkComplete={handleMarkComplete}
           isCompleting={toggleCompleteMutation.isPending}
           completeLabel={(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
+          extraActions={
+            <div className="flex items-center gap-2 flex-wrap">
+              {canSendToReview && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSendToReview}
+                  data-testid="button-send-subtask-to-review"
+                >
+                  <Eye className="h-4 w-4 mr-1.5" />
+                  Send to Review
+                </Button>
+              )}
+              {canApproveReview && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleApproveReview}
+                  data-testid="button-approve-subtask-review"
+                >
+                  <Check className="h-4 w-4 mr-1.5" />
+                  Approve Review
+                </Button>
+              )}
+            </div>
+          }
           className="sticky bottom-0 z-10"
         />
         </div>

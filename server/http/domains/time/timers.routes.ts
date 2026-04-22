@@ -20,6 +20,7 @@ import {
   emitTimeEntryCreated,
 } from "./shared";
 import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssignments";
+import { logEntityActivity } from "../../../lib/taskActivity";
 
 const router = Router();
 
@@ -398,6 +399,29 @@ router.post("/timer/stop", async (req, res) => {
         },
         workspaceId,
       );
+
+      const entityType = timeEntry.subtaskId ? "subtask" : timeEntry.taskId ? "task" : null;
+      const entityId = timeEntry.subtaskId || timeEntry.taskId;
+      if (entityType && entityId) {
+        const entityTitle = timeEntry.subtaskId
+          ? (await storage.getSubtask(timeEntry.subtaskId))?.title || timeEntry.description || "Subtask"
+          : (await storage.getTask(timeEntry.taskId!))?.title || timeEntry.description || "Task";
+        await logEntityActivity({
+          storage,
+          workspaceId,
+          actorUserId: userId,
+          entityType: entityType as "task" | "subtask",
+          entityId,
+          entityTitle,
+          action: "time_logged",
+          metadata: {
+            projectId: timeEntry.projectId,
+            taskId: timeEntry.taskId,
+            subtaskId: timeEntry.subtaskId,
+            durationSeconds: timeEntry.durationSeconds,
+          },
+        }).catch(() => {});
+      }
     }
 
     if (timer.tenantId) {

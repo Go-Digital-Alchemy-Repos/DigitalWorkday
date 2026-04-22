@@ -9,6 +9,8 @@ type NotificationType =
   | "task_deadline"
   | "task_assigned"
   | "task_completed"
+  | "task_review_requested"
+  | "task_review_approved"
   | "comment_added"
   | "comment_mention"
   | "project_update"
@@ -62,6 +64,8 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
       task_deadline: "taskDeadline",
       task_assigned: "taskAssigned",
       task_completed: "taskCompleted",
+      task_review_requested: "taskStatusChanged",
+      task_review_approved: "taskStatusChanged",
       comment_added: "commentAdded",
       comment_mention: "commentMention",
       project_update: "projectUpdate",
@@ -175,6 +179,42 @@ export async function notifyTaskCompleted(
     "task_completed",
     `Task completed: ${taskTitle}`,
     `${completedByName} completed this task`,
+    { taskId },
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
+  );
+}
+
+export async function notifyTaskReviewRequested(
+  userId: string,
+  taskId: string,
+  taskTitle: string,
+  requestedByName: string,
+  context: NotificationContext
+): Promise<void> {
+  await createAndEmitNotification(
+    userId,
+    "task_review_requested",
+    `Ready for review: ${taskTitle}`,
+    `${requestedByName} sent this task for review`,
+    { taskId },
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
+  );
+}
+
+export async function notifyTaskReviewApproved(
+  userId: string,
+  taskId: string,
+  taskTitle: string,
+  approvedByName: string,
+  context: NotificationContext
+): Promise<void> {
+  await createAndEmitNotification(
+    userId,
+    "task_review_approved",
+    `Review approved: ${taskTitle}`,
+    `${approvedByName} approved this task and returned it for final completion`,
     { taskId },
     context,
     { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
