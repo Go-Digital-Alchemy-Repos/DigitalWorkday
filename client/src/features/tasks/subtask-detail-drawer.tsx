@@ -150,6 +150,10 @@ export function SubtaskDetailDrawer({
     }
     return mergeMentionUsers(tenantUsers, workspaceUsers);
   }, [availableUsers, tenantUsers, workspaceUsers]);
+  const displayedDescriptionSource = useMemo(() => {
+    const candidates = [subtask?.description, description];
+    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? subtask?.description ?? description;
+  }, [subtask?.description, description]);
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -393,7 +397,7 @@ export function SubtaskDetailDrawer({
     if (subtask) {
       setTitle(subtask.title);
       setDescription(normalizeRichTextValue(subtask.description));
-      setEditingDescription(!toPlainText(subtask.description).trim());
+      setEditingDescription(!toPlainText(subtask.description ?? description).trim());
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
       setShowHistory(false);
     }
@@ -865,7 +869,7 @@ export function SubtaskDetailDrawer({
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
-                {editingDescription || !toPlainText(description).trim() ? (
+                {editingDescription || !toPlainText(displayedDescriptionSource).trim() ? (
                   <RichTextEditor
                     key={`subtask-description-${subtask.id}-${subtask.updatedAt ? new Date(subtask.updatedAt).getTime() : "static"}`}
                     value={description}
@@ -888,7 +892,7 @@ export function SubtaskDetailDrawer({
                       <Pencil className="h-3.5 w-3.5" />
                     </div>
                     <div className="whitespace-pre-wrap text-sm text-foreground">
-                      {richTextToPlainText(subtask.description)}
+                      {richTextToPlainText(displayedDescriptionSource)}
                     </div>
                   </button>
                 )}

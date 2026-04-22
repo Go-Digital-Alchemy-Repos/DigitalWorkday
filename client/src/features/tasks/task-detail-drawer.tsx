@@ -147,6 +147,10 @@ export function TaskDetailDrawer({
     staleTime: 5000,
   });
   const task = liveTask || taskProp;
+  const displayedDescriptionSource = useMemo(() => {
+    const candidates = [task?.description, taskProp?.description, description];
+    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? task?.description ?? taskProp?.description ?? description;
+  }, [task?.description, taskProp?.description, description]);
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
@@ -811,7 +815,7 @@ export function TaskDetailDrawer({
     if (task) {
       setTitle(task.title);
       setDescription(normalizeRichTextValue(task.description));
-      setEditingDescription(!toPlainText(task.description).trim());
+      setEditingDescription(!toPlainText(task.description ?? taskProp?.description).trim());
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
       setShowHistory(false);
     }
@@ -1275,7 +1279,7 @@ export function TaskDetailDrawer({
 
           <FormFieldWrapper label="Description" className="overflow-hidden">
             <div className="max-w-full overflow-hidden">
-              {editingDescription || !toPlainText(description).trim() ? (
+              {editingDescription || !toPlainText(displayedDescriptionSource).trim() ? (
                 <RichTextEditor
                   key={`task-description-${task.id}-${task.updatedAt ? new Date(task.updatedAt).getTime() : "static"}`}
                   value={description}
@@ -1299,7 +1303,7 @@ export function TaskDetailDrawer({
                     <Pencil className="h-3.5 w-3.5" />
                   </div>
                   <div className="whitespace-pre-wrap text-sm text-foreground">
-                    {richTextToPlainText(task.description)}
+                    {richTextToPlainText(displayedDescriptionSource)}
                   </div>
                 </button>
               )}
