@@ -91,7 +91,6 @@ The factory automatically applies:
 | client-documents | /api/v1 | Document management |
 | automation | /api/v1 | Client stage automation |
 | assets | /api/v1 | Asset library |
-| control-center | /api/v1 | Control center widgets |
 | file-serve | /api/v1/files/serve | File serving |
 | projects-dashboard | /api/v1 | Project analytics and forecast |
 | tenant-data | /api/v1/tenant/data | Import/export, Asana import |

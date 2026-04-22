@@ -6,6 +6,7 @@ import { db } from "../db";
 import { config } from "../config";
 import { eq, and, desc, sql, count, inArray } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../lib/errors";
+import { canDeleteClientInTenant } from "../lib/clientDeleteAuthorization";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { requireAuth } from "../auth";
 import {
@@ -233,6 +234,10 @@ router.delete("/clients/:id", async (req, res) => {
     if (tenantId) {
       const client = await storage.getClientByIdAndTenant(req.params.id, tenantId);
       if (!client) throw AppError.notFound("Client");
+      const canDelete = await canDeleteClientInTenant(req, client.id, tenantId);
+      if (!canDelete) {
+        return sendError(res, AppError.forbidden("You do not have permission to delete this client"), req);
+      }
       workspaceId = client.workspaceId;
       const deleted = await storage.deleteClientWithTenant(req.params.id, tenantId);
       if (!deleted) throw AppError.notFound("Client");

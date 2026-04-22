@@ -6,6 +6,35 @@ function storageKey(clientId: string) {
   return `client-profile-section:${clientId}`;
 }
 
+export function normalizeClientProfileSection(
+  sectionId: string | null | undefined,
+  validIds: Set<string>,
+): string {
+  if (sectionId && validIds.has(sectionId)) {
+    return sectionId;
+  }
+  return "overview";
+}
+
+function writeSectionState(clientId: string, sectionId: string) {
+  if (clientId) {
+    try {
+      localStorage.setItem(storageKey(clientId), sectionId);
+    } catch {}
+  }
+
+  const currentPath = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+  if (sectionId === "overview") {
+    params.delete("section");
+  } else {
+    params.set("section", sectionId);
+  }
+  const qs = params.toString();
+  const newUrl = qs ? `${currentPath}?${qs}` : currentPath;
+  window.history.replaceState(null, "", newUrl);
+}
+
 export function useClientProfileSection(visibleSections: ClientProfileSection[], clientId: string) {
   const searchString = useSearch();
 
@@ -14,12 +43,13 @@ export function useClientProfileSection(visibleSections: ClientProfileSection[],
   const getInitialSection = (): string => {
     const params = new URLSearchParams(searchString);
     const fromUrl = params.get("section");
-    if (fromUrl && validIds.has(fromUrl)) return fromUrl;
+    const normalizedFromUrl = normalizeClientProfileSection(fromUrl, validIds);
+    if (normalizedFromUrl !== "overview" || fromUrl === "overview") return normalizedFromUrl;
 
     if (clientId) {
       try {
         const stored = localStorage.getItem(storageKey(clientId));
-        if (stored && validIds.has(stored)) return stored;
+        return normalizeClientProfileSection(stored, validIds);
       } catch {}
     }
 
@@ -29,40 +59,34 @@ export function useClientProfileSection(visibleSections: ClientProfileSection[],
   const [activeSection, setActiveSectionRaw] = useState(getInitialSection);
 
   useEffect(() => {
-    if (!validIds.has(activeSection)) {
+    if (normalizeClientProfileSection(activeSection, validIds) !== activeSection) {
       setActiveSectionRaw("overview");
+      writeSectionState(clientId, "overview");
     }
-  }, [validIds, activeSection]);
+  }, [validIds, activeSection, clientId]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchString);
     const fromUrl = params.get("section");
-    if (fromUrl && validIds.has(fromUrl) && fromUrl !== activeSection) {
+    if (!fromUrl) return;
+
+    const normalized = normalizeClientProfileSection(fromUrl, validIds);
+    if (normalized !== fromUrl) {
+      setActiveSectionRaw("overview");
+      writeSectionState(clientId, "overview");
+      return;
+    }
+
+    if (fromUrl !== activeSection) {
       setActiveSectionRaw(fromUrl);
     }
-  }, [searchString, validIds]);
+  }, [searchString, validIds, activeSection, clientId]);
 
   const setActiveSection = useCallback(
     (sectionId: string) => {
       if (!validIds.has(sectionId)) return;
       setActiveSectionRaw(sectionId);
-
-      if (clientId) {
-        try {
-          localStorage.setItem(storageKey(clientId), sectionId);
-        } catch {}
-      }
-
-      const currentPath = window.location.pathname;
-      const params = new URLSearchParams(window.location.search);
-      if (sectionId === "overview") {
-        params.delete("section");
-      } else {
-        params.set("section", sectionId);
-      }
-      const qs = params.toString();
-      const newUrl = qs ? `${currentPath}?${qs}` : currentPath;
-      window.history.replaceState(null, "", newUrl);
+      writeSectionState(clientId, sectionId);
     },
     [validIds, clientId],
   );

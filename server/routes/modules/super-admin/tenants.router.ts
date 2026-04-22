@@ -64,7 +64,6 @@ import {
   chatExportJobs,
   chatMessageReactions,
   tenancyWarnings,
-  controlCenterWidgetLayouts,
   clientStageHistory,
   clientStageAutomationRules,
   clientStageAutomationEvents,
@@ -543,7 +542,7 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(tenantAgreementAcceptances).where(eq(tenantAgreementAcceptances.tenantId, tenantId));
       await tx.delete(tenantAgreements).where(eq(tenantAgreements.tenantId, tenantId));
       await tx.delete(tenantIntegrations).where(eq(tenantIntegrations.tenantId, tenantId));
-      await tx.delete(controlCenterWidgetLayouts).where(eq(controlCenterWidgetLayouts.tenantId, tenantId));
+      await tx.execute(sql`DELETE FROM control_center_widget_layouts WHERE tenant_id = ${tenantId}`);
       await tx.delete(tenantSettings).where(eq(tenantSettings.tenantId, tenantId));
 
       await tx.delete(appSettings).where(eq(appSettings.tenantId, tenantId));

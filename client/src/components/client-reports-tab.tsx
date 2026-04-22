@@ -145,12 +145,12 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "control-center" }))}
+          onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "overview" }))}
           className="text-muted-foreground hover:text-foreground"
-          data-testid="button-back-to-control-center"
+          data-testid="button-back-to-overview"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Control Center
+          Back to Overview
         </Button>
       </div>
       <div className="flex flex-wrap items-end gap-3">

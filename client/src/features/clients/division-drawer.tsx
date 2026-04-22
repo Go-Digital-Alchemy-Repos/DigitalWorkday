@@ -376,10 +376,10 @@ export function DivisionDrawer({
                 size="sm"
                 onClick={() => onOpenChange(false)}
                 className="text-muted-foreground hover:text-foreground p-0 h-auto"
-                data-testid="button-back-to-control-center"
+                data-testid="button-back-to-divisions"
               >
                 <ArrowLeft className="h-4 w-4 mr-1" />
-                Back to Control Center
+                Back to Divisions
               </Button>
             </div>
             <DivisionDetailsForm form={form} colorOptions={colorOptions} />

@@ -23,6 +23,7 @@ import {
 import { UserRole } from "@shared/schema";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
+import { canDeleteClientInTenant } from "../../lib/clientDeleteAuthorization";
 import { getCurrentWorkspaceIdOrThrow } from "../../routes/helpers";
 
 function getCurrentUserId(req: Request): string {
@@ -259,6 +260,10 @@ router.delete("/:id", async (req, res) => {
       const client = await storage.getClientByIdAndTenant(req.params.id, tenantId);
       if (!client) {
         throw AppError.notFound("Client");
+      }
+      const canDelete = await canDeleteClientInTenant(req, client.id, tenantId);
+      if (!canDelete) {
+        throw AppError.forbidden("You do not have permission to delete this client");
       }
       workspaceId = client.workspaceId;
       const deleted = await storage.deleteClientWithTenant(req.params.id, tenantId);

@@ -6,8 +6,6 @@ export interface FeatureFlags {
   documentsUsingAssets: boolean;
   clientProfileLayoutV2: boolean;
   clientCommandPaletteV1: boolean;
-  clientControlCenterPremium: boolean;
-  clientControlCenterPinnedWidgets: boolean;
   notificationsGroupingV1: boolean;
   prefetchV1: boolean;
   virtualizationV1: boolean;
@@ -37,8 +35,6 @@ const ALL_OFF: FeatureFlags = {
   documentsUsingAssets: false,
   clientProfileLayoutV2: false,
   clientCommandPaletteV1: false,
-  clientControlCenterPremium: false,
-  clientControlCenterPinnedWidgets: false,
   notificationsGroupingV1: false,
   prefetchV1: false,
   virtualizationV1: false,

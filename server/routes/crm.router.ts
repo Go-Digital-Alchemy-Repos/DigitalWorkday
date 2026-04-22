@@ -12,6 +12,7 @@ import {
   clientFiles,
   userClientAccess,
   users,
+  tenants,
   projects,
   tasks,
   timeEntries,
@@ -68,6 +69,9 @@ router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, r
       ownerName = owner?.name || null;
     }
 
+    const [tenant] = await db.select({ ownerUserId: tenants.ownerUserId }).from(tenants)
+      .where(eq(tenants.id, tenantId)).limit(1);
+
     const totalHoursResult = await db.select({
       totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
     }).from(timeEntries)
@@ -101,6 +105,7 @@ router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, r
       client,
       crm: crmResponse,
       ownerName,
+      tenantOwnerUserId: tenant?.ownerUserId || null,
       counts: {
         projects: Number(projectCount?.value || 0),
         openTasks: allTaskCount - doneCount,

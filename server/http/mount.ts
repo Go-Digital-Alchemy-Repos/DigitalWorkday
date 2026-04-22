@@ -42,7 +42,6 @@ import clientDocumentsRouter from "./domains/clientDocuments.router";
 import automationRouter from "./domains/automation.router";
 import assetsRouter from "./domains/assets.router";
 import tenantDefaultDocsRouter from "./domains/tenantDefaultDocs.router";
-import controlCenterRouter from "./domains/controlCenter.router";
 import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
 import accessRouter from "./domains/access.router";
@@ -309,13 +308,6 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "tenant-default-docs",
     description: "Tenant Default Documents: canonical tenant-wide document library managed by admins.",
-  },
-  {
-    path: "/api/v1",
-    router: controlCenterRouter,
-    policy: "authTenant",
-    domain: "control-center",
-    description: "Control Center widget layout: GET/PUT pinned widget configuration per tenant/workspace.",
   },
   {
     path: "/api/v1/files/serve",

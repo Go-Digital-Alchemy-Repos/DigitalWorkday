@@ -121,6 +121,7 @@ interface CrmSummary {
     followUpNotes: string | null;
   } | null;
   ownerName?: string | null;
+  tenantOwnerUserId?: string | null;
   counts: {
     projects: number;
     openTasks: number;

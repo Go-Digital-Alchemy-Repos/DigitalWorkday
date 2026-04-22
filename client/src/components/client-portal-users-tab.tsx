@@ -325,12 +325,12 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "control-center" }))}
+          onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "overview" }))}
           className="text-muted-foreground hover:text-foreground p-0 h-auto"
-          data-testid="button-back-to-control-center"
+          data-testid="button-back-to-overview"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Control Center
+          Back to Overview
         </Button>
       </div>
       <div className="flex items-center justify-between">

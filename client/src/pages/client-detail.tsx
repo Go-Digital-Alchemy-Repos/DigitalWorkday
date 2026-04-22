@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { formatErrorForToast } from "@/lib/parseApiError";
 import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,8 +94,8 @@ import {
   KeyRound,
   Copy,
   Check,
-  Settings2,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -102,7 +103,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, CONTROL_CENTER_CHILD_IDS, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection } from "@/features/clients";
+import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -171,6 +172,93 @@ const createProjectSchema = z.object({
 });
 
 type CreateProjectForm = z.infer<typeof createProjectSchema>;
+
+function ClientDeleteDangerZone({
+  clientId,
+  clientName,
+  canDelete,
+}: {
+  clientId: string;
+  clientName: string;
+  canDelete: boolean;
+}) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async () => apiRequest("DELETE", `/api/clients/${clientId}`),
+    onSuccess: async () => {
+      toast({ title: "Client deleted successfully" });
+      await queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.removeQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.removeQueries({ queryKey: [`/api/crm/clients/${clientId}/summary`] });
+      navigate("/clients");
+    },
+    onError: (error: any) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
+    },
+  });
+
+  if (!canDelete) return null;
+
+  return (
+    <Card className="border-destructive/50 bg-destructive/5" data-testid="danger-zone-card">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-md bg-destructive/10">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </div>
+          <div>
+            <CardTitle className="text-sm font-medium text-destructive">Danger Zone</CardTitle>
+            <CardDescription>Permanent actions for this client record.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Delete this client</p>
+            <p className="text-xs text-muted-foreground">
+              This permanently deletes the client and removes its contacts and invites. Linked projects will stay in the system and be unlinked from this client.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteOpen(true)}
+            data-testid="button-delete-client"
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            Delete Client
+          </Button>
+        </div>
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Client</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{clientName}"? This permanently removes the client plus its contacts and invites. Linked projects will remain in the system and be unlinked from this client.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-delete-client">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteClientMutation.mutate()}
+                disabled={deleteClientMutation.isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-delete-client"
+              >
+                {deleteClientMutation.isPending ? "Deleting..." : "Delete Client"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
 
 function EditContactForm({
   contact,
@@ -311,26 +399,14 @@ export default function ClientDetailPage() {
     [crmFlags, featureFlags],
   );
 
-  const hasControlCenter = useMemo(
-    () => allVisibleSections.some((s) => s.id === "control-center"),
-    [allVisibleSections],
-  );
-
-  const tabBarSections = useMemo(
-    () =>
-      allVisibleSections.filter((s) => s.id !== "control-center" && !CONTROL_CENTER_CHILD_IDS.has(s.id)),
-    [allVisibleSections],
-  );
-
+  const tabBarSections = allVisibleSections;
   const visibleSections = allVisibleSections;
   const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
   const cmdPalette = useClientCommandPaletteState();
   const useV2Layout = featureFlags.clientProfileLayoutV2;
 
   useEffect(() => {
-    if (activeSection === "control-center") {
-      setActiveTab("control-center");
-    }
+    setActiveTab(activeSection);
   }, [activeSection]);
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
@@ -345,8 +421,19 @@ export default function ClientDetailPage() {
 
   const { data: crmSummary, isLoading: crmSummaryLoading } = useQuery<CrmSummary>({
     queryKey: [`/api/crm/clients/${clientId}/summary`],
-    enabled: !!clientId && crmFlags.client360,
+    enabled: !!clientId,
   });
+
+  const canDeleteClient = Boolean(
+    user &&
+      clientId &&
+      (
+        user.role === "super_user" ||
+        user.role === "admin" ||
+        crmSummary?.tenantOwnerUserId === user.id ||
+        crmSummary?.crm?.ownerUserId === user.id
+      ),
+  );
 
   // Fetch all clients for parent client selector (excluding the current client)
   const { data: allClients = [] } = useQuery<ClientWithContacts[]>({
@@ -668,6 +755,7 @@ export default function ClientDetailPage() {
     const handleNavigate = (e: any) => {
       if (e.detail) {
         setActiveSection(e.detail);
+        setActiveTab(e.detail);
       }
     };
     window.addEventListener("navigate-client-tab", handleNavigate);
@@ -822,18 +910,6 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="default"
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-            onClick={() => {
-              setActiveSection("control-center");
-              setActiveTab("control-center");
-            }}
-            data-testid="button-control-center-client"
-          >
-            <Settings2 className="h-4 w-4 mr-2" />
-            Control Center
-          </Button>
           <Button 
             variant="default" 
             className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
@@ -864,23 +940,10 @@ export default function ClientDetailPage() {
             />
           </div>
         )}
-
-        {activeSection === "control-center" && (
-          <div className="overflow-auto">
-            <ControlCenterSection
-              clientId={clientId || ""}
-              onNavigateTab={(tab) => {
-                setActiveTab(tab);
-                setActiveSection(tab);
-              }}
-            />
-          </div>
-        )}
-
         <Tabs value={useV2Layout ? activeSection : activeTab} onValueChange={(val) => {
           setActiveSection(val);
           setActiveTab(val);
-        }} className={activeSection === "control-center" ? "hidden" : "h-full"}>
+        }} className="h-full">
           {!useV2Layout && (
             <div className="px-6 py-4 border-b border-border">
               <TabsList>
@@ -933,17 +996,6 @@ export default function ClientDetailPage() {
                 )}
               </TabsList>
             </div>
-          )}
-
-          {!useV2Layout && (
-            <TabsContent value="control-center" className="overflow-auto">
-              <ControlCenterSection
-                clientId={clientId || ""}
-                onNavigateTab={(tab) => {
-                  setActiveTab(tab);
-                }}
-              />
-            </TabsContent>
           )}
 
           <TabsContent value="overview" className="p-6 overflow-auto">
@@ -1861,6 +1913,12 @@ export default function ClientDetailPage() {
                   </CardContent>
                 </Card>
               )}
+
+              <ClientDeleteDangerZone
+                clientId={clientId || ""}
+                clientName={client.companyName}
+                canDelete={canDeleteClient}
+              />
             </div>
           </TabsContent>
 
