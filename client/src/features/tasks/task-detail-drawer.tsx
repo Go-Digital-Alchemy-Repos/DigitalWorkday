@@ -147,10 +147,6 @@ export function TaskDetailDrawer({
     staleTime: 5000,
   });
   const task = liveTask || taskProp;
-  const displayedDescriptionSource = useMemo(() => {
-    const candidates = [task?.description, taskProp?.description, description];
-    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? task?.description ?? taskProp?.description ?? description;
-  }, [task?.description, taskProp?.description, description]);
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
@@ -177,6 +173,10 @@ export function TaskDetailDrawer({
   const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(() => normalizeRichTextValue(task?.description));
+  const displayedDescriptionSource = useMemo(() => {
+    const candidates = [task?.description, taskProp?.description, description];
+    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? task?.description ?? taskProp?.description ?? description;
+  }, [task?.description, taskProp?.description, description]);
   const [estimateMinutes, setEstimateMinutes] = useState<string>(
     task?.estimateMinutes ? String(task.estimateMinutes) : ""
   );

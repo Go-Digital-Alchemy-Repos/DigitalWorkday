@@ -150,10 +150,6 @@ export function SubtaskDetailDrawer({
     }
     return mergeMentionUsers(tenantUsers, workspaceUsers);
   }, [availableUsers, tenantUsers, workspaceUsers]);
-  const displayedDescriptionSource = useMemo(() => {
-    const candidates = [subtask?.description, description];
-    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? subtask?.description ?? description;
-  }, [subtask?.description, description]);
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -162,6 +158,10 @@ export function SubtaskDetailDrawer({
   const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
   const [description, setDescription] = useState<string>(() => normalizeRichTextValue(subtask?.description));
+  const displayedDescriptionSource = useMemo(() => {
+    const candidates = [subtask?.description, description];
+    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? subtask?.description ?? description;
+  }, [subtask?.description, description]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
