@@ -82,6 +82,8 @@ interface TenantUserDrawerProps {
   tenantName?: string;
 }
 
+const EDITABLE_USER_ROLES = ["admin", "project_manager", "employee", "client"] as const;
+
 export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }: TenantUserDrawerProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
@@ -378,7 +380,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       toast({ title: "Valid email is required", variant: "destructive" });
       return;
     }
-    if (!editRole || !["admin", "employee", "client"].includes(editRole)) {
+    if (!editRole || !EDITABLE_USER_ROLES.includes(editRole as (typeof EDITABLE_USER_ROLES)[number])) {
       toast({ title: "Please select a valid role", variant: "destructive" });
       return;
     }
@@ -568,6 +570,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="project_manager">Project Manager</SelectItem>
                               <SelectItem value="employee">Employee</SelectItem>
                               <SelectItem value="client">Client</SelectItem>
                             </SelectContent>

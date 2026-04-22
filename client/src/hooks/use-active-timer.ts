@@ -11,6 +11,7 @@ export interface ActiveTimer {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  subtaskId?: string | null;
   title: string | null;
   description: string | null;
   status: "running" | "paused";
@@ -21,6 +22,7 @@ export interface ActiveTimer {
   client?: { id: string; companyName: string } | null;
   project?: { id: string; name: string } | null;
   task?: { id: string; title: string } | null;
+  subtask?: { id: string; title: string } | null;
 }
 
 // Explicit timer UI states for clear user feedback

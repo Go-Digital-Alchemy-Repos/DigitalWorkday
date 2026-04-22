@@ -67,6 +67,7 @@ import {
   projectAccess,
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { db } from "../../db";
 import { eq, and, inArray, ilike, asc, desc } from "drizzle-orm";
 import { config } from "../../config";
@@ -122,7 +123,7 @@ router.get("/projects", async (req: Request, res: Response) => {
     const workspaceId = getCurrentWorkspaceId(req);
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
+    const isAdmin = hasTenantAdminAccess(user?.role);
     
     if (tenantId) {
       if (config.features.enableProjectsSqlFiltering) {
@@ -499,7 +500,7 @@ router.delete("/projects/:id", async (req: Request, res: Response) => {
       return sendError(res, AppError.unauthorized("User not found"), req);
     }
 
-    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    const isAdmin = hasTenantAdminAccess(currentUser.role);
     if (!isAdmin) {
       return sendError(res, AppError.forbidden("Only admins can delete projects"), req);
     }
@@ -702,7 +703,7 @@ router.post("/projects/backfill-membership", async (req: Request, res: Response)
     }
 
     const currentUser = req.user as any;
-    if (currentUser.role !== "admin") {
+    if (!hasTenantAdminAccess(currentUser.role)) {
       return sendError(res, AppError.forbidden("Only admins can backfill project membership"), req);
     }
 

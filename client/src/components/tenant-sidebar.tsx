@@ -71,6 +71,7 @@ import { TeamDrawer } from "@/features/teams";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/schema";
+import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/roles";
 
 interface UiPreferences {
   sidebarProjectOrder?: string[] | null;
@@ -158,6 +159,7 @@ const mainNavItems = [
   { title: "My Time", url: "/my-time", icon: Clock, color: "text-rose-500" },
   // { title: "My Calendar", url: "/my-calendar", icon: CalendarDays },
   { title: "Projects", url: "/projects", icon: FolderKanban, color: "text-amber-500" },
+  { title: "PM Dashboard", url: "/pm-dashboard", icon: BarChart3, color: "text-cyan-500", adminOnly: true },
   { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
   // { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
@@ -179,8 +181,9 @@ export function TenantSidebar() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { appName, iconUrl, logoUrl } = useTenantTheme();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasTenantAdminAccess(user?.role);
   const isSuperUser = user?.role === "super_user";
+  const showPmDashboard = hasProjectManagerDashboardAccess(user?.role);
 
   const { data: workspace } = useQuery<Workspace>({
     queryKey: ["/api/workspaces/current"],
@@ -402,7 +405,7 @@ export function TenantSidebar() {
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {mainNavItems.map((item) => (
+                  {mainNavItems.filter((item: any) => !item.adminOnly || showPmDashboard).map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild

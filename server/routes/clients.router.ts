@@ -22,6 +22,7 @@ import {
   clientNoteCategories,
   users,
 } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import {
   getCurrentUserId,
   getCurrentWorkspaceId,
@@ -561,7 +562,7 @@ router.get("/v1/divisions/:divisionId/members", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
+    const isAdmin = hasTenantAdminAccess(user?.role);
     
     if (!isAdmin) {
       const isMember = await storage.isDivisionMember(divisionId, userId);

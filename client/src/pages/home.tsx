@@ -32,6 +32,7 @@ import { TaskProgressBar } from "@/components/task-progress-bar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 interface AnalyticsSummary {
   activeProjects: number;
@@ -715,7 +716,7 @@ export default function Home() {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(user?.role);
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],

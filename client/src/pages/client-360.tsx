@@ -99,6 +99,7 @@ import {
 } from "@/components/ui/select";
 import { ClientReportsTab } from "@/components/client-reports-tab";
 import { useAuth } from "@/lib/auth";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 interface CrmSummary {
   client: {
@@ -1370,7 +1371,7 @@ interface EffectivePermissions {
 function MessagesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const { user: authUser } = useAuth();
-  const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(authUser?.role);
 
   const { data: permsData } = useQuery<{ permissions: any; effective: EffectivePermissions }>({
     queryKey: ["/api/crm/message-permissions"],

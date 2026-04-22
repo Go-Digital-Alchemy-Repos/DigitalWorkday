@@ -69,6 +69,7 @@ export const TimerStatus = {
 export const UserRole = {
   SUPER_USER: "super_user",
   ADMIN: "admin",
+  PROJECT_MANAGER: "project_manager",
   EMPLOYEE: "employee",
   CLIENT: "client",
 } as const;
@@ -1297,6 +1298,7 @@ export const activeTimers = pgTable("active_timers", {
   clientId: varchar("client_id").references(() => clients.id),
   projectId: varchar("project_id").references(() => projects.id),
   taskId: varchar("task_id").references(() => tasks.id),
+  subtaskId: varchar("subtask_id").references(() => subtasks.id),
   title: text("title"),
   description: text("description"),
   status: text("status").notNull().default("running"),
@@ -1307,6 +1309,7 @@ export const activeTimers = pgTable("active_timers", {
 }, (table) => [
   uniqueIndex("active_timers_user_unique").on(table.userId),
   index("active_timers_tenant_idx").on(table.tenantId),
+  index("active_timers_subtask_idx").on(table.subtaskId),
 ]);
 
 // Projects table
@@ -2936,7 +2939,7 @@ export const insertInvitationSchema = createInsertSchema(invitations).omit({
   id: true,
   createdAt: true,
 }).extend({
-  role: z.enum([UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
+  role: z.enum([UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
   status: z.enum([InvitationStatus.PENDING, InvitationStatus.ACCEPTED, InvitationStatus.EXPIRED, InvitationStatus.REVOKED]).default(InvitationStatus.PENDING),
 });
 
@@ -3040,7 +3043,7 @@ export const insertChatExportJobSchema = createInsertSchema(chatExportJobs).omit
 
 // Enhanced user insert schema with role validation
 export const insertUserWithRoleSchema = insertUserSchema.extend({
-  role: z.enum([UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
+  role: z.enum([UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
 });
 
 // Types
@@ -3306,6 +3309,7 @@ export type TimeEntryWithRelations = TimeEntry & {
   client?: Client;
   project?: Project;
   task?: Task;
+  subtask?: Subtask;
 };
 
 export type ActiveTimerWithRelations = ActiveTimer & {
@@ -3313,6 +3317,7 @@ export type ActiveTimerWithRelations = ActiveTimer & {
   client?: Client;
   project?: Project;
   task?: Task;
+  subtask?: Subtask;
 };
 
 // User Management & Auth Types

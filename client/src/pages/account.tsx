@@ -11,6 +11,7 @@ import { WorkspacesTab } from "@/components/settings/workspaces-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
 import { DataTab } from "@/components/settings/data-tab";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 const ACCOUNT_TABS = [
   { id: "profile", label: "Profile", icon: Building2 },
@@ -24,14 +25,13 @@ export default function AccountPage() {
   const [location, setLocation] = useLocation();
   const { user, isLoading } = useAuth();
 
-  const isAdmin = user?.role === "admin";
-  const isSuperUser = user?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(user?.role);
 
   if (isLoading) {
     return <PageSkeleton variant="compact" />;
   }
 
-  if (!isAdmin && !isSuperUser) {
+  if (!isAdmin) {
     return <Redirect to="/" />;
   }
 

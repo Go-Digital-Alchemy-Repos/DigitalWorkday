@@ -23,6 +23,7 @@ import {
   passwordResetTokens,
   userUiPreferences,
 } from '@shared/schema';
+import { getWorkspaceMembershipRoleForUserRole } from '@shared/roles';
 import { cleanupUserReferences } from '../../../utils/userDeletion';
 import { tenantIntegrationService } from '../../../services/tenantIntegrations';
 import Mailgun from 'mailgun.js';
@@ -73,7 +74,7 @@ const createUserSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["admin", "employee"]).default("employee"),
+  role: z.enum(["admin", "project_manager", "employee"]).default("employee"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   isActive: z.boolean().default(true),
 });
@@ -113,7 +114,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users", requireSuperUser, async (req,
     await db.insert(workspaceMembers).values({
       workspaceId: primaryWorkspaceId,
       userId: newUser.id,
-      role: data.role === "admin" ? "admin" : "member",
+      role: getWorkspaceMembershipRoleForUserRole(data.role),
     }).onConflictDoNothing();
 
     if (data.role !== "client") {
@@ -157,7 +158,7 @@ const provisionUserSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1, "First name is required").optional(),
   lastName: z.string().min(1, "Last name is required").optional(),
-  role: z.enum(["admin", "employee", "client"]).default("employee"),
+  role: z.enum(["admin", "project_manager", "employee", "client"]).default("employee"),
   activateNow: z.boolean().default(true),
   method: z.enum(["SET_PASSWORD", "RESET_LINK"]),
   password: z.string().min(8, "Password must be at least 8 characters").optional(),
@@ -248,7 +249,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/provision", requireSuperUser, a
       await db.insert(workspaceMembers).values({
         workspaceId: primaryWorkspaceId,
         userId: user.id,
-        role: data.role === "admin" ? "admin" : "member",
+        role: getWorkspaceMembershipRoleForUserRole(data.role),
       }).onConflictDoNothing();
       
       await recordTenantAuditEvent(
@@ -500,7 +501,7 @@ const updateUserSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().optional(),
   name: z.string().min(1).optional(),
-  role: z.enum(["admin", "employee", "client"]).optional(),
+  role: z.enum(["admin", "project_manager", "employee", "client"]).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -535,6 +536,11 @@ tenantUsersRouter.patch("/tenants/:tenantId/users/:userId", requireSuperUser, as
     if (data.isActive !== undefined) updates.isActive = data.isActive;
     
     const updatedUser = await storage.updateUserWithTenant(userId, tenantId, updates);
+    if (data.role) {
+      await db.update(workspaceMembers)
+        .set({ role: getWorkspaceMembershipRoleForUserRole(data.role) })
+        .where(eq(workspaceMembers.userId, userId));
+    }
     
     await recordTenantAuditEvent(
       tenantId,
@@ -1070,7 +1076,7 @@ const csvUserSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  role: z.enum(["admin", "employee"]).optional().default("employee"),
+  role: z.enum(["admin", "project_manager", "employee"]).optional().default("employee"),
 });
 
 const bulkImportSchema = z.object({

@@ -19,6 +19,7 @@ import {
   emitTimerUpdated,
   emitTimeEntryCreated,
 } from "./shared";
+import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssignments";
 
 const router = Router();
 
@@ -78,13 +79,21 @@ router.post("/timer/start", async (req, res) => {
       throw AppError.conflict("You already have an active timer. Stop it before starting a new one.");
     }
 
+    const assignment = await normalizeTimeTrackingAssignment(
+      storage,
+      req.body.projectId || null,
+      req.body.taskId || null,
+      req.body.subtaskId || null,
+    );
+
     const now = new Date();
     const data = insertActiveTimerSchema.parse({
       workspaceId: getCurrentWorkspaceId(req),
       userId: userId,
       clientId: req.body.clientId || null,
       projectId: req.body.projectId || null,
-      taskId: req.body.taskId || null,
+      taskId: assignment.taskId,
+      subtaskId: assignment.subtaskId,
       title: req.body.title || null,
       description: req.body.description || null,
       status: "running",
@@ -113,6 +122,7 @@ router.post("/timer/start", async (req, res) => {
         clientId: timer.clientId,
         projectId: timer.projectId,
         taskId: timer.taskId,
+        subtaskId: timer.subtaskId,
         description: timer.description,
         status: timer.status as "running" | "paused",
         elapsedSeconds: timer.elapsedSeconds,
@@ -259,8 +269,19 @@ router.patch("/timer/current", async (req, res) => {
     const allowedUpdates: Partial<ActiveTimer> = {};
     if ("clientId" in req.body) allowedUpdates.clientId = req.body.clientId;
     if ("projectId" in req.body) allowedUpdates.projectId = req.body.projectId;
-    if ("taskId" in req.body) allowedUpdates.taskId = req.body.taskId;
     if ("description" in req.body) allowedUpdates.description = req.body.description;
+    if ("title" in req.body) allowedUpdates.title = req.body.title;
+
+    if ("projectId" in req.body || "taskId" in req.body || "subtaskId" in req.body) {
+      const assignment = await normalizeTimeTrackingAssignment(
+        storage,
+        "projectId" in req.body ? req.body.projectId : timer.projectId,
+        "taskId" in req.body ? req.body.taskId : timer.taskId,
+        "subtaskId" in req.body ? req.body.subtaskId : timer.subtaskId,
+      );
+      allowedUpdates.taskId = assignment.taskId;
+      allowedUpdates.subtaskId = assignment.subtaskId;
+    }
 
     let updated;
     if (timer.tenantId) {
@@ -314,20 +335,27 @@ router.post("/timer/stop", async (req, res) => {
       finalElapsedSeconds += additionalSeconds;
     }
 
-    const { discard, scope, title, description, clientId, projectId, taskId } = req.body;
+    const { discard, scope, title, description, clientId, projectId, taskId, subtaskId } = req.body;
 
     let timeEntryId: string | null = null;
 
     if (!discard && finalElapsedSeconds > 0) {
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - finalElapsedSeconds * 1000);
+      const assignment = await normalizeTimeTrackingAssignment(
+        storage,
+        projectId !== undefined ? projectId : timer.projectId,
+        taskId !== undefined ? taskId : timer.taskId,
+        subtaskId !== undefined ? subtaskId : timer.subtaskId,
+      );
 
       const entryData = {
         workspaceId,
         userId,
         clientId: clientId !== undefined ? clientId : timer.clientId,
         projectId: projectId !== undefined ? projectId : timer.projectId,
-        taskId: taskId !== undefined ? taskId : timer.taskId,
+        taskId: assignment.taskId,
+        subtaskId: assignment.subtaskId,
         title: title !== undefined ? title : null,
         description: description !== undefined ? description : timer.description,
         startTime,
@@ -359,6 +387,7 @@ router.post("/timer/stop", async (req, res) => {
           clientId: timeEntry.clientId,
           projectId: timeEntry.projectId,
           taskId: timeEntry.taskId,
+          subtaskId: timeEntry.subtaskId,
           description: timeEntry.description,
           startTime: timeEntry.startTime,
           endTime: timeEntry.endTime,

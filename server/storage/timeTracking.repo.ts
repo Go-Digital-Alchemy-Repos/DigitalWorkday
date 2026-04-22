@@ -2,8 +2,8 @@ import {
   type TimeEntry, type InsertTimeEntry,
   type ActiveTimer, type InsertActiveTimer,
   type TimeEntryWithRelations, type ActiveTimerWithRelations,
-  type User, type Client, type Project, type Task,
-  timeEntries, activeTimers, users, clients, projects, tasks,
+  type User, type Client, type Project, type Task, type Subtask,
+  timeEntries, activeTimers, users, clients, projects, tasks, subtasks,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
@@ -25,18 +25,21 @@ async function batchEnrichEntries(entries: TimeEntry[]): Promise<TimeEntryWithRe
   const clientIds = collectUniqueIds(entries, "clientId");
   const projectIds = collectUniqueIds(entries, "projectId");
   const taskIds = collectUniqueIds(entries, "taskId");
+  const subtaskIds = collectUniqueIds(entries, "subtaskId");
 
-  const [userList, clientList, projectList, taskList] = await Promise.all([
+  const [userList, clientList, projectList, taskList, subtaskList] = await Promise.all([
     userIds.length > 0 ? db.select().from(users).where(inArray(users.id, userIds)) : [],
     clientIds.length > 0 ? db.select().from(clients).where(inArray(clients.id, clientIds)) : [],
     projectIds.length > 0 ? db.select().from(projects).where(inArray(projects.id, projectIds)) : [],
     taskIds.length > 0 ? db.select().from(tasks).where(inArray(tasks.id, taskIds)) : [],
+    subtaskIds.length > 0 ? db.select().from(subtasks).where(inArray(subtasks.id, subtaskIds)) : [],
   ]);
 
   const userMap = new Map(userList.map(u => [u.id, u]));
   const clientMap = new Map(clientList.map(c => [c.id, c]));
   const projectMap = new Map(projectList.map(p => [p.id, p]));
   const taskMap = new Map(taskList.map(t => [t.id, t]));
+  const subtaskMap = new Map(subtaskList.map((s: Subtask) => [s.id, s]));
 
   return entries.map(entry => {
     const enriched: TimeEntryWithRelations = { ...entry };
@@ -44,6 +47,7 @@ async function batchEnrichEntries(entries: TimeEntry[]): Promise<TimeEntryWithRe
     if (entry.clientId) enriched.client = clientMap.get(entry.clientId);
     if (entry.projectId) enriched.project = projectMap.get(entry.projectId);
     if (entry.taskId) enriched.task = taskMap.get(entry.taskId);
+    if (entry.subtaskId) enriched.subtask = subtaskMap.get(entry.subtaskId);
     return enriched;
   });
 }
@@ -59,6 +63,7 @@ export class TimeTrackingRepository {
     clientId?: string;
     projectId?: string;
     taskId?: string;
+    subtaskId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
     endDate?: Date;
@@ -76,6 +81,9 @@ export class TimeTrackingRepository {
     }
     if (filters?.taskId) {
       conditions.push(eq(timeEntries.taskId, filters.taskId));
+    }
+    if (filters?.subtaskId) {
+      conditions.push(eq(timeEntries.subtaskId, filters.subtaskId));
     }
     if (filters?.scope) {
       conditions.push(eq(timeEntries.scope, filters.scope));
@@ -145,6 +153,10 @@ export class TimeTrackingRepository {
       const [task] = await db.select().from(tasks).where(eq(tasks.id, timer.taskId));
       if (task) enriched.task = task;
     }
+    if (timer.subtaskId) {
+      const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, timer.subtaskId));
+      if (subtask) enriched.subtask = subtask;
+    }
     
     return enriched;
   }
@@ -178,6 +190,7 @@ export class TimeTrackingRepository {
     clientId?: string;
     projectId?: string;
     taskId?: string;
+    subtaskId?: string;
     divisionId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
@@ -199,6 +212,9 @@ export class TimeTrackingRepository {
     }
     if (filters?.taskId) {
       conditions.push(eq(timeEntries.taskId, filters.taskId));
+    }
+    if (filters?.subtaskId) {
+      conditions.push(eq(timeEntries.subtaskId, filters.subtaskId));
     }
     if (filters?.divisionId) {
       conditions.push(eq(timeEntries.divisionId, filters.divisionId));
@@ -272,6 +288,10 @@ export class TimeTrackingRepository {
     if (timer.taskId) {
       const [task] = await db.select().from(tasks).where(eq(tasks.id, timer.taskId));
       if (task) enriched.task = task;
+    }
+    if (timer.subtaskId) {
+      const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, timer.subtaskId));
+      if (subtask) enriched.subtask = subtask;
     }
     
     return enriched;

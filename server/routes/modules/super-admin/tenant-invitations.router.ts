@@ -3,6 +3,7 @@ import { requireSuperUser } from '../../../middleware/tenantContext';
 import { storage } from '../../../storage';
 import { db } from '../../../db';
 import { invitations, users, workspaceMembers } from '@shared/schema';
+import { getWorkspaceMembershipRoleForUserRole } from '@shared/roles';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { recordTenantAuditEvent } from '../../superAdmin';
@@ -126,7 +127,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/activ
       await tx.insert(workspaceMembers).values({
         workspaceId: primaryWorkspaceId,
         userId: createdUser.id,
-        role: invitation.role === "admin" ? "admin" : "member",
+        role: getWorkspaceMembershipRoleForUserRole(invitation.role),
       }).onConflictDoNothing();
       
       // Mark invitation as accepted

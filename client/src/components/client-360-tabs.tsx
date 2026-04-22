@@ -90,6 +90,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
 import { useAuth } from "@/lib/auth";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 export interface CrmSummary {
   client: {
@@ -1602,7 +1603,7 @@ export function ApprovalsTab({ clientId }: { clientId: string }) {
 export function MessagesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const { user: authUser } = useAuth();
-  const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(authUser?.role);
 
   const { data: permsData } = useQuery<{ permissions: any; effective: EffectivePermissions }>({
     queryKey: ["/api/crm/message-permissions"],

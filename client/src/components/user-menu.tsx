@@ -13,31 +13,18 @@ import { LogOut, User, Shield, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { getUserRoleLabel } from "@shared/roles";
 
 function getRoleIcon(role: string) {
   switch (role) {
     case "super_user":
     case "admin":
+    case "project_manager":
       return <Shield className="h-3 w-3" />;
     case "client":
       return <Users className="h-3 w-3" />;
     default:
       return <User className="h-3 w-3" />;
-  }
-}
-
-function getRoleLabel(role: string) {
-  switch (role) {
-    case "super_user":
-      return "Super Admin";
-    case "admin":
-      return "Admin";
-    case "client":
-      return "Client";
-    case "employee":
-      return "Employee";
-    default:
-      return "Employee";
   }
 }
 
@@ -73,7 +60,7 @@ export function UserMenu() {
             <div className="pt-1">
               <Badge variant="secondary" className="text-xs gap-1">
                 {getRoleIcon(user.role)}
-                {getRoleLabel(user.role)}
+                {getUserRoleLabel(user.role)}
               </Badge>
             </div>
           </div>

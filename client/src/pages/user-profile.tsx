@@ -17,19 +17,16 @@ import { useTheme } from "@/lib/theme-provider";
 import { type ThemePack } from "@/theme/themePacks";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { getUserRoleLabel } from "@shared/roles";
 
 function getRoleLabel(role: string) {
-  switch (role) {
-    case "admin": return "Administrator";
-    case "super_user": return "Super Admin";
-    case "client": return "Client";
-    default: return "Employee";
-  }
+  return getUserRoleLabel(role);
 }
 
 function getRoleIcon(role: string) {
   switch (role) {
     case "admin":
+    case "project_manager":
     case "super_user":
       return <Shield className="h-4 w-4" />;
     case "client":

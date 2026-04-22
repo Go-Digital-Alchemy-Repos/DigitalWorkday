@@ -38,6 +38,7 @@ import { trackChunkLoad } from "@/lib/perf";
 const Home = lazy(trackChunkLoad("Home", () => import("@/pages/home")));
 const MyTasks = lazy(trackChunkLoad("MyTasks", () => import("@/pages/my-tasks")));
 const ProjectsDashboard = lazy(trackChunkLoad("Projects", () => import("@/pages/projects-dashboard")));
+const PmDashboard = lazy(trackChunkLoad("PmDashboard", () => import("@/pages/pm-dashboard")));
 const ProjectPage = lazy(trackChunkLoad("Project", () => import("@/pages/project")));
 const ClientsPage = lazy(trackChunkLoad("Clients", () => import("@/pages/clients")));
 const ClientDetailPage = lazy(trackChunkLoad("ClientDetail", () => import("@/pages/client-detail")));
@@ -84,6 +85,9 @@ function TenantRouter() {
         </Route>
         <Route path="/projects">
           {() => <TenantRouteGuard component={ProjectsDashboard} />}
+        </Route>
+        <Route path="/pm-dashboard">
+          {() => <TenantRouteGuard component={PmDashboard} />}
         </Route>
         <Route path="/projects/:id">
           {() => <TenantRouteGuard component={ProjectPage} />}

@@ -72,6 +72,7 @@ type ActiveTimer = {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  subtaskId?: string | null;
   description: string | null;
   status: "running" | "paused";
   elapsedSeconds: number;
@@ -89,6 +90,7 @@ type TimeEntry = {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  subtaskId?: string | null;
   title: string | null;
   description: string | null;
   startTime: string;
@@ -641,6 +643,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       clientId: string | null;
       projectId: string | null;
       taskId: string | null;
+      subtaskId: string | null;
       scope: string;
     }) => apiRequest("POST", "/api/time-entries", data),
     onSuccess: () => {
@@ -676,7 +679,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       return;
     }
     const startTime = new Date(`${date}T09:00:00`);
-    const finalTaskId = subtaskId || taskId;
     createMutation.mutate({
       title,
       description,
@@ -684,7 +686,8 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       startTime: startTime.toISOString(),
       clientId,
       projectId,
-      taskId: finalTaskId,
+      taskId,
+      subtaskId,
       scope,
     });
   };
@@ -938,7 +941,7 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
       setDivisionId(null);
       setProjectId(entry.projectId);
       setTaskId(entry.taskId);
-      setSubtaskId(null);
+      setSubtaskId(entry.subtaskId || null);
       setTitle(entry.title || "");
       setDescription(entry.description || "");
       setScope(entry.scope);
@@ -1012,6 +1015,7 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
       clientId: string | null;
       projectId: string | null;
       taskId: string | null;
+      subtaskId: string | null;
       title: string | null;
       description: string | null;
       startTime: string;
@@ -1111,12 +1115,11 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
       return;
     }
 
-    const finalTaskId = subtaskId || taskId;
-
     updateMutation.mutate({
       clientId,
       projectId,
-      taskId: finalTaskId,
+      taskId,
+      subtaskId,
       title: title.trim() || null,
       description: description || null,
       startTime: calculatedStartTime.toISOString(),

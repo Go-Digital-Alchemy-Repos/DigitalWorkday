@@ -4,11 +4,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { UsersRound } from "lucide-react";
 import { TeamTab } from "@/components/settings/team-tab";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 export default function UserManagerPage() {
   const { user, isLoading } = useAuth();
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasTenantAdminAccess(user?.role);
   const isSuperUser = user?.role === "super_user";
   const isEmployee = user?.role === "employee";
   const isTenantMember = isAdmin || isEmployee || isSuperUser;

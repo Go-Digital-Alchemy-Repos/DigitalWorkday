@@ -53,11 +53,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { ProjectDrawer } from "@/features/projects";
 import type { Project, Team, Workspace } from "@shared/schema";
+import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/roles";
 
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home, color: "text-sky-500" },
   { title: "My Tasks", url: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
   { title: "Projects", url: "/projects", icon: FolderKanban, color: "text-amber-500" },
+  { title: "PM Dashboard", url: "/pm-dashboard", icon: BarChart3, color: "text-cyan-500", adminOnly: true },
   { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
   { title: "My Time", url: "/my-time", icon: Clock, color: "text-rose-500" },
   { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
@@ -68,8 +70,9 @@ export function AppSidebar() {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const { user } = useAuth();
   const { appName, iconUrl, logoUrl } = useTenantTheme();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasTenantAdminAccess(user?.role);
   const isSuperUser = user?.role === "super_user";
+  const showPmDashboard = hasProjectManagerDashboardAccess(user?.role);
   const crmEnabled = useAnyCrmEnabled();
 
   const { data: workspace } = useQuery<Workspace>({
@@ -113,7 +116,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {mainNavItems.filter((item: any) => !item.adminOnly || showPmDashboard).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

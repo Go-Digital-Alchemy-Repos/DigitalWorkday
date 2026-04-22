@@ -9,9 +9,9 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
-import request from "supertest";
 import { requestIdMiddleware } from "../middleware/requestId";
 import session from "express-session";
+import { request } from "./httpHarness";
 
 function createMockApp(userRole: string | null = null) {
   const app = express();

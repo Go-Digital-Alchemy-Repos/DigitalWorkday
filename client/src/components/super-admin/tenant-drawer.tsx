@@ -291,7 +291,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFirstName, setInviteFirstName] = useState("");
   const [inviteLastName, setInviteLastName] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "employee">("admin");
+  const [inviteRole, setInviteRole] = useState<"admin" | "project_manager" | "employee">("admin");
   const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
 
   const [brandingData, setBrandingData] = useState<TenantSettings>({});
@@ -403,7 +403,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   });
 
   const inviteAdminMutation = useMutation({
-    mutationFn: async (data: { email: string; firstName?: string; lastName?: string; role?: "admin" | "employee"; inviteType: "link" | "email" }) => {
+    mutationFn: async (data: { email: string; firstName?: string; lastName?: string; role?: "admin" | "project_manager" | "employee"; inviteType: "link" | "email" }) => {
       const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/invite-admin`, data);
       return res.json();
     },
@@ -703,12 +703,13 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="wizard-invite-role">Role</Label>
-                      <Select value={inviteRole} onValueChange={(v: "admin" | "employee") => setInviteRole(v)}>
+                      <Select value={inviteRole} onValueChange={(v: "admin" | "project_manager" | "employee") => setInviteRole(v)}>
                         <SelectTrigger id="wizard-invite-role" data-testid="select-wizard-invite-role">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="project_manager">Project Manager</SelectItem>
                           <SelectItem value="employee">Employee</SelectItem>
                         </SelectContent>
                       </Select>

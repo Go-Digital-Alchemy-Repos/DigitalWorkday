@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { getSocket } from "@/lib/realtime/socket";
 import { useChatDrawer } from "@/contexts/chat-drawer-context";
 import { Button } from "@/components/ui/button";
@@ -629,7 +630,7 @@ export function GlobalChatDrawer() {
                 {messages.map((message) => {
                   const isDeleted = !!message.deletedAt;
                   const isOwnMessage = message.authorUserId === user?.id;
-                  const isTenantAdmin = user?.role === "admin";
+                  const isTenantAdmin = hasTenantAdminAccess(user?.role);
                   const isEditing = editingMessageId === message.id;
                   const canEdit = isOwnMessage && !isDeleted;
                   const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted;

@@ -522,11 +522,9 @@ export default function MyTasks() {
     enabled: !!pendingCompleteTask,
   });
 
-  // Get taskId from URL for deep linking
-  const urlTaskId = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('taskId');
-  }, []);
+  // Read the current task deep link on each render so closing the drawer
+  // after a replaceState does not reopen it from a stale memoized value.
+  const urlTaskId = new URLSearchParams(window.location.search).get('taskId');
 
   // Fetch individual task for deep linking if not in the main tasks list
   const { data: linkedTask } = useQuery<TaskWithRelations>({

@@ -16,6 +16,7 @@ import {
   emitTimeEntryDeleted,
 } from "./shared";
 import { perfLog } from "../../../lib/queryDebug";
+import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssignments";
 
 const router = Router();
 
@@ -24,13 +25,14 @@ router.get("/time-entries", async (req, res) => {
     const t0 = Date.now();
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
-    const { userId, clientId, projectId, taskId, scope, startDate, endDate } = req.query;
+    const { userId, clientId, projectId, taskId, subtaskId, scope, startDate, endDate } = req.query;
 
     const filters: any = {};
     if (userId) filters.userId = userId as string;
     if (clientId) filters.clientId = clientId as string;
     if (projectId) filters.projectId = projectId as string;
     if (taskId) filters.taskId = taskId as string;
+    if (subtaskId) filters.subtaskId = subtaskId as string;
     if (scope) filters.scope = scope as "in_scope" | "out_of_scope";
     if (startDate) filters.startDate = new Date(startDate as string);
     if (endDate) filters.endDate = new Date(endDate as string);
@@ -220,6 +222,12 @@ router.post("/time-entries", async (req, res) => {
     let duration = durationSeconds;
     let start = startTime ? new Date(startTime) : new Date();
     let end = endTime ? new Date(endTime) : null;
+    const assignment = await normalizeTimeTrackingAssignment(
+      storage,
+      rest.projectId || null,
+      rest.taskId || null,
+      rest.subtaskId || null,
+    );
 
     if (!duration && start && end) {
       duration = Math.floor((end.getTime() - start.getTime()) / 1000);
@@ -231,6 +239,8 @@ router.post("/time-entries", async (req, res) => {
       ...rest,
       workspaceId,
       userId,
+      taskId: assignment.taskId,
+      subtaskId: assignment.subtaskId,
       startTime: start,
       endTime: end,
       durationSeconds: duration || 0,
@@ -257,6 +267,7 @@ router.post("/time-entries", async (req, res) => {
         clientId: entry.clientId,
         projectId: entry.projectId,
         taskId: entry.taskId,
+        subtaskId: entry.subtaskId,
         description: entry.description,
         startTime: entry.startTime,
         endTime: entry.endTime,
@@ -299,11 +310,16 @@ router.patch("/time-entries/:id", async (req, res) => {
     
     if (!entry) throw AppError.notFound("Time entry");
 
-    const { startTime, endTime, durationSeconds, clientId, projectId, taskId, ...rest } = req.body;
+    const { startTime, endTime, durationSeconds, clientId, projectId, taskId, subtaskId, ...rest } = req.body;
 
     const finalClientId = clientId !== undefined ? clientId : entry.clientId;
     const finalProjectId = projectId !== undefined ? projectId : entry.projectId;
-    const finalTaskId = taskId !== undefined ? taskId : entry.taskId;
+    const assignment = await normalizeTimeTrackingAssignment(
+      storage,
+      finalProjectId,
+      taskId !== undefined ? taskId : entry.taskId,
+      subtaskId !== undefined ? subtaskId : entry.subtaskId,
+    );
 
     if (finalProjectId) {
       const project = await storage.getProject(finalProjectId);
@@ -312,18 +328,15 @@ router.patch("/time-entries/:id", async (req, res) => {
       if (finalClientId && project.clientId !== finalClientId) throw AppError.badRequest("Project does not belong to the selected client");
     }
 
-    if (finalTaskId) {
-      const task = await storage.getTask(finalTaskId);
-      if (!task) throw AppError.badRequest("Task not found");
-      if (task.projectId !== finalProjectId) throw AppError.badRequest("Task does not belong to the selected project");
-    }
-
     if (durationSeconds !== undefined && durationSeconds <= 0) throw AppError.badRequest("Duration must be greater than zero");
 
     const updates: any = { ...rest };
     if (clientId !== undefined) updates.clientId = clientId;
     if (projectId !== undefined) updates.projectId = projectId;
-    if (taskId !== undefined) updates.taskId = taskId;
+    if (taskId !== undefined || subtaskId !== undefined || projectId !== undefined) {
+      updates.taskId = assignment.taskId;
+      updates.subtaskId = assignment.subtaskId;
+    }
     if (startTime) updates.startTime = new Date(startTime);
     if (endTime !== undefined) updates.endTime = endTime ? new Date(endTime) : null;
     if (durationSeconds !== undefined) updates.durationSeconds = durationSeconds;

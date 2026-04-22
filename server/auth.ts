@@ -21,6 +21,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { db } from "./db";
 import { users, UserRole, platformInvitations, platformAuditEvents, invitations, tenants, tenantSettings, systemSettings, workspaces, passwordResetTokens } from "@shared/schema";
+import { getWorkspaceMembershipRoleForUserRole } from "@shared/roles";
 import { eq, sql, and, desc } from "drizzle-orm";
 import { createHash } from "crypto";
 import type { User } from "@shared/schema";
@@ -1079,7 +1080,11 @@ export function setupTenantInviteEndpoints(app: Express): void {
             passwordHash,
             firstName: firstName || null,
             lastName: lastName || null,
-            role: invite.role === "admin" ? UserRole.ADMIN : UserRole.EMPLOYEE,
+            role: invite.role === UserRole.ADMIN
+              ? UserRole.ADMIN
+              : invite.role === UserRole.PROJECT_MANAGER
+                ? UserRole.PROJECT_MANAGER
+                : UserRole.EMPLOYEE,
             tenantId: invite.tenantId,
             isActive: true,
             mustChangePasswordOnNextLogin: false,
@@ -1091,7 +1096,7 @@ export function setupTenantInviteEndpoints(app: Express): void {
         await storage.addWorkspaceMember({
           userId: user.id,
           workspaceId: invite.workspaceId,
-          role: invite.role === "admin" ? "admin" : "member",
+          role: getWorkspaceMembershipRoleForUserRole(invite.role),
         });
       }
       
@@ -1493,4 +1498,3 @@ export function setupPasswordResetEndpoints(app: Express): void {
     }
   });
 }
-

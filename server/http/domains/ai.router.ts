@@ -13,6 +13,7 @@ import { AppError, sendError } from "../../lib/errors";
 import { config } from "../../config";
 import { db } from "../../db";
 import { aiSummaries } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { and, eq, gt, desc } from "drizzle-orm";
 import { getEmployeeProfileReport } from "../../reports/employeeProfileAggregator";
 import { buildEmployeeSummaryPayload, hashPayload } from "../../ai/employeeSummary/buildEmployeeSummaryPayload";
@@ -31,7 +32,7 @@ async function requireAdmin(req: any, res: any): Promise<boolean> {
     sendError(res, AppError.unauthorized("User not found"), req);
     return false;
   }
-  const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+  const isAdmin = hasTenantAdminAccess(currentUser.role);
   if (!isAdmin) {
     sendError(res, AppError.forbidden("Only admins can use AI features"), req);
     return false;
@@ -43,7 +44,7 @@ router.get("/v1/ai/status", async (req, res) => {
   try {
     const currentUserId = getCurrentUserId(req);
     const currentUser = await storage.getUser(currentUserId);
-    const isAdmin = currentUser?.role === "admin" || isSuperUser(req);
+    const isAdmin = hasTenantAdminAccess(currentUser?.role);
     if (!isAdmin) {
       return res.json({ enabled: false, isOperational: false, error: null });
     }

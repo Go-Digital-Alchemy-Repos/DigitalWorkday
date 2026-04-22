@@ -2,6 +2,7 @@ import { Request } from "express";
 import { createApiRouter } from "../routerFactory";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { UserRole } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { AppError, handleRouteError } from "../../lib/errors";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
@@ -13,7 +14,7 @@ const router = createApiRouter({
 
 function isAdmin(req: Request): boolean {
   const role = (req.user as any)?.role;
-  return role === UserRole.ADMIN || role === UserRole.SUPER_USER;
+  return hasTenantAdminAccess(role);
 }
 
 function rows(result: any): any[] {

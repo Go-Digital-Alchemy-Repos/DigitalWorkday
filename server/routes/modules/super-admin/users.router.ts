@@ -61,6 +61,8 @@ import { z } from 'zod';
 
 export const superUsersRouter = Router();
 
+const SUPER_ADMIN_FILTERABLE_USER_ROLES = ["admin", "project_manager", "employee"] as const;
+
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
@@ -137,7 +139,11 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
         inviteConditions.push(eq(invitations.tenantId, tenantId));
       }
 
-      if (role && typeof role === "string" && ["admin", "employee"].includes(role)) {
+      if (
+        role &&
+        typeof role === "string" &&
+        SUPER_ADMIN_FILTERABLE_USER_ROLES.includes(role as (typeof SUPER_ADMIN_FILTERABLE_USER_ROLES)[number])
+      ) {
         inviteConditions.push(eq(invitations.role, role));
       }
 
@@ -214,7 +220,11 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
       }
     }
 
-    if (role && typeof role === "string" && ["admin", "employee"].includes(role)) {
+    if (
+      role &&
+      typeof role === "string" &&
+      SUPER_ADMIN_FILTERABLE_USER_ROLES.includes(role as (typeof SUPER_ADMIN_FILTERABLE_USER_ROLES)[number])
+    ) {
       conditions.push(eq(users.role, role as any));
     }
 
@@ -355,7 +365,7 @@ superUsersRouter.patch("/users/:userId", requireSuperUser, async (req, res) => {
       firstName: z.string().min(1).optional(),
       lastName: z.string().min(1).optional(),
       email: z.string().email().optional(),
-      role: z.enum(["admin", "employee"]).optional(),
+      role: z.enum(["admin", "project_manager", "employee"]).optional(),
       isActive: z.boolean().optional(),
     }).parse(req.body);
     const superUser = req.user!;

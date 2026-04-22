@@ -41,6 +41,7 @@ import {
   ListChecks,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { hasTenantAdminAccess } from "@shared/roles";
 import type { ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 
 interface TemplateSection {
@@ -294,7 +295,7 @@ export default function TemplatesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ProjectTemplate | undefined>();
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(user?.role);
 
   const { data: templates = [], isLoading } = useQuery<ProjectTemplate[]>({
     queryKey: ["/api/project-templates"],

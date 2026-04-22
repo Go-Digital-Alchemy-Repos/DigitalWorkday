@@ -65,6 +65,7 @@ import {
   addAssigneeSchema,
   taskAccess,
 } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { db } from "../../db";
 import { eq, and } from "drizzle-orm";
 import { canManageTaskAccess, canViewTask, getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
@@ -813,7 +814,7 @@ router.delete("/tasks/:id", async (req, res) => {
       return sendError(res, AppError.unauthorized("User not found"), req);
     }
 
-    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    const isAdmin = hasTenantAdminAccess(currentUser.role);
     if (!isAdmin) {
       return sendError(res, AppError.forbidden("Only admins can delete tasks"), req);
     }
@@ -863,7 +864,7 @@ router.delete("/sections/:sectionId/tasks", async (req, res) => {
       return sendError(res, AppError.unauthorized("User not found"), req);
     }
 
-    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    const isAdmin = hasTenantAdminAccess(currentUser.role);
     if (!isAdmin) {
       return sendError(res, AppError.forbidden("Only admins can bulk delete tasks"), req);
     }

@@ -2,6 +2,7 @@ import type { Request } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { clientCrm, tenants, UserRole } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 export async function canDeleteClientInTenant(
   req: Request,
@@ -11,7 +12,7 @@ export async function canDeleteClientInTenant(
   const user = req.user;
   if (!user) return false;
 
-  if (user.role === UserRole.SUPER_USER || user.role === UserRole.ADMIN) {
+  if (hasTenantAdminAccess(user.role)) {
     return true;
   }
 

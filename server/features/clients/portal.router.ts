@@ -3,6 +3,7 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { UserRole, ClientAccessLevel } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../../auth";
@@ -17,7 +18,7 @@ function isClientUser(req: Request): boolean {
 }
 
 function isTenantAdmin(req: Request): boolean {
-  return req.user?.role === UserRole.ADMIN;
+  return hasTenantAdminAccess(req.user?.role);
 }
 
 const router = Router();

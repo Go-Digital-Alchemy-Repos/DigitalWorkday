@@ -3,6 +3,7 @@ import { requireSuperUser } from '../../../middleware/tenantContext';
 import { storage } from '../../../storage';
 import { db } from '../../../db';
 import { invitations, users, workspaceMembers } from '@shared/schema';
+import { getWorkspaceMembershipRoleForUserRole } from '@shared/roles';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { hashPassword } from '../../../auth';
@@ -118,7 +119,7 @@ superInvitationsRouter.post("/invitations/:invitationId/activate", requireSuperU
       await db.insert(workspaceMembers).values({
         workspaceId: invitation.workspaceId,
         userId: newUser.id,
-        role: invitation.role === "admin" ? "admin" : "member",
+        role: getWorkspaceMembershipRoleForUserRole(invitation.role),
       }).onConflictDoNothing();
     }
     

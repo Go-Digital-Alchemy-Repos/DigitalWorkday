@@ -13,11 +13,11 @@
 
 import { describe, it, expect } from "vitest";
 import express from "express";
-import request from "supertest";
 import { requestIdMiddleware } from "../middleware/requestId";
 import { errorHandler } from "../middleware/errorHandler";
 import { AppError, sendError, handleRouteError } from "../lib/errors";
 import { ZodError, z } from "zod";
+import { request } from "./httpHarness";
 
 function createTestApp() {
   const app = express();

@@ -3,6 +3,7 @@ import { db } from "../db";
 import { tenants, systemSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { UserRole } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { decryptValue, isEncryptionAvailable } from "../lib/encryption";
 import { AppError, handleRouteError } from "../lib/errors";
 import Stripe from "stripe";
@@ -16,7 +17,7 @@ function requireTenantAdmin(req: any, res: any, next: any) {
   }
   
   const isSuperUser = user.role === UserRole.SUPER_USER;
-  const isAdmin = user.role === UserRole.ADMIN;
+  const isAdmin = hasTenantAdminAccess(user.role);
   
   if (!isSuperUser && !isAdmin) {
     throw AppError.forbidden("Admin access required");

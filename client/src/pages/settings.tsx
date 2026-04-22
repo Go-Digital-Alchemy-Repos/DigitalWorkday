@@ -11,6 +11,7 @@ import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
 import AlertRulesPage from "@/pages/settings-alerts";
 import DigestConfigPage from "@/pages/settings-digest";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 const BASE_SETTINGS_TABS = [
   { id: "integrations", label: "Integrations", icon: Puzzle, flag: null },
@@ -29,7 +30,7 @@ export default function SettingsPage() {
   const [, params] = useRoute("/settings/:tab");
   const flags = useFeatureFlags();
 
-  if (user?.role !== "admin" && user?.role !== "super_user") {
+  if (!hasTenantAdminAccess(user?.role)) {
     return <Redirect to="/" />;
   }
 

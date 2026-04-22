@@ -28,7 +28,7 @@ const userSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
-  role: z.enum(["admin", "employee", "client"]).default("employee"),
+  role: z.enum(["admin", "project_manager", "employee", "client"]).default("employee"),
   isActive: z.boolean().default(true),
   teamIds: z.array(z.string()).default([]),
   clientIds: z.array(z.string()).default([]),
@@ -89,7 +89,7 @@ export function UserDrawer({
           firstName: user.firstName || "",
           lastName: user.lastName || "",
           email: user.email,
-          role: (user.role as "admin" | "employee" | "client") || "employee",
+          role: (user.role as "admin" | "project_manager" | "employee" | "client") || "employee",
           isActive: user.isActive ?? true,
           teamIds: userTeamIds,
           clientIds: userClientIds,
@@ -228,12 +228,13 @@ export function UserDrawer({
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="project_manager">Project Manager</SelectItem>
                     <SelectItem value="employee">Employee</SelectItem>
                     <SelectItem value="client">Client</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  Admins have full access to settings and all data
+                  Admins and project managers have full tenant access, while clients are limited to portal access
                 </FormDescription>
                 <FormMessage />
               </FormItem>

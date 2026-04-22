@@ -596,7 +596,7 @@ const inviteAdminSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  role: z.enum(["admin", "employee"]).optional().default("admin"),
+  role: z.enum(["admin", "project_manager", "employee"]).optional().default("admin"),
   expiresInDays: z.number().min(1).max(30).optional(),
   inviteType: z.enum(["link", "email"]).optional().default("link"),
 });

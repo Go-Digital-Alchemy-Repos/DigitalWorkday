@@ -290,6 +290,7 @@ export interface IStorage {
     clientId?: string;
     projectId?: string;
     taskId?: string;
+    subtaskId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
     endDate?: Date;
@@ -373,6 +374,7 @@ export interface IStorage {
     clientId?: string;
     projectId?: string;
     taskId?: string;
+    subtaskId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
     endDate?: Date;
@@ -2259,6 +2261,7 @@ export class DatabaseStorage implements IStorage {
     clientId?: string;
     projectId?: string;
     taskId?: string;
+    subtaskId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
     endDate?: Date;
@@ -2276,6 +2279,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.taskId) {
       conditions.push(eq(timeEntries.taskId, filters.taskId));
+    }
+    if (filters?.subtaskId) {
+      conditions.push(eq(timeEntries.subtaskId, filters.subtaskId));
     }
     if (filters?.scope) {
       conditions.push(eq(timeEntries.scope, filters.scope));
@@ -2312,6 +2318,10 @@ export class DatabaseStorage implements IStorage {
       if (entry.taskId) {
         const [task] = await db.select().from(tasks).where(eq(tasks.id, entry.taskId));
         if (task) enriched.task = task;
+      }
+      if (entry.subtaskId) {
+        const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, entry.subtaskId));
+        if (subtask) enriched.subtask = subtask;
       }
       
       result.push(enriched);
@@ -2373,6 +2383,10 @@ export class DatabaseStorage implements IStorage {
     if (timer.taskId) {
       const [task] = await db.select().from(tasks).where(eq(tasks.id, timer.taskId));
       if (task) enriched.task = task;
+    }
+    if (timer.subtaskId) {
+      const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, timer.subtaskId));
+      if (subtask) enriched.subtask = subtask;
     }
     
     return enriched;
@@ -3195,6 +3209,7 @@ export class DatabaseStorage implements IStorage {
     clientId?: string;
     projectId?: string;
     taskId?: string;
+    subtaskId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
     endDate?: Date;
@@ -3215,6 +3230,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.taskId) {
       conditions.push(eq(timeEntries.taskId, filters.taskId));
+    }
+    if (filters?.subtaskId) {
+      conditions.push(eq(timeEntries.subtaskId, filters.subtaskId));
     }
     if (filters?.scope) {
       conditions.push(eq(timeEntries.scope, filters.scope));
@@ -3250,6 +3268,10 @@ export class DatabaseStorage implements IStorage {
       if (entry.taskId) {
         const [task] = await db.select().from(tasks).where(eq(tasks.id, entry.taskId));
         if (task) enriched.task = task;
+      }
+      if (entry.subtaskId) {
+        const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, entry.subtaskId));
+        if (subtask) enriched.subtask = subtask;
       }
       
       result.push(enriched);
@@ -3311,6 +3333,10 @@ export class DatabaseStorage implements IStorage {
     if (timer.taskId) {
       const [task] = await db.select().from(tasks).where(eq(tasks.id, timer.taskId));
       if (task) enriched.task = task;
+    }
+    if (timer.subtaskId) {
+      const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, timer.subtaskId));
+      if (subtask) enriched.subtask = subtask;
     }
     
     return enriched;
@@ -3396,7 +3422,7 @@ export class DatabaseStorage implements IStorage {
     email: string;
     firstName?: string;
     lastName?: string;
-    role?: "admin" | "employee";
+    role?: "admin" | "project_manager" | "employee";
     expiresInDays?: number;
     createdByUserId: string;
     workspaceId: string;
@@ -3412,7 +3438,11 @@ export class DatabaseStorage implements IStorage {
       tenantId: data.tenantId,
       workspaceId: data.workspaceId,
       email: data.email,
-      role: data.role === "employee" ? UserRole.EMPLOYEE : UserRole.ADMIN,
+      role: data.role === "employee"
+        ? UserRole.EMPLOYEE
+        : data.role === "project_manager"
+          ? UserRole.PROJECT_MANAGER
+          : UserRole.ADMIN,
       tokenHash,
       status: "pending",
       expiresAt,
