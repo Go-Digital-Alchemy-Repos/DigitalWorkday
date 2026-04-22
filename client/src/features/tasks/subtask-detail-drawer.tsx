@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Pencil } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type SubtaskOrTask = (Subtask | (TaskWithRelations & { taskId?: string; completed?: boolean; assigneeId?: string | null })) & {
   id: string;
@@ -74,6 +82,30 @@ interface SubtaskTag {
   tagId: string;
   createdAt: string;
   tag?: TagType;
+}
+
+interface ActiveTimer {
+  id: string;
+  taskId: string | null;
+  subtaskId?: string | null;
+  status: "running" | "paused";
+  elapsedSeconds: number;
+  lastStartedAt: string | null;
+}
+
+interface TimeEntryListItem {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  startTime: string;
+  durationSeconds: number;
+  scope: "in_scope" | "out_of_scope";
+  user?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  };
 }
 
 interface SubtaskDetailDrawerProps {
@@ -124,6 +156,10 @@ export function SubtaskDetailDrawer({
     subtask?.dueDate ? new Date(subtask.dueDate) : null
   );
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntryListItem | null>(null);
+  const [timeEntryTitle, setTimeEntryTitle] = useState("");
+  const [timeEntryDescription, setTimeEntryDescription] = useState("");
+  const [timeEntryScope, setTimeEntryScope] = useState<"in_scope" | "out_of_scope">("in_scope");
 
   const isActualSubtask = isSubtask(subtask);
 
@@ -359,8 +395,16 @@ export function SubtaskDetailDrawer({
     refetchInterval: 30000,
   });
 
-  const isTimerOnThisTask = activeTimer?.taskId === subtask?.id;
+  const isTimerOnThisTask = isActualSubtask
+    ? activeTimer?.subtaskId === subtask?.id
+    : activeTimer?.taskId === subtask?.id && !activeTimer?.subtaskId;
   const isTimerRunning = activeTimer?.status === "running";
+  const timeEntriesQueryKey = isActualSubtask
+    ? ["/api/time-entries", { subtaskId: subtask?.id }]
+    : ["/api/time-entries", { taskId: subtask?.id }];
+  const timeEntriesUrl = isActualSubtask
+    ? `/api/time-entries?subtaskId=${subtask?.id}`
+    : `/api/time-entries?taskId=${subtask?.id}`;
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
@@ -370,7 +414,8 @@ export function SubtaskDetailDrawer({
       return apiRequest("POST", "/api/timer/start", {
         clientId: (subtask as any).project?.clientId || null,
         projectId: projectId || null,
-        taskId: subtask?.id || null,
+        taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
+        subtaskId: isActualSubtask ? subtask?.id || null : null,
         description: subtask?.title || "",
       });
     },
@@ -403,14 +448,36 @@ export function SubtaskDetailDrawer({
     mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${subtask?.id}`] });
+      queryClient.invalidateQueries({ queryKey: timeEntriesQueryKey });
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
   });
 
-  const { data: timeEntries = [], isLoading: timeEntriesLoading } = useQuery<any[]>({
-    queryKey: [`/api/time-entries?taskId=${subtask?.id}`],
+  const { data: timeEntries = [], isLoading: timeEntriesLoading } = useQuery<TimeEntryListItem[]>({
+    queryKey: timeEntriesQueryKey,
+    queryFn: async () => {
+      const res = await fetch(timeEntriesUrl, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load time entries");
+      return res.json();
+    },
     enabled: !!subtask?.id && open,
+  });
+
+  const updateTimeEntryMutation = useMutation({
+    mutationFn: async (entry: { id: string; title: string | null; description: string | null; scope: "in_scope" | "out_of_scope" }) => {
+      const response = await apiRequest("PATCH", `/api/time-entries/${entry.id}`, entry);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      setEditingTimeEntry(null);
+      toast({ title: "Time entry updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update time entry", description: error.message, variant: "destructive" });
+    },
   });
 
   const timerState = 
@@ -419,6 +486,13 @@ export function SubtaskDetailDrawer({
     activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
     activeTimer && !isTimerOnThisTask ? "other_task" :
     "idle";
+
+  const creatorUser = subtask?.createdBy
+    ? mentionUsers.find((user) => user.id === subtask.createdBy)
+    : undefined;
+  const creatorLabel = creatorUser
+    ? `${creatorUser.firstName || ""} ${creatorUser.lastName || ""}`.trim() || creatorUser.email || "Unknown"
+    : null;
 
   if (!subtask) return null;
 
@@ -441,6 +515,23 @@ export function SubtaskDetailDrawer({
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
+  };
+
+  const openTimeEntryEditor = (entry: TimeEntryListItem) => {
+    setEditingTimeEntry(entry);
+    setTimeEntryTitle(entry.title || "");
+    setTimeEntryDescription(entry.description || "");
+    setTimeEntryScope(entry.scope);
+  };
+
+  const handleTimeEntrySave = () => {
+    if (!editingTimeEntry) return;
+    updateTimeEntryMutation.mutate({
+      id: editingTimeEntry.id,
+      title: timeEntryTitle.trim() || null,
+      description: timeEntryDescription || null,
+      scope: timeEntryScope,
+    });
   };
 
   const originalDescription = typeof subtask.description === 'string' 
@@ -562,11 +653,20 @@ export function SubtaskDetailDrawer({
                   </h2>
                 )}
 
-                {isActualSubtask && subtask.createdAt && (
-                  <div className="text-xs text-muted-foreground" data-testid="subtask-created-at">
-                    Created {format(new Date(subtask.createdAt), "MMM d, yyyy")}
+                {(isActualSubtask && subtask.createdAt) || creatorLabel ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    {isActualSubtask && subtask.createdAt && (
+                      <div data-testid="subtask-created-at">
+                        Created {format(new Date(subtask.createdAt), "MMM d, yyyy")}
+                      </div>
+                    )}
+                    {creatorLabel && (
+                      <Badge variant="outline" className="text-[11px]" data-testid="subtask-created-by-badge">
+                        Created by {creatorLabel}
+                      </Badge>
+                    )}
                   </div>
-                )}
+                ) : null}
 
                 <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                   <div className="space-y-2">
@@ -961,11 +1061,40 @@ export function SubtaskDetailDrawer({
                                 <span className="text-sm font-medium">
                                   {formatDurationShort(entry.durationSeconds)}
                                 </span>
+                                <Badge variant={entry.scope === "out_of_scope" ? "default" : "secondary"} className="text-xs">
+                                  {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
+                                </Badge>
                               </div>
+                              {entry.title && (
+                                <p className="text-sm font-medium truncate">{entry.title}</p>
+                              )}
+                              {entry.description && (
+                                <p className="text-sm text-muted-foreground truncate">{entry.description}</p>
+                              )}
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
+                                {entry.user && (
+                                  <>
+                                    <span>•</span>
+                                    <span>
+                                      {entry.user.firstName && entry.user.lastName
+                                        ? `${entry.user.firstName} ${entry.user.lastName}`
+                                        : entry.user.email}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => openTimeEntryEditor(entry)}
+                              aria-label="Edit time entry"
+                              data-testid={`button-edit-subtask-time-entry-${entry.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           </div>
                         ))}
                       </div>
@@ -1013,6 +1142,59 @@ export function SubtaskDetailDrawer({
         </div>
       </SheetContent>
     </Sheet>
+
+    <Dialog open={!!editingTimeEntry} onOpenChange={(open) => !open && setEditingTimeEntry(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Time Entry</DialogTitle>
+          <DialogDescription>Update the tracked details for this time entry.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="subtask-time-entry-title">Title</Label>
+            <Input
+              id="subtask-time-entry-title"
+              value={timeEntryTitle}
+              onChange={(e) => setTimeEntryTitle(e.target.value)}
+              placeholder="Optional title"
+              data-testid="input-subtask-time-entry-title"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Scope</Label>
+            <Select value={timeEntryScope} onValueChange={(value: "in_scope" | "out_of_scope") => setTimeEntryScope(value)}>
+              <SelectTrigger data-testid="select-subtask-time-entry-scope">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="in_scope">Unbillable</SelectItem>
+                <SelectItem value="out_of_scope">Billable</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <div className="min-h-[140px] border rounded-md focus-within:ring-1 focus-within:ring-ring transition-shadow">
+              <RichTextEditor
+                value={timeEntryDescription}
+                onChange={setTimeEntryDescription}
+                placeholder="Add more detail about the work performed..."
+                className="border-0 focus-visible:ring-0"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEditingTimeEntry(null)}>
+            Cancel
+          </Button>
+          <Button onClick={handleTimeEntrySave} disabled={updateTimeEntryMutation.isPending}>
+            {updateTimeEntryMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <AlertDialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
       <AlertDialogContent>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2 } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -58,6 +58,7 @@ import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client 
 type ActiveTimer = {
   id: string;
   taskId: string | null;
+  subtaskId?: string | null;
   status: "running" | "paused";
   elapsedSeconds: number;
   lastStartedAt: string | null;
@@ -71,6 +72,7 @@ type ProjectContext = Project & {
 type TimeEntry = {
   id: string;
   userId: string;
+  title?: string | null;
   description: string | null;
   startTime: string;
   durationSeconds: number;
@@ -177,6 +179,10 @@ export function TaskDetailDrawer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
+  const [timeEntryTitle, setTimeEntryTitle] = useState("");
+  const [timeEntryDescription, setTimeEntryDescription] = useState("");
+  const [timeEntryScope, setTimeEntryScope] = useState<"in_scope" | "out_of_scope">("in_scope");
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -438,6 +444,23 @@ export function TaskDetailDrawer({
     enabled: !!task?.id && open,
   });
 
+  const updateTimeEntryMutation = useMutation({
+    mutationFn: async (entry: { id: string; title: string | null; description: string | null; scope: "in_scope" | "out_of_scope" }) => {
+      const response = await apiRequest("PATCH", `/api/time-entries/${entry.id}`, entry);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      setEditingTimeEntry(null);
+      toast({ title: "Time entry updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update time entry", description: error.message, variant: "destructive" });
+    },
+  });
+
   const { data: projectContext, isLoading: projectContextLoading, isError: projectContextError } = useQuery<ProjectContext>({
     queryKey: ["/api/projects", task?.projectId, "context"],
     queryFn: async () => {
@@ -475,8 +498,14 @@ export function TaskDetailDrawer({
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const isTimerOnThisTask = activeTimer?.taskId === task?.id;
+  const isTimerOnThisTask = activeTimer?.taskId === task?.id && !activeTimer?.subtaskId;
   const isTimerRunning = activeTimer?.status === "running";
+  const creatorUser = task?.createdBy
+    ? mentionUsers.find((user) => user.id === task.createdBy)
+    : undefined;
+  const creatorLabel = creatorUser
+    ? `${creatorUser.firstName || ""} ${creatorUser.lastName || ""}`.trim() || creatorUser.email || "Unknown"
+    : null;
 
   const timerState = 
     timerLoading ? "loading" :
@@ -486,6 +515,23 @@ export function TaskDetailDrawer({
     (!activeTimer && !canQuickStartTimer) || projectContextError ? "hidden" :
     projectContextLoading && task?.projectId ? "loading" :
     "idle";
+
+  const openTimeEntryEditor = (entry: TimeEntry) => {
+    setEditingTimeEntry(entry);
+    setTimeEntryTitle(entry.title || "");
+    setTimeEntryDescription(entry.description || "");
+    setTimeEntryScope(entry.scope);
+  };
+
+  const handleTimeEntrySave = () => {
+    if (!editingTimeEntry) return;
+    updateTimeEntryMutation.mutate({
+      id: editingTimeEntry.id,
+      title: timeEntryTitle.trim() || null,
+      description: timeEntryDescription || null,
+      scope: timeEntryScope,
+    });
+  };
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
@@ -1072,6 +1118,17 @@ export function TaskDetailDrawer({
               </h2>
             )}
 
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <div data-testid="task-created-at">
+                Created {format(new Date(task.createdAt), "MMM d, yyyy")}
+              </div>
+              {creatorLabel && (
+                <Badge variant="outline" className="text-[11px]" data-testid="task-created-by-badge">
+                  Created by {creatorLabel}
+                </Badge>
+              )}
+            </div>
+
             <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
               <FormFieldWrapper
                 label="Assignees"
@@ -1472,6 +1529,9 @@ export function TaskDetailDrawer({
                             {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
                           </Badge>
                         </div>
+                        {entry.title && (
+                          <p className="text-sm font-medium truncate">{entry.title}</p>
+                        )}
                         {entry.description && (
                           <p className="text-sm text-muted-foreground truncate">{entry.description}</p>
                         )}
@@ -1489,6 +1549,16 @@ export function TaskDetailDrawer({
                           )}
                         </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openTimeEntryEditor(entry)}
+                        aria-label="Edit time entry"
+                        data-testid={`button-edit-task-time-entry-${entry.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1654,6 +1724,57 @@ export function TaskDetailDrawer({
                   Log Time & Complete
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editingTimeEntry} onOpenChange={(open) => !open && setEditingTimeEntry(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Time Entry</DialogTitle>
+            <DialogDescription>Update the tracked details for this time entry.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="task-time-entry-title">Title</Label>
+              <Input
+                id="task-time-entry-title"
+                value={timeEntryTitle}
+                onChange={(e) => setTimeEntryTitle(e.target.value)}
+                placeholder="Optional title"
+                data-testid="input-task-time-entry-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select value={timeEntryScope} onValueChange={(value: "in_scope" | "out_of_scope") => setTimeEntryScope(value)}>
+                <SelectTrigger data-testid="select-task-time-entry-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in_scope">Unbillable</SelectItem>
+                  <SelectItem value="out_of_scope">Billable</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                value={timeEntryDescription}
+                onChange={(e) => setTimeEntryDescription(e.target.value)}
+                placeholder="Add more detail about the work performed..."
+                className="min-h-[140px] resize-none"
+                data-testid="textarea-task-time-entry-description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTimeEntry(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleTimeEntrySave} disabled={updateTimeEntryMutation.isPending}>
+              {updateTimeEntryMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

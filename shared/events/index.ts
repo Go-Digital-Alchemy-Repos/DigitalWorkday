@@ -396,6 +396,7 @@ export interface TimerPayload {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  subtaskId: string | null;
   description: string | null;
   status: 'running' | 'paused';
   elapsedSeconds: number;
@@ -439,6 +440,7 @@ export interface TimeEntryPayload {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  subtaskId: string | null;
   description: string | null;
   startTime: Date;
   endTime: Date | null;
