@@ -3,6 +3,7 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 interface ErrorStateProps {
   error?: Error | { message?: string; requestId?: string } | null;
@@ -24,7 +25,7 @@ export function ErrorState({
   showRequestId = true,
 }: ErrorStateProps) {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin" || user?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(user?.role) || user?.role === "super_admin";
   
   const errorMessage = description || (error as any)?.message || "An unexpected error occurred. Please try again.";
   const requestId = (error as any)?.requestId;

@@ -47,6 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
+import { hasTenantAdminAccess } from "@shared/roles";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -83,7 +84,7 @@ export function ProjectSettingsSheet({
 }: ProjectSettingsSheetProps) {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(user?.role);
   const [, setLocation] = useLocation();
   const [clientSearch, setClientSearch] = useState("");
 

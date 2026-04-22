@@ -568,6 +568,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="project_manager">Project Manager</SelectItem>
                               <SelectItem value="employee">Employee</SelectItem>
                               <SelectItem value="client">Client</SelectItem>
                             </SelectContent>

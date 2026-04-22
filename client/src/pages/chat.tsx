@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDebounce } from "@/hooks/use-debounce";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
 import { useConversationTyping } from "@/hooks/use-typing";
 import { Button } from "@/components/ui/button";
@@ -454,7 +455,7 @@ export default function ChatPage() {
   );
   const canPin = useMemo(() => {
     if (!selectedChannel || !user) return false;
-    const isAdmin = user.role === "admin" || user.role === "super_admin";
+    const isAdmin = hasTenantAdminAccess(user.role) || user.role === "super_admin";
     const isOwner = selectedChannel.createdBy === user.id;
     return isAdmin || isOwner;
   }, [selectedChannel, user]);
@@ -2595,7 +2596,7 @@ export default function ChatPage() {
                 >
                   <Search className="h-4 w-4" />
                 </Button>
-                {user?.role === "admin" && selectedChannel && (
+                {hasTenantAdminAccess(user?.role) && selectedChannel && (
                   <>
                     <Button
                       variant="ghost"

@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { WorkloadReportsV2 } from "@/components/reports/workload-reports-v2";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -331,8 +332,7 @@ export default function ReportsPage() {
   const [currentView, setCurrentView] = useState<ReportView>("landing");
   const flags = useFeatureFlags();
 
-  const isAdmin = user?.role === "admin";
-  const isSuperUser = user?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(user?.role);
 
   if (isLoading) {
     return (
@@ -342,7 +342,7 @@ export default function ReportsPage() {
     );
   }
 
-  if (!isAdmin && !isSuperUser) {
+  if (!isAdmin) {
     return <Redirect to="/" />;
   }
 

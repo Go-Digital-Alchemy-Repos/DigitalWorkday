@@ -15,6 +15,7 @@ import {
 import { sanitizeFilename, isFilenameUnsafe } from "../middleware/uploadGuards";
 import { config } from "../../config";
 import { UserRole } from "@shared/schema";
+import { hasTenantAdminAccess, isTenantAdminRole } from "@shared/roles";
 
 const docUpload = multer({
   storage: multer.memoryStorage(),
@@ -29,7 +30,7 @@ const router = createApiRouter({
 function requireAdminOrSuper(req: Request, res: Response, next: NextFunction) {
   const user = req.user as any;
   if (!user) return res.status(401).json({ error: "Authentication required" });
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+  if (!hasTenantAdminAccess(user.role)) {
     return res.status(403).json({ error: "Admin access required" });
   }
   next();
@@ -38,7 +39,7 @@ function requireAdminOrSuper(req: Request, res: Response, next: NextFunction) {
 function validateTenantAccess(req: Request, tenantId: string): boolean {
   const user = req.user as any;
   if (user.role === UserRole.SUPER_USER) return true;
-  if (user.role === UserRole.ADMIN && user.tenantId === tenantId) return true;
+  if (isTenantAdminRole(user.role) && user.tenantId === tenantId) return true;
   return false;
 }
 

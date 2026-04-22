@@ -22,6 +22,7 @@ import {
   messagePermissionsSchema,
   type MessagePermissions,
 } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { getCurrentUserId } from "../../helpers";
 import { verifyClientTenancy } from "./crm.helpers";
 import { emitToTenant, emitToUser } from "../../../realtime/socket";
@@ -47,7 +48,7 @@ async function getMessagePermissions(tenantId: string): Promise<MessagePermissio
 function checkPermission(perms: MessagePermissions, action: keyof MessagePermissions, role: string): boolean {
   if (role === UserRole.SUPER_USER) return true;
   const actionPerms = perms[action];
-  if (role === UserRole.ADMIN) return actionPerms.admin;
+  if (hasTenantAdminAccess(role)) return actionPerms.admin;
   if (role === UserRole.EMPLOYEE) return actionPerms.employee;
   if (role === UserRole.CLIENT) return actionPerms.client;
   return false;
@@ -873,7 +874,7 @@ router.post("/crm/conversations/:conversationId/merge", requireAuth, async (req:
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+    if (!hasTenantAdminAccess(user.role)) {
       return sendError(res, AppError.forbidden("Only admins can merge conversations"), req);
     }
 
@@ -1173,7 +1174,7 @@ router.post("/crm/conversation-sla-policies", requireAuth, async (req: Request, 
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+    if (!hasTenantAdminAccess(user.role)) {
       return sendError(res, AppError.forbidden("Only admins can manage SLA policies"), req);
     }
 
@@ -1216,7 +1217,7 @@ router.patch("/crm/conversation-sla-policies/:policyId", requireAuth, async (req
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+    if (!hasTenantAdminAccess(user.role)) {
       return sendError(res, AppError.forbidden("Only admins can manage SLA policies"), req);
     }
 
@@ -1248,7 +1249,7 @@ router.delete("/crm/conversation-sla-policies/:policyId", requireAuth, async (re
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+    if (!hasTenantAdminAccess(user.role)) {
       return sendError(res, AppError.forbidden("Only admins can manage SLA policies"), req);
     }
 
@@ -1729,7 +1730,7 @@ router.get("/crm/conversation-settings", requireAuth, async (req: Request, res: 
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+    if (!hasTenantAdminAccess(user.role)) {
       return sendError(res, AppError.forbidden("Only admins can view conversation settings"), req);
     }
 
@@ -1764,7 +1765,7 @@ router.patch("/crm/conversation-settings", requireAuth, async (req: Request, res
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+    if (!hasTenantAdminAccess(user.role)) {
       return sendError(res, AppError.forbidden("Only admins can update conversation settings"), req);
     }
 

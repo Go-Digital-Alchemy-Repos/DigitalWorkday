@@ -5,7 +5,7 @@ import { z } from "zod";
 import multer from "multer";
 import { storage } from "../storage";
 import { db } from "../db";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { handleRouteError, AppError } from "../lib/errors";
 import { requireAuth } from "../auth";
 import { userCreateRateLimiter, inviteCreateRateLimiter } from "../middleware/rateLimit";
@@ -27,7 +27,9 @@ import {
   activityLog,
   taskAssignees,
   comments,
+  workspaceMembers,
 } from "@shared/schema";
+import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
 
 const router = createApiRouter({ policy: "authTenant" });
@@ -39,7 +41,7 @@ const avatarUpload = multer({
 
 const requireAdmin: RequestHandler = (req, res, next) => {
   const user = req.user as Express.User | undefined;
-  if (!user || (user.role !== "admin" && user.role !== "super_user")) {
+  if (!user || !hasTenantAdminAccess(user.role)) {
     return res.status(403).json({ ok: false, error: { code: "FORBIDDEN", message: "Admin access required", status: 403 } });
   }
   next();
@@ -132,7 +134,7 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
     await storage.addWorkspaceMember({
       workspaceId: resolvedWorkspaceId,
       userId: user.id,
-      role: role === "admin" ? "admin" : "member",
+      role: getWorkspaceMembershipRoleForUserRole(role),
       status: "active",
     });
 
@@ -343,6 +345,11 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     if (!targetUser) throw AppError.notFound("User not found in your organization");
 
     const user = await storage.updateUser(id, updates);
+    if (updates.role) {
+      await db.update(workspaceMembers)
+        .set({ role: getWorkspaceMembershipRoleForUserRole(updates.role) })
+        .where(eq(workspaceMembers.userId, id));
+    }
     if (!user) throw AppError.notFound("User");
     res.json(user);
   } catch (error) {
@@ -474,13 +481,13 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
       throw AppError.badRequest("Cannot delete active user. Deactivate the user first.");
     }
 
-    if (targetUser.role === "admin") {
+    if (targetUser.role === "admin" || targetUser.role === "project_manager") {
       const [adminCount] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(users)
-        .where(and(eq(users.tenantId, tenantId), eq(users.role, "admin")));
+        .where(and(eq(users.tenantId, tenantId), inArray(users.role, ["admin", "project_manager"])));
       if ((adminCount?.count || 0) <= 1) {
-        throw AppError.badRequest("Cannot delete the last admin user in the organization");
+        throw AppError.badRequest("Cannot delete the last admin or project manager in the organization");
       }
     }
 
@@ -623,7 +630,7 @@ router.post("/invitations", inviteCreateRateLimiter, requireAdmin, async (req, r
 
     const invitation = await storage.createInvitation({
       email,
-      role: (role || "employee") as "admin" | "employee" | "client",
+      role: (role || "employee") as "admin" | "project_manager" | "employee" | "client",
       tokenHash: token,
       expiresAt,
       workspaceId: await getCurrentWorkspaceIdAsync(req),
@@ -661,7 +668,7 @@ router.post("/invitations/for-user", requireAdmin, async (req, res) => {
 
     const invitation = await storage.createInvitation({
       email: user.email,
-      role: (user.role || "employee") as "admin" | "employee" | "client",
+      role: (user.role || "employee") as "admin" | "project_manager" | "employee" | "client",
       tokenHash: token,
       expiresAt,
       workspaceId: await getCurrentWorkspaceIdAsync(req),

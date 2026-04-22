@@ -98,6 +98,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import type { Client } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 type ViewType = "board" | "list" | "calendar";
 
@@ -108,7 +109,7 @@ export default function ProjectPage() {
   const [, navigate] = useLocation();
 
   const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(currentUser?.role);
 
   // Subscribe to real-time updates for this project
   useProjectSocket(projectId);

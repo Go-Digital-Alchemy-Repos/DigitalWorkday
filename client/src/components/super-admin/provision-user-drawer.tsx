@@ -63,7 +63,7 @@ export function ProvisionUserDrawer({
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [role, setRole] = useState<"admin" | "employee" | "client">("employee");
+  const [role, setRole] = useState<"admin" | "project_manager" | "employee" | "client">("employee");
   const [method, setMethod] = useState<"SET_PASSWORD" | "RESET_LINK">("SET_PASSWORD");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -191,6 +191,7 @@ export function ProvisionUserDrawer({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="admin">Tenant Admin</SelectItem>
+              <SelectItem value="project_manager">Project Manager</SelectItem>
               <SelectItem value="employee">Employee</SelectItem>
               <SelectItem value="client">Client</SelectItem>
             </SelectContent>
@@ -357,7 +358,7 @@ export function ProvisionUserDrawer({
           <div className="flex justify-between">
             <span className="text-muted-foreground">Role</span>
             <Badge variant="secondary">
-              {role === "admin" ? "Tenant Admin" : role === "employee" ? "Employee" : "Client"}
+              {role === "admin" ? "Tenant Admin" : role === "project_manager" ? "Project Manager" : role === "employee" ? "Employee" : "Client"}
             </Badge>
           </div>
           <div className="flex justify-between">
@@ -420,6 +421,7 @@ export function ProvisionUserDrawer({
             <span className="text-muted-foreground">Role</span>
             <Badge variant="secondary">
               {result?.user.role === "admin" ? "Tenant Admin" : 
+               result?.user.role === "project_manager" ? "Project Manager" :
                result?.user.role === "employee" ? "Employee" : "Client"}
             </Badge>
           </div>

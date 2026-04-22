@@ -21,6 +21,13 @@ describe("Workload Reports API", () => {
     email: "employee@tenant1.com",
   };
 
+  const mockProjectManagerUser = {
+    id: "pm-user-1",
+    tenantId: "tenant-1",
+    role: UserRole.PROJECT_MANAGER,
+    email: "pm@tenant1.com",
+  };
+
   const mockTenant2Admin = {
     id: "admin-user-2",
     tenantId: "tenant-2",
@@ -51,7 +58,7 @@ describe("Workload Reports API", () => {
 
     testApp.get("/api/v1/workload/tasks-by-employee", (req: any, res) => {
       const userRole = req.user?.role;
-      if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_USER) {
+      if (userRole !== UserRole.ADMIN && userRole !== UserRole.PROJECT_MANAGER && userRole !== UserRole.SUPER_USER) {
         return res.status(403).json({ error: "Admin access required" });
       }
       res.json([]);
@@ -59,7 +66,7 @@ describe("Workload Reports API", () => {
 
     testApp.get("/api/v1/workload/summary", (req: any, res) => {
       const userRole = req.user?.role;
-      if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_USER) {
+      if (userRole !== UserRole.ADMIN && userRole !== UserRole.PROJECT_MANAGER && userRole !== UserRole.SUPER_USER) {
         return res.status(403).json({ error: "Admin access required" });
       }
       res.json({ totalEmployees: 0, totalProjects: 0 });
@@ -67,7 +74,7 @@ describe("Workload Reports API", () => {
 
     testApp.get("/api/v1/workload/by-status", (req: any, res) => {
       const userRole = req.user?.role;
-      if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_USER) {
+      if (userRole !== UserRole.ADMIN && userRole !== UserRole.PROJECT_MANAGER && userRole !== UserRole.SUPER_USER) {
         return res.status(403).json({ error: "Admin access required" });
       }
       res.json({ summary: [], total: 0 });
@@ -75,7 +82,7 @@ describe("Workload Reports API", () => {
 
     testApp.get("/api/v1/workload/by-priority", (req: any, res) => {
       const userRole = req.user?.role;
-      if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_USER) {
+      if (userRole !== UserRole.ADMIN && userRole !== UserRole.PROJECT_MANAGER && userRole !== UserRole.SUPER_USER) {
         return res.status(403).json({ error: "Admin access required" });
       }
       res.json({ summary: [], total: 0 });
@@ -83,7 +90,7 @@ describe("Workload Reports API", () => {
 
     testApp.get("/api/v1/workload/unassigned", (req: any, res) => {
       const userRole = req.user?.role;
-      if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_USER) {
+      if (userRole !== UserRole.ADMIN && userRole !== UserRole.PROJECT_MANAGER && userRole !== UserRole.SUPER_USER) {
         return res.status(403).json({ error: "Admin access required" });
       }
       res.json({ tasks: [], totalCount: 0 });
@@ -91,7 +98,7 @@ describe("Workload Reports API", () => {
 
     testApp.get("/api/v1/workload/employee/:userId/tasks", (req: any, res) => {
       const userRole = req.user?.role;
-      if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_USER) {
+      if (userRole !== UserRole.ADMIN && userRole !== UserRole.PROJECT_MANAGER && userRole !== UserRole.SUPER_USER) {
         return res.status(403).json({ error: "Admin access required" });
       }
       const requestingUserTenantId = req.user?.tenantId;
@@ -123,6 +130,12 @@ describe("Workload Reports API", () => {
 
     it("allows super_user to access tasks-by-employee", async () => {
       const testApp = createTestApp(mockSuperUser);
+      const response = await request(testApp).get("/api/v1/workload/tasks-by-employee");
+      expect(response.status).toBe(200);
+    });
+
+    it("allows project managers to access tasks-by-employee", async () => {
+      const testApp = createTestApp(mockProjectManagerUser);
       const response = await request(testApp).get("/api/v1/workload/tasks-by-employee");
       expect(response.status).toBe(200);
     });

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { requireAuth } from "../auth";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { AppError, handleRouteError } from "../lib/errors";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { parseCsv } from "../imports/csvParser";
 import { createJob, getJob, getJobsForTenant, updateJob, jobToDTO } from "../imports/jobStore";
 import { validateJob, executeJob } from "../imports/importEngine";
@@ -28,7 +29,7 @@ function requireTenantAdmin(req: any, res: any, next: any) {
   if (!effectiveTenantId) {
     throw AppError.forbidden("No tenant context");
   }
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+  if (!hasTenantAdminAccess(user.role)) {
     throw AppError.forbidden("Admin access required");
   }
 

@@ -4,14 +4,14 @@ import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { UserRole } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
 
 const router = Router();
 
 function isAdmin(req: Request): boolean {
-  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_USER;
+  return hasTenantAdminAccess(req.user?.role);
 }
 
 const templateContentSchema = z.object({

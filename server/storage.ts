@@ -3422,7 +3422,7 @@ export class DatabaseStorage implements IStorage {
     email: string;
     firstName?: string;
     lastName?: string;
-    role?: "admin" | "employee";
+    role?: "admin" | "project_manager" | "employee";
     expiresInDays?: number;
     createdByUserId: string;
     workspaceId: string;
@@ -3438,7 +3438,11 @@ export class DatabaseStorage implements IStorage {
       tenantId: data.tenantId,
       workspaceId: data.workspaceId,
       email: data.email,
-      role: data.role === "employee" ? UserRole.EMPLOYEE : UserRole.ADMIN,
+      role: data.role === "employee"
+        ? UserRole.EMPLOYEE
+        : data.role === "project_manager"
+          ? UserRole.PROJECT_MANAGER
+          : UserRole.ADMIN,
       tokenHash,
       status: "pending",
       expiresAt,

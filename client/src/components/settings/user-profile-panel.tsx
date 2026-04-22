@@ -356,6 +356,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="project_manager">Project Manager</SelectItem>
                             <SelectItem value="employee">Employee</SelectItem>
                             <SelectItem value="client">Client</SelectItem>
                           </SelectContent>

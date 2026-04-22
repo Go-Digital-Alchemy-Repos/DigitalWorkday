@@ -31,6 +31,7 @@ import multer from "multer";
 import { validateBrandAsset, generateBrandAssetKey, uploadToS3, isS3Configured, getMimeType } from "../s3";
 import { getStorageStatus } from "../storage/getStorageProvider";
 import { AppError, handleRouteError } from "../lib/errors";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -46,7 +47,7 @@ function requireTenantAdmin(req: any, res: any, next: any) {
   if (!effectiveTenantId) {
     throw AppError.forbidden("No tenant context");
   }
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+  if (!hasTenantAdminAccess(user.role)) {
     throw AppError.forbidden("Admin access required");
   }
   

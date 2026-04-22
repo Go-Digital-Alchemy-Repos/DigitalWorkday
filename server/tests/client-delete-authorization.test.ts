@@ -95,6 +95,14 @@ describe("Client delete authorization", () => {
     expect(response.status).toBe(204);
   });
 
+  it("allows project managers to delete clients in their tenant", async () => {
+    const app = createAuthenticatedApp({ id: "pm-role-1", tenantId: "tenant-a", role: "project_manager" });
+
+    const response = await request(app).delete("/api/clients/client-1");
+
+    expect(response.status).toBe(204);
+  });
+
   it("allows tenant owners to delete clients in their tenant", async () => {
     tenantOwners.set("tenant-a", "owner-1");
     const app = createAuthenticatedApp({ id: "owner-1", tenantId: "tenant-a", role: "employee" });

@@ -34,6 +34,7 @@ import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { hasProjectManagerDashboardAccess } from "@shared/roles";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,7 +71,11 @@ interface ProjectAnalyticsSummary {
   }>;
 }
 
-export default function ProjectsDashboard() {
+interface ProjectsDashboardProps {
+  variant?: "projects" | "pm";
+}
+
+export default function ProjectsDashboard({ variant = "projects" }: ProjectsDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [clientFilter, setClientFilter] = useState<string>("all");
@@ -82,6 +87,12 @@ export default function ProjectsDashboard() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isEmployee = user?.role === UserRole.EMPLOYEE;
+  const isPmDashboard = variant === "pm";
+  const dashboardTitle = isPmDashboard ? "PM Dashboard" : "Projects";
+  const dashboardSubtitle = isPmDashboard
+    ? "Monitor delivery, workload, and project risk across the workspace"
+    : "View and manage all projects across your workspace";
+  const canAccessPmDashboard = hasProjectManagerDashboardAccess(user?.role);
 
   const { data: projects, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
     queryKey: ["/api/v1/projects", { includeCounts: true }],
@@ -231,12 +242,23 @@ export default function ProjectsDashboard() {
     return client?.companyName || "-";
   };
 
+  if (isPmDashboard && !canAccessPmDashboard) {
+    return (
+      <PageShell className="max-w-7xl mx-auto">
+        <ErrorState
+          error={new Error("Project Manager access required")}
+          title="Access denied"
+        />
+      </PageShell>
+    );
+  }
+
   if (projectsLoading) {
     return (
       <PageShell className="max-w-7xl mx-auto">
         <PageHeader
-          title="Projects"
-          subtitle="View and manage all projects across your workspace"
+          title={dashboardTitle}
+          subtitle={dashboardSubtitle}
           icon={<FolderKanban className="h-6 w-6" />}
         />
         <LoadingState type="table" rows={5} />
@@ -248,8 +270,8 @@ export default function ProjectsDashboard() {
     return (
       <PageShell className="max-w-7xl mx-auto">
         <PageHeader
-          title="Projects"
-          subtitle="View and manage all projects across your workspace"
+          title={dashboardTitle}
+          subtitle={dashboardSubtitle}
           icon={<FolderKanban className="h-6 w-6" />}
         />
         <ErrorState
@@ -264,8 +286,8 @@ export default function ProjectsDashboard() {
   return (
     <PageShell className="max-w-7xl mx-auto">
       <PageHeader
-        title="Projects"
-        subtitle="View and manage all projects across your workspace"
+        title={dashboardTitle}
+        subtitle={dashboardSubtitle}
         icon={<FolderKanban className="h-6 w-6" />}
         actions={
           <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-new-project">

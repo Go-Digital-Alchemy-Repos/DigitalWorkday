@@ -44,6 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/roles";
 
 interface NavItem {
   title: string;
@@ -110,8 +111,9 @@ export function MobileNavBar() {
   const { user } = useAuth();
   const { appName, iconUrl, logoUrl } = useTenantTheme();
   const crmEnabled = useAnyCrmEnabled();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasTenantAdminAccess(user?.role);
   const isSuperUser = user?.role === "super_user";
+  const showPmDashboard = hasProjectManagerDashboardAccess(user?.role);
 
   const isActive = (item: NavItem) => {
     if (item.matchPaths) {
@@ -162,6 +164,7 @@ export function MobileNavBar() {
         { title: "Home", href: "/", icon: Home, color: "text-sky-500" },
         { title: "My Tasks", href: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
         { title: "Projects", href: "/projects", icon: FolderKanban, color: "text-amber-500" },
+        { title: "PM Dashboard", href: "/pm-dashboard", icon: BarChart3, color: "text-cyan-500" },
         { title: "Clients", href: "/clients", icon: Briefcase, color: "text-indigo-500" },
         { title: "My Time", href: "/my-time", icon: Clock, color: "text-rose-500" },
         { title: "Chat", href: "/chat", icon: MessageCircle, color: "text-violet-500" },
@@ -345,7 +348,7 @@ export function MobileNavBar() {
                         </div>
                       </>
                     )}
-                    {section.items.map((item) => {
+                    {section.items.filter((item) => item.href !== "/pm-dashboard" || showPmDashboard).map((item) => {
                       const Icon = item.icon;
                       const active = isMenuActive(item);
                       return (

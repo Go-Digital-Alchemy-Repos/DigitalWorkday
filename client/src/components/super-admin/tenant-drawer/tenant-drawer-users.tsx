@@ -55,14 +55,14 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFirstName, setInviteFirstName] = useState("");
   const [inviteLastName, setInviteLastName] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "employee">("admin");
+  const [inviteRole, setInviteRole] = useState<"admin" | "project_manager" | "employee">("admin");
   const [lastInviteUrl, setLastInviteUrl] = useState("");
   const [manualUserMode, setManualUserMode] = useState(false);
   const [manualUserEmail, setManualUserEmail] = useState("");
   const [manualUserFirstName, setManualUserFirstName] = useState("");
   const [manualUserLastName, setManualUserLastName] = useState("");
   const [manualUserPassword, setManualUserPassword] = useState("");
-  const [manualUserRole, setManualUserRole] = useState<"admin" | "employee">("employee");
+  const [manualUserRole, setManualUserRole] = useState<"admin" | "project_manager" | "employee">("employee");
   const [showManualPassword, setShowManualPassword] = useState(false);
   const [csvData, setCsvData] = useState<Array<{ email: string; firstName?: string; lastName?: string; role?: string }>>([]);
   const [bulkImportResults, setBulkImportResults] = useState<any[]>([]);
@@ -84,7 +84,7 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
   });
 
   const inviteAdminMutation = useMutation({
-    mutationFn: async (data: { email: string; firstName?: string; lastName?: string; role?: "admin" | "employee"; inviteType: "link" | "email" }) => {
+    mutationFn: async (data: { email: string; firstName?: string; lastName?: string; role?: "admin" | "project_manager" | "employee"; inviteType: "link" | "email" }) => {
       const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant.id}/invite-admin`, data);
       return res.json();
     },
@@ -107,7 +107,7 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
   });
 
   const createManualUserMutation = useMutation({
-    mutationFn: async (data: { email: string; firstName: string; lastName: string; role: "admin" | "employee"; password: string }) => {
+    mutationFn: async (data: { email: string; firstName: string; lastName: string; role: "admin" | "project_manager" | "employee"; password: string }) => {
       const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant.id}/users`, data);
       return res.json();
     },
@@ -327,8 +327,8 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
           email,
           firstName: firstNameIndex >= 0 ? values[firstNameIndex] : undefined,
           lastName: lastNameIndex >= 0 ? values[lastNameIndex] : undefined,
-          role: roleIndex >= 0 && ['admin', 'employee'].includes(values[roleIndex]?.toLowerCase()) 
-            ? values[roleIndex].toLowerCase() as 'admin' | 'employee'
+          role: roleIndex >= 0 && ['admin', 'project_manager', 'employee'].includes(values[roleIndex]?.toLowerCase())
+            ? values[roleIndex].toLowerCase() as 'admin' | 'project_manager' | 'employee'
             : 'employee',
         });
       }
@@ -426,10 +426,11 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="manual-role">Role *</Label>
-                    <Select value={manualUserRole} onValueChange={(v: "admin" | "employee") => setManualUserRole(v)}>
+                    <Select value={manualUserRole} onValueChange={(v: "admin" | "project_manager" | "employee") => setManualUserRole(v)}>
                       <SelectTrigger id="manual-role" data-testid="select-manual-role"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="project_manager">Project Manager</SelectItem>
                         <SelectItem value="employee">Employee</SelectItem>
                       </SelectContent>
                     </Select>
@@ -480,10 +481,11 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="invite-role">Role</Label>
-                    <Select value={inviteRole} onValueChange={(v: "admin" | "employee") => setInviteRole(v)}>
+                    <Select value={inviteRole} onValueChange={(v: "admin" | "project_manager" | "employee") => setInviteRole(v)}>
                       <SelectTrigger id="invite-role" data-testid="select-invite-role"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="project_manager">Project Manager</SelectItem>
                         <SelectItem value="employee">Employee</SelectItem>
                       </SelectContent>
                     </Select>
@@ -678,7 +680,7 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">Required columns: email. Optional: firstName, lastName, role (admin/employee)</p>
+              <p className="text-xs text-muted-foreground">Required columns: email. Optional: firstName, lastName, role (admin/project_manager/employee)</p>
             </div>
 
             {csvData.length > 0 && (

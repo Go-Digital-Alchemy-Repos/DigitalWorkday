@@ -179,7 +179,7 @@ export default function SuperAdminUsers() {
     firstName: "",
     lastName: "",
     email: "",
-    role: "employee" as "admin" | "employee",
+    role: "employee" as "admin" | "project_manager" | "employee",
   });
   
   // Password reset link state
@@ -688,7 +688,7 @@ export default function SuperAdminUsers() {
       firstName: appUser.firstName || "",
       lastName: appUser.lastName || "",
       email: appUser.email || "",
-      role: (appUser.role === "admin" ? "admin" : "employee") as "admin" | "employee",
+      role: (appUser.role === "admin" || appUser.role === "project_manager" ? appUser.role : "employee") as "admin" | "project_manager" | "employee",
     });
     setAppUserEditDrawerOpen(true);
   };
@@ -1007,6 +1007,7 @@ export default function SuperAdminUsers() {
                       <SelectContent>
                         <SelectItem value="all">All Roles</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="project_manager">Project Manager</SelectItem>
                         <SelectItem value="employee">Employee</SelectItem>
                       </SelectContent>
                     </Select>
@@ -2303,13 +2304,14 @@ export default function SuperAdminUsers() {
               <Label htmlFor="editAppUserRole">Role</Label>
               <Select
                 value={appUserEditForm.role}
-                onValueChange={(value) => setAppUserEditForm({ ...appUserEditForm, role: value as "admin" | "employee" })}
+                onValueChange={(value) => setAppUserEditForm({ ...appUserEditForm, role: value as "admin" | "project_manager" | "employee" })}
               >
                 <SelectTrigger id="editAppUserRole" data-testid="select-edit-app-user-role">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="project_manager">Project Manager</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
                 </SelectContent>
               </Select>

@@ -1,10 +1,11 @@
 import { Request } from "express";
 import { db } from "../../../db";
 import { eq, and } from "drizzle-orm";
-import { clients, UserRole } from "@shared/schema";
+import { clients } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 export function isAdminOrSuper(req: Request): boolean {
-  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_USER;
+  return hasTenantAdminAccess(req.user?.role);
 }
 
 export async function verifyClientTenancy(clientId: string, tenantId: string): Promise<typeof clients.$inferSelect | null> {

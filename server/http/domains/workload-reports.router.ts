@@ -3,6 +3,7 @@ import { createApiRouter } from "../routerFactory";
 import { DatabaseStorage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { UserRole, User, TaskWithRelations } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { AppError, handleRouteError } from "../../lib/errors";
 
 const router = createApiRouter({
@@ -22,7 +23,7 @@ function isSuperUser(req: Request): boolean {
 
 function isAdmin(req: Request): boolean {
   const role = (req.user as any)?.role;
-  return role === UserRole.ADMIN || role === UserRole.SUPER_USER;
+  return hasTenantAdminAccess(role);
 }
 
 interface EmployeeWorkload {

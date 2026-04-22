@@ -51,6 +51,14 @@ import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShareModal } from "@/features/sharing/share-modal";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
@@ -149,7 +157,7 @@ export function TaskDetailDrawer({
   );
 
   const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+  const isAdmin = hasTenantAdminAccess(currentUser?.role);
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { formatErrorForToast } from "@/lib/parseApiError";
 import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
@@ -428,8 +429,7 @@ export default function ClientDetailPage() {
     user &&
       clientId &&
       (
-        user.role === "super_user" ||
-        user.role === "admin" ||
+        hasTenantAdminAccess(user.role) ||
         crmSummary?.tenantOwnerUserId === user.id ||
         crmSummary?.crm?.ownerUserId === user.id
       ),

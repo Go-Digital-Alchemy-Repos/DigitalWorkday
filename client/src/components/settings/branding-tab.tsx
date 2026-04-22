@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
 import type { AccentColor } from "@/lib/theme-provider";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 interface SystemSettings {
   id: number;
@@ -60,7 +61,7 @@ export function BrandingTab() {
 
   const { data: systemSettings } = useQuery<SystemSettings>({
     queryKey: ["/api/v1/super/system-settings"],
-    enabled: user?.role === "super_user" || user?.role === "admin",
+    enabled: hasTenantAdminAccess(user?.role),
   });
 
   useEffect(() => {
