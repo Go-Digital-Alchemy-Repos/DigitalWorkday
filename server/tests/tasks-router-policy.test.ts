@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { getRouterMeta } from "../http/routerFactory";
 import tasksRouter from "../http/domains/tasks.router";
 import express from "express";
-import request from "supertest";
 import type { RequestHandler } from "express";
+import { request } from "./httpHarness";
 
 function injectNoAuth(): RequestHandler {
   return (req, _res, next) => {
