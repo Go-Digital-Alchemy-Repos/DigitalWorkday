@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import request from "supertest";
 import express from "express";
 import session from "express-session";
 import { setupAuth } from "../auth";
+import { request } from "./httpHarness";
 
 describe("Auth Endpoints", () => {
   let app: express.Express;

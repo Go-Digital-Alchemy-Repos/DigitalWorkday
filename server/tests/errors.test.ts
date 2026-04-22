@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import request from "supertest";
 import express from "express";
 import { AppError } from "../lib/errors";
 import { errorHandler } from "../middleware/errorHandler";
 import { asyncHandler } from "../middleware/asyncHandler";
+import { request } from "./httpHarness";
 
 describe("Error Handling", () => {
   it("should handle AppError correctly", async () => {

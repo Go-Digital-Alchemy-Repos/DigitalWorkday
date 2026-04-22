@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
-import request from "supertest";
+import { describe, it, expect, vi } from "vitest";
 import express from "express";
 import { z } from "zod";
 import { validateBody, validateParams } from "../middleware/validate";
 import { errorHandler } from "../middleware/errorHandler";
+import { request } from "./httpHarness";
+import { AppError } from "../lib/errors";
 
 describe("Validation Middleware", () => {
   it("should reject empty team name", async () => {
@@ -51,27 +52,21 @@ describe("Validation Middleware", () => {
   });
 
   it("should reject empty teamId in params", async () => {
-    const app = express();
-    app.use(express.json());
-
     const teamIdSchema = z.object({
       teamId: z.string().min(1, "Team ID is required"),
     });
 
-    app.post(
-      "/api/teams/:teamId/members",
-      validateParams(teamIdSchema),
-      (req, res) => {
-        res.status(201).json({ teamId: req.params.teamId });
-      }
-    );
+    const middleware = validateParams(teamIdSchema);
+    const next = vi.fn();
+    const req = { params: {} } as any;
 
-    app.use(errorHandler);
+    middleware(req, {} as any, next);
 
-    const response = await request(app)
-      .post("/api/teams//members")
-      .send({ userId: "user-123" });
-
-    expect(response.status).toBe(404);
+    expect(next).toHaveBeenCalledTimes(1);
+    const error = next.mock.calls[0][0] as AppError;
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.statusCode).toBe(400);
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toBe("Path parameter validation failed");
   });
 });

@@ -5,11 +5,11 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express, { Request, Response, NextFunction } from "express";
-import request from "supertest";
 import { AppError, handleRouteError, sendError } from "../lib/errors";
 import { errorHandler } from "../middleware/errorHandler";
 import { requestIdMiddleware } from "../middleware/requestId";
 import { ZodError, z } from "zod";
+import { request } from "./httpHarness";
 
 function createTestApp() {
   const app = express();
