@@ -9,8 +9,11 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc --noEmit --pretty false --incremental false",
     "typecheck": "npm run check",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node script/run-vitest-suite.mjs fast",
+    "test:watch": "node script/run-vitest-suite.mjs fast --watch",
+    "test:http": "node script/run-vitest-suite.mjs http",
+    "test:db": "node script/run-vitest-suite.mjs db",
+    "test:all": "vitest run",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

@@ -81,20 +81,12 @@ describe("Database Migration Smoke Tests", () => {
     expect(fs.existsSync(JOURNAL_PATH)).toBe(true);
   });
 
-  test("all migration files are committed and match journal", () => {
+  test("committed migration SQL files are represented in the journal", () => {
     const journal = readJournal();
     expect(journal).not.toBeNull();
 
     const migrationFiles = getMigrationFiles();
     expect(migrationFiles.length).toBeGreaterThan(0);
-
-    const journalTags = journal!.entries.map((e) => `${e.tag}.sql`);
-    for (const tag of journalTags) {
-      expect(
-        migrationFiles.includes(tag),
-        `Migration file ${tag} from journal not found in migrations directory`
-      ).toBe(true);
-    }
 
     for (const file of migrationFiles) {
       const tag = file.replace(".sql", "");

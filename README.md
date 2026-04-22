@@ -117,12 +117,15 @@ npm start
 ## Testing
 
 ```bash
-npm test                 # Run the Vitest suite once
-npm run test:watch       # Run Vitest in watch mode
+npm test                 # Run the fast suite (no DB required)
+npm run test:watch       # Watch the fast suite
+npm run test:http        # Run HTTP/supertest suites
+npm run test:db          # Run DB-backed suites
+npm run test:all         # Run the full Vitest suite
 npm run check            # Run the TypeScript typecheck
 ```
 
-Many server tests rely on a configured `DATABASE_URL` and a local Postgres instance. In a partial local setup, some suites may fail or skip until the database is available.
+The fast suite is intended to be the default local gate. DB-backed suites require a configured `DATABASE_URL` and local Postgres, and HTTP suites may be blocked in restricted sandboxes that do not allow local listeners.
 
 ## Key Features
 

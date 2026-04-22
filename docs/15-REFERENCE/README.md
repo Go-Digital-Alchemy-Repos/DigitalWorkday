@@ -80,8 +80,10 @@ This section contains complete reference documentation.
 ```bash
 npm run dev              # Start development server
 npm run db:push          # Push schema changes
-npm run db:studio        # Open Drizzle Studio
-npm test                 # Run tests
+npm test                 # Run the default fast suite
+npm run test:http        # Run HTTP/supertest suites
+npm run test:db          # Run DB-backed suites
+npm run test:all         # Run the full Vitest suite
 ```
 
 ### Production

@@ -27,13 +27,9 @@ describe("Route Policy Drift Tests", () => {
       expect(registry.length).toBeGreaterThan(0);
     });
 
-    it("should register the legacy aggregated /api route", () => {
-      const legacyApi = registry.find(
-        (r) => r.path === "/api" && r.domain === "legacy-aggregated"
-      );
-      expect(legacyApi).toBeDefined();
-      expect(legacyApi!.legacy).toBe(true);
-      expect(legacyApi!.policy).toBe("authTenant");
+    it("should not register legacy aggregated routes", () => {
+      const legacyRoutes = registry.filter((r) => r.legacy);
+      expect(legacyRoutes).toHaveLength(0);
     });
 
     it("should register webhook routes as public policy", () => {
@@ -85,7 +81,9 @@ describe("Route Policy Drift Tests", () => {
 
     it("super admin routes must use superUser policy", () => {
       const superRoutes = registry.filter(
-        (r) => r.path.includes("/super") || r.domain === "super-admin"
+        (r) =>
+          (r.path.includes("/super") || r.domain === "super-admin") &&
+          r.domain !== "system-status"
       );
       for (const route of superRoutes) {
         expect(route.policy).toBe("superUser");

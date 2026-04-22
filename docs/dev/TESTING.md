@@ -5,17 +5,23 @@ This document describes the test suite, how to run tests, and known issues.
 ## Quick Start
 
 ```bash
-# Run all tests
+# Run the default fast suite
 npm test
+
+# Watch the fast suite
+npm run test:watch
+
+# Run HTTP/supertest suites
+npm run test:http
+
+# Run DB-backed suites
+npm run test:db
+
+# Run the full suite
+npm run test:all
 
 # Run specific test file
 npx vitest run server/tests/tenancy_permissions_audit.test.ts
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run with verbose output
-npx vitest run --reporter=verbose
 ```
 
 ## Test Structure
@@ -47,23 +53,18 @@ npx vitest run server/tests/tenancy_permissions_audit.test.ts
 npx vitest run server/tests/tenancy_enforcement.test.ts
 ```
 
-### 2. Integration Tests
-These test API endpoints with authentication:
+### 2. HTTP Route Tests
+These test API endpoints with mounted routers:
 
 ```bash
-# Workload reports
-npx vitest run server/tests/workload.test.ts
-
-# Tenant integrations (Mailgun/S3)
-npx vitest run server/tests/tenant-integrations.test.ts
+npm run test:http
 ```
 
-### 3. Auth & Bootstrap Tests
-These test authentication and first-user setup:
+### 3. DB-Backed Tests
+These require a configured Postgres database:
 
 ```bash
-npx vitest run server/tests/bootstrap-registration.test.ts
-npx vitest run server/tests/bootstrap-endpoints.test.ts
+npm run test:db
 ```
 
 ## Test Utilities
@@ -115,18 +116,11 @@ The `safeDeleteAllUsers()` function deletes data in FK-safe order:
 
 ## Known Issues
 
-### Port Conflicts
+### Environment Requirements
 
-When the development server is running, some tests fail with `EADDRINUSE` because they import modules that try to bind to port 5000.
-
-**Affected Tests**:
-- `super-only-integrations.test.ts`
-- `platform-admins.test.ts`
-- `bootstrap-registration.test.ts`
-- `global-integrations-persist.test.ts`
-- `seed-endpoints.test.ts`
-
-**Workaround**: Stop the development workflow before running tests.
+- `npm test` is the default fast suite and does not require Postgres.
+- `npm run test:db` requires `DATABASE_URL` and a reachable Postgres instance.
+- `npm run test:http` uses `supertest`; restricted sandboxes that disallow local listeners may block it.
 
 ### Test Isolation
 

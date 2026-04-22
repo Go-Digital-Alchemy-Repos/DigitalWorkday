@@ -46,14 +46,20 @@ client/src/
 ## Running Tests
 
 ```bash
-# Run all tests
+# Run the default fast suite
 npm test
 
-# Run with coverage
-npm test -- --coverage
+# Run HTTP/supertest suites
+npm run test:http
 
-# Run specific file
-npm test -- time-entry-edit.test.ts
+# Run DB-backed suites
+npm run test:db
+
+# Run the full suite
+npm run test:all
+
+# Run specific file directly with Vitest
+npx vitest run server/tests/time-entry-edit.test.ts
 ```
 
 ---
