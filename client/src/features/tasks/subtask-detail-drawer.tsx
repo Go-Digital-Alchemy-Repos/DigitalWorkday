@@ -4,6 +4,7 @@ import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pa
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { normalizeRichTextValue } from "@/components/richtext/richTextUtils";
 import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -142,11 +144,7 @@ export function SubtaskDetailDrawer({
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
-  const [description, setDescription] = useState<string>(
-    typeof subtask?.description === 'string' 
-      ? subtask.description 
-      : subtask?.description ? (typeof subtask.description === 'object' ? JSON.stringify(subtask.description) : String(subtask.description)) : ""
-  );
+  const [description, setDescription] = useState<string>(() => normalizeRichTextValue(subtask?.description));
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
@@ -380,14 +378,10 @@ export function SubtaskDetailDrawer({
   useEffect(() => {
     if (subtask) {
       setTitle(subtask.title);
-      setDescription(
-        typeof subtask.description === 'string' 
-          ? subtask.description 
-          : subtask.description ? JSON.stringify(subtask.description) : ""
-      );
+      setDescription(normalizeRichTextValue(subtask.description));
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
     }
-  }, [subtask?.id]);
+  }, [subtask?.id, subtask?.description, subtask?.title, subtask?.dueDate]);
 
   const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
     queryKey: ["/api/timer/current"],

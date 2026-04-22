@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
-import { toPlainText } from "@/components/richtext/richTextUtils";
+import { normalizeRichTextValue, toPlainText } from "@/components/richtext/richTextUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -161,7 +161,7 @@ export function TaskDetailDrawer({
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
-  const [description, setDescription] = useState(task?.description || "");
+  const [description, setDescription] = useState(() => normalizeRichTextValue(task?.description));
   const [estimateMinutes, setEstimateMinutes] = useState<string>(
     task?.estimateMinutes ? String(task.estimateMinutes) : ""
   );
@@ -772,7 +772,7 @@ export function TaskDetailDrawer({
   useEffect(() => {
     if (task) {
       setTitle(task.title);
-      setDescription(task.description || "");
+      setDescription(normalizeRichTextValue(task.description));
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
@@ -914,7 +914,7 @@ export function TaskDetailDrawer({
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
-    if (value !== (task?.description || "")) {
+    if (toPlainText(value) !== toPlainText(task?.description)) {
       setDirty(true);
     }
   };
