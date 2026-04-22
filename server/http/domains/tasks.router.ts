@@ -244,6 +244,126 @@ router.get("/tasks/my", async (req, res) => {
   }
 });
 
+router.get("/tasks/review-queue", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    const currentUser = await storage.getUser(userId);
+
+    if (!canApproveReview(currentUser)) {
+      return sendError(res, AppError.forbidden("Project manager access required"), req);
+    }
+
+    if (!tenantId) {
+      return sendError(res, AppError.badRequest("Tenant context is required"), req);
+    }
+
+    const projects = await storage.getProjectsByTenant(tenantId);
+    const clientNameById = new Map<string, string>();
+
+    await Promise.all(
+      projects
+        .filter((project) => !!project.clientId)
+        .map(async (project) => {
+          if (!project.clientId || clientNameById.has(project.clientId)) return;
+          const client = await storage.getClient(project.clientId);
+          clientNameById.set(
+            project.clientId,
+            client?.displayName || client?.companyName || "Unknown client",
+          );
+        }),
+    );
+
+    const items = (
+      await Promise.all(
+        projects.map(async (project) => {
+          const projectTasks = await storage.getTasksByProject(project.id);
+          const seenTaskIds = new Set<string>();
+          const reviewItems: Array<Record<string, unknown>> = [];
+
+          for (const task of projectTasks) {
+            if (seenTaskIds.has(task.id)) continue;
+            seenTaskIds.add(task.id);
+
+            if (!task.parentTaskId && isTaskReviewStatus(task.status)) {
+              reviewItems.push({
+                id: task.id,
+                type: "task",
+                title: task.title,
+                status: normalizeTaskStatus(task.status) || task.status,
+                projectId: project.id,
+                projectName: project.name,
+                clientId: project.clientId,
+                clientName: project.clientId ? clientNameById.get(project.clientId) ?? "Unknown client" : null,
+                taskId: task.id,
+                taskTitle: task.title,
+                priority: task.priority,
+                dueDate: task.dueDate,
+                estimateMinutes: task.estimateMinutes,
+                submittedAt: task.updatedAt,
+                updatedAt: task.updatedAt,
+                assignees: (task.assignees || []).map((assignee: any) => ({
+                  id: assignee.user?.id || assignee.userId,
+                  name:
+                    assignee.user?.name ||
+                    [assignee.user?.firstName, assignee.user?.lastName].filter(Boolean).join(" ") ||
+                    assignee.user?.email ||
+                    "Unassigned",
+                  email: assignee.user?.email || null,
+                })),
+              });
+            }
+
+            for (const subtask of task.subtasks || []) {
+              if (!isTaskReviewStatus(subtask.status)) continue;
+
+              const subtaskAssignees = await storage.getSubtaskAssignees(subtask.id);
+              reviewItems.push({
+                id: subtask.id,
+                type: "subtask",
+                title: subtask.title,
+                status: normalizeTaskStatus(subtask.status) || subtask.status,
+                projectId: project.id,
+                projectName: project.name,
+                clientId: project.clientId,
+                clientName: project.clientId ? clientNameById.get(project.clientId) ?? "Unknown client" : null,
+                taskId: task.id,
+                taskTitle: task.title,
+                priority: subtask.priority,
+                dueDate: subtask.dueDate,
+                estimateMinutes: subtask.estimateMinutes,
+                submittedAt: subtask.updatedAt,
+                updatedAt: subtask.updatedAt,
+                assignees: subtaskAssignees.map((assignee: any) => ({
+                  id: assignee.user?.id || assignee.userId,
+                  name:
+                    assignee.user?.name ||
+                    [assignee.user?.firstName, assignee.user?.lastName].filter(Boolean).join(" ") ||
+                    assignee.user?.email ||
+                    "Unassigned",
+                  email: assignee.user?.email || null,
+                })),
+              });
+            }
+          }
+
+          return reviewItems;
+        }),
+      )
+    )
+      .flat()
+      .sort((a, b) => {
+        const aTime = a.updatedAt ? new Date(String(a.updatedAt)).getTime() : 0;
+        const bTime = b.updatedAt ? new Date(String(b.updatedAt)).getTime() : 0;
+        return bTime - aTime;
+      });
+
+    res.json(items);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/tasks/review-queue", req);
+  }
+});
+
 router.post("/tasks/personal", async (req, res) => {
   const requestId = req.requestId || 'unknown';
   try {

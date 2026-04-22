@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock, ClipboardCheck, Eye } from "lucide-react";
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -75,6 +75,29 @@ interface ProjectsDashboardProps {
   variant?: "projects" | "pm";
 }
 
+interface ReviewQueueItem {
+  id: string;
+  type: "task" | "subtask";
+  title: string;
+  status: string;
+  projectId: string | null;
+  projectName: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  taskId: string;
+  taskTitle: string;
+  priority: string | null;
+  dueDate: string | null;
+  estimateMinutes: number | null;
+  submittedAt: string | null;
+  updatedAt: string | null;
+  assignees: Array<{
+    id: string;
+    name: string;
+    email: string | null;
+  }>;
+}
+
 export default function ProjectsDashboard({ variant = "projects" }: ProjectsDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
@@ -117,6 +140,15 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
   const { data: analytics } = useQuery<ProjectAnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
     staleTime: 30000,
+  });
+
+  const {
+    data: reviewQueue = [],
+    isLoading: reviewQueueLoading,
+  } = useQuery<ReviewQueueItem[]>({
+    queryKey: ["/api/tasks/review-queue"],
+    enabled: isPmDashboard && canAccessPmDashboard,
+    staleTime: 15000,
   });
 
   const createProjectMutation = useMutation({
@@ -178,6 +210,29 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     await updateProjectMutation.mutateAsync({ projectId: editingProject.id, data });
   };
 
+  const approveReviewMutation = useMutation({
+    mutationFn: async (item: ReviewQueueItem) => {
+      const endpoint =
+        item.type === "task" ? `/api/tasks/${item.id}` : `/api/subtasks/${item.id}`;
+      await apiRequest("PATCH", endpoint, { status: "in_progress" });
+    },
+    onSuccess: (_, item) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects/analytics/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      if (item.projectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", item.projectId, "tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", item.projectId, "sections"] });
+      }
+      toast({
+        title: item.type === "task" ? "Task returned to assignee" : "Subtask returned to assignee",
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to approve review", variant: "destructive" });
+    },
+  });
+
   const getProjectStats = (projectId: string) => {
     if (!analytics?.perProject) return null;
     return analytics.perProject.find(p => p.projectId === projectId);
@@ -234,6 +289,12 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
 
   const handleRowClick = (project: ProjectWithCounts) => {
     navigate(`/projects/${project.id}`);
+  };
+
+  const handleOpenReviewItem = (item: ReviewQueueItem) => {
+    if (!item.projectId) return;
+    const taskId = item.type === "task" ? item.id : item.taskId;
+    navigate(`/projects/${item.projectId}?task=${taskId}`);
   };
 
   const getClientName = (clientId: string | null) => {
@@ -338,6 +399,169 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {isPmDashboard && (
+        <Card className="mb-6" data-testid="pm-review-queue">
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4 text-primary" />
+                  <h2 className="font-semibold">Sent for Review</h2>
+                  <Badge variant="secondary">{reviewQueue.length}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review submitted work and return it to the assignee to close out and log time.
+                </p>
+              </div>
+            </div>
+
+            {reviewQueueLoading ? (
+              <LoadingState type="list" rows={4} />
+            ) : reviewQueue.length === 0 ? (
+              <EmptyState
+                icon={<ClipboardCheck className="h-10 w-10" />}
+                title="No tasks waiting for review"
+                description="Items sent to review will appear here for project managers and admins."
+              />
+            ) : (
+              <>
+                <div className="md:hidden space-y-3">
+                  {reviewQueue.map((item) => (
+                    <Card key={`${item.type}-${item.id}`} className="border-muted">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline">
+                                {item.type === "task" ? "Task" : "Subtask"}
+                              </Badge>
+                              <Badge variant="secondary">In Review</Badge>
+                            </div>
+                            <h3 className="font-medium mt-2">{item.title}</h3>
+                            {item.type === "subtask" && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Parent task: {item.taskTitle}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <p>{item.projectName || "Unknown project"}</p>
+                          {item.clientName && <p>{item.clientName}</p>}
+                          <p>
+                            Assigned to:{" "}
+                            {item.assignees.length > 0
+                              ? item.assignees.map((assignee) => assignee.name).join(", ")
+                              : "Unassigned"}
+                          </p>
+                          <p>
+                            Submitted:{" "}
+                            {item.submittedAt ? format(new Date(item.submittedAt), "MMM d, yyyy") : "-"}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenReviewItem(item)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Open
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => approveReviewMutation.mutate(item)}
+                            disabled={approveReviewMutation.isPending}
+                          >
+                            {approveReviewMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <CheckSquare className="h-4 w-4 mr-2" />
+                            )}
+                            Approve Review
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="hidden md:block border rounded-lg overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead>Project</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Assigned To</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reviewQueue.map((item) => (
+                        <TableRow key={`${item.type}-${item.id}`}>
+                          <TableCell>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{item.title}</span>
+                                <Badge variant="outline">
+                                  {item.type === "task" ? "Task" : "Subtask"}
+                                </Badge>
+                                <Badge variant="secondary">In Review</Badge>
+                              </div>
+                              {item.type === "subtask" && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Parent task: {item.taskTitle}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{item.projectName || "-"}</TableCell>
+                          <TableCell>{item.clientName || "-"}</TableCell>
+                          <TableCell>
+                            {item.assignees.length > 0
+                              ? item.assignees.map((assignee) => assignee.name).join(", ")
+                              : "Unassigned"}
+                          </TableCell>
+                          <TableCell>
+                            {item.submittedAt ? format(new Date(item.submittedAt), "MMM d, yyyy") : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenReviewItem(item)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Open
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => approveReviewMutation.mutate(item)}
+                                disabled={approveReviewMutation.isPending}
+                              >
+                                {approveReviewMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <CheckSquare className="h-4 w-4 mr-2" />
+                                )}
+                                Approve Review
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <div className="mb-6" data-testid="projects-pipeline-bar">
