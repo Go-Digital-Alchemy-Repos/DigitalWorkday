@@ -1299,7 +1299,7 @@ export function TaskDetailDrawer({
                     <Pencil className="h-3.5 w-3.5" />
                   </div>
                   <div className="whitespace-pre-wrap text-sm text-foreground">
-                    {richTextToPlainText(description)}
+                    {richTextToPlainText(task.description)}
                   </div>
                 </button>
               )}
@@ -1691,37 +1691,41 @@ export function TaskDetailDrawer({
         </div>
       </SheetContent>
 
-      <SubtaskDetailDrawer
-        subtask={selectedSubtask}
-        parentTaskTitle={task.title}
-        projectId={task.projectId || undefined}
-        workspaceId={workspaceId}
-        open={subtaskDrawerOpen}
-        onOpenChange={(open) => {
-          setSubtaskDrawerOpen(open);
-          if (!open) setSelectedSubtask(null);
-        }}
-        onUpdate={(subtaskId, data) => {
-          apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
-            invalidateTaskQueries();
-            if (selectedSubtask && selectedSubtask.id === subtaskId) {
-              setSelectedSubtask({ ...selectedSubtask, ...data });
-            }
-          }).catch(console.error);
-        }}
-        onBack={() => {
-          setSubtaskDrawerOpen(false);
-          setSelectedSubtask(null);
-        }}
-        availableUsers={mentionUsers}
-      />
+      {subtaskDrawerOpen && selectedSubtask ? (
+        <SubtaskDetailDrawer
+          subtask={selectedSubtask}
+          parentTaskTitle={task.title}
+          projectId={task.projectId || undefined}
+          workspaceId={workspaceId}
+          open={subtaskDrawerOpen}
+          onOpenChange={(open) => {
+            setSubtaskDrawerOpen(open);
+            if (!open) setSelectedSubtask(null);
+          }}
+          onUpdate={(subtaskId, data) => {
+            apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
+              invalidateTaskQueries();
+              if (selectedSubtask && selectedSubtask.id === subtaskId) {
+                setSelectedSubtask({ ...selectedSubtask, ...data });
+              }
+            }).catch(console.error);
+          }}
+          onBack={() => {
+            setSubtaskDrawerOpen(false);
+            setSelectedSubtask(null);
+          }}
+          availableUsers={mentionUsers}
+        />
+      ) : null}
 
-      <StartTimerDrawer
-        open={timerDrawerOpen}
-        onOpenChange={setTimerDrawerOpen}
-        initialTaskId={task.id}
-        initialProjectId={task.projectId || null}
-      />
+      {timerDrawerOpen ? (
+        <StartTimerDrawer
+          open={timerDrawerOpen}
+          onOpenChange={setTimerDrawerOpen}
+          initialTaskId={task.id}
+          initialProjectId={task.projectId || null}
+        />
+      ) : null}
 
       <Dialog open={showTimeTrackingPrompt} onOpenChange={setShowTimeTrackingPrompt}>
         <DialogContent className="sm:max-w-md">
@@ -1880,14 +1884,14 @@ export function TaskDetailDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {task && (
+      {task && shareModalOpen ? (
         <ShareModal
           type="task"
           itemId={task.id}
           isOpen={shareModalOpen}
           onClose={() => setShareModalOpen(false)}
         />
-      )}
+      ) : null}
       </Sheet>
     </>
   );

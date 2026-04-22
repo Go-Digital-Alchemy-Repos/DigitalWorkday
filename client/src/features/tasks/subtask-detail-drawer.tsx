@@ -888,7 +888,7 @@ export function SubtaskDetailDrawer({
                       <Pencil className="h-3.5 w-3.5" />
                     </div>
                     <div className="whitespace-pre-wrap text-sm text-foreground">
-                      {richTextToPlainText(description)}
+                      {richTextToPlainText(subtask.description)}
                     </div>
                   </button>
                 )}
