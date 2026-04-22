@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import request from "supertest";
 import express from "express";
 import type { RequestHandler } from "express";
 import { getRouterMeta } from "../http/routerFactory";
 import teamsRouter from "../http/domains/teams.router";
+import { request } from "./httpHarness";
 
 function injectNoAuth(): RequestHandler {
   return (req, _res, next) => {
