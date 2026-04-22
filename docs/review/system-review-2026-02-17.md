@@ -7,7 +7,7 @@
 | TypeScript    | PASS    | tsc --noEmit times out (large codebase), runtime clean |
 | Frontend Build| PASS    | Vite build in ~25s, 3622 modules, 950KB gzip |
 | Backend Start | PASS    | App READY in ~800ms, all schema checks pass |
-| Tests         | N/A     | No automated test suite configured to run   |
+| Tests         | PARTIAL | Automated Vitest suite exists; full runs depend on local DB/env setup |
 | Lint          | N/A     | No eslint config active                     |
 
 ### Build Metrics

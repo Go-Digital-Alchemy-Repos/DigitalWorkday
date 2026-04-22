@@ -117,9 +117,12 @@ npm start
 ## Testing
 
 ```bash
-npm test                 # Run all tests
-npm run test:watch       # Watch mode
+npm test                 # Run the Vitest suite once
+npm run test:watch       # Run Vitest in watch mode
+npm run check            # Run the TypeScript typecheck
 ```
+
+Many server tests rely on a configured `DATABASE_URL` and a local Postgres instance. In a partial local setup, some suites may fail or skip until the database is available.
 
 ## Key Features
 
