@@ -8,7 +8,7 @@ import { TaskDrawerSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
+import { RichTextEditor, richTextToPlainText } from "@/components/richtext";
 import { normalizeRichTextValue, toPlainText } from "@/components/richtext/richTextUtils";
 import { mergeMentionUsers } from "@/components/richtext/mentionUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
@@ -1298,7 +1298,9 @@ export function TaskDetailDrawer({
                     <span>Click to edit</span>
                     <Pencil className="h-3.5 w-3.5" />
                   </div>
-                  <RichTextRenderer value={description} />
+                  <div className="whitespace-pre-wrap text-sm text-foreground">
+                    {richTextToPlainText(description)}
+                  </div>
                 </button>
               )}
             </div>

@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RichTextEditor, RichTextRenderer, toPlainText } from "@/components/richtext";
+import { RichTextEditor, richTextToPlainText, toPlainText } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -887,7 +887,9 @@ export function SubtaskDetailDrawer({
                       <span>Click to edit</span>
                       <Pencil className="h-3.5 w-3.5" />
                     </div>
-                    <RichTextRenderer value={description} />
+                    <div className="whitespace-pre-wrap text-sm text-foreground">
+                      {richTextToPlainText(description)}
+                    </div>
                   </button>
                 )}
               </div>
