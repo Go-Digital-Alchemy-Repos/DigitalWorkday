@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
 import { normalizeRichTextValue, toPlainText } from "@/components/richtext/richTextUtils";
+import { mergeMentionUsers } from "@/components/richtext/mentionUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -151,9 +152,18 @@ export function TaskDetailDrawer({
     queryKey: ["/api/tenant/users"],
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
+  const { data: workspaceUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: open && (!availableUsers || availableUsers.length === 0),
+  });
   const mentionUsers = useMemo(
-    () => availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers,
-    [availableUsers, tenantUsers]
+    () => {
+      if (availableUsers && availableUsers.length > 0) {
+        return availableUsers;
+      }
+      return mergeMentionUsers(tenantUsers, workspaceUsers);
+    },
+    [availableUsers, tenantUsers, workspaceUsers]
   );
 
   const { user: currentUser } = useAuth();
@@ -1228,6 +1238,7 @@ export function TaskDetailDrawer({
           <FormFieldWrapper label="Description" className="overflow-hidden">
             <div className="max-w-full overflow-hidden">
               <RichTextEditor
+                key={`task-description-${task.id}`}
                 value={description}
                 onChange={handleDescriptionChange}
                 onBlur={handleDescriptionBlur}

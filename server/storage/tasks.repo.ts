@@ -18,7 +18,7 @@ import {
   projects, users, timeEntries, activeTimers, sections,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, gte, lte, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, inArray, isNull, sql } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export type CalendarTask = {
@@ -807,9 +807,22 @@ export class TasksRepository {
 
   async getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]> {
     const attachmentsList = await db.select().from(taskAttachments)
-      .where(eq(taskAttachments.taskId, taskId))
+      .where(and(eq(taskAttachments.taskId, taskId), isNull(taskAttachments.subtaskId)))
       .orderBy(desc(taskAttachments.createdAt));
     
+    const result: TaskAttachmentWithUser[] = [];
+    for (const attachment of attachmentsList) {
+      const user = await this.getUser(attachment.uploadedByUserId);
+      result.push({ ...attachment, uploadedByUser: user });
+    }
+    return result;
+  }
+
+  async getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]> {
+    const attachmentsList = await db.select().from(taskAttachments)
+      .where(eq(taskAttachments.subtaskId, subtaskId))
+      .orderBy(desc(taskAttachments.createdAt));
+
     const result: TaskAttachmentWithUser[] = [];
     for (const attachment of attachmentsList) {
       const user = await this.getUser(attachment.uploadedByUserId);

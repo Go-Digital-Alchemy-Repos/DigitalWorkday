@@ -3,6 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Mention from "@tiptap/extension-mention";
+import { Placeholder } from "@tiptap/extensions/placeholder";
 import { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
 import type { User } from "@shared/schema";
 import { PromptDialog } from "@/components/prompt-dialog";
+import { getMentionUserLabel, matchesMentionUser } from "./mentionUtils";
 
 interface CommentEditorProps {
   value?: string;
@@ -57,19 +59,7 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
   function MentionList({ query, users, command }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0);
 
-    const filteredUsers = users.filter((user) => {
-      const searchText = query.toLowerCase();
-      const name = (user.displayName || user.name || "").toLowerCase();
-      const email = user.email?.toLowerCase() || "";
-      const firstName = user.firstName?.toLowerCase() || "";
-      const lastName = user.lastName?.toLowerCase() || "";
-      return (
-        name.includes(searchText) ||
-        email.includes(searchText) ||
-        firstName.includes(searchText) ||
-        lastName.includes(searchText)
-      );
-    }).slice(0, 5);
+    const filteredUsers = users.filter((user) => matchesMentionUser(user, query)).slice(0, 5);
 
     useEffect(() => {
       setSelectedIndex(0);
@@ -81,7 +71,7 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
         if (user) {
           command({
             id: user.id,
-            label: user.displayName || user.name || user.email,
+            label: getMentionUserLabel(user),
           });
         }
       },
@@ -130,7 +120,7 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             onClick={() => selectUser(index)}
             data-testid={`mention-option-${user.id}`}
           >
-            <span className="font-medium">{user.displayName || user.name || "Unknown"}</span>
+            <span className="font-medium">{getMentionUserLabel(user)}</span>
             <span className="text-xs text-muted-foreground">{user.email}</span>
           </button>
         ))}
@@ -296,9 +286,29 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
     const [mentionRect, setMentionRect] = useState<{ top: number; left: number } | null>(null);
     const [linkDialogOpen, setLinkDialogOpen] = useState(false);
     const [linkDefaultValue, setLinkDefaultValue] = useState("");
+    const editorHostRef = useRef<HTMLDivElement | null>(null);
 
     const usersRef = useRef<User[]>(users);
     useEffect(() => { usersRef.current = users; }, [users]);
+
+    const updateMentionRect = useCallback((clientRect?: (() => DOMRect | null) | null) => {
+      const rect = clientRect?.();
+      if (rect) {
+        setMentionRect({ top: rect.top + window.scrollY, left: rect.left + window.scrollX });
+        return;
+      }
+
+      const hostRect = editorHostRef.current?.getBoundingClientRect();
+      if (hostRect) {
+        setMentionRect({
+          top: hostRect.top + window.scrollY + 40,
+          left: hostRect.left + window.scrollX + 12,
+        });
+        return;
+      }
+
+      setMentionRect(null);
+    }, []);
 
     const mentionListRef = useRef<MentionListHandle>(null);
 
@@ -326,12 +336,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
           suggestion: {
             char: "@",
             items: ({ query }: { query: string }) => {
-              return usersRef.current.filter((user) => {
-                const searchText = query.toLowerCase();
-                const name = (user.displayName || user.name || "").toLowerCase();
-                const email = user.email?.toLowerCase() || "";
-                return name.includes(searchText) || email.includes(searchText);
-              }).slice(0, 5);
+              return usersRef.current.filter((user) => matchesMentionUser(user, query)).slice(0, 5);
             },
             render: () => {
               return {
@@ -339,21 +344,11 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
                   setMentionQuery(props.query);
                   setMentionCommand(() => props.command);
                   setMentionPopupOpen(true);
-                  if (props.clientRect) {
-                    const rect = props.clientRect();
-                    if (rect) {
-                      setMentionRect({ top: rect.top + window.scrollY, left: rect.left + window.scrollX });
-                    }
-                  }
+                  updateMentionRect(props.clientRect);
                 },
                 onUpdate: (props: { query: string; clientRect?: (() => DOMRect | null) | null }) => {
                   setMentionQuery(props.query);
-                  if (props.clientRect) {
-                    const rect = props.clientRect();
-                    if (rect) {
-                      setMentionRect({ top: rect.top + window.scrollY, left: rect.left + window.scrollX });
-                    }
-                  }
+                  updateMentionRect(props.clientRect);
                 },
                 onKeyDown: (props: { event: KeyboardEvent }) => {
                   if (props.event.key === "Escape") {
@@ -374,6 +369,10 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
             },
           },
         }),
+        Placeholder.configure({
+          placeholder,
+          showOnlyWhenEditable: true,
+        }),
       ],
       content: value ? getDocForEditor(value) : "",
       editable: !disabled,
@@ -381,9 +380,10 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       editorProps: {
         attributes: {
           class: cn(
-            "prose prose-sm dark:prose-invert max-w-none focus:outline-none",
+            "prose prose-sm dark:prose-invert max-w-none text-foreground focus:outline-none",
             "min-h-[60px] px-3 py-2"
           ),
+          "data-placeholder": placeholder,
           "data-testid": testId ? `${testId}-content` : "comment-content",
         },
         handlePaste: (_view, event) => {
@@ -451,8 +451,19 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       }
     }, [editor, disabled]);
 
+    useEffect(() => {
+      if (!editor) return;
+      const nextValue = value ?? "";
+      const currentDoc = serializeDocToString(editor.getJSON());
+      const nextDoc = serializeDocToString(getDocForEditor(nextValue));
+      if (currentDoc !== nextDoc) {
+        editor.commands.setContent(getDocForEditor(nextValue), false);
+      }
+    }, [editor, value]);
+
     return (
       <div
+        ref={editorHostRef}
         className={cn(
           "border border-input rounded-md overflow-hidden bg-background relative",
           disabled && "opacity-50 cursor-not-allowed",

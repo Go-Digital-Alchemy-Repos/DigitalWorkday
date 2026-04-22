@@ -82,6 +82,12 @@ function extractTextFromDoc(node: JSONContent): string {
     return node.text;
   }
 
+  if (node.type === "mention" && node.attrs) {
+    const attrs = node.attrs as Record<string, unknown>;
+    const label = attrs.label || attrs.id || "";
+    return label ? `@${String(label)}` : "";
+  }
+
   if (node.content && Array.isArray(node.content)) {
     return node.content
       .map((child) => extractTextFromDoc(child))

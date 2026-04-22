@@ -640,13 +640,6 @@ export function NotificationCenter() {
 
     if (notification.href) {
       setIsOpen(false);
-      if (isTaskNotification(notification.type)) {
-        const taskId = getTaskIdFromPayload(notification.payloadJson);
-        if (taskId && openTask) {
-          openTask(taskId);
-          return;
-        }
-      }
       setLocation(notification.href);
       return;
     }

@@ -23,7 +23,7 @@
  * 
  * @see POST /api/tasks/:taskId/comments in server/routes.ts for mention parsing
  */
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
+import { mergeMentionUsers } from "@/components/richtext/mentionUtils";
 import { CommentAttachments, type CommentAttachmentMeta } from "@/components/comments/CommentAttachments";
 import { CommentDropzone } from "@/components/uploads/CommentDropzone";
 import { useAttachmentUploadQueue } from "@/lib/uploads/useAttachmentUploadQueue";
@@ -148,7 +149,15 @@ export function CommentThread({
     enabled: !users || users.length === 0,
   });
 
-  const mentionUsers = users && users.length > 0 ? users : tenantUsers;
+  const { data: workspaceUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: !users || users.length === 0,
+  });
+
+  const mentionUsers = useMemo(() => {
+    if (users && users.length > 0) return users;
+    return mergeMentionUsers(tenantUsers, workspaceUsers);
+  }, [users, tenantUsers, workspaceUsers]);
 
   const handleFileSelect = useCallback(
     (files: FileList | null) => {

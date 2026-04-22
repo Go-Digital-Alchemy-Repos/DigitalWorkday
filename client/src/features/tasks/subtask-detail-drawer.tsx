@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Pencil } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { normalizeRichTextValue } from "@/components/richtext/richTextUtils";
+import { mergeMentionUsers } from "@/components/richtext/mentionUtils";
 import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -137,7 +138,16 @@ export function SubtaskDetailDrawer({
     queryKey: ["/api/tenant/users"],
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
-  const mentionUsers = availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers;
+  const { data: workspaceUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: open && (!availableUsers || availableUsers.length === 0),
+  });
+  const mentionUsers = useMemo(() => {
+    if (availableUsers && availableUsers.length > 0) {
+      return availableUsers;
+    }
+    return mergeMentionUsers(tenantUsers, workspaceUsers);
+  }, [availableUsers, tenantUsers, workspaceUsers]);
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -800,6 +810,7 @@ export function SubtaskDetailDrawer({
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
                 <RichTextEditor
+                  key={`subtask-description-${subtask.id}`}
                   value={description}
                   onChange={handleDescriptionChange}
                   placeholder="Add a description... Type @ to mention someone"
@@ -811,12 +822,12 @@ export function SubtaskDetailDrawer({
 
               <Separator />
 
-              {projectId && (
+              {projectId && isActualSubtask && (
                 <div 
                   className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
                   style={{ borderRadius: "10px" }}
                 >
-                  <AttachmentUploader taskId={subtask.id} projectId={projectId} />
+                  <AttachmentUploader taskId={subtask.taskId} subtaskId={subtask.id} projectId={projectId} />
                 </div>
               )}
 

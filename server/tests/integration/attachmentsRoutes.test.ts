@@ -113,6 +113,16 @@ describe("Attachments Domain — Smoke Integration Tests", () => {
       const res = await request(app).get("/api/projects/nonexistent/tasks/nonexistent/attachments");
       expect([200, 404, 500]).toContain(res.status);
     });
+
+    it("should route GET /projects/:pid/subtasks/:sid/attachments to handler (not express 404)", async () => {
+      const app = express();
+      app.use(express.json());
+      app.use(injectPassportAuth(testUser));
+      app.use("/api", attachmentsRouter);
+
+      const res = await request(app).get("/api/projects/nonexistent/subtasks/nonexistent/attachments");
+      expect([200, 404, 500]).toContain(res.status);
+    });
   });
 
   describe("Validation (2 tests)", () => {
@@ -161,6 +171,19 @@ describe("Attachments Domain — Smoke Integration Tests", () => {
           fileSizeBytes: 1000,
         });
       expect([404, 500, 503]).toContain(res.status);
+    });
+
+    it("should route subtask upload requests through the attachment handler", async () => {
+      const app = express();
+      app.use(express.json());
+      app.use(injectPassportAuth(testUser));
+      app.use("/api", attachmentsRouter);
+
+      const res = await request(app)
+        .post("/api/projects/p1/subtasks/s1/attachments/upload")
+        .attach("file", Buffer.from("hello"), "note.txt");
+
+      expect([400, 404, 500, 503]).toContain(res.status);
     });
   });
 });

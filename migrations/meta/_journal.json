@@ -309,6 +309,13 @@
       "when": 1773873000000,
       "tag": "0043_active_timer_subtasks",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1773880200000,
+      "tag": "0044_subtask_attachments",
+      "breakpoints": true
     }
   ]
 }
