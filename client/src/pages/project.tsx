@@ -42,6 +42,7 @@ import { TaskCard } from "@/features/tasks/task-card";
 import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
+import { sortSectionsOpenFirst } from "@/features/tasks/taskOrdering";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import {
@@ -178,7 +179,16 @@ export default function ProjectPage() {
     enabled: !!projectId,
   });
 
-  const displaySections = localSections || sections;
+  const displaySections = useMemo(
+    () => sortSectionsOpenFirst(localSections || sections),
+    [localSections, sections],
+  );
+
+  useEffect(() => {
+    if (sections) {
+      setLocalSections(null);
+    }
+  }, [sections]);
 
   const activeTask = activeTaskId
     ? displaySections?.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
@@ -223,6 +233,14 @@ export default function ProjectPage() {
       if (selectedTask) {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks", selectedTask.id] });
       }
+    },
+    onError: () => {
+      setLocalSections(null);
+      toast({
+        title: "Failed to update task",
+        description: "The task status could not be updated. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -578,6 +596,24 @@ export default function ProjectPage() {
   };
 
   const handleStatusChange = async (taskId: string, completed: boolean) => {
+    setLocalSections((current) => {
+      const baseSections = current || sections;
+      if (!baseSections) {
+        return current;
+      }
+
+      return sortSectionsOpenFirst(
+        baseSections.map((section) => ({
+          ...section,
+          tasks: (section.tasks || []).map((task) =>
+            task.id === taskId
+              ? { ...task, status: completed ? "done" : "todo" }
+              : task,
+          ),
+        })),
+      );
+    });
+
     if (!completed) {
       updateTaskMutation.mutate({
         taskId,
