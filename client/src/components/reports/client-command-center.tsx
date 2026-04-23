@@ -97,7 +97,7 @@ interface ClientOverviewItem {
 }
 
 function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError } = useQuery<{
     clients: ClientOverviewItem[];
     summary?: {
       current: {
@@ -176,6 +176,26 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  if (isError || !data) {
+    return (
+      <ReportEmptyState
+        icon={Building2}
+        title="Client overview is unavailable"
+        description="We couldn't load client overview metrics for this range just now. Refresh and try again, or switch the date range to confirm whether data exists."
+      />
+    );
+  }
+
+  if (!data.clients.length) {
+    return (
+      <ReportEmptyState
+        icon={Building2}
+        title="No client overview data in this range"
+        description="There are no clients with matching report activity for the selected range and project-status filter yet."
+      />
+    );
+  }
 
   const range = `${rangeDays}d`;
 

@@ -118,7 +118,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
   const [sortBy, setSortBy] = useState<SortField>("overdueCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError } = useQuery<{
     team: TeamMember[];
     pagination: { total: number };
     range: { startDate: string; endDate: string };
@@ -201,6 +201,16 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  if (isError || !data) {
+    return (
+      <ReportEmptyState
+        icon={Users}
+        title="Team workload is unavailable"
+        description="We couldn't load team workload metrics for this range. Refresh and try again, or change the date range to confirm available data."
+      />
+    );
+  }
 
   if (!data?.team?.length) {
     return (
@@ -382,7 +392,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
 function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
-  const { data: teamData } = useQuery<{ team: TeamMember[] }>({
+  const { data: teamData, isLoading: isTeamLoading, isError: isTeamError } = useQuery<{ team: TeamMember[] }>({
     queryKey: ["/api/reports/v2/workload/team", rangeDays],
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/team?${buildQueryParams(rangeDays, { limit: "100" })}`);
@@ -391,7 +401,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
     },
   });
 
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError } = useQuery<{
     user: { id: string; firstName: string | null; lastName: string | null; email: string; avatarUrl: string | null };
     summary: { activeTasksNow: number; overdueCount: number; completedCount: number; totalHours: number; dueSoonCount: number };
     dailyTrend: Array<{ day: string; completedTasks: number; hoursTracked: number }>;
@@ -415,6 +425,34 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
     none: "text-muted-foreground",
   };
 
+  if (isTeamLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+      </div>
+    );
+  }
+
+  if (isTeamError || !teamData) {
+    return (
+      <ReportEmptyState
+        icon={User}
+        title="Employee detail is unavailable"
+        description="We couldn't load the team roster needed for employee workload detail. Refresh and try again."
+      />
+    );
+  }
+
+  if (!teamData.team.length) {
+    return (
+      <ReportEmptyState
+        icon={User}
+        title="No employees available for workload detail"
+        description="There are no team members with reportable workload data in the selected range yet."
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -426,14 +464,13 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
                 <SelectValue placeholder="Select an employee…" />
               </SelectTrigger>
               <SelectContent>
-                {teamData?.team.map((m) => (
+                {teamData.team.map((m) => (
                   <SelectItem key={m.userId} value={m.userId} data-testid={`option-employee-${m.userId}`}>
                     {userName(m)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {!teamData && <Skeleton className="h-9 w-64" />}
           </div>
         </CardContent>
       </Card>
@@ -449,6 +486,14 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
         </div>
+      )}
+
+      {selectedUserId && !isLoading && (isError || !data) && (
+        <ReportEmptyState
+          icon={User}
+          title="No workload detail available for this employee"
+          description="We couldn't load employee workload detail for the selected range. Try another employee or widen the date range."
+        />
       )}
 
       {data && (
@@ -544,7 +589,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
 }
 
 function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError } = useQuery<{
     users: Array<{
       userId: string;
       firstName: string | null;
@@ -572,6 +617,16 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
     </div>
   );
+
+  if (isError || !data) {
+    return (
+      <ReportEmptyState
+        icon={CalendarRange}
+        title="Capacity planning is unavailable"
+        description="We couldn't load capacity planning data for this range. Refresh and try again, or choose a different period."
+      />
+    );
+  }
 
   if (!data?.users.length) return (
     <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
@@ -647,7 +702,7 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
 }
 
 function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError } = useQuery<{
     flagged: Array<{
       userId: string;
       firstName: string | null;
@@ -680,6 +735,16 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
     </div>
   );
+
+  if (isError || !data) {
+    return (
+      <ReportEmptyState
+        icon={ShieldAlert}
+        title="Risk flags are unavailable"
+        description="We couldn't load workload risk signals for this range. Refresh and try again, or change the date range to confirm available data."
+      />
+    );
+  }
 
   function scoreColor(score: number) {
     if (score >= 5) return "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800";
