@@ -75,9 +75,22 @@ function QueueRow({
 }) {
   const timestamp = mode === "pending" ? item.submittedAt : item.approvedAt ?? item.updatedAt;
   const relativeTime = formatTimestamp(timestamp);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onOpen();
+    }
+  };
 
   return (
-    <div className="rounded-lg border bg-background/70 p-3">
+    <div
+      role="button"
+      tabIndex={0}
+      className="rounded-lg border bg-background/70 p-3 cursor-pointer transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
+      data-testid={`review-queue-row-${mode}-${item.type}-${item.id}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -119,12 +132,26 @@ function QueueRow({
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground mt-1" />
       </div>
       <div className="mt-3 flex items-center gap-2 flex-wrap">
-        <Button variant="outline" size="sm" onClick={onOpen}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+        >
           <Eye className="mr-2 h-4 w-4" />
           Open
         </Button>
         {mode === "pending" && onApprove && (
-          <Button size="sm" onClick={onApprove} disabled={isApproving}>
+          <Button
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              onApprove();
+            }}
+            disabled={isApproving}
+          >
             {isApproving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
