@@ -31,6 +31,7 @@ import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useWorkspaceRealtime } from "@/lib/realtime";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 
@@ -712,6 +713,7 @@ function EmployeeDashboardSection({
 
 export default function Home() {
   const { user } = useAuth();
+  useWorkspaceRealtime({ enableMyTasks: true, enableDashboard: hasTenantAdminAccess(user?.role), enableTimer: true });
   const [, setLocation] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
@@ -724,6 +726,8 @@ export default function Home() {
 
   const { data: myTasks, isLoading: tasksLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: teams } = useQuery<Team[]>({
@@ -741,6 +745,8 @@ export default function Home() {
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
     enabled: !!user && isAdmin,
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: workload, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
@@ -761,6 +767,8 @@ export default function Home() {
   const { data: timeStats, isLoading: timeStatsLoading } = useQuery<MyTimeStats>({
     queryKey: ["/api/time-entries/my/stats"],
     enabled: !!user && !isAdmin,
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const createProjectMutation = useMutation({

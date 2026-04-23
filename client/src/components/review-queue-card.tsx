@@ -148,6 +148,7 @@ export function ReviewQueueCard({
     queryKey: ["/api/dashboard/review-queue"],
     enabled,
     staleTime: 15000,
+    refetchOnWindowFocus: true,
   });
 
   if (!enabled) return null;

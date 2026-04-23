@@ -27,6 +27,7 @@ import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriang
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
 import { ReviewQueueCard, type DashboardReviewQueueItem, type DashboardReviewQueueResponse } from "@/components/review-queue-card";
@@ -94,6 +95,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     ? "Monitor delivery, workload, and project risk across the workspace"
     : "View and manage all projects across your workspace";
   const canAccessPmDashboard = hasProjectManagerDashboardAccess(user?.role);
+  useWorkspaceRealtime({ enableDashboard: isPmDashboard && canAccessPmDashboard, enableTimer: true });
 
   const { data: projects, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
     queryKey: ["/api/v1/projects", { includeCounts: true }],
@@ -129,6 +131,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     queryKey: ["/api/dashboard/overdue-tasks"],
     enabled: isPmDashboard && canAccessPmDashboard,
     staleTime: 15000,
+    refetchOnWindowFocus: true,
   });
 
   const createProjectMutation = useMutation({

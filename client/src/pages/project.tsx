@@ -84,7 +84,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useProjectSocket } from "@/lib/realtime";
+import { useProjectSocket, useWorkspaceRealtime } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth";
 import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 import { Link } from "wouter";
@@ -141,6 +141,7 @@ export default function ProjectPage() {
 
   // Subscribe to real-time updates for this project
   useProjectSocket(projectId);
+  useWorkspaceRealtime({ enableMyTasks: true, enableTimer: true });
 
   const [view, setView] = useState<ViewType>("board");
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);

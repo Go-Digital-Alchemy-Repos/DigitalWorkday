@@ -99,6 +99,7 @@ import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-
 import { isToday, isPast, isFuture, subDays, isWithinInterval, addDays, startOfDay } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
@@ -478,6 +479,7 @@ function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryPr
 
 export default function MyTasks() {
   const { user } = useAuth();
+  useWorkspaceRealtime({ enableMyTasks: true, enableTimer: true });
   const isEmployee = user?.role === UserRole.EMPLOYEE;
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [showNewTaskDrawer, setShowNewTaskDrawer] = useState(false);
@@ -515,6 +517,8 @@ export default function MyTasks() {
 
   const { data: tasks, isLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({
