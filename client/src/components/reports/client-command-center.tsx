@@ -765,12 +765,6 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
     staleTime: 2 * 60 * 1000,
   });
 
-  if (isLoading) return (
-    <div className="space-y-3">
-      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
-    </div>
-  );
-
   const range = `${rangeDays}d`;
   const topReasons = useMemo(() => {
     const counts = new Map<string, number>();
@@ -779,6 +773,12 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
     });
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
   }, [data?.flagged]);
+
+  if (isLoading) return (
+    <div className="space-y-3">
+      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+    </div>
+  );
 
   function scoreColor(score: number) {
     if (score >= 5) return "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800";
