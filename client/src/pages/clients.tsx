@@ -168,6 +168,16 @@ function isInactiveLikeStatus(status: string | null | undefined) {
   return status === "inactive" || status === "lost";
 }
 
+function renderClientStageBadge(stage: string | null | undefined, className?: string) {
+  if (!stage) return null;
+  return (
+    <Badge variant="outline" className={cn(className, STAGE_TEXT_COLORS[stage] || "")}>
+      <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[stage] || "bg-muted")} />
+      {CLIENT_STAGE_LABELS[stage as ClientStageType] || stage}
+    </Badge>
+  );
+}
+
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -407,12 +417,7 @@ function ClientGridCard({
                     </p>
                   )
                 )}
-                <div className="mt-1.5">
-                  <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[client.stage] || "")}>
-                    <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
-                    {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
-                  </Badge>
-                </div>
+                <div className="mt-1.5">{renderClientStageBadge(client.stage, "text-xs")}</div>
               </div>
             </div>
           </CardHeader>
@@ -775,13 +780,7 @@ function ClientTableRow({
         </div>
 
         <div className="hidden sm:flex items-center gap-2 w-32 shrink-0 justify-end">
-          <Badge
-            variant="outline"
-            className={cn(STAGE_TEXT_COLORS[client.stage] || "", compact && "text-xs")}
-          >
-            <span className={cn("h-1.5 w-1.5 rounded-full mr-1 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
-            {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
-          </Badge>
+          {renderClientStageBadge(client.stage, compact ? "text-xs" : undefined)}
         </div>
 
         <div className="hidden md:flex items-center gap-1 text-sm text-muted-foreground w-24 shrink-0 justify-end">
@@ -931,10 +930,7 @@ function ClientDetailSheet({
 
         <div className="space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className={STAGE_TEXT_COLORS[client.stage] || ""}>
-              <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
-              {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
-            </Badge>
+            {renderClientStageBadge(client.stage)}
             {client.needsAttention && (
               <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-600">
                 <AlertTriangle className="h-3 w-3 mr-1" />
@@ -1173,6 +1169,56 @@ interface ClientViewProps {
   onOpenProfile: (id: string) => void;
 }
 
+function ClientSection({
+  title,
+  description,
+  groupedClients,
+  selectedIds,
+  onSelect,
+  onOpenProfile,
+  viewMode,
+  density,
+  muted = false,
+}: ClientViewProps & {
+  title: string;
+  description?: string;
+  viewMode: "grid" | "table";
+  density: "comfortable" | "compact";
+  muted?: boolean;
+}) {
+  if (groupedClients.length === 0) return null;
+
+  return (
+    <section className={cn("space-y-4", muted && "opacity-85")} data-testid={`client-section-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        </div>
+        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+          {groupedClients.length}
+        </Badge>
+      </div>
+      {viewMode === "grid" ? (
+        <ClientGridView
+          groupedClients={groupedClients}
+          selectedIds={selectedIds}
+          onSelect={onSelect}
+          onOpenProfile={onOpenProfile}
+        />
+      ) : (
+        <ClientTableView
+          groupedClients={groupedClients}
+          selectedIds={selectedIds}
+          onSelect={onSelect}
+          onOpenProfile={onOpenProfile}
+          density={density}
+        />
+      )}
+    </section>
+  );
+}
+
 function ClientGridView({ groupedClients, selectedIds, onSelect, onOpenProfile }: ClientViewProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="client-grid">
@@ -1405,24 +1451,7 @@ function VipCarousel({
                         </p>
                       )
                     )}
-                    <div className="mt-1.5">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-xs",
-                          STAGE_TEXT_COLORS[client.stage] || ""
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "h-1.5 w-1.5 rounded-full mr-1.5 shrink-0",
-                            STAGE_COLORS[client.stage] || "bg-muted"
-                          )}
-                        />
-                        {CLIENT_STAGE_LABELS[client.stage as ClientStageType] ||
-                          client.stage}
-                      </Badge>
-                    </div>
+                    <div className="mt-1.5">{renderClientStageBadge(client.stage, "text-xs")}</div>
                   </div>
                 </div>
               </CardHeader>
@@ -1886,12 +1915,22 @@ export default function ClientsPage() {
     return result;
   }, [hierarchyClients, searchQuery, filterValues, sortValue, activeSegment]);
 
+  const activeClients = useMemo(
+    () => filteredAndSortedClients.filter((client) => !isInactiveLikeStatus(client.status)),
+    [filteredAndSortedClients]
+  );
+
+  const inactiveClients = useMemo(
+    () => filteredAndSortedClients.filter((client) => isInactiveLikeStatus(client.status)),
+    [filteredAndSortedClients]
+  );
+
   const vipClients = useMemo(() => {
-    if (!filteredAndSortedClients) return [];
-    return filteredAndSortedClients.filter(
+    if (!activeClients) return [];
+    return activeClients.filter(
       (c) => c.tags && c.tags.some((t) => t.toLowerCase() === "vip")
     );
-  }, [filteredAndSortedClients]);
+  }, [activeClients]);
 
   const vipClientIds = useMemo(() => new Set(vipClients.map((c) => c.id)), [vipClients]);
 
@@ -1904,52 +1943,59 @@ export default function ClientsPage() {
   }, [vipClients, hierarchyClients]);
 
   const groupedClients = useMemo(() => {
-    const clientsToGroup = viewMode === "table"
-      ? filteredAndSortedClients
-      : filteredAndSortedClients.filter((c) => !vipClientIds.has(c.id));
-    const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
-    const clientMap = new Map<string, ClientWithHierarchy>();
-    const childrenByParent = new Map<string, ClientWithHierarchy[]>();
+    const buildGroupedClients = (clientsToGroup: ClientWithHierarchy[]) => {
+      const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
+      const clientMap = new Map<string, ClientWithHierarchy>();
+      const childrenByParent = new Map<string, ClientWithHierarchy[]>();
 
-    for (const client of clientsToGroup) {
-      clientMap.set(client.id, client);
-    }
+      for (const client of clientsToGroup) {
+        clientMap.set(client.id, client);
+      }
 
-    const findRoot = (client: ClientWithHierarchy): string => {
-      if (!client.parentClientId) return client.id;
-      const parent = clientMap.get(client.parentClientId);
-      if (parent) return findRoot(parent);
-      return client.id;
+      const findRoot = (client: ClientWithHierarchy): string => {
+        if (!client.parentClientId) return client.id;
+        const parent = clientMap.get(client.parentClientId);
+        if (parent) return findRoot(parent);
+        return client.id;
+      };
+
+      for (const client of clientsToGroup) {
+        if (!client.parentClientId) continue;
+        const rootId = findRoot(client);
+        if (rootId === client.id) continue;
+        if (!childrenByParent.has(rootId)) {
+          childrenByParent.set(rootId, []);
+        }
+        childrenByParent.get(rootId)!.push(client);
+      }
+
+      const assignedIds = new Set<string>();
+      for (const children of childrenByParent.values()) {
+        for (const child of children) {
+          assignedIds.add(child.id);
+        }
+      }
+
+      for (const client of clientsToGroup) {
+        if (assignedIds.has(client.id)) continue;
+        groups.push({
+          parent: client,
+          children: childrenByParent.get(client.id) || [],
+        });
+      }
+
+      return groups.sort((a, b) => a.parent.companyName.localeCompare(b.parent.companyName));
     };
 
-    for (const client of clientsToGroup) {
-      if (!client.parentClientId) continue;
-      const rootId = findRoot(client);
-      if (rootId === client.id) continue;
-      if (!childrenByParent.has(rootId)) {
-        childrenByParent.set(rootId, []);
-      }
-      childrenByParent.get(rootId)!.push(client);
-    }
+    const activeClientsToGroup = viewMode === "table"
+      ? activeClients
+      : activeClients.filter((c) => !vipClientIds.has(c.id));
 
-    const assignedIds = new Set<string>();
-    for (const children of childrenByParent.values()) {
-      for (const child of children) {
-        assignedIds.add(child.id);
-      }
-    }
-
-    for (const client of clientsToGroup) {
-      if (assignedIds.has(client.id)) continue;
-      groups.push({
-        parent: client,
-        children: childrenByParent.get(client.id) || [],
-      });
-    }
-
-    // Sort groups by parent's company name to maintain consistent order
-    return groups.sort((a, b) => a.parent.companyName.localeCompare(b.parent.companyName));
-  }, [filteredAndSortedClients, vipClientIds, viewMode]);
+    return {
+      active: buildGroupedClients(activeClientsToGroup),
+      inactive: buildGroupedClients(inactiveClients),
+    };
+  }, [activeClients, inactiveClients, vipClientIds, viewMode]);
 
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
@@ -2157,23 +2203,30 @@ export default function ClientsPage() {
         />
       )}
 
-      {groupedClients.length > 0 ? (
-        viewMode === "grid" ? (
-          <ClientGridView
-            groupedClients={groupedClients}
+      {groupedClients.active.length > 0 || groupedClients.inactive.length > 0 ? (
+        <div className="space-y-8">
+          <ClientSection
+            title="Active Clients"
+            description="Current prospects and active accounts."
+            groupedClients={groupedClients.active}
             selectedIds={selectedIds}
             onSelect={handleSelectClient}
             onOpenProfile={handleOpenClientSheet}
-          />
-        ) : (
-          <ClientTableView
-            groupedClients={groupedClients}
-            selectedIds={selectedIds}
-            onSelect={handleSelectClient}
-            onOpenProfile={handleOpenClientSheet}
+            viewMode={viewMode}
             density={density}
           />
-        )
+          <ClientSection
+            title="Inactive Clients"
+            description="Moved to the bottom to keep the active client list clean."
+            groupedClients={groupedClients.inactive}
+            selectedIds={selectedIds}
+            onSelect={handleSelectClient}
+            onOpenProfile={handleOpenClientSheet}
+            viewMode={viewMode}
+            density={density}
+            muted
+          />
+        </div>
       ) : vipClients.length === 0 ? (
         <EmptyState
           icon={<Building2 className="h-16 w-16" />}

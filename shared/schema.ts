@@ -610,7 +610,7 @@ export const clients = pgTable("clients", {
   primaryContactEmail: text("primary_contact_email"),
   primaryContactPhone: text("primary_contact_phone"),
   status: text("status").notNull().default("active"),
-  stage: text("stage").notNull().default("lead"),
+  stage: text("stage").default("lead"),
   notes: text("notes"),
   tags: text("tags").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

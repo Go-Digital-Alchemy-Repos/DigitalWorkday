@@ -76,45 +76,113 @@ export async function calculateClientHealth(
     SELECT
       c.id AS client_id,
       c.company_name,
-      COUNT(DISTINCT t.id) AS total_tasks,
-      COUNT(DISTINCT CASE
-        WHEN t.status NOT IN ('done','cancelled') AND t.due_date < NOW() THEN t.id
-      END) AS overdue_count,
-      COUNT(DISTINCT CASE
-        WHEN t.status = 'done'
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+      ) AS total_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+          AND t.due_date < NOW()
+      ) AS overdue_count,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status = 'done'
           AND t.due_date IS NOT NULL
           AND t.updated_at <= t.due_date
-        THEN t.id
-      END) AS completed_on_time,
-      COUNT(DISTINCT CASE
-        WHEN t.status = 'done' AND t.due_date IS NOT NULL THEN t.id
-      END) AS total_done_with_due,
-      COALESCE(SUM(
-        CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-        THEN te.duration_seconds ELSE 0 END
-      ), 0) AS total_seconds,
-      COALESCE(SUM(
-        CASE WHEN t.status NOT IN ('done','cancelled')
-        THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END
-      ), 0) AS estimated_minutes,
-      COUNT(DISTINCT CASE
-        WHEN cm.created_at >= ${startDate} AND cm.created_at <= ${endDate}
-        THEN cm.id END
+      ) AS completed_on_time,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status = 'done'
+          AND t.due_date IS NOT NULL
+      ) AS total_done_with_due,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0)
+        FROM projects p
+        JOIN time_entries te ON te.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time BETWEEN ${startDate} AND ${endDate}
+      ) AS total_seconds,
+      (
+        SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+      ) AS estimated_minutes,
+      (
+        SELECT COUNT(DISTINCT cm.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        JOIN comments cm ON cm.task_id = t.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND cm.created_at BETWEEN ${startDate} AND ${endDate}
       ) AS comment_count,
-      EXTRACT(EPOCH FROM (NOW() - GREATEST(
-        MAX(t.updated_at),
-        MAX(te.start_time)
-      ))) / 86400.0 AS days_since_last_activity,
-      COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) AS active_projects,
+      EXTRACT(EPOCH FROM (
+        NOW() - GREATEST(
+          (
+            SELECT MAX(t.updated_at)
+            FROM projects p
+            JOIN tasks t ON t.project_id = p.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND t.tenant_id = ${tenantId}
+          ),
+          (
+            SELECT MAX(te.start_time)
+            FROM projects p
+            JOIN time_entries te ON te.project_id = p.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND te.tenant_id = ${tenantId}
+          ),
+          (
+            SELECT MAX(cm.created_at)
+            FROM projects p
+            JOIN tasks t ON t.project_id = p.id
+            JOIN comments cm ON cm.task_id = t.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND t.tenant_id = ${tenantId}
+          )
+        )
+      )) / 86400.0 AS days_since_last_activity,
+      (
+        SELECT COUNT(DISTINCT p.id)
+        FROM projects p
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND p.status = 'active'
+      ) AS active_projects,
       COUNT(*) OVER() AS total_count
     FROM clients c
-    LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
-    LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
-    LEFT JOIN time_entries te ON te.task_id = t.id AND te.tenant_id = ${tenantId}
-    LEFT JOIN comments cm ON cm.task_id = t.id
     WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
-    GROUP BY c.id, c.company_name
     ORDER BY c.company_name ASC
     LIMIT ${limit} OFFSET ${offset}
   `);

@@ -559,13 +559,20 @@ export default function ClientDetailPage() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async (status: "active" | "inactive" | "prospect") => {
-      return apiRequest("PATCH", `/api/clients/${clientId}`, { status });
+      return apiRequest("PATCH", `/api/clients/${clientId}`, {
+        status,
+        stage: status === "inactive" ? null : undefined,
+      });
     },
     onMutate: async (newStatus) => {
       await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId] });
       const prev = queryClient.getQueryData<ClientWithContacts>(["/api/clients", clientId]);
       if (prev) {
-        queryClient.setQueryData<ClientWithContacts>(["/api/clients", clientId], { ...prev, status: newStatus });
+        queryClient.setQueryData<ClientWithContacts>(["/api/clients", clientId], {
+          ...prev,
+          status: newStatus,
+          stage: newStatus === "inactive" ? null : prev.stage,
+        });
       }
       return { prev };
     },
@@ -906,11 +913,12 @@ export default function ClientDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <Select
-                value={client.stage}
+                value={client.stage ?? undefined}
                 onValueChange={(val) => updateStageMutation.mutate(val)}
+                disabled={client.status === "inactive"}
               >
                 <SelectTrigger className="w-auto gap-1.5" data-testid="select-client-stage">
-                  <SelectValue />
+                  <SelectValue placeholder="No pipeline stage" />
                 </SelectTrigger>
                 <SelectContent>
                   {CLIENT_STAGES_ORDERED.map((stage) => (

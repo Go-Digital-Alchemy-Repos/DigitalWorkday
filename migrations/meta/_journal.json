@@ -50,6 +50,13 @@
       "when": 1773880200000,
       "tag": "0044_subtask_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773967800000,
+      "tag": "0045_client_stage_nullable",
+      "breakpoints": true
     }
   ]
 }

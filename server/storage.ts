@@ -1966,8 +1966,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const normalizedClient = client.status === "inactive"
+      ? { ...client, stage: null }
+      : client;
     const [updated] = await db.update(clients)
-      .set({ ...client, updatedAt: new Date() })
+      .set({ ...normalizedClient, updatedAt: new Date() })
       .where(eq(clients.id, id))
       .returning();
     return updated || undefined;
@@ -2890,10 +2893,14 @@ export class DatabaseStorage implements IStorage {
     })
       .from(clients)
       .leftJoin(projects, eq(projects.clientId, clients.id))
-      .where(eq(clients.tenantId, tenantId))
+      .where(and(
+        eq(clients.tenantId, tenantId),
+        sql`${clients.stage} IS NOT NULL`,
+        sql`${clients.status} <> 'inactive'`
+      ))
       .groupBy(clients.stage);
 
-    return results;
+    return results.filter((result) => !!result.stage) as { stage: string; clientCount: number; projectCount: number }[];
   }
 
   async getClientStageHistory(clientId: string, tenantId: string): Promise<ClientStageHistory[]> {
@@ -2991,8 +2998,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const normalizedClient = client.status === "inactive"
+      ? { ...client, stage: null }
+      : client;
     const [updated] = await db.update(clients)
-      .set({ ...client, updatedAt: new Date() })
+      .set({ ...normalizedClient, updatedAt: new Date() })
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
       .returning();
     return updated || undefined;

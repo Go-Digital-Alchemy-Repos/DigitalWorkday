@@ -78,19 +78,79 @@ router.get("/client/overview", async (req: Request, res: Response) => {
       SELECT
         c.id AS client_id,
         c.company_name,
-        COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) AS active_projects,
-        COUNT(DISTINCT CASE WHEN t.status NOT IN ('done', 'cancelled') THEN t.id END) AS open_tasks,
-        COUNT(DISTINCT CASE WHEN t.status NOT IN ('done', 'cancelled') AND t.due_date < NOW() THEN t.id END) AS overdue_tasks,
-        COUNT(DISTINCT CASE WHEN t.status = 'done' AND t.updated_at BETWEEN ${startDate} AND ${endDate} THEN t.id END) AS completed_in_range,
-        COALESCE(SUM(CASE WHEN te.start_time BETWEEN ${startDate} AND ${endDate} THEN te.duration_seconds ELSE 0 END), 0)::float / 3600.0 AS total_hours,
-        GREATEST(MAX(t.updated_at), MAX(te.start_time)) AS last_activity_date
+        (
+          SELECT COUNT(DISTINCT p.id)
+          FROM projects p
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND p.status = 'active'
+            ${projectStatusFilter}
+        ) AS active_projects,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.status NOT IN ('done', 'cancelled')
+            ${projectStatusFilter}
+        ) AS open_tasks,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.status NOT IN ('done', 'cancelled')
+            AND t.due_date < NOW()
+            ${projectStatusFilter}
+        ) AS overdue_tasks,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.status = 'done'
+            AND t.updated_at BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS completed_in_range,
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)::float / 3600.0
+          FROM projects p
+          JOIN time_entries te ON te.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS total_hours,
+        GREATEST(
+          (
+            SELECT MAX(t.updated_at)
+            FROM projects p
+            JOIN tasks t ON t.project_id = p.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND t.tenant_id = ${tenantId}
+              ${projectStatusFilter}
+          ),
+          (
+            SELECT MAX(te.start_time)
+            FROM projects p
+            JOIN time_entries te ON te.project_id = p.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND te.tenant_id = ${tenantId}
+              ${projectStatusFilter}
+          )
+        ) AS last_activity_date
       FROM clients c
-      LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
-        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY open_tasks DESC, total_hours DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -166,18 +226,70 @@ router.get("/client/activity", async (req: Request, res: Response) => {
       SELECT
         c.id AS client_id,
         c.company_name,
-        COUNT(DISTINCT CASE WHEN t.created_at BETWEEN ${startDate} AND ${endDate} THEN t.id END) AS tasks_created_in_range,
-        COALESCE(SUM(CASE WHEN te.start_time BETWEEN ${startDate} AND ${endDate} THEN te.duration_seconds ELSE 0 END), 0)::float / 3600.0 AS time_logged_in_range,
-        COUNT(DISTINCT CASE WHEN cm.created_at BETWEEN ${startDate} AND ${endDate} THEN cm.id END) AS comments_in_range,
-        GREATEST(MAX(t.updated_at), MAX(te.start_time), MAX(cm.created_at)) AS last_activity
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.created_at BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS tasks_created_in_range,
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)::float / 3600.0
+          FROM projects p
+          JOIN time_entries te ON te.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS time_logged_in_range,
+        (
+          SELECT COUNT(DISTINCT cm.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          JOIN comments cm ON cm.task_id = t.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND cm.created_at BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS comments_in_range,
+        GREATEST(
+          (
+            SELECT MAX(t.updated_at)
+            FROM projects p
+            JOIN tasks t ON t.project_id = p.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND t.tenant_id = ${tenantId}
+              ${projectStatusFilter}
+          ),
+          (
+            SELECT MAX(te.start_time)
+            FROM projects p
+            JOIN time_entries te ON te.project_id = p.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND te.tenant_id = ${tenantId}
+              ${projectStatusFilter}
+          ),
+          (
+            SELECT MAX(cm.created_at)
+            FROM projects p
+            JOIN tasks t ON t.project_id = p.id
+            JOIN comments cm ON cm.task_id = t.id
+            WHERE p.client_id = c.id
+              AND p.tenant_id = ${tenantId}
+              AND t.tenant_id = ${tenantId}
+              ${projectStatusFilter}
+          )
+        ) AS last_activity
       FROM clients c
-      LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
-      LEFT JOIN comments cm ON cm.task_id = t.id
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
-        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY time_logged_in_range DESC, tasks_created_in_range DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -240,15 +352,29 @@ router.get("/client/time", async (req: Request, res: Response) => {
       SELECT
         c.id AS client_id,
         c.company_name,
-        COALESCE(SUM(CASE WHEN te.start_time BETWEEN ${startDate} AND ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS total_seconds,
-        COALESCE(SUM(CASE WHEN t.status NOT IN ('done','cancelled') THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END), 0) AS estimated_minutes
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)
+          FROM projects p
+          JOIN time_entries te ON te.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS total_seconds,
+        (
+          SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.status NOT IN ('done','cancelled')
+            ${projectStatusFilter}
+        ) AS estimated_minutes
       FROM clients c
-      LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
-        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY total_seconds DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -528,18 +654,65 @@ router.get("/client/risk", async (req: Request, res: Response) => {
       SELECT
         c.id AS client_id,
         c.company_name,
-        COUNT(DISTINCT t.id) AS total_tasks,
-        COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') AND t.due_date < NOW() THEN t.id END) AS overdue_count,
-        COALESCE(SUM(CASE WHEN te.start_time BETWEEN ${startDate} AND ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS total_seconds_in_range,
-        COALESCE(SUM(CASE WHEN t.status NOT IN ('done','cancelled') THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END), 0) AS estimated_minutes,
-        COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) AS active_projects,
-        MAX(t.updated_at) AS last_task_update
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            ${projectStatusFilter}
+        ) AS total_tasks,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.status NOT IN ('done','cancelled')
+            AND t.due_date < NOW()
+            ${projectStatusFilter}
+        ) AS overdue_count,
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)
+          FROM projects p
+          JOIN time_entries te ON te.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS total_seconds_in_range,
+        (
+          SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.status NOT IN ('done','cancelled')
+            ${projectStatusFilter}
+        ) AS estimated_minutes,
+        (
+          SELECT COUNT(DISTINCT p.id)
+          FROM projects p
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND p.status = 'active'
+            ${projectStatusFilter}
+        ) AS active_projects,
+        (
+          SELECT MAX(t.updated_at)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            ${projectStatusFilter}
+        ) AS last_task_update
       FROM clients c
-      LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
-        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
     `);
 
