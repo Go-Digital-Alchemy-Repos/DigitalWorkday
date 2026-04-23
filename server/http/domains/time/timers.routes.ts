@@ -21,36 +21,9 @@ import {
   emitTimeEntryCreated,
 } from "./shared";
 import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssignments";
+import { buildTimerStartContext, findExistingTimerForStart } from "../../../lib/timerStart";
 
 const router = Router();
-
-async function resolveTimerWorkspaceId(req: Parameters<typeof getCurrentUserId>[0]): Promise<string> {
-  try {
-    return await getCurrentWorkspaceIdOrThrow(req);
-  } catch (error) {
-    let projectId = req.body?.projectId || null;
-
-    if (!projectId && req.body?.taskId) {
-      const task = await storage.getTask(req.body.taskId);
-      projectId = task?.projectId || null;
-    }
-
-    if (!projectId && req.body?.subtaskId) {
-      const subtask = await storage.getSubtask(req.body.subtaskId);
-      const task = subtask?.taskId ? await storage.getTask(subtask.taskId) : undefined;
-      projectId = task?.projectId || null;
-    }
-
-    if (projectId) {
-      const project = await storage.getProject(projectId);
-      if (project?.workspaceId) {
-        return project.workspaceId;
-      }
-    }
-
-    throw error;
-  }
-}
 
 router.get("/timer/current", async (req, res) => {
   try {
@@ -84,27 +57,16 @@ router.post("/timer/start", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
-    const workspaceId = await resolveTimerWorkspaceId(req);
     
-    let existingTimer;
-    if (tenantId && isStrictMode()) {
-      existingTimer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
-    } else if (tenantId && isSoftMode()) {
-      existingTimer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
-      if (!existingTimer) {
-        const legacyTimer = await storage.getActiveTimerByUser(userId);
-        if (legacyTimer && !legacyTimer.tenantId) {
-          existingTimer = legacyTimer;
-          logTenancyWarning("timer/start", "Existing legacy timer found without tenantId", userId);
-        }
-      }
-    } else {
-      existingTimer = await storage.getActiveTimerByUser(userId);
-    }
+    let existingTimer = await findExistingTimerForStart(storage, userId, tenantId);
     
     if (existingTimer) {
-      if (isSoftMode() && !existingTimer.tenantId) {
+      if (!existingTimer.tenantId) {
         addTenancyWarningHeader(res, "Existing timer has legacy null tenantId");
+        logTenancyWarning("timer/start", "Existing legacy timer found without tenantId", userId);
+      } else if (tenantId && existingTimer.tenantId !== tenantId) {
+        addTenancyWarningHeader(res, "Existing timer belongs to a different tenant context");
+        logTenancyWarning("timer/start", `Existing timer belongs to tenant ${existingTimer.tenantId}`, userId);
       }
       throw AppError.conflict("You already have an active timer. Stop it before starting a new one.");
     }
@@ -115,15 +77,21 @@ router.post("/timer/start", async (req, res) => {
       req.body.taskId || null,
       req.body.subtaskId || null,
     );
+    const timerContext = await buildTimerStartContext(
+      storage,
+      req.body ?? {},
+      assignment,
+      () => getCurrentWorkspaceIdOrThrow(req),
+    );
 
     const now = new Date();
     const data = insertActiveTimerSchema.parse({
-      workspaceId,
+      workspaceId: timerContext.workspaceId,
       userId: userId,
-      clientId: req.body.clientId || null,
-      projectId: req.body.projectId || null,
-      taskId: assignment.taskId,
-      subtaskId: assignment.subtaskId,
+      clientId: timerContext.clientId,
+      projectId: timerContext.projectId,
+      taskId: timerContext.taskId,
+      subtaskId: timerContext.subtaskId,
       title: req.body.title || null,
       description: req.body.description || null,
       status: "running",
@@ -159,7 +127,7 @@ router.post("/timer/start", async (req, res) => {
         lastStartedAt: timer.lastStartedAt || now,
         createdAt: timer.createdAt,
       },
-      workspaceId,
+      timerContext.workspaceId,
     );
 
     res.status(201).json(enrichedTimer);
