@@ -158,6 +158,23 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     });
   }, [data?.team, sortBy, sortDir]);
 
+  const exceptions = useMemo(() => {
+    if (!data?.team) return { overdue: [], lowEfficiency: [] } as const;
+    const overdue = [...data.team]
+      .filter((m) => m.overdueCount > 0)
+      .sort((a, b) => {
+        const overdueDelta = b.overdueCount - a.overdueCount;
+        if (overdueDelta !== 0) return overdueDelta;
+        return b.activeTasksNow - a.activeTasksNow;
+      })
+      .slice(0, 5);
+    const lowEfficiency = [...data.team]
+      .filter((m) => m.efficiencyRatio !== null && m.efficiencyRatio > 1.2)
+      .sort((a, b) => (b.efficiencyRatio ?? 0) - (a.efficiencyRatio ?? 0))
+      .slice(0, 5);
+    return { overdue, lowEfficiency };
+  }, [data?.team]);
+
   function toggleSort(field: SortField) {
     if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortBy(field); setSortDir("desc"); }
@@ -194,6 +211,70 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
           <MetricCard label="Overdue Tasks" value={totals.overdueTasks} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
           <MetricCard label="Completed (Range)" value={totals.completedTasks} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
           <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" />
+        </div>
+      )}
+      {(exceptions.overdue.length > 0 || exceptions.lowEfficiency.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                Highest Overdue Load
+              </CardTitle>
+              <CardDescription className="text-xs">Employees carrying the most overdue work right now</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptions.overdue.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No overdue hotspots right now.</p>
+              ) : exceptions.overdue.map((member) => (
+                <Link
+                  key={member.userId}
+                  href={getEmployeeReportDrilldownPath(window.location.pathname, member.userId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName(member)}</p>
+                    <p className="text-xs text-muted-foreground">{member.activeTasksNow} active tasks</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{member.overdueCount}</p>
+                    <p className="text-xs text-muted-foreground">overdue</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
+                Time Overrun Watchlist
+              </CardTitle>
+              <CardDescription className="text-xs">Employees whose tracked time is running well over estimates</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptions.lowEfficiency.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No notable time overrun signals.</p>
+              ) : exceptions.lowEfficiency.map((member) => (
+                <Link
+                  key={member.userId}
+                  href={getEmployeeReportDrilldownPath(window.location.pathname, member.userId, { range, section: "time" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName(member)}</p>
+                    <p className="text-xs text-muted-foreground">{member.totalHours}h tracked vs {member.estimatedHours}h est.</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                      {((member.efficiencyRatio ?? 0) * 100).toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">efficiency</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       )}
 

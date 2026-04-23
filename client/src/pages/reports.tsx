@@ -31,6 +31,20 @@ import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
+interface ClientListItem {
+  id: string;
+  status?: string | null;
+}
+
+function buildReportRangeParams(days: number) {
+  const end = new Date();
+  const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return new URLSearchParams({
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  }).toString();
+}
+
 const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
 const OverviewDashboard = lazy(() => import("@/components/reports/overview-dashboard"));
 const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
@@ -113,11 +127,22 @@ function PipelineReport() {
   const { data: stageSummary, isLoading } = useQuery<StageSummaryItem[]>({
     queryKey: ["/api/v1/clients/stages/summary"],
   });
+  const { data: clients = [] } = useQuery<ClientListItem[]>({
+    queryKey: ["/api/clients"],
+  });
+
+  const inactiveLikeClientCount = useMemo(() => {
+    return clients.filter((client) => client.status === "inactive" || client.status === "lost").length;
+  }, [clients]);
 
   const totalClients = useMemo(() => {
     if (!stageSummary) return 0;
     return stageSummary.reduce((sum, s) => sum + s.clientCount, 0);
   }, [stageSummary]);
+
+  const activeClientCount = useMemo(() => {
+    return Math.max(totalClients - inactiveLikeClientCount, 0);
+  }, [totalClients, inactiveLikeClientCount]);
 
   const totalProjects = useMemo(() => {
     if (!stageSummary) return 0;
@@ -159,8 +184,16 @@ function PipelineReport() {
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card data-testid="metric-total-clients">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Clients</p>
-            <p className="text-2xl font-semibold">{totalClients}</p>
+            <p className="text-xs text-muted-foreground">Active Pipeline Clients</p>
+            <p className="text-2xl font-semibold">{activeClientCount}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-inactive-clients">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Inactive Clients</p>
+            <Link href="/clients" className="text-2xl font-semibold hover:underline text-primary">
+              {inactiveLikeClientCount}
+            </Link>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-projects">
@@ -191,7 +224,7 @@ function PipelineReport() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Pipeline Distribution</CardTitle>
-          <CardDescription>Visual breakdown of clients across pipeline stages</CardDescription>
+          <CardDescription>Visual breakdown of active clients across pipeline stages. Inactive clients are tracked separately below.</CardDescription>
         </CardHeader>
         <CardContent>
           {(() => {
@@ -299,7 +332,7 @@ function PipelineReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Pipeline Health</CardTitle>
-            <CardDescription>Distribution insights</CardDescription>
+            <CardDescription>Distribution insights and inactive client context</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -333,6 +366,22 @@ function PipelineReport() {
                   </div>
                 ));
               })()}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">Inactive Clients</p>
+                    <p className="text-xs text-muted-foreground">Clients removed from the active pipeline flow</p>
+                  </div>
+                  <div className="text-right">
+                    <Link href="/clients" className="text-lg font-semibold text-slate-500 hover:underline">
+                      {inactiveLikeClientCount}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {clients.length > 0 ? `${((inactiveLikeClientCount / clients.length) * 100).toFixed(0)}% of total` : "0%"}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -345,8 +394,38 @@ export default function ReportsPage() {
   const { user, isLoading } = useAuth();
   const [currentView, setCurrentView] = useState<ReportView>("landing");
   const flags = useFeatureFlags();
+  const landingRangeParams = useMemo(() => buildReportRangeParams(30), []);
 
   const isAdmin = hasTenantAdminAccess(user?.role);
+
+  const { data: reviewQueue } = useQuery<{ items: Array<unknown>; clearedItems: Array<unknown> }>({
+    queryKey: ["/api/dashboard/review-queue"],
+    enabled: isAdmin && (flags.enableEmployeeCommandCenter || flags.enableClientCommandCenter),
+  });
+  const { data: overdueItems = [] } = useQuery<Array<unknown>>({
+    queryKey: ["/api/dashboard/overdue-tasks"],
+    enabled: isAdmin && (flags.enableEmployeeCommandCenter || flags.enableClientCommandCenter),
+  });
+  const { data: employeeRisk } = useQuery<{ flagged: Array<unknown> }>({
+    queryKey: ["/api/reports/v2/employee/risk", "landing"],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/employee/risk?${landingRangeParams}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: isAdmin && flags.enableEmployeeCommandCenter,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: clientRisk } = useQuery<{ flagged: Array<unknown> }>({
+    queryKey: ["/api/reports/v2/client/risk", "landing"],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/client/risk?${landingRangeParams}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: isAdmin && flags.enableClientCommandCenter,
+    staleTime: 2 * 60 * 1000,
+  });
 
   if (isLoading) {
     return (
@@ -461,6 +540,64 @@ export default function ReportsPage() {
               />
             ))}
           </div>
+
+          <Card className="mb-6 sm:mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Management Exceptions
+              </CardTitle>
+              <CardDescription>
+                The highest-priority issues across delivery, reviews, client health, and employee risk
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => setCurrentView("employee-cc")}
+                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-sm font-medium">Sent For Review</span>
+                  <Badge variant="secondary">{reviewQueue?.items.length ?? 0}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Open the command center and PM views to inspect review backlog.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentView("overview")}
+                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-sm font-medium">Overdue Across Projects</span>
+                  <Badge variant="destructive">{overdueItems.length}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Use this as the top-level overdue exception queue across active work.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentView("client-cc")}
+                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-sm font-medium">Clients At Risk</span>
+                  <Badge variant="secondary">{clientRisk?.flagged.length ?? 0}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Jump into Client Command Center risk and health views for evidence.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentView("employee-cc")}
+                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-sm font-medium">Employees At Risk</span>
+                  <Badge variant="secondary">{employeeRisk?.flagged.length ?? 0}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Open Employee Command Center for workload, risk, and compliance detail.</p>
+              </button>
+            </CardContent>
+          </Card>
 
           <Card className="mb-8">
             <CardHeader>
