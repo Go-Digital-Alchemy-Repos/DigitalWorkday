@@ -140,6 +140,10 @@ function TaskDetailDrawerContent({
   isLoading = false,
   isError = false,
 }: TaskDetailDrawerProps) {
+  const sectionCardClass =
+    "rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)] sm:p-5";
+  const sectionHeaderClass = "mb-3 flex items-center justify-between gap-3";
+  const sectionTitleClass = "flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground";
   const renderCount = useRef(0);
   if (PERF_ENABLED) {
     renderCount.current++;
@@ -979,7 +983,7 @@ function TaskDetailDrawerContent({
         className={drawerContentClass}
         data-testid="task-detail-drawer"
       >
-        <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
+        <SheetHeader className={cn("sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl", drawerPadding)}>
           <SheetDescription className="sr-only">Edit task details, add subtasks, and manage comments</SheetDescription>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -1004,6 +1008,7 @@ function TaskDetailDrawerContent({
                   size="icon"
                   onClick={() => setShareModalOpen(true)}
                   title="Share task"
+                  className="rounded-xl"
                   data-testid="button-share-task"
                 >
                   <Share2 className="h-4 w-4" />
@@ -1020,6 +1025,7 @@ function TaskDetailDrawerContent({
                     });
                   }}
                   title="Copy task link"
+                  className="rounded-xl"
                   data-testid="button-copy-task-link"
                 >
                   <Link2 className="h-4 w-4" />
@@ -1033,6 +1039,7 @@ function TaskDetailDrawerContent({
                       size="icon"
                       disabled={deleteTaskMutation.isPending}
                       aria-label="Delete task"
+                      className="rounded-xl"
                       data-testid="button-delete-task"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1062,6 +1069,7 @@ function TaskDetailDrawerContent({
               <Button
                 variant="secondary"
                 size="icon"
+                className="rounded-xl"
                 onClick={saveAndClose}
                 aria-label="Close drawer"
                 data-testid="button-close-drawer"
@@ -1074,7 +1082,7 @@ function TaskDetailDrawerContent({
 
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className={cn("flex-1 overflow-y-auto space-y-6 scrollbar-hide", drawerBodyPadding)}>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
             {task.projectId && projectContextLoading ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -1118,7 +1126,7 @@ function TaskDetailDrawerContent({
             )}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)] sm:p-5">
             {editingTitle ? (
               <Input
                 value={title}
@@ -1131,13 +1139,13 @@ function TaskDetailDrawerContent({
                     setEditingTitle(false);
                   }
                 }}
-                className="text-xl font-semibold h-auto py-1"
+                className="h-auto border-0 bg-transparent px-0 py-1 text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
                 autoFocus
                 data-testid="input-task-title"
               />
             ) : (
               <h2
-                className="text-xl font-semibold cursor-pointer hover:text-muted-foreground transition-colors"
+                className="cursor-pointer text-2xl font-semibold tracking-tight transition-colors hover:text-muted-foreground"
                 onClick={() => {
                   setTitle(task.title);
                   setEditingTitle(true);
@@ -1153,14 +1161,14 @@ function TaskDetailDrawerContent({
                 Created {format(new Date(task.createdAt), "MMM d, yyyy")}
               </div>
               {creatorLabel && (
-                <Badge variant="outline" className="text-[11px]" data-testid="task-created-by-badge">
+                <Badge variant="outline" className="rounded-full border-border/70 bg-background/70 px-3 py-1 text-[11px]" data-testid="task-created-by-badge">
                   Created by {creatorLabel}
                 </Badge>
               )}
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-[11px]"
+                className="h-8 rounded-xl px-3 text-[11px]"
                 onClick={() => setShowHistory((value) => !value)}
                 data-testid="button-task-history"
               >
@@ -1170,9 +1178,11 @@ function TaskDetailDrawerContent({
             </div>
 
             {showHistory && (
-              <TaskHistoryTab entityType="task" entityId={task.id} />
+              <div className="rounded-2xl border border-border/70 bg-background/70 p-3 sm:p-4">
+                <TaskHistoryTab entityType="task" entityId={task.id} />
+              </div>
             )}
-            <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
+            <div className={cn("grid gap-4 rounded-2xl border border-border/70 bg-background/60 p-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
               <FormFieldWrapper
                 label="Assignees"
                 labelIcon={<Users className="h-3.5 w-3.5" />}
@@ -1247,9 +1257,7 @@ function TaskDetailDrawerContent({
             </div>
           </div>
 
-          <Separator />
-
-          <FormFieldWrapper label="Description" className="overflow-hidden">
+          <FormFieldWrapper label="Description" className={cn("overflow-hidden", sectionCardClass)}>
             <div className="max-w-full overflow-hidden">
               <RichTextEditor
                 value={description}
@@ -1263,30 +1271,20 @@ function TaskDetailDrawerContent({
             </div>
           </FormFieldWrapper>
 
-          <Separator />
-
           {task.projectId && (
-            <div 
-              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
-              style={{ borderRadius: "10px" }}
-            >
+            <div className={sectionCardClass}>
               <AttachmentUploader taskId={task.id} projectId={task.projectId} />
             </div>
           )}
           {!task.projectId && (
-            <div className="text-sm text-muted-foreground">
+            <div className={cn(sectionCardClass, "text-sm text-muted-foreground")}>
               Attachments are available for project tasks only
             </div>
           )}
 
-          <Separator />
-
-          <div 
-            className="p-3 sm:p-4 bg-[#e3e3e34d] dark:bg-[hsl(var(--section-subtasks))] border border-[#cfcfcf] dark:border-[hsl(var(--section-subtasks-border))]"
-            style={{ borderRadius: "10px" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+          <div className={sectionCardClass}>
+            <div className={sectionHeaderClass}>
+              <label className={sectionTitleClass}>
                 <Layers className="h-3.5 w-3.5" />
                 Subtasks
               </label>
@@ -1311,12 +1309,9 @@ function TaskDetailDrawerContent({
             />
           </div>
 
-          <div 
-            className="p-3 sm:p-4 dark:bg-[hsl(var(--section-tags))] border border-[#ade8f5] dark:border-[hsl(var(--section-tags-border))] bg-[#edf4f54d]"
-            style={{ borderRadius: "10px" }}
-          >
+          <div className={sectionCardClass}>
             <div className="space-y-2">
-              <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+              <label className={sectionTitleClass}>
                 <Tag className="h-3.5 w-3.5" />
                 Tags
               </label>
@@ -1351,7 +1346,7 @@ function TaskDetailDrawerContent({
                   }
                 }}>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-muted ml-auto">
+                    <Button variant="ghost" size="sm" className="ml-auto h-8 w-8 rounded-xl p-0 hover:bg-muted">
                       <Plus className="h-4 w-4" />
                     </Button>
                   </PopoverTrigger>
@@ -1457,12 +1452,7 @@ function TaskDetailDrawerContent({
             </div>
           </div>
 
-          <Separator />
-
-          <div 
-            className="p-3 sm:p-4 dark:bg-[hsl(var(--section-comments))] border border-[#adc6e6] dark:border-[hsl(var(--section-comments-border))] bg-[#ebf4fc4d]"
-            style={{ borderRadius: "10px" }}
-          >
+          <div className={sectionCardClass}>
             <CommentThread
               comments={taskComments}
               taskId={task.id}
@@ -1477,15 +1467,10 @@ function TaskDetailDrawerContent({
             />
           </div>
 
-          <Separator />
-
-          <div 
-            className="p-3 sm:p-4 dark:bg-[hsl(var(--section-time))] border border-[#f5ac5b] dark:border-[hsl(var(--section-time-border))] bg-[#f7ebe44d]"
-            style={{ borderRadius: "10px" }}
-          >
+          <div className={sectionCardClass}>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+              <div className={sectionHeaderClass}>
+                <label className={sectionTitleClass}>
                   <Timer className="h-3.5 w-3.5" />
                   Time Entries
                 </label>
@@ -1500,7 +1485,7 @@ function TaskDetailDrawerContent({
                           setTimerDrawerOpen(true);
                         }
                       }}
-                      className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
+                      className="h-9 rounded-xl shadow-[var(--shadow-soft)]"
                       data-testid="button-timer-start"
                     >
                       <Play className="h-3.5 w-3.5 mr-1.5" />
@@ -1508,18 +1493,18 @@ function TaskDetailDrawerContent({
                     </Button>
                   )}
                   {timerState === "loading" && (
-                    <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+                    <Button size="sm" disabled className="h-9 rounded-xl">
                       <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                       Loading...
                     </Button>
                   )}
                   {timerState === "running" && (
                     <>
-                      <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+                      <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-9 rounded-xl">
                         <Pause className="h-3.5 w-3.5 mr-1.5" />
                         Pause
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-8">
+                      <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-9 rounded-xl">
                         <Square className="h-3.5 w-3.5 mr-1.5" />
                         Stop
                       </Button>
@@ -1527,11 +1512,11 @@ function TaskDetailDrawerContent({
                   )}
                   {timerState === "paused" && (
                     <>
-                      <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+                      <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-9 rounded-xl">
                         <Play className="h-3.5 w-3.5 mr-1.5" />
                         Resume
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-8">
+                      <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-9 rounded-xl">
                         <Square className="h-3.5 w-3.5 mr-1.5" />
                         Stop
                       </Button>
@@ -1551,7 +1536,7 @@ function TaskDetailDrawerContent({
               ) : (
                 <div className="space-y-2">
                   {timeEntries.map((entry) => (
-                    <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
+                    <div key={entry.id} className="flex items-start justify-between rounded-2xl border border-border/70 bg-background/70 p-3 shadow-[var(--shadow-soft)]">
                       <div className="space-y-1 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">
