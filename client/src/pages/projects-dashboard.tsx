@@ -483,7 +483,17 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
                   {overdueItems.map((item) => (
                     <div
                       key={`overdue-${item.type}-${item.id}`}
-                      className="rounded-lg border border-destructive/20 bg-destructive/5 p-3"
+                      role="button"
+                      tabIndex={0}
+                      className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 cursor-pointer transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => handleOpenReviewItem(item)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleOpenReviewItem(item);
+                        }
+                      }}
+                      data-testid={`pm-overdue-row-${item.type}-${item.id}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -506,7 +516,14 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
                             ) : null}
                           </div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => handleOpenReviewItem(item)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenReviewItem(item);
+                          }}
+                        >
                           Open
                         </Button>
                       </div>
