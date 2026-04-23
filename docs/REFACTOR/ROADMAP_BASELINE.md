@@ -65,9 +65,6 @@
 | POST | `/api/tasks/:id/move` | Tasks |
 | POST | `/api/tasks/:taskId/assignees` | Tasks |
 | DELETE | `/api/tasks/:taskId/assignees/:userId` | Tasks |
-| GET | `/api/tasks/:taskId/watchers` | Tasks |
-| POST | `/api/tasks/:taskId/watchers` | Tasks |
-| DELETE | `/api/tasks/:taskId/watchers/:userId` | Tasks |
 | GET | `/api/tasks/:taskId/subtasks` | Subtasks |
 | POST | `/api/tasks/:taskId/subtasks` | Subtasks |
 | PATCH | `/api/subtasks/:id` | Subtasks |

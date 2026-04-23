@@ -28,7 +28,6 @@ import {
   type Section, type InsertSection,
   type Task, type InsertTask,
   type TaskAssignee, type InsertTaskAssignee,
-  type TaskWatcher, type InsertTaskWatcher,
   type Subtask, type InsertSubtask,
   type Tag, type InsertTag,
   type TaskTag, type InsertTaskTag,
@@ -199,10 +198,6 @@ export interface IStorage {
   getTaskAssignees(taskId: string): Promise<(TaskAssignee & { user?: User })[]>;
   addTaskAssignee(assignee: InsertTaskAssignee): Promise<TaskAssignee>;
   removeTaskAssignee(taskId: string, userId: string): Promise<void>;
-  
-  getTaskWatchers(taskId: string): Promise<(TaskWatcher & { user?: User })[]>;
-  addTaskWatcher(watcher: InsertTaskWatcher): Promise<TaskWatcher>;
-  removeTaskWatcher(taskId: string, userId: string): Promise<void>;
   
   getSubtask(id: string): Promise<Subtask | undefined>;
   getSubtasksByTask(taskId: string): Promise<Subtask[]>;
@@ -1398,27 +1393,6 @@ export class DatabaseStorage implements IStorage {
   async removeTaskAssignee(taskId: string, userId: string): Promise<void> {
     await db.delete(taskAssignees).where(
       and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId))
-    );
-  }
-
-  async getTaskWatchers(taskId: string): Promise<(TaskWatcher & { user?: User })[]> {
-    const watchers = await db.select().from(taskWatchers).where(eq(taskWatchers.taskId, taskId));
-    const result = [];
-    for (const watcher of watchers) {
-      const user = await this.getUser(watcher.userId);
-      result.push({ ...watcher, user });
-    }
-    return result;
-  }
-
-  async addTaskWatcher(watcher: InsertTaskWatcher): Promise<TaskWatcher> {
-    const [result] = await db.insert(taskWatchers).values(watcher).returning();
-    return result;
-  }
-
-  async removeTaskWatcher(taskId: string, userId: string): Promise<void> {
-    await db.delete(taskWatchers).where(
-      and(eq(taskWatchers.taskId, taskId), eq(taskWatchers.userId, userId))
     );
   }
 

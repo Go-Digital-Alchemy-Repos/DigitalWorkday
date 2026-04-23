@@ -53,9 +53,6 @@
 2057	POST	/api/tasks/:id/move
 2094	POST	/api/tasks/:taskId/assignees
 2152	DELETE	/api/tasks/:taskId/assignees/:userId
-2175	GET	/api/tasks/:taskId/watchers
-2184	POST	/api/tasks/:taskId/watchers
-2199	DELETE	/api/tasks/:taskId/watchers/:userId
 2208	GET	/api/tasks/:taskId/subtasks
 2230	POST	/api/tasks/:taskId/subtasks
 2265	PATCH	/api/subtasks/:id

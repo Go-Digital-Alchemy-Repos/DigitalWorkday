@@ -40,11 +40,11 @@
 | 7 | `server/routes/tenantOnboarding.ts` | 984 | Route | LOW | Extract wizard steps to service |
 | 8 | `server/services/tenancyHealth.ts` | 932 | Service | MED | Already service; consolidate with route |
 | 9 | `server/routes/clients.router.ts` | 932 | Route (legacy) | MED | Migrate to createApiRouter, extract services |
-| 10 | `server/http/domains/tasks.router.ts` | 877 | Route | MED | Split: CRUD, assignees, watchers, personal sections |
+| 10 | `server/http/domains/tasks.router.ts` | 877 | Route | MED | Split: CRUD, assignees, personal sections |
 | 11 | `server/storage/tasks.repo.ts` | 873 | Repo | LOW | Acceptable for complexity |
 | 12 | `server/imports/importEngine.ts` | 857 | Service | LOW | Complex but cohesive; no split needed |
 | 13 | `server/routes/users.router.ts` | 827 | Route (legacy) | MED | Split: profile, preferences, password, avatar |
-| 14 | `server/services/tenantIntegrations.ts` | 812 | Service | MED | Has duplicate function impls (TS error) |
+| 14 | `server/services/tenantIntegrations.ts` | 812 | Service | MED | Extract provider/secret helpers to reduce branching |
 | 15 | `server/routes/crm.router.ts` | 800 | Route (legacy) | MED | Consolidate with clients or migrate to domain |
 | 16 | `server/routes/systemStatus.ts` | 792 | Route | LOW | Admin-only; acceptable |
 | 17 | `server/routes/modules/super-admin/export-import.router.ts` | 775 | Route | LOW | Complex but cohesive |
@@ -88,7 +88,7 @@
 | P1 | `server/http/domains/chat.router.ts` (1,296) | Split channels/messages/DMs |
 | P1 | `server/http/domains/time.router.ts` (1,152) | Split timers/entries/reports |
 | P1 | `client/src/pages/chat.tsx` (2,808) | Extract hooks and sub-panels |
-| P2 | `server/http/domains/tasks.router.ts` (877) | Split CRUD/assignees/watchers |
+| P2 | `server/http/domains/tasks.router.ts` (877) | Split CRUD/assignees/personal sections |
 | P2 | `server/routes/clients.router.ts` (932) | Migrate to createApiRouter |
 | P2 | `client/src/pages/super-admin-settings.tsx` (2,566) | Extract setting tab components |
 | P2 | `client/src/pages/super-admin-users.tsx` (2,326) | Extract table/dialog components |
