@@ -4,6 +4,39 @@ import { getSocket, joinProjectRoom, leaveProjectRoom } from "./socket";
 import type { ServerToClientEvents } from "@shared/events";
 import { queryKeys } from "@/lib/queryKeys";
 
+function patchTaskInSections(
+  sections: unknown,
+  taskId: string,
+  updater: (task: any) => any,
+) {
+  if (!Array.isArray(sections)) return sections;
+  return sections.map((section: any) => ({
+    ...section,
+    tasks: Array.isArray(section.tasks)
+      ? section.tasks.map((task: any) => (task.id === taskId ? updater(task) : task))
+      : section.tasks,
+  }));
+}
+
+function patchTaskInList(
+  tasks: unknown,
+  taskId: string,
+  updater: (task: any) => any,
+) {
+  if (!Array.isArray(tasks)) return tasks;
+  return tasks.map((task: any) => (task.id === taskId ? updater(task) : task));
+}
+
+function patchSubtaskInTask(task: any, subtaskId: string, updater: (subtask: any) => any) {
+  if (!task || !Array.isArray(task.subtasks)) return task;
+  return {
+    ...task,
+    subtasks: task.subtasks.map((subtask: any) =>
+      subtask.id === subtaskId ? updater(subtask) : subtask,
+    ),
+  };
+}
+
 function invalidateProjectViews(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
   queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId) });
@@ -73,6 +106,15 @@ export function useProjectSocket(projectId: string | null | undefined) {
 
     const handleTaskUpdated: ServerToClientEvents["task:updated"] = (payload) => {
       if (payload.projectId === projectId) {
+        queryClient.setQueryData(queryKeys.tasks.detail(payload.taskId), (current: any) =>
+          current ? { ...current, ...payload.updates } : current,
+        );
+        queryClient.setQueryData(queryKeys.projects.tasks(projectId), (current: any) =>
+          patchTaskInList(current, payload.taskId, (task) => ({ ...task, ...payload.updates })),
+        );
+        queryClient.setQueryData(queryKeys.projects.sections(projectId), (current: any) =>
+          patchTaskInSections(current, payload.taskId, (task) => ({ ...task, ...payload.updates })),
+        );
         invalidateProjectViews(queryClient, projectId);
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(payload.taskId) });
         invalidateParentTask(queryClient, payload.parentTaskId);
@@ -108,6 +150,28 @@ export function useProjectSocket(projectId: string | null | undefined) {
 
     const handleSubtaskUpdated: ServerToClientEvents["subtask:updated"] = (payload) => {
       if (payload.projectId === projectId) {
+        queryClient.setQueryData(queryKeys.tasks.detail(payload.taskId), (current: any) =>
+          patchSubtaskInTask(current, payload.subtaskId, (subtask) => ({
+            ...subtask,
+            ...payload.updates,
+          })),
+        );
+        queryClient.setQueryData(queryKeys.projects.tasks(projectId), (current: any) =>
+          patchTaskInList(current, payload.taskId, (task) =>
+            patchSubtaskInTask(task, payload.subtaskId, (subtask) => ({
+              ...subtask,
+              ...payload.updates,
+            })),
+          ),
+        );
+        queryClient.setQueryData(queryKeys.projects.sections(projectId), (current: any) =>
+          patchTaskInSections(current, payload.taskId, (task) =>
+            patchSubtaskInTask(task, payload.subtaskId, (subtask) => ({
+              ...subtask,
+              ...payload.updates,
+            })),
+          ),
+        );
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(payload.taskId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(payload.taskId) });
       }

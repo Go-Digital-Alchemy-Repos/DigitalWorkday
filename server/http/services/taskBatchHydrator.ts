@@ -105,6 +105,7 @@ export async function getTasksByUserBatched(userId: string, tenantId: string, in
   const buildChildStub = (ct: typeof tasks.$inferSelect): TaskWithRelations => ({
     ...ct,
     assignees: [],
+    watchers: [],
     tags: [],
     subtasks: [] as Subtask[],
     childTasks: [],
@@ -115,6 +116,7 @@ export async function getTasksByUserBatched(userId: string, tenantId: string, in
   const result: TaskWithRelations[] = filteredTasks.map(task => ({
     ...task,
     assignees: assigneesByTask.get(task.id) ?? [],
+    watchers: [],
     tags: (tagsByTask.get(task.id) ?? []).map(r => ({
       id: r.id,
       taskId: r.taskId,

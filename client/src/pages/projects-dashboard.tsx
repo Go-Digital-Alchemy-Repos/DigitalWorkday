@@ -23,12 +23,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock, ClipboardCheck, Eye } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock } from "lucide-react";
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
+import { ReviewQueueCard, type DashboardReviewQueueItem, type DashboardReviewQueueResponse } from "@/components/review-queue-card";
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
@@ -73,29 +74,6 @@ interface ProjectAnalyticsSummary {
 
 interface ProjectsDashboardProps {
   variant?: "projects" | "pm";
-}
-
-interface ReviewQueueItem {
-  id: string;
-  type: "task" | "subtask";
-  title: string;
-  status: string;
-  projectId: string | null;
-  projectName: string | null;
-  clientId: string | null;
-  clientName: string | null;
-  taskId: string;
-  taskTitle: string;
-  priority: string | null;
-  dueDate: string | null;
-  estimateMinutes: number | null;
-  submittedAt: string | null;
-  updatedAt: string | null;
-  assignees: Array<{
-    id: string;
-    name: string;
-    email: string | null;
-  }>;
 }
 
 export default function ProjectsDashboard({ variant = "projects" }: ProjectsDashboardProps) {
@@ -143,10 +121,12 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
   });
 
   const {
-    data: reviewQueue = [],
-    isLoading: reviewQueueLoading,
-  } = useQuery<ReviewQueueItem[]>({
-    queryKey: ["/api/tasks/review-queue"],
+    data: overdueItems = [],
+    isLoading: overdueItemsLoading,
+    isError: overdueItemsError,
+    refetch: refetchOverdueItems,
+  } = useQuery<DashboardReviewQueueItem[]>({
+    queryKey: ["/api/dashboard/overdue-tasks"],
     enabled: isPmDashboard && canAccessPmDashboard,
     staleTime: 15000,
   });
@@ -211,13 +191,61 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
   };
 
   const approveReviewMutation = useMutation({
-    mutationFn: async (item: ReviewQueueItem) => {
+    mutationFn: async (item: DashboardReviewQueueItem) => {
       const endpoint =
         item.type === "task" ? `/api/tasks/${item.id}` : `/api/subtasks/${item.id}`;
       await apiRequest("PATCH", endpoint, { status: "in_progress" });
     },
+    onMutate: async (item) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks/review-queue"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/dashboard/review-queue"] });
+
+      const previousReviewQueue =
+        queryClient.getQueryData<DashboardReviewQueueItem[]>(["/api/tasks/review-queue"]) || [];
+      const previousDashboardQueue =
+        queryClient.getQueryData<DashboardReviewQueueResponse>(["/api/dashboard/review-queue"]);
+      const approverName =
+        [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "A project manager";
+      const now = new Date().toISOString();
+
+      queryClient.setQueryData<DashboardReviewQueueItem[]>(
+        ["/api/tasks/review-queue"],
+        (current = []) =>
+          current.filter(
+            (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
+          ),
+      );
+
+      queryClient.setQueryData<DashboardReviewQueueResponse>(
+        ["/api/dashboard/review-queue"],
+        (current) => {
+          if (!current) return current;
+          return {
+            items: current.items.filter(
+              (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
+            ),
+            clearedItems: [
+              {
+                ...item,
+                status: "in_progress",
+                approvedAt: now,
+                updatedAt: now,
+                approverName,
+              },
+              ...current.clearedItems.filter(
+                (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
+              ),
+            ].slice(0, 20),
+          };
+        },
+      );
+
+      return { previousReviewQueue, previousDashboardQueue };
+    },
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/overdue-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects/analytics/summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       if (item.projectId) {
@@ -228,11 +256,16 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         title: item.type === "task" ? "Task returned to assignee" : "Subtask returned to assignee",
       });
     },
-    onError: () => {
+    onError: (_, __, context) => {
+      if (context?.previousReviewQueue) {
+        queryClient.setQueryData(["/api/tasks/review-queue"], context.previousReviewQueue);
+      }
+      if (context?.previousDashboardQueue) {
+        queryClient.setQueryData(["/api/dashboard/review-queue"], context.previousDashboardQueue);
+      }
       toast({ title: "Failed to approve review", variant: "destructive" });
     },
   });
-
   const getProjectStats = (projectId: string) => {
     if (!analytics?.perProject) return null;
     return analytics.perProject.find(p => p.projectId === projectId);
@@ -291,12 +324,11 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     navigate(`/projects/${project.id}`);
   };
 
-  const handleOpenReviewItem = (item: ReviewQueueItem) => {
+  const handleOpenReviewItem = (item: DashboardReviewQueueItem) => {
     if (!item.projectId) return;
     const taskId = item.type === "task" ? item.id : item.taskId;
     navigate(`/projects/${item.projectId}?task=${taskId}`);
   };
-
   const getClientName = (clientId: string | null) => {
     if (!clientId || !clients) return "-";
     const client = clients.find(c => c.id === clientId);
@@ -402,168 +434,87 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
       )}
 
       {isPmDashboard && (
-        <Card className="mb-6" data-testid="pm-review-queue">
-          <CardContent className="pt-5">
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4 text-primary" />
-                  <h2 className="font-semibold">Sent for Review</h2>
-                  <Badge variant="secondary">{reviewQueue.length}</Badge>
+        <>
+          <ReviewQueueCard
+            enabled={canAccessPmDashboard}
+            onOpenItem={handleOpenReviewItem}
+            onApproveItem={(item) => approveReviewMutation.mutate(item)}
+            approvingItemKey={approveReviewMutation.variables ? `${approveReviewMutation.variables.type}-${approveReviewMutation.variables.id}` : null}
+          />
+          <Card className="mb-6" data-testid="pm-overdue-tasks">
+            <CardContent className="pt-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <h2 className="text-lg font-semibold">Overdue Across Projects</h2>
+                    <Badge variant="destructive">{overdueItems.length}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    A PM-level view of work that is already past due across active projects.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Review submitted work and return it to the assignee to close out and log time.
-                </p>
+                {overdueItemsError && (
+                  <Button variant="outline" size="sm" onClick={() => refetchOverdueItems()}>
+                    Retry
+                  </Button>
+                )}
               </div>
-            </div>
 
-            {reviewQueueLoading ? (
-              <LoadingState type="list" rows={4} />
-            ) : reviewQueue.length === 0 ? (
-              <EmptyState
-                icon={<ClipboardCheck className="h-10 w-10" />}
-                title="No tasks waiting for review"
-                description="Items sent to review will appear here for project managers and admins."
-              />
-            ) : (
-              <>
-                <div className="md:hidden space-y-3">
-                  {reviewQueue.map((item) => (
-                    <Card key={`${item.type}-${item.id}`} className="border-muted">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="outline">
-                                {item.type === "task" ? "Task" : "Subtask"}
-                              </Badge>
-                              <Badge variant="secondary">In Review</Badge>
-                            </div>
-                            <h3 className="font-medium mt-2">{item.title}</h3>
-                            {item.type === "subtask" && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Parent task: {item.taskTitle}
-                              </p>
-                            )}
+              {overdueItemsLoading ? (
+                <LoadingState type="table" rows={4} />
+              ) : overdueItemsError ? (
+                <ErrorState
+                  error={new Error("Failed to load overdue tasks")}
+                  title="Could not load overdue tasks"
+                  onRetry={() => refetchOverdueItems()}
+                />
+              ) : overdueItems.length === 0 ? (
+                <EmptyState
+                  icon={<AlertTriangle className="h-8 w-8" />}
+                  title="No overdue work right now"
+                  description="Anything that slips past its due date will show up here."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {overdueItems.map((item) => (
+                    <div
+                      key={`overdue-${item.type}-${item.id}`}
+                      className="rounded-lg border border-destructive/20 bg-destructive/5 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate font-medium">{item.title}</span>
+                            <Badge variant="outline">{item.type === "task" ? "Task" : "Subtask"}</Badge>
+                            {item.projectName ? <Badge variant="secondary">{item.projectName}</Badge> : null}
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {item.clientName ? <span>{item.clientName}</span> : null}
+                            {item.dueDate ? (
+                              <span className="text-destructive">
+                                Due {format(new Date(item.dueDate), "MMM d, yyyy")}
+                              </span>
+                            ) : null}
+                            {item.assignees.length > 0 ? (
+                              <span>
+                                Assigned to {item.assignees.map((assignee) => assignee.name).join(", ")}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
-                        <div className="text-sm text-muted-foreground space-y-1">
-                          <p>{item.projectName || "Unknown project"}</p>
-                          {item.clientName && <p>{item.clientName}</p>}
-                          <p>
-                            Assigned to:{" "}
-                            {item.assignees.length > 0
-                              ? item.assignees.map((assignee) => assignee.name).join(", ")
-                              : "Unassigned"}
-                          </p>
-                          <p>
-                            Submitted:{" "}
-                            {item.submittedAt ? format(new Date(item.submittedAt), "MMM d, yyyy") : "-"}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenReviewItem(item)}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Open
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => approveReviewMutation.mutate(item)}
-                            disabled={approveReviewMutation.isPending}
-                          >
-                            {approveReviewMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <CheckSquare className="h-4 w-4 mr-2" />
-                            )}
-                            Approve Review
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        <Button size="sm" variant="outline" onClick={() => handleOpenReviewItem(item)}>
+                          Open
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                 </div>
-
-                <div className="hidden md:block border rounded-lg overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead>Project</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Assigned To</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reviewQueue.map((item) => (
-                        <TableRow key={`${item.type}-${item.id}`}>
-                          <TableCell>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium">{item.title}</span>
-                                <Badge variant="outline">
-                                  {item.type === "task" ? "Task" : "Subtask"}
-                                </Badge>
-                                <Badge variant="secondary">In Review</Badge>
-                              </div>
-                              {item.type === "subtask" && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  Parent task: {item.taskTitle}
-                                </p>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{item.projectName || "-"}</TableCell>
-                          <TableCell>{item.clientName || "-"}</TableCell>
-                          <TableCell>
-                            {item.assignees.length > 0
-                              ? item.assignees.map((assignee) => assignee.name).join(", ")
-                              : "Unassigned"}
-                          </TableCell>
-                          <TableCell>
-                            {item.submittedAt ? format(new Date(item.submittedAt), "MMM d, yyyy") : "-"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenReviewItem(item)}
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Open
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => approveReviewMutation.mutate(item)}
-                                disabled={approveReviewMutation.isPending}
-                              >
-                                {approveReviewMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <CheckSquare className="h-4 w-4 mr-2" />
-                                )}
-                                Approve Review
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
-
       <div className="mb-6" data-testid="projects-pipeline-bar">
         <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted mb-3">
           {projects && projects.length > 0 && (

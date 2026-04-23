@@ -129,11 +129,20 @@ Or enable `AUTO_MIGRATE=true` and redeploy.
 
 ### 6. Timer endpoint returns 500
 
-**Cause:** Missing `title` column on `active_timers` table.
+**Cause:** The `active_timers` table is missing one or more columns the current timer code now relies on. At minimum, check `title`, `tenant_id`, and `subtask_id`.
 
 **Fix:**
 ```bash
 railway run psql $DATABASE_URL -c "ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS title text;"
+railway run psql $DATABASE_URL -c "ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS tenant_id varchar REFERENCES tenants(id);"
+railway run psql $DATABASE_URL -c "ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS subtask_id varchar REFERENCES subtasks(id);"
+railway run psql $DATABASE_URL -c "CREATE INDEX IF NOT EXISTS active_timers_subtask_idx ON active_timers(subtask_id);"
+```
+
+Then verify with:
+```bash
+railway run npx tsx server/scripts/db-smoke.ts
+railway run npx tsx server/scripts/railway-smoke.ts
 ```
 
 ## Post-Deploy Verification

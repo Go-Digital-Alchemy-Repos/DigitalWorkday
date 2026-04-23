@@ -8,9 +8,8 @@ import { TaskDrawerSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RichTextEditor, richTextToPlainText } from "@/components/richtext";
-import { normalizeRichTextValue, toPlainText } from "@/components/richtext/richTextUtils";
-import { mergeMentionUsers } from "@/components/richtext/mentionUtils";
+import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
+import { toPlainText } from "@/components/richtext/richTextUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -41,7 +40,7 @@ import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
 import { AttachmentUploader } from "@/components/attachment-uploader";
-import { ActivityFeed } from "@/components/activity-feed";
+import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { StatusBadge } from "@/components/status-badge";
 import { TagBadge } from "@/components/tag-badge";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -120,7 +119,15 @@ interface TaskDetailDrawerProps {
   isError?: boolean;
 }
 
-export function TaskDetailDrawer({
+export function TaskDetailDrawer(props: TaskDetailDrawerProps) {
+  if (!props.open && !props.task && !props.isLoading && !props.isError) {
+    return null;
+  }
+
+  return <TaskDetailDrawerContent {...props} />;
+}
+
+function TaskDetailDrawerContent({
   task: taskProp,
   open,
   onOpenChange,
@@ -152,31 +159,17 @@ export function TaskDetailDrawer({
     queryKey: ["/api/tenant/users"],
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
-  const { data: workspaceUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-    enabled: open && (!availableUsers || availableUsers.length === 0),
-  });
   const mentionUsers = useMemo(
-    () => {
-      if (availableUsers && availableUsers.length > 0) {
-        return availableUsers;
-      }
-      return mergeMentionUsers(tenantUsers, workspaceUsers);
-    },
-    [availableUsers, tenantUsers, workspaceUsers]
+    () => availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers,
+    [availableUsers, tenantUsers]
   );
 
   const { user: currentUser } = useAuth();
   const isAdmin = hasTenantAdminAccess(currentUser?.role);
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
-  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
-  const [description, setDescription] = useState(() => normalizeRichTextValue(task?.description));
-  const displayedDescriptionSource = useMemo(() => {
-    const candidates = [task?.description, taskProp?.description, description];
-    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? task?.description ?? taskProp?.description ?? description;
-  }, [task?.description, taskProp?.description, description]);
+  const [description, setDescription] = useState(task?.description || "");
   const [estimateMinutes, setEstimateMinutes] = useState<string>(
     task?.estimateMinutes ? String(task.estimateMinutes) : ""
   );
@@ -582,7 +575,11 @@ export function TaskDetailDrawer({
         });
         setTimerDrawerOpen(true);
       } else {
-        toast({ title: "Failed to start timer", variant: "destructive" });
+        toast({
+          title: "Failed to start timer",
+          description: error.message || "Please try again",
+          variant: "destructive",
+        });
       }
     },
   });
@@ -784,40 +781,12 @@ export function TaskDetailDrawer({
     }
   };
 
-  const isTaskAssignee = Boolean(
-    task?.assignees?.some((assignee) => assignee.userId === currentUser?.id || assignee.user?.id === currentUser?.id)
-  );
-  const canSendToReview = Boolean(task && isTaskAssignee && task.status !== "in_review" && task.status !== "done");
-  const canApproveReview = Boolean(task && isAdmin && task.status === "in_review");
-
-  const handleSendToReview = async () => {
-    if (!task) return;
-    try {
-      await updateTaskStatusMutation.mutateAsync("in_review");
-      toast({ title: "Task sent to review", description: `"${task.title}" is ready for approval` });
-    } catch {
-      toast({ title: "Failed to send task to review", variant: "destructive" });
-    }
-  };
-
-  const handleApproveReview = async () => {
-    if (!task) return;
-    try {
-      await updateTaskStatusMutation.mutateAsync("in_progress");
-      toast({ title: "Review approved", description: `"${task.title}" returned to the assignee for final completion` });
-    } catch {
-      toast({ title: "Failed to approve review", variant: "destructive" });
-    }
-  };
-
   
   useEffect(() => {
     if (task) {
       setTitle(task.title);
-      setDescription(normalizeRichTextValue(task.description));
-      setEditingDescription(!toPlainText(task.description ?? taskProp?.description).trim());
+      setDescription(task.description || "");
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
-      setShowHistory(false);
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
@@ -954,7 +923,7 @@ export function TaskDetailDrawer({
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
-    if (toPlainText(value) !== toPlainText(task?.description)) {
+    if (value !== (task?.description || "")) {
       setDirty(true);
     }
   };
@@ -968,7 +937,6 @@ export function TaskDetailDrawer({
       onUpdate?.(task.id, { description: description || null });
       markClean();
     }
-    setEditingDescription(false);
   };
 
 
@@ -1189,17 +1157,8 @@ export function TaskDetailDrawer({
             </div>
 
             {showHistory && (
-              <div className="border rounded-lg overflow-hidden">
-                <ActivityFeed
-                  entityType="task"
-                  entityId={task.id}
-                  height="260px"
-                  emptyTitle="No task history yet"
-                  emptyDescription="Task activity will appear here as changes are made"
-                />
-              </div>
+              <TaskHistoryTab entityType="task" entityId={task.id} />
             )}
-
             <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
               <FormFieldWrapper
                 label="Assignees"
@@ -1279,34 +1238,15 @@ export function TaskDetailDrawer({
 
           <FormFieldWrapper label="Description" className="overflow-hidden">
             <div className="max-w-full overflow-hidden">
-              {editingDescription || !toPlainText(displayedDescriptionSource).trim() ? (
-                <RichTextEditor
-                  key={`task-description-${task.id}-${task.updatedAt ? new Date(task.updatedAt).getTime() : "static"}`}
-                  value={description}
-                  onChange={handleDescriptionChange}
-                  onBlur={handleDescriptionBlur}
-                  placeholder="Add a description... Type @ to mention someone"
-                  minHeight="100px"
-                  users={mentionUsers}
-                  autoFocus
-                  data-testid="textarea-description"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingDescription(true)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-left transition-premium hover:border-ring/40"
-                  data-testid="button-edit-task-description"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>Click to edit</span>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="whitespace-pre-wrap text-sm text-foreground">
-                    {richTextToPlainText(displayedDescriptionSource)}
-                  </div>
-                </button>
-              )}
+              <RichTextEditor
+                value={description}
+                onChange={handleDescriptionChange}
+                onBlur={handleDescriptionBlur}
+                placeholder="Add a description... Type @ to mention someone"
+                minHeight="100px"
+                users={mentionUsers}
+                data-testid="textarea-description"
+              />
             </div>
           </FormFieldWrapper>
 
@@ -1649,7 +1589,7 @@ export function TaskDetailDrawer({
           showSave={true}
           onSave={saveAndClose}
           saveLabel="Save Task"
-          showComplete={task.status !== "done" && task.status !== "in_review"}
+          showComplete={task.status !== "done"}
           onMarkComplete={handleMarkAsComplete}
           completeDisabled={timeEntriesLoading || isCompletingTask}
           isCompleting={isCompletingTask}
@@ -1658,78 +1598,48 @@ export function TaskDetailDrawer({
           incompleteDisabled={isReopeningTask}
           isIncompleting={isReopeningTask}
           extraActions={
-            <div className="flex items-center gap-2 flex-wrap">
-              {canSendToReview && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSendToReview}
-                  disabled={updateTaskStatusMutation.isPending}
-                  data-testid="button-send-task-to-review"
-                >
-                  <Eye className="h-4 w-4 mr-1.5" />
-                  Send to Review
-                </Button>
-              )}
-              {canApproveReview && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleApproveReview}
-                  disabled={updateTaskStatusMutation.isPending}
-                  data-testid="button-approve-task-review"
-                >
-                  <Check className="h-4 w-4 mr-1.5" />
-                  Approve Review
-                </Button>
-              )}
-              {activeTimer && !isTimerOnThisTask ? (
-                <Badge variant="secondary" className="text-xs">
-                  Timer running on another task
-                </Badge>
-              ) : null}
-            </div>
+            activeTimer && !isTimerOnThisTask ? (
+              <Badge variant="secondary" className="text-xs">
+                Timer running on another task
+              </Badge>
+            ) : undefined
           }
           className="sticky bottom-0 z-10"
         />
         </div>
       </SheetContent>
 
-      {subtaskDrawerOpen && selectedSubtask ? (
-        <SubtaskDetailDrawer
-          subtask={selectedSubtask}
-          parentTaskTitle={task.title}
-          projectId={task.projectId || undefined}
-          workspaceId={workspaceId}
-          open={subtaskDrawerOpen}
-          onOpenChange={(open) => {
-            setSubtaskDrawerOpen(open);
-            if (!open) setSelectedSubtask(null);
-          }}
-          onUpdate={(subtaskId, data) => {
-            apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
-              invalidateTaskQueries();
-              if (selectedSubtask && selectedSubtask.id === subtaskId) {
-                setSelectedSubtask({ ...selectedSubtask, ...data });
-              }
-            }).catch(console.error);
-          }}
-          onBack={() => {
-            setSubtaskDrawerOpen(false);
-            setSelectedSubtask(null);
-          }}
-          availableUsers={mentionUsers}
-        />
-      ) : null}
+      <SubtaskDetailDrawer
+        subtask={selectedSubtask}
+        parentTaskTitle={task.title}
+        projectId={task.projectId || undefined}
+        workspaceId={workspaceId}
+        open={subtaskDrawerOpen}
+        onOpenChange={(open) => {
+          setSubtaskDrawerOpen(open);
+          if (!open) setSelectedSubtask(null);
+        }}
+        onUpdate={(subtaskId, data) => {
+          apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
+            invalidateTaskQueries();
+            if (selectedSubtask && selectedSubtask.id === subtaskId) {
+              setSelectedSubtask({ ...selectedSubtask, ...data });
+            }
+          }).catch(console.error);
+        }}
+        onBack={() => {
+          setSubtaskDrawerOpen(false);
+          setSelectedSubtask(null);
+        }}
+        availableUsers={mentionUsers}
+      />
 
-      {timerDrawerOpen ? (
-        <StartTimerDrawer
-          open={timerDrawerOpen}
-          onOpenChange={setTimerDrawerOpen}
-          initialTaskId={task.id}
-          initialProjectId={task.projectId || null}
-        />
-      ) : null}
+      <StartTimerDrawer
+        open={timerDrawerOpen}
+        onOpenChange={setTimerDrawerOpen}
+        initialTaskId={task.id}
+        initialProjectId={task.projectId || null}
+      />
 
       <Dialog open={showTimeTrackingPrompt} onOpenChange={setShowTimeTrackingPrompt}>
         <DialogContent className="sm:max-w-md">
@@ -1888,14 +1798,14 @@ export function TaskDetailDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {task && shareModalOpen ? (
+      {task && (
         <ShareModal
           type="task"
           itemId={task.id}
           isOpen={shareModalOpen}
           onClose={() => setShareModalOpen(false)}
         />
-      ) : null}
+      )}
       </Sheet>
     </>
   );

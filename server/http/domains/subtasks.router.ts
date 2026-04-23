@@ -3,7 +3,7 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../../routes/helpers";
+import { getCurrentUserId, isSuperUser } from "../../routes/helpers";
 import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "../../utils/mentionUtils";
 import {
   insertSubtaskSchema,
@@ -11,9 +11,6 @@ import {
   updateSubtaskSchema,
   addAssigneeSchema,
 } from "@shared/schema";
-import { hasTenantAdminAccess } from "@shared/roles";
-import { getTaskStatusLabel, isTaskReviewStatus, normalizeTaskStatus } from "@shared/taskStatus";
-import { logEntityActivity, logSubtaskCreated, logSubtaskFieldChanges } from "../../lib/taskActivity";
 import {
   embedAttachmentIdsInBody,
   enrichCommentsWithAttachments as enrichComments,
@@ -27,9 +24,6 @@ import {
 import {
   notifyCommentAdded,
   notifyCommentMention,
-  notifyTaskReviewApproved,
-  notifyTaskReviewRequested,
-  notifyTaskStatusChanged,
 } from "../../features/notifications/notification.service";
 
 const router = createApiRouter({
@@ -37,8 +31,11 @@ const router = createApiRouter({
   skipEnvelope: true,
 });
 
-function isAssignedToSubtask(assignees: Array<{ userId?: string; id?: string }>, userId: string): boolean {
-  return assignees.some((assignee: any) => assignee.userId === userId || assignee.user?.id === userId);
+function normalizeReviewStatus(status: string | null | undefined): string | null {
+  if (!status) return null;
+  if (status === "review") return "in_review";
+  if (status === "completed") return "done";
+  return status;
 }
 
 router.get("/tasks/:taskId/subtasks", async (req, res) => {
@@ -65,7 +62,6 @@ router.get("/tasks/:taskId/subtasks", async (req, res) => {
 router.post("/tasks/:taskId/subtasks", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    const actorUserId = getCurrentUserId(req);
     const data = insertSubtaskSchema.parse({
       ...req.body,
       taskId: req.params.taskId,
@@ -78,13 +74,6 @@ router.post("/tasks/:taskId/subtasks", async (req, res) => {
         : null;
 
     const subtask = await storage.createSubtask(data);
-
-    await logSubtaskCreated(
-      storage,
-      actorUserId,
-      parentTask?.projectId ? (await storage.getProject(parentTask.projectId))?.workspaceId || getCurrentWorkspaceId(req) : getCurrentWorkspaceId(req),
-      subtask,
-    ).catch(() => {});
 
     if (parentTask && parentTask.projectId) {
       emitSubtaskCreated(
@@ -109,8 +98,6 @@ router.patch("/subtasks/:id", async (req, res) => {
     if (!data) return;
     
     const tenantId = getEffectiveTenantId(req);
-    const actorUserId = getCurrentUserId(req);
-    const currentUser = await storage.getUser(actorUserId);
     
     const existingSubtask = await storage.getSubtask(req.params.id);
     if (!existingSubtask) {
@@ -131,115 +118,38 @@ router.patch("/subtasks/:id", async (req, res) => {
     if (updateData.dueDate !== undefined && typeof updateData.dueDate === 'string') {
       updateData.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
     }
-    if (updateData.status !== undefined) {
-      const normalizedStatus = normalizeTaskStatus(updateData.status);
-      if (!normalizedStatus) {
-        return sendError(res, AppError.badRequest("Invalid subtask status"), req);
-      }
-      updateData.status = normalizedStatus;
-    }
-
-    const subtaskAssignees = await storage.getSubtaskAssignees(existingSubtask.id);
-    const wasInReview = isTaskReviewStatus(existingSubtask.status);
-    const isAssigned = isAssignedToSubtask(subtaskAssignees as any, actorUserId);
-    const canApprove = hasTenantAdminAccess(currentUser?.role);
-
-    if (updateData.status === "in_review" && !wasInReview && !isAssigned && !canApprove) {
-      return sendError(res, AppError.forbidden("Only assignees can send a subtask to review"), req);
-    }
-    if (wasInReview && updateData.status && updateData.status !== "in_review" && !canApprove) {
-      return sendError(res, AppError.forbidden("Only project managers and admins can approve a reviewed subtask"), req);
-    }
     
     const subtask = await storage.updateSubtask(req.params.id, updateData);
     if (!subtask) {
       return sendError(res, AppError.notFound("Subtask"), req);
     }
 
-    const project = parentTask.projectId ? await storage.getProject(parentTask.projectId) : null;
-    const workspaceId = project?.workspaceId || getCurrentWorkspaceId(req);
-    await logSubtaskFieldChanges(
-      storage,
-      actorUserId,
-      workspaceId,
-      existingSubtask as any,
-      subtask as any,
-      parentTask.projectId || null,
-    ).catch(() => {});
+    if (parentTask?.projectId && updateData.status && updateData.status !== existingSubtask.status) {
+      const project = await storage.getProject(parentTask.projectId);
+      const actor = await storage.getUser(getCurrentUserId(req));
+      const normalizedBefore = normalizeReviewStatus(existingSubtask.status) || existingSubtask.status;
+      const normalizedAfter = normalizeReviewStatus(updateData.status) || updateData.status;
 
-    const normalizedBeforeStatus = normalizeTaskStatus(existingSubtask.status) || existingSubtask.status;
-    const normalizedAfterStatus = normalizeTaskStatus(subtask.status) || subtask.status;
-    const currentUserName = currentUser?.name || currentUser?.email || "Someone";
-    const notificationContext = { tenantId, excludeUserId: actorUserId };
-    const reviewApprovers = tenantId
-      ? (await storage.getUsersByTenant(tenantId)).filter((candidate) => candidate.id !== actorUserId && hasTenantAdminAccess(candidate.role))
-      : [];
-
-    if (!wasInReview && normalizedAfterStatus === "in_review") {
-      for (const approver of reviewApprovers) {
-        if (approver.id !== actorUserId) {
-          notifyTaskReviewRequested(
-            approver.id,
-            parentTask.id,
-            subtask.title,
-            currentUserName,
-            notificationContext
-          ).catch(() => {});
-        }
-      }
-
-      await logEntityActivity({
-        storage,
-        workspaceId,
-        actorUserId,
-        entityType: "subtask",
-        entityId: subtask.id,
-        entityTitle: subtask.title,
-        action: "review_requested",
-        metadata: {
-          taskId: subtask.taskId,
-          projectId: parentTask.projectId,
-        },
-      }).catch(() => {});
-    } else if (wasInReview && normalizedBeforeStatus !== normalizedAfterStatus) {
-      for (const assignee of subtaskAssignees as any[]) {
-        if (assignee.userId !== actorUserId) {
-          notifyTaskReviewApproved(
-            assignee.userId,
-            parentTask.id,
-            subtask.title,
-            currentUserName,
-            notificationContext
-          ).catch(() => {});
-        }
-      }
-
-      await logEntityActivity({
-        storage,
-        workspaceId,
-        actorUserId,
-        entityType: "subtask",
-        entityId: subtask.id,
-        entityTitle: subtask.title,
-        action: "review_approved",
-        metadata: {
-          taskId: subtask.taskId,
-          projectId: parentTask.projectId,
-          returnedStatus: normalizedAfterStatus,
-        },
-      }).catch(() => {});
-    } else if (updateData.status && normalizedBeforeStatus !== normalizedAfterStatus) {
-      for (const assignee of subtaskAssignees as any[]) {
-        if (assignee.userId !== actorUserId) {
-          notifyTaskStatusChanged(
-            assignee.userId,
-            parentTask.id,
-            subtask.title,
-            getTaskStatusLabel(normalizedAfterStatus),
-            currentUserName,
-            notificationContext
-          ).catch(() => {});
-        }
+      if (project?.workspaceId) {
+        await storage.createActivityLog({
+          workspaceId: project.workspaceId,
+          actorUserId: getCurrentUserId(req),
+          entityType: "subtask",
+          entityId: subtask.id,
+          action:
+            normalizedAfter === "in_review"
+              ? "review_submitted"
+              : normalizedBefore === "in_review" && normalizedAfter === "in_progress"
+                ? "review_approved"
+                : "status_changed",
+          diffJson: {
+            actorName: actor?.name || actor?.email || "Someone",
+            actorEmail: actor?.email || "",
+            entityTitle: subtask.title,
+            from: normalizedBefore,
+            to: normalizedAfter,
+          },
+        });
       }
     }
 
@@ -332,25 +242,6 @@ router.post("/subtasks/:id/assignees", async (req, res) => {
       userId,
       tenantId: tenantId || null,
     });
-    const subtask = await storage.getSubtask(req.params.id);
-    const parentTask = subtask ? await storage.getTask(subtask.taskId) : null;
-    const project = parentTask?.projectId ? await storage.getProject(parentTask.projectId) : null;
-    if (subtask) {
-      await logEntityActivity({
-        storage,
-        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-        actorUserId: getCurrentUserId(req),
-        entityType: "subtask",
-        entityId: subtask.id,
-        entityTitle: subtask.title,
-        action: "assigned",
-        metadata: {
-          taskId: subtask.taskId,
-          projectId: parentTask?.projectId || null,
-          userId,
-        },
-      }).catch(() => {});
-    }
     res.status(201).json(assignee);
   } catch (error: any) {
     if (error?.code === '23505') {
@@ -362,26 +253,7 @@ router.post("/subtasks/:id/assignees", async (req, res) => {
 
 router.delete("/subtasks/:subtaskId/assignees/:userId", async (req, res) => {
   try {
-    const subtask = await storage.getSubtask(req.params.subtaskId);
-    const parentTask = subtask ? await storage.getTask(subtask.taskId) : null;
-    const project = parentTask?.projectId ? await storage.getProject(parentTask.projectId) : null;
     await storage.removeSubtaskAssignee(req.params.subtaskId, req.params.userId);
-    if (subtask) {
-      await logEntityActivity({
-        storage,
-        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-        actorUserId: getCurrentUserId(req),
-        entityType: "subtask",
-        entityId: subtask.id,
-        entityTitle: subtask.title,
-        action: "unassigned",
-        metadata: {
-          taskId: subtask.taskId,
-          projectId: parentTask?.projectId || null,
-          userId: req.params.userId,
-        },
-      }).catch(() => {});
-    }
     res.status(204).send();
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/subtasks/:subtaskId/assignees/:userId", req);
@@ -407,26 +279,6 @@ router.post("/subtasks/:id/tags", async (req, res) => {
       subtaskId: req.params.id,
       tagId,
     });
-    const subtask = await storage.getSubtask(req.params.id);
-    const parentTask = subtask ? await storage.getTask(subtask.taskId) : null;
-    const project = parentTask?.projectId ? await storage.getProject(parentTask.projectId) : null;
-    if (subtask) {
-      await logEntityActivity({
-        storage,
-        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-        actorUserId: getCurrentUserId(req),
-        entityType: "subtask",
-        entityId: subtask.id,
-        entityTitle: subtask.title,
-        action: "updated",
-        metadata: {
-          field: "tags",
-          to: tagId,
-          taskId: subtask.taskId,
-          projectId: parentTask?.projectId || null,
-        },
-      }).catch(() => {});
-    }
     res.status(201).json(subtaskTag);
   } catch (error: any) {
     if (error?.code === '23505') {
@@ -438,27 +290,7 @@ router.post("/subtasks/:id/tags", async (req, res) => {
 
 router.delete("/subtasks/:subtaskId/tags/:tagId", async (req, res) => {
   try {
-    const subtask = await storage.getSubtask(req.params.subtaskId);
-    const parentTask = subtask ? await storage.getTask(subtask.taskId) : null;
-    const project = parentTask?.projectId ? await storage.getProject(parentTask.projectId) : null;
     await storage.removeSubtaskTag(req.params.subtaskId, req.params.tagId);
-    if (subtask) {
-      await logEntityActivity({
-        storage,
-        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-        actorUserId: getCurrentUserId(req),
-        entityType: "subtask",
-        entityId: subtask.id,
-        entityTitle: subtask.title,
-        action: "updated",
-        metadata: {
-          field: "tags",
-          from: req.params.tagId,
-          taskId: subtask.taskId,
-          projectId: parentTask?.projectId || null,
-        },
-      }).catch(() => {});
-    }
     res.status(204).send();
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/subtasks/:subtaskId/tags/:tagId", req);
@@ -528,21 +360,6 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
     });
     const comment = await storage.createComment(data);
     const commenter = await storage.getUser(currentUserId);
-    const project = parentTask.projectId ? await storage.getProject(parentTask.projectId) : null;
-    await logEntityActivity({
-      storage,
-      workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-      actorUserId: currentUserId,
-      entityType: "subtask",
-      entityId: subtask.id,
-      entityTitle: subtask.title,
-      action: "comment_added",
-      metadata: {
-        taskId: subtask.taskId,
-        projectId: parentTask.projectId || null,
-        commentId: comment.id,
-      },
-    }).catch(() => {});
 
     const requestId = (req as any).requestId || "unknown";
     const mentionedUserIds = extractMentionsFromTipTapJson(data.body);

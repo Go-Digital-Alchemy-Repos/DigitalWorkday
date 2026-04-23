@@ -174,7 +174,7 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     router: tasksRouter,
     policy: "authTenant",
     domain: "tasks",
-    description: "Tasks core: CRUD, assignees, watchers, move, personal tasks, personal sections, child tasks, calendar events, project activity.",
+    description: "Tasks core: CRUD, assignees, move, personal tasks, personal sections, child tasks, calendar events, project activity.",
   },
   {
     path: "/api",

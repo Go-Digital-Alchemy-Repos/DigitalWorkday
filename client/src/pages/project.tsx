@@ -42,7 +42,6 @@ import { TaskCard } from "@/features/tasks/task-card";
 import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
-import { sortSectionsOpenFirst } from "@/features/tasks/taskOrdering";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import {
@@ -102,6 +101,34 @@ import type { Client } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 
 type ViewType = "board" | "list" | "calendar";
+
+function isTaskDone(status: string | null | undefined): boolean {
+  return status === "done" || status === "completed";
+}
+
+function getDueDateRank(task: TaskWithRelations): number {
+  if (isTaskDone(task.status)) return 2;
+  if (!task.dueDate) return 1;
+  return 0;
+}
+
+function getDueTimestamp(task: TaskWithRelations): number {
+  if (!task.dueDate) return Number.MAX_SAFE_INTEGER;
+  const parsed = new Date(task.dueDate).getTime();
+  return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+}
+
+function sortTasksForProjectDisplay(tasks: TaskWithRelations[]): TaskWithRelations[] {
+  return [...tasks].sort((a, b) => {
+    const rankDiff = getDueDateRank(a) - getDueDateRank(b);
+    if (rankDiff !== 0) return rankDiff;
+
+    const dueDiff = getDueTimestamp(a) - getDueTimestamp(b);
+    if (dueDiff !== 0) return dueDiff;
+
+    return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+  });
+}
 
 export default function ProjectPage() {
   const [, params] = useRoute("/projects/:id");
@@ -179,19 +206,18 @@ export default function ProjectPage() {
     enabled: !!projectId,
   });
 
-  const displaySections = useMemo(
-    () => sortSectionsOpenFirst(localSections || sections),
-    [localSections, sections],
+  const displaySections = localSections || sections;
+  const orderedSections = useMemo(
+    () =>
+      displaySections?.map((section) => ({
+        ...section,
+        tasks: sortTasksForProjectDisplay(section.tasks || []),
+      })) || [],
+    [displaySections],
   );
 
-  useEffect(() => {
-    if (sections) {
-      setLocalSections(null);
-    }
-  }, [sections]);
-
   const activeTask = activeTaskId
-    ? displaySections?.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
+    ? orderedSections.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
     : null;
 
   const [urlTaskId] = useState(() => {
@@ -207,7 +233,7 @@ export default function ProjectPage() {
 
   useEffect(() => {
     if (deepLinkHandled || sectionsLoading || selectedTask || !urlTaskId) return;
-    const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
+    const allTasks = orderedSections.flatMap((s) => s.tasks || []);
     const found = allTasks.find(t => t.id === urlTaskId) || tasks?.find(t => t.id === urlTaskId);
     if (found) {
       setSelectedTask(found);
@@ -218,7 +244,7 @@ export default function ProjectPage() {
       setSelectedTask(linkedTask);
       setDeepLinkHandled(true);
     }
-  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, displaySections, deepLinkHandled]);
+  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, orderedSections, deepLinkHandled]);
 
   const createTaskMutation = useCreateTask();
 
@@ -226,21 +252,109 @@ export default function ProjectPage() {
     mutationFn: async ({ taskId, data }: { taskId: string; data: Partial<TaskWithRelations> }) => {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      if (selectedTask) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", selectedTask.id] });
+    onMutate: async ({ taskId, data }) => {
+      const projectTasksKey = ["/api/projects", projectId, "tasks"] as const;
+      const projectSectionsKey = ["/api/projects", projectId, "sections"] as const;
+      const taskDetailKey = ["/api/tasks", taskId] as const;
+
+      await queryClient.cancelQueries({ queryKey: projectTasksKey });
+      await queryClient.cancelQueries({ queryKey: projectSectionsKey });
+      await queryClient.cancelQueries({ queryKey: taskDetailKey });
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks/my"] });
+
+      const previousProjectTasks =
+        queryClient.getQueryData<TaskWithRelations[]>(projectTasksKey) || [];
+      const previousProjectSections =
+        queryClient.getQueryData<SectionWithTasks[]>(projectSectionsKey) || [];
+      const previousTaskDetail =
+        queryClient.getQueryData<TaskWithRelations>(taskDetailKey) || null;
+      const previousMyTasks =
+        queryClient.getQueryData<TaskWithRelations[]>(["/api/tasks/my"]) || [];
+      const previousSelectedTask =
+        selectedTask && selectedTask.id === taskId ? selectedTask : null;
+      const previousLocalSections = localSections;
+
+      queryClient.setQueryData<TaskWithRelations[]>(projectTasksKey, (current = []) =>
+        current.map((task) => (task.id === taskId ? { ...task, ...data } : task)),
+      );
+
+      queryClient.setQueryData<SectionWithTasks[]>(projectSectionsKey, (current = []) =>
+        current.map((section) => ({
+          ...section,
+          tasks: (section.tasks || []).map((task) =>
+            task.id === taskId ? { ...task, ...data } : task,
+          ),
+        })),
+      );
+
+      queryClient.setQueryData<TaskWithRelations>(taskDetailKey, (current) =>
+        current ? { ...current, ...data } : current,
+      );
+
+      queryClient.setQueryData<TaskWithRelations[]>(["/api/tasks/my"], (current = []) =>
+        current.map((task) => (task.id === taskId ? { ...task, ...data } : task)),
+      );
+
+      setLocalSections((current) =>
+        current
+          ? current.map((section) => ({
+              ...section,
+              tasks: (section.tasks || []).map((task) =>
+                task.id === taskId ? { ...task, ...data } : task,
+              ),
+            }))
+          : current,
+      );
+
+      if (previousSelectedTask) {
+        setSelectedTask((current) =>
+          current && current.id === taskId ? { ...current, ...data } : current,
+        );
       }
+
+      return {
+        previousProjectTasks,
+        previousProjectSections,
+        previousTaskDetail,
+        previousMyTasks,
+        previousSelectedTask,
+        previousLocalSections,
+        projectTasksKey,
+        projectSectionsKey,
+        taskDetailKey,
+      };
     },
-    onError: () => {
-      setLocalSections(null);
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId] });
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousProjectTasks) {
+        queryClient.setQueryData(context.projectTasksKey, context.previousProjectTasks);
+      }
+      if (context?.previousProjectSections) {
+        queryClient.setQueryData(context.projectSectionsKey, context.previousProjectSections);
+      }
+      if (context?.previousTaskDetail) {
+        queryClient.setQueryData(context.taskDetailKey, context.previousTaskDetail);
+      }
+      if (context?.previousMyTasks) {
+        queryClient.setQueryData(["/api/tasks/my"], context.previousMyTasks);
+      }
+      if (context?.previousSelectedTask) {
+        setSelectedTask(context.previousSelectedTask);
+      }
+      setLocalSections(context?.previousLocalSections ?? null);
       toast({
         title: "Failed to update task",
         description: "The task status could not be updated. Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId] });
     },
   });
 
@@ -409,7 +523,7 @@ export default function ProjectPage() {
       const { active, over } = event;
       setActiveTaskId(null);
 
-      const currentSections = displaySections;
+      const currentSections = orderedSections;
       if (!over || !currentSections) return;
 
       const activeId = active.id as string;
@@ -596,24 +710,6 @@ export default function ProjectPage() {
   };
 
   const handleStatusChange = async (taskId: string, completed: boolean) => {
-    setLocalSections((current) => {
-      const baseSections = current || sections;
-      if (!baseSections) {
-        return current;
-      }
-
-      return sortSectionsOpenFirst(
-        baseSections.map((section) => ({
-          ...section,
-          tasks: (section.tasks || []).map((task) =>
-            task.id === taskId
-              ? { ...task, status: completed ? "done" : "todo" }
-              : task,
-          ),
-        })),
-      );
-    });
-
     if (!completed) {
       updateTaskMutation.mutate({
         taskId,
@@ -646,7 +742,7 @@ export default function ProjectPage() {
       taskId,
       data: { status: "done" },
     });
-    const pendingTask = displaySections?.flatMap(s => s.tasks || []).find(t => t.id === taskId);
+    const pendingTask = orderedSections.flatMap(s => s.tasks || []).find(t => t.id === taskId);
     toast({ title: "Task completed", description: `"${pendingTask?.title}" marked as done` });
     resetCompletionState();
   };
@@ -673,7 +769,7 @@ export default function ProjectPage() {
       return;
     }
 
-    const pendingTask = displaySections?.flatMap(s => s.tasks || []).find(t => t.id === pendingCompletionTaskId);
+    const pendingTask = orderedSections.flatMap(s => s.tasks || []).find(t => t.id === pendingCompletionTaskId);
     
     if (projectId && !project?.clientId) {
       toast({ 
@@ -1096,7 +1192,7 @@ export default function ProjectPage() {
             onDragEnd={handleDragEnd}
           >
             <div className="flex gap-3 md:gap-4 px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-x-auto snap-x snap-mandatory sm:snap-none scroll-smooth">
-              {displaySections?.map((section) => (
+              {orderedSections.map((section) => (
                 <div key={section.id} className="snap-center sm:snap-align-none">
                   <SectionColumn
                     section={section}
@@ -1141,7 +1237,7 @@ export default function ProjectPage() {
             onDragEnd={handleDragEnd}
           >
             <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-y-auto">
-              {displaySections?.map((section) => (
+              {orderedSections.map((section) => (
                 <ListSectionDroppable
                   key={section.id}
                   section={section}

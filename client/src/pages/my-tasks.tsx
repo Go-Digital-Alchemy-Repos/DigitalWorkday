@@ -590,11 +590,63 @@ export default function MyTasks() {
     mutationFn: async ({ taskId, data }: { taskId: string; data: Partial<TaskWithRelations> }) => {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      if (selectedTask) {
-        refetchSelectedTask();
+    onMutate: async ({ taskId, data }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks/my"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks", taskId] });
+
+      const previousMyTasks =
+        queryClient.getQueryData<TaskWithRelations[]>(["/api/tasks/my"]) || [];
+      const previousTaskDetail =
+        queryClient.getQueryData<TaskWithRelations>(["/api/tasks", taskId]) || null;
+      const previousSelectedTask =
+        selectedTask && selectedTask.id === taskId ? selectedTask : null;
+      const previousPendingCompleteTask =
+        pendingCompleteTask && pendingCompleteTask.id === taskId ? pendingCompleteTask : null;
+
+      queryClient.setQueryData<TaskWithRelations[]>(["/api/tasks/my"], (current = []) =>
+        current.map((task) => (task.id === taskId ? { ...task, ...data } : task)),
+      );
+      queryClient.setQueryData<TaskWithRelations>(["/api/tasks", taskId], (current) =>
+        current ? { ...current, ...data } : current,
+      );
+
+      if (previousSelectedTask) {
+        setSelectedTask((current) =>
+          current && current.id === taskId ? { ...current, ...data } : current,
+        );
       }
+
+      if (previousPendingCompleteTask) {
+        setPendingCompleteTask((current) =>
+          current && current.id === taskId ? { ...current, ...data } : current,
+        );
+      }
+
+      return {
+        previousMyTasks,
+        previousTaskDetail,
+        previousSelectedTask,
+        previousPendingCompleteTask,
+        taskId,
+      };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousMyTasks) {
+        queryClient.setQueryData(["/api/tasks/my"], context.previousMyTasks);
+      }
+      if (context?.previousTaskDetail) {
+        queryClient.setQueryData(["/api/tasks", variables.taskId], context.previousTaskDetail);
+      }
+      if (context?.previousSelectedTask) {
+        setSelectedTask(context.previousSelectedTask);
+      }
+      if (context?.previousPendingCompleteTask) {
+        setPendingCompleteTask(context.previousPendingCompleteTask);
+      }
+    },
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId] });
     },
   });
 

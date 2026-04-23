@@ -252,6 +252,7 @@ describe("Tasks Routes – Integration Tests", () => {
       expect([400, 404, 500]).toContain(res.status);
     });
 
+
     it("POST /api/v1/my-tasks/sections resolves (not 404 routing)", async () => {
       const res = await request(buildTenantApp())
         .post("/api/v1/my-tasks/sections")

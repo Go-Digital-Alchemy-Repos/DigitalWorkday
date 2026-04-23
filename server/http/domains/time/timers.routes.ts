@@ -12,6 +12,7 @@ import {
   logTenancyWarning,
   getCurrentUserId,
   getCurrentWorkspaceId,
+  getCurrentWorkspaceIdOrThrow,
   emitTimerStarted,
   emitTimerPaused,
   emitTimerResumed,
@@ -20,7 +21,7 @@ import {
   emitTimeEntryCreated,
 } from "./shared";
 import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssignments";
-import { logEntityActivity } from "../../../lib/taskActivity";
+import { buildTimerStartContext, findExistingTimerForStart } from "../../../lib/timerStart";
 
 const router = Router();
 
@@ -57,25 +58,15 @@ router.post("/timer/start", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     
-    let existingTimer;
-    if (tenantId && isStrictMode()) {
-      existingTimer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
-    } else if (tenantId && isSoftMode()) {
-      existingTimer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
-      if (!existingTimer) {
-        const legacyTimer = await storage.getActiveTimerByUser(userId);
-        if (legacyTimer && !legacyTimer.tenantId) {
-          existingTimer = legacyTimer;
-          logTenancyWarning("timer/start", "Existing legacy timer found without tenantId", userId);
-        }
-      }
-    } else {
-      existingTimer = await storage.getActiveTimerByUser(userId);
-    }
+    let existingTimer = await findExistingTimerForStart(storage, userId, tenantId);
     
     if (existingTimer) {
-      if (isSoftMode() && !existingTimer.tenantId) {
+      if (!existingTimer.tenantId) {
         addTenancyWarningHeader(res, "Existing timer has legacy null tenantId");
+        logTenancyWarning("timer/start", "Existing legacy timer found without tenantId", userId);
+      } else if (tenantId && existingTimer.tenantId !== tenantId) {
+        addTenancyWarningHeader(res, "Existing timer belongs to a different tenant context");
+        logTenancyWarning("timer/start", `Existing timer belongs to tenant ${existingTimer.tenantId}`, userId);
       }
       throw AppError.conflict("You already have an active timer. Stop it before starting a new one.");
     }
@@ -86,15 +77,21 @@ router.post("/timer/start", async (req, res) => {
       req.body.taskId || null,
       req.body.subtaskId || null,
     );
+    const timerContext = await buildTimerStartContext(
+      storage,
+      req.body ?? {},
+      assignment,
+      () => getCurrentWorkspaceIdOrThrow(req),
+    );
 
     const now = new Date();
     const data = insertActiveTimerSchema.parse({
-      workspaceId: getCurrentWorkspaceId(req),
+      workspaceId: timerContext.workspaceId,
       userId: userId,
-      clientId: req.body.clientId || null,
-      projectId: req.body.projectId || null,
-      taskId: assignment.taskId,
-      subtaskId: assignment.subtaskId,
+      clientId: timerContext.clientId,
+      projectId: timerContext.projectId,
+      taskId: timerContext.taskId,
+      subtaskId: timerContext.subtaskId,
       title: req.body.title || null,
       description: req.body.description || null,
       status: "running",
@@ -130,7 +127,7 @@ router.post("/timer/start", async (req, res) => {
         lastStartedAt: timer.lastStartedAt || now,
         createdAt: timer.createdAt,
       },
-      getCurrentWorkspaceId(req),
+      timerContext.workspaceId,
     );
 
     res.status(201).json(enrichedTimer);
@@ -399,29 +396,6 @@ router.post("/timer/stop", async (req, res) => {
         },
         workspaceId,
       );
-
-      const entityType = timeEntry.subtaskId ? "subtask" : timeEntry.taskId ? "task" : null;
-      const entityId = timeEntry.subtaskId || timeEntry.taskId;
-      if (entityType && entityId) {
-        const entityTitle = timeEntry.subtaskId
-          ? (await storage.getSubtask(timeEntry.subtaskId))?.title || timeEntry.description || "Subtask"
-          : (await storage.getTask(timeEntry.taskId!))?.title || timeEntry.description || "Task";
-        await logEntityActivity({
-          storage,
-          workspaceId,
-          actorUserId: userId,
-          entityType: entityType as "task" | "subtask",
-          entityId,
-          entityTitle,
-          action: "time_logged",
-          metadata: {
-            projectId: timeEntry.projectId,
-            taskId: timeEntry.taskId,
-            subtaskId: timeEntry.subtaskId,
-            durationSeconds: timeEntry.durationSeconds,
-          },
-        }).catch(() => {});
-      }
     }
 
     if (timer.tenantId) {

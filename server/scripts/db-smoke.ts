@@ -40,7 +40,17 @@ const REQUIRED_SCHEMA: TableCheck[] = [
   },
   {
     table: "active_timers",
-    columns: ["id", "user_id", "workspace_id", "title", "status", "elapsed_seconds", "created_at"]
+    columns: [
+      "id",
+      "tenant_id",
+      "user_id",
+      "workspace_id",
+      "subtask_id",
+      "title",
+      "status",
+      "elapsed_seconds",
+      "created_at",
+    ]
   },
   {
     table: "tenants",

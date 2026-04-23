@@ -61,11 +61,9 @@ import {
   taskAccess,
 } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
-import { getTaskStatusLabel, isTaskDoneStatus, isTaskReviewStatus, normalizeTaskStatus } from "@shared/taskStatus";
 import { db } from "../../db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { canManageTaskAccess, canViewTask, getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
-import { logEntityActivity, logTaskCreated, logTaskFieldChanges } from "../../lib/taskActivity";
 import {
   emitTaskCreated,
   emitTaskUpdated,
@@ -78,8 +76,6 @@ import {
 import {
   notifyTaskAssigned,
   notifyTaskCompleted,
-  notifyTaskReviewApproved,
-  notifyTaskReviewRequested,
   notifyTaskStatusChanged,
 } from "../../features/notifications/notification.service";
 import { evaluateAutomation } from "../../features/automation/clientStageAutomation.service";
@@ -94,6 +90,402 @@ function canApproveReview(user: { role?: string | null } | undefined): boolean {
   return hasTenantAdminAccess(user?.role);
 }
 
+function normalizeTaskStatus(status: string | null | undefined): string | null {
+  if (!status) return null;
+  if (status === "review") return "in_review";
+  if (status === "completed") return "done";
+  return status;
+}
+
+function isTaskReviewStatus(status: string | null | undefined): boolean {
+  const normalized = normalizeTaskStatus(status);
+  return normalized === "in_review";
+}
+
+type ReviewQueueAssignee = {
+  id: string;
+  name: string;
+  email: string | null;
+};
+
+type ReviewQueueDashboardItem = {
+  id: string;
+  type: "task" | "subtask";
+  title: string;
+  status: string;
+  projectId: string | null;
+  projectName: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  taskId: string;
+  taskTitle: string;
+  priority: string | null;
+  dueDate: Date | string | null;
+  estimateMinutes: number | null;
+  submittedAt: Date | string | null;
+  updatedAt: Date | string | null;
+  assignees: ReviewQueueAssignee[];
+  approvedAt?: Date | string | null;
+  approverName?: string | null;
+};
+
+function parseAssignees(value: unknown): ReviewQueueAssignee[] {
+  if (!value) return [];
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((assignee: any) => ({
+      id: String(assignee?.id || ""),
+      name: String(assignee?.name || "Unassigned"),
+      email: assignee?.email ? String(assignee.email) : null,
+    }))
+    .filter((assignee) => assignee.id.length > 0);
+}
+
+async function getPendingReviewQueueItems(tenantId: string): Promise<ReviewQueueDashboardItem[]> {
+  const [taskResult, subtaskResult] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        t.id,
+        'task'::text AS type,
+        t.title,
+        t.status,
+        p.id AS project_id,
+        p.name AS project_name,
+        p.client_id,
+        COALESCE(c.display_name, c.company_name, 'Unknown client') AS client_name,
+        t.id AS task_id,
+        t.title AS task_title,
+        t.priority,
+        t.due_date,
+        t.estimate_minutes,
+        t.updated_at AS submitted_at,
+        t.updated_at,
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object(
+              'id', u.id,
+              'name', COALESCE(NULLIF(u.name, ''), NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.email, 'Unassigned'),
+              'email', u.email
+            )
+          ) FILTER (WHERE u.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS assignees
+      FROM tasks t
+      JOIN projects p ON p.id = t.project_id
+      LEFT JOIN clients c ON c.id = p.client_id
+      LEFT JOIN task_assignees ta ON ta.task_id = t.id
+      LEFT JOIN users u ON u.id = ta.user_id
+      WHERE p.tenant_id = ${tenantId}
+        AND t.archived_at IS NULL
+        AND t.parent_task_id IS NULL
+        AND t.status IN ('in_review', 'review')
+      GROUP BY t.id, p.id, c.id
+      ORDER BY t.updated_at DESC
+      LIMIT 20
+    `),
+    db.execute(sql`
+      SELECT
+        st.id,
+        'subtask'::text AS type,
+        st.title,
+        st.status,
+        p.id AS project_id,
+        p.name AS project_name,
+        p.client_id,
+        COALESCE(c.display_name, c.company_name, 'Unknown client') AS client_name,
+        t.id AS task_id,
+        t.title AS task_title,
+        st.priority,
+        st.due_date,
+        st.estimate_minutes,
+        st.updated_at AS submitted_at,
+        st.updated_at,
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object(
+              'id', u.id,
+              'name', COALESCE(NULLIF(u.name, ''), NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.email, 'Unassigned'),
+              'email', u.email
+            )
+          ) FILTER (WHERE u.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS assignees
+      FROM subtasks st
+      JOIN tasks t ON t.id = st.task_id
+      JOIN projects p ON p.id = t.project_id
+      LEFT JOIN clients c ON c.id = p.client_id
+      LEFT JOIN subtask_assignees sa ON sa.subtask_id = st.id
+      LEFT JOIN users u ON u.id = sa.user_id
+      WHERE p.tenant_id = ${tenantId}
+        AND t.archived_at IS NULL
+        AND st.status IN ('in_review', 'review')
+      GROUP BY st.id, t.id, p.id, c.id
+      ORDER BY st.updated_at DESC
+      LIMIT 20
+    `),
+  ]);
+
+  return [...(taskResult.rows || []), ...(subtaskResult.rows || [])]
+    .map((row: any) => ({
+      id: String(row.id),
+      type: row.type === "subtask" ? "subtask" : "task",
+      title: String(row.title || ""),
+      status: normalizeTaskStatus(String(row.status || "")) || String(row.status || ""),
+      projectId: row.project_id ? String(row.project_id) : null,
+      projectName: row.project_name ? String(row.project_name) : null,
+      clientId: row.client_id ? String(row.client_id) : null,
+      clientName: row.client_name ? String(row.client_name) : null,
+      taskId: row.task_id ? String(row.task_id) : String(row.id),
+      taskTitle: row.task_title ? String(row.task_title) : String(row.title || ""),
+      priority: row.priority ? String(row.priority) : null,
+      dueDate: row.due_date ?? null,
+      estimateMinutes: row.estimate_minutes != null ? Number(row.estimate_minutes) : null,
+      submittedAt: row.submitted_at ?? null,
+      updatedAt: row.updated_at ?? null,
+      assignees: parseAssignees(row.assignees),
+    }))
+    .sort((a, b) => {
+      const aTime = a.updatedAt ? new Date(String(a.updatedAt)).getTime() : 0;
+      const bTime = b.updatedAt ? new Date(String(b.updatedAt)).getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, 20);
+}
+
+async function getClearedReviewQueueItems(tenantId: string): Promise<ReviewQueueDashboardItem[]> {
+  const [taskResult, subtaskResult] = await Promise.all([
+    db.execute(sql`
+      WITH latest_task_approvals AS (
+        SELECT DISTINCT ON (al.entity_id)
+          al.entity_id,
+          al.created_at AS approved_at,
+          COALESCE(al.diff_json->>'actorName', 'A project manager') AS approver_name
+        FROM activity_log al
+        JOIN tasks t ON t.id = al.entity_id
+        JOIN projects p ON p.id = t.project_id
+        WHERE al.entity_type = 'task'
+          AND al.action = 'review_approved'
+          AND p.tenant_id = ${tenantId}
+          AND t.archived_at IS NULL
+        ORDER BY al.entity_id, al.created_at DESC
+      )
+      SELECT
+        t.id,
+        'task'::text AS type,
+        t.title,
+        t.status,
+        t.project_id,
+        p.name AS project_name,
+        p.client_id,
+        COALESCE(c.display_name, c.company_name, 'Unknown client') AS client_name,
+        t.id AS task_id,
+        t.title AS task_title,
+        t.priority,
+        t.due_date,
+        t.estimate_minutes,
+        lta.approved_at,
+        lta.approver_name
+      FROM latest_task_approvals lta
+      JOIN tasks t ON t.id = lta.entity_id
+      JOIN projects p ON p.id = t.project_id
+      LEFT JOIN clients c ON c.id = p.client_id
+      WHERE t.status NOT IN ('done', 'completed', 'in_review', 'review')
+        AND t.archived_at IS NULL
+      ORDER BY lta.approved_at DESC
+      LIMIT 20
+    `),
+    db.execute(sql`
+      WITH latest_subtask_approvals AS (
+        SELECT DISTINCT ON (al.entity_id)
+          al.entity_id,
+          al.created_at AS approved_at,
+          COALESCE(al.diff_json->>'actorName', 'A project manager') AS approver_name
+        FROM activity_log al
+        JOIN subtasks st ON st.id = al.entity_id
+        JOIN tasks t ON t.id = st.task_id
+        JOIN projects p ON p.id = t.project_id
+        WHERE al.entity_type = 'subtask'
+          AND al.action = 'review_approved'
+          AND p.tenant_id = ${tenantId}
+          AND t.archived_at IS NULL
+        ORDER BY al.entity_id, al.created_at DESC
+      )
+      SELECT
+        st.id,
+        'subtask'::text AS type,
+        st.title,
+        st.status,
+        t.project_id,
+        p.name AS project_name,
+        p.client_id,
+        COALESCE(c.display_name, c.company_name, 'Unknown client') AS client_name,
+        t.id AS task_id,
+        t.title AS task_title,
+        st.priority,
+        st.due_date,
+        st.estimate_minutes,
+        lsa.approved_at,
+        lsa.approver_name
+      FROM latest_subtask_approvals lsa
+      JOIN subtasks st ON st.id = lsa.entity_id
+      JOIN tasks t ON t.id = st.task_id
+      JOIN projects p ON p.id = t.project_id
+      LEFT JOIN clients c ON c.id = p.client_id
+      WHERE st.status NOT IN ('done', 'completed', 'in_review', 'review')
+        AND st.completed = false
+        AND t.archived_at IS NULL
+      ORDER BY lsa.approved_at DESC
+      LIMIT 20
+    `),
+  ]);
+
+  const clearedItems = [...(taskResult.rows || []), ...(subtaskResult.rows || [])]
+    .map((row: any) => ({
+      id: String(row.id),
+      type: row.type === "subtask" ? "subtask" : "task",
+      title: String(row.title || ""),
+      status: String(row.status || ""),
+      projectId: row.project_id ? String(row.project_id) : null,
+      projectName: row.project_name ? String(row.project_name) : null,
+      clientId: row.client_id ? String(row.client_id) : null,
+      clientName: row.client_name ? String(row.client_name) : null,
+      taskId: row.task_id ? String(row.task_id) : String(row.id),
+      taskTitle: row.task_title ? String(row.task_title) : String(row.title || ""),
+      priority: row.priority ? String(row.priority) : null,
+      dueDate: row.due_date ?? null,
+      estimateMinutes: row.estimate_minutes != null ? Number(row.estimate_minutes) : null,
+      submittedAt: row.approved_at ?? null,
+      updatedAt: row.approved_at ?? null,
+      approvedAt: row.approved_at ?? null,
+      approverName: row.approver_name ? String(row.approver_name) : null,
+      assignees: [],
+    }))
+    .sort((a, b) => {
+      const aTime = a.approvedAt ? new Date(String(a.approvedAt)).getTime() : 0;
+      const bTime = b.approvedAt ? new Date(String(b.approvedAt)).getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, 20);
+
+  return clearedItems;
+}
+
+async function getOverdueDashboardItems(tenantId: string): Promise<ReviewQueueDashboardItem[]> {
+  const [taskResult, subtaskResult] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        t.id,
+        'task'::text AS type,
+        t.title,
+        t.status,
+        p.id AS project_id,
+        p.name AS project_name,
+        p.client_id,
+        COALESCE(c.display_name, c.company_name, 'Unknown client') AS client_name,
+        t.id AS task_id,
+        t.title AS task_title,
+        t.priority,
+        t.due_date,
+        t.estimate_minutes,
+        t.updated_at,
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object(
+              'id', u.id,
+              'name', COALESCE(NULLIF(u.name, ''), NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.email, 'Unassigned'),
+              'email', u.email
+            )
+          ) FILTER (WHERE u.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS assignees
+      FROM tasks t
+      JOIN projects p ON p.id = t.project_id
+      LEFT JOIN clients c ON c.id = p.client_id
+      LEFT JOIN task_assignees ta ON ta.task_id = t.id
+      LEFT JOIN users u ON u.id = ta.user_id
+      WHERE p.tenant_id = ${tenantId}
+        AND p.status != 'archived'
+        AND t.archived_at IS NULL
+        AND t.parent_task_id IS NULL
+        AND t.due_date IS NOT NULL
+        AND t.due_date < NOW()
+        AND COALESCE(t.status, 'todo') NOT IN ('done', 'completed')
+      GROUP BY t.id, p.id, c.id
+      ORDER BY t.due_date ASC
+      LIMIT 20
+    `),
+    db.execute(sql`
+      SELECT
+        st.id,
+        'subtask'::text AS type,
+        st.title,
+        st.status,
+        p.id AS project_id,
+        p.name AS project_name,
+        p.client_id,
+        COALESCE(c.display_name, c.company_name, 'Unknown client') AS client_name,
+        t.id AS task_id,
+        t.title AS task_title,
+        st.priority,
+        st.due_date,
+        st.estimate_minutes,
+        st.updated_at,
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object(
+              'id', u.id,
+              'name', COALESCE(NULLIF(u.name, ''), NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.email, 'Unassigned'),
+              'email', u.email
+            )
+          ) FILTER (WHERE u.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS assignees
+      FROM subtasks st
+      JOIN tasks t ON t.id = st.task_id
+      JOIN projects p ON p.id = t.project_id
+      LEFT JOIN clients c ON c.id = p.client_id
+      LEFT JOIN subtask_assignees sa ON sa.subtask_id = st.id
+      LEFT JOIN users u ON u.id = sa.user_id
+      WHERE p.tenant_id = ${tenantId}
+        AND p.status != 'archived'
+        AND t.archived_at IS NULL
+        AND st.due_date IS NOT NULL
+        AND st.due_date < NOW()
+        AND st.completed = false
+        AND COALESCE(st.status, 'todo') NOT IN ('done', 'completed')
+      GROUP BY st.id, t.id, p.id, c.id
+      ORDER BY st.due_date ASC
+      LIMIT 20
+    `),
+  ]);
+
+  return [...(taskResult.rows || []), ...(subtaskResult.rows || [])]
+    .map((row: any) => ({
+      id: String(row.id),
+      type: row.type === "subtask" ? "subtask" : "task",
+      title: String(row.title || ""),
+      status: normalizeTaskStatus(String(row.status || "")) || String(row.status || ""),
+      projectId: row.project_id ? String(row.project_id) : null,
+      projectName: row.project_name ? String(row.project_name) : null,
+      clientId: row.client_id ? String(row.client_id) : null,
+      clientName: row.client_name ? String(row.client_name) : null,
+      taskId: row.task_id ? String(row.task_id) : String(row.id),
+      taskTitle: row.task_title ? String(row.task_title) : String(row.title || ""),
+      priority: row.priority ? String(row.priority) : null,
+      dueDate: row.due_date ?? null,
+      estimateMinutes: row.estimate_minutes != null ? Number(row.estimate_minutes) : null,
+      submittedAt: row.updated_at ?? null,
+      updatedAt: row.updated_at ?? null,
+      assignees: parseAssignees(row.assignees),
+    }))
+    .sort((a, b) => {
+      const aTime = a.dueDate ? new Date(String(a.dueDate)).getTime() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.dueDate ? new Date(String(b.dueDate)).getTime() : Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    })
+    .slice(0, 20);
+}
 // ---------------------------------------------------------------------------
 // Project-scoped task queries
 // ---------------------------------------------------------------------------
@@ -258,112 +650,58 @@ router.get("/tasks/review-queue", async (req, res) => {
       return sendError(res, AppError.badRequest("Tenant context is required"), req);
     }
 
-    const projects = await storage.getProjectsByTenant(tenantId);
-    const clientNameById = new Map<string, string>();
-
-    await Promise.all(
-      projects
-        .filter((project) => !!project.clientId)
-        .map(async (project) => {
-          if (!project.clientId || clientNameById.has(project.clientId)) return;
-          const client = await storage.getClient(project.clientId);
-          clientNameById.set(
-            project.clientId,
-            client?.displayName || client?.companyName || "Unknown client",
-          );
-        }),
-    );
-
-    const items = (
-      await Promise.all(
-        projects.map(async (project) => {
-          const projectTasks = await storage.getTasksByProject(project.id);
-          const seenTaskIds = new Set<string>();
-          const reviewItems: Array<Record<string, unknown>> = [];
-
-          for (const task of projectTasks) {
-            if (seenTaskIds.has(task.id)) continue;
-            seenTaskIds.add(task.id);
-
-            if (!task.parentTaskId && isTaskReviewStatus(task.status)) {
-              reviewItems.push({
-                id: task.id,
-                type: "task",
-                title: task.title,
-                status: normalizeTaskStatus(task.status) || task.status,
-                projectId: project.id,
-                projectName: project.name,
-                clientId: project.clientId,
-                clientName: project.clientId ? clientNameById.get(project.clientId) ?? "Unknown client" : null,
-                taskId: task.id,
-                taskTitle: task.title,
-                priority: task.priority,
-                dueDate: task.dueDate,
-                estimateMinutes: task.estimateMinutes,
-                submittedAt: task.updatedAt,
-                updatedAt: task.updatedAt,
-                assignees: (task.assignees || []).map((assignee: any) => ({
-                  id: assignee.user?.id || assignee.userId,
-                  name:
-                    assignee.user?.name ||
-                    [assignee.user?.firstName, assignee.user?.lastName].filter(Boolean).join(" ") ||
-                    assignee.user?.email ||
-                    "Unassigned",
-                  email: assignee.user?.email || null,
-                })),
-              });
-            }
-
-            for (const subtask of task.subtasks || []) {
-              if (!isTaskReviewStatus(subtask.status)) continue;
-
-              const subtaskAssignees = await storage.getSubtaskAssignees(subtask.id);
-              reviewItems.push({
-                id: subtask.id,
-                type: "subtask",
-                title: subtask.title,
-                status: normalizeTaskStatus(subtask.status) || subtask.status,
-                projectId: project.id,
-                projectName: project.name,
-                clientId: project.clientId,
-                clientName: project.clientId ? clientNameById.get(project.clientId) ?? "Unknown client" : null,
-                taskId: task.id,
-                taskTitle: task.title,
-                priority: subtask.priority,
-                dueDate: subtask.dueDate,
-                estimateMinutes: subtask.estimateMinutes,
-                submittedAt: subtask.updatedAt,
-                updatedAt: subtask.updatedAt,
-                assignees: subtaskAssignees.map((assignee: any) => ({
-                  id: assignee.user?.id || assignee.userId,
-                  name:
-                    assignee.user?.name ||
-                    [assignee.user?.firstName, assignee.user?.lastName].filter(Boolean).join(" ") ||
-                    assignee.user?.email ||
-                    "Unassigned",
-                  email: assignee.user?.email || null,
-                })),
-              });
-            }
-          }
-
-          return reviewItems;
-        }),
-      )
-    )
-      .flat()
-      .sort((a, b) => {
-        const aTime = a.updatedAt ? new Date(String(a.updatedAt)).getTime() : 0;
-        const bTime = b.updatedAt ? new Date(String(b.updatedAt)).getTime() : 0;
-        return bTime - aTime;
-      });
-
+    const items = await getPendingReviewQueueItems(tenantId);
     res.json(items);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/tasks/review-queue", req);
   }
 });
 
+router.get("/dashboard/review-queue", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    const currentUser = await storage.getUser(userId);
+
+    if (!canApproveReview(currentUser)) {
+      return sendError(res, AppError.forbidden("Project manager access required"), req);
+    }
+
+    if (!tenantId) {
+      return sendError(res, AppError.badRequest("Tenant context is required"), req);
+    }
+
+    const [items, clearedItems] = await Promise.all([
+      getPendingReviewQueueItems(tenantId),
+      getClearedReviewQueueItems(tenantId),
+    ]);
+
+    res.json({ items, clearedItems });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/dashboard/review-queue", req);
+  }
+});
+
+router.get("/dashboard/overdue-tasks", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    const currentUser = await storage.getUser(userId);
+
+    if (!canApproveReview(currentUser)) {
+      return sendError(res, AppError.forbidden("Project manager access required"), req);
+    }
+
+    if (!tenantId) {
+      return sendError(res, AppError.badRequest("Tenant context is required"), req);
+    }
+
+    const items = await getOverdueDashboardItems(tenantId);
+    res.json(items);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/dashboard/overdue-tasks", req);
+  }
+});
 router.post("/tasks/personal", async (req, res) => {
   const requestId = req.requestId || 'unknown';
   try {
@@ -708,14 +1046,6 @@ router.post("/tasks", async (req, res) => {
     }
 
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
-    const createdProject = task.projectId ? await storage.getProject(task.projectId) : null;
-
-    await logTaskCreated(
-      storage,
-      userId,
-      createdProject?.workspaceId || getCurrentWorkspaceId(req),
-      task,
-    ).catch(() => {});
 
     if (taskWithRelations) {
       if (task.isPersonal && task.createdBy) {
@@ -773,14 +1103,6 @@ router.post("/tasks/:taskId/childtasks", async (req, res) => {
 
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
-    const parentProject = parentTask.projectId ? await storage.getProject(parentTask.projectId) : null;
-    await logTaskCreated(
-      storage,
-      getCurrentUserId(req),
-      parentProject?.workspaceId || getCurrentWorkspaceId(req),
-      task,
-    ).catch(() => {});
-
     if (taskWithRelations && parentTask.projectId) {
       emitTaskCreated(parentTask.projectId, taskWithRelations as any);
     }
@@ -801,12 +1123,8 @@ router.patch("/tasks/:id", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
-    const currentUser = await storage.getUser(userId);
     
     const taskBefore = await storage.getTaskWithRelations(req.params.id);
-    if (!taskBefore) {
-      return sendError(res, AppError.notFound("Task"), req);
-    }
     
     const updateData: any = { ...data };
     if (updateData.isPersonal === true) {
@@ -820,32 +1138,6 @@ router.patch("/tasks/:id", async (req, res) => {
     }
     if (updateData.startDate !== undefined) {
       updateData.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
-    }
-    if (updateData.status !== undefined) {
-      const normalizedStatus = normalizeTaskStatus(updateData.status);
-      if (!normalizedStatus) {
-        return sendError(res, AppError.badRequest("Invalid task status"), req);
-      }
-      updateData.status = normalizedStatus;
-    }
-
-    const taskWasInReview = isTaskReviewStatus(taskBefore.status);
-    const taskIsAssignedToCurrentUser = isAssignedToTask(taskBefore, userId);
-    const currentUserCanApproveReview = canApproveReview(currentUser);
-
-    if (updateData.status === "in_review" && !taskWasInReview) {
-      if (!taskIsAssignedToCurrentUser && !currentUserCanApproveReview) {
-        return sendError(res, AppError.forbidden("Only assignees can send a task to review"), req);
-      }
-    }
-
-    if (taskWasInReview && updateData.status && updateData.status !== "in_review") {
-      if (!currentUserCanApproveReview) {
-        return sendError(res, AppError.forbidden("Only project managers and admins can approve a reviewed task"), req);
-      }
-      if (isTaskDoneStatus(updateData.status)) {
-        return sendError(res, AppError.badRequest("Reviewed tasks must be approved before they can be marked done"), req);
-      }
     }
     
     if (updateData.visibility !== undefined && config.features.enablePrivateTasks && tenantId) {
@@ -891,42 +1183,43 @@ router.patch("/tasks/:id", async (req, res) => {
       emitTaskUpdated(task.id, task.projectId, task.parentTaskId, data);
     }
 
-    if (!task.isPersonal) {
+    if (taskBefore && task.projectId && updateData.status && updateData.status !== taskBefore.status) {
+      const project = await storage.getProject(task.projectId);
+      const actor = await storage.getUser(userId);
+      const normalizedBefore = normalizeTaskStatus(taskBefore.status) || taskBefore.status;
+      const normalizedAfter = normalizeTaskStatus(updateData.status) || updateData.status;
+
+      if (project?.workspaceId) {
+        await storage.createActivityLog({
+          workspaceId: project.workspaceId,
+          actorUserId: userId,
+          entityType: "task",
+          entityId: task.id,
+          action:
+            normalizedAfter === "in_review"
+              ? "review_submitted"
+              : normalizedBefore === "in_review" && normalizedAfter === "in_progress"
+                ? "review_approved"
+                : "status_changed",
+          diffJson: {
+            actorName: actor?.name || actor?.email || "Someone",
+            actorEmail: actor?.email || "",
+            entityTitle: task.title,
+            from: normalizedBefore,
+            to: normalizedAfter,
+          },
+        });
+      }
+    }
+
+    if (taskBefore && !task.isPersonal) {
+      const currentUser = await storage.getUser(userId);
       const currentUserName = currentUser?.name || currentUser?.email || "Someone";
       const project = task.projectId ? await storage.getProject(task.projectId) : null;
       const projectName = project?.name || "Unknown project";
       const notificationContext = { tenantId, excludeUserId: userId };
-      const workspaceId = project?.workspaceId || getCurrentWorkspaceId(req);
-      const normalizedBeforeStatus = normalizeTaskStatus(taskBefore.status) || taskBefore.status;
-      const normalizedAfterStatus = normalizeTaskStatus(task.status) || task.status;
 
-      await logTaskFieldChanges(
-        storage,
-        userId,
-        workspaceId,
-        {
-          id: taskBefore.id,
-          title: taskBefore.title,
-          projectId: taskBefore.projectId,
-          status: normalizeTaskStatus(taskBefore.status) || taskBefore.status,
-          priority: taskBefore.priority,
-          dueDate: taskBefore.dueDate,
-          estimateMinutes: taskBefore.estimateMinutes,
-          description: taskBefore.description,
-        } as any,
-        {
-          id: task.id,
-          title: task.title,
-          projectId: task.projectId,
-          status: normalizeTaskStatus(task.status) || task.status,
-          priority: task.priority,
-          dueDate: task.dueDate,
-          estimateMinutes: task.estimateMinutes,
-          description: task.description,
-        } as any,
-      ).catch(() => {});
-
-      if (normalizedAfterStatus === "done" && !isTaskDoneStatus(taskBefore.status)) {
+      if (updateData.status === "completed" && taskBefore.status !== "completed") {
         const assignees = (taskWithRelations as any)?.assignees || [];
         for (const assignee of assignees) {
           if (assignee.id !== userId) {
@@ -962,7 +1255,7 @@ router.patch("/tasks/:id", async (req, res) => {
           if (task.sectionId && section && task.projectId) {
             const projectTasks = await storage.getTasksByProject(task.projectId);
             const sectionTasks = projectTasks.filter(t => t.sectionId === task.sectionId);
-            const allComplete = sectionTasks.every(t => t.id === task.id ? true : isTaskDoneStatus(t.status));
+            const allComplete = sectionTasks.every(t => t.id === task.id ? true : t.status === "completed");
             if (allComplete && sectionTasks.length > 0) {
               evaluateAutomation({
                 tenantId,
@@ -982,62 +1275,7 @@ router.patch("/tasks/:id", async (req, res) => {
         }
       }
 
-      if (!taskWasInReview && normalizedAfterStatus === "in_review") {
-        const reviewApprovers = tenantId
-          ? (await storage.getUsersByTenant(tenantId)).filter((candidate) => candidate.id !== userId && canApproveReview(candidate))
-          : [];
-        for (const approver of reviewApprovers) {
-          if (approver.id !== userId) {
-            notifyTaskReviewRequested(
-              approver.id,
-              task.id,
-              task.title,
-              currentUserName,
-              notificationContext
-            ).catch(() => {});
-          }
-        }
-
-        await logEntityActivity({
-          storage,
-          workspaceId,
-          actorUserId: userId,
-          entityType: "task",
-          entityId: task.id,
-          entityTitle: task.title,
-          action: "review_requested",
-          metadata: {
-            projectId: task.projectId,
-          },
-        }).catch(() => {});
-      } else if (taskWasInReview && normalizedBeforeStatus !== normalizedAfterStatus) {
-        const assignees = (taskWithRelations as any)?.assignees || [];
-        for (const assignee of assignees) {
-          if (assignee.id !== userId) {
-            notifyTaskReviewApproved(
-              assignee.id,
-              task.id,
-              task.title,
-              currentUserName,
-              notificationContext
-            ).catch(() => {});
-          }
-        }
-
-        await logEntityActivity({
-          storage,
-          workspaceId,
-          actorUserId: userId,
-          entityType: "task",
-          entityId: task.id,
-          entityTitle: task.title,
-          action: "review_approved",
-          metadata: {
-            projectId: task.projectId,
-            returnedStatus: normalizedAfterStatus,
-          },
-        }).catch(() => {});
-      } else if (updateData.status && normalizedBeforeStatus !== normalizedAfterStatus && normalizedAfterStatus !== "done") {
+      if (updateData.status && updateData.status !== taskBefore.status && updateData.status !== "completed") {
         const assignees = (taskWithRelations as any)?.assignees || [];
         for (const assignee of assignees) {
           if (assignee.id !== userId) {
@@ -1045,7 +1283,7 @@ router.patch("/tasks/:id", async (req, res) => {
               assignee.id,
               task.id,
               task.title,
-              getTaskStatusLabel(normalizedAfterStatus),
+              updateData.status,
               currentUserName,
               notificationContext
             ).catch(() => {});
@@ -1207,29 +1445,14 @@ router.post("/tasks/:taskId/assignees", async (req, res) => {
       userId: assigneeUserId,
       tenantId: tenantId || undefined,
     });
-
-    const project = task.projectId
-      ? (tenantId
-        ? await storage.getProjectByIdAndTenant(task.projectId, tenantId)
-        : await storage.getProject(task.projectId))
-      : null;
-
-    await logEntityActivity({
-      storage,
-      workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-      actorUserId: currentUserId,
-      entityType: "task",
-      entityId: task.id,
-      entityTitle: task.title,
-      action: "assigned",
-      metadata: {
-        projectId: task.projectId,
-        userId: assigneeUserId,
-      },
-    }).catch(() => {});
     
     if (assigneeUserId !== currentUserId && !task.isPersonal) {
       const currentUser = await storage.getUser(currentUserId);
+      const project = task.projectId 
+        ? (tenantId 
+          ? await storage.getProjectByIdAndTenant(task.projectId, tenantId)
+          : await storage.getProject(task.projectId)) 
+        : null;
       notifyTaskAssigned(
         assigneeUserId,
         task.id,
@@ -1261,25 +1484,6 @@ router.delete("/tasks/:taskId/assignees/:userId", async (req, res) => {
     }
     
     await storage.removeTaskAssignee(req.params.taskId, req.params.userId);
-
-    const project = task.projectId
-      ? (tenantId
-        ? await storage.getProjectByIdAndTenant(task.projectId, tenantId)
-        : await storage.getProject(task.projectId))
-      : null;
-    await logEntityActivity({
-      storage,
-      workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
-      actorUserId: getCurrentUserId(req),
-      entityType: "task",
-      entityId: task.id,
-      entityTitle: task.title,
-      action: "unassigned",
-      metadata: {
-        projectId: task.projectId,
-        userId: req.params.userId,
-      },
-    }).catch(() => {});
     res.status(204).send();
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/tasks/:taskId/assignees/:userId", req);

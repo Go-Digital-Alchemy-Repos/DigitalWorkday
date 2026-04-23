@@ -68,7 +68,7 @@ The factory automatically applies:
 | flags | /api | CRM feature flags |
 | time | /api | Time tracking, timers, entries, reporting |
 | projects | /api | Projects CRUD, members, sections |
-| tasks | /api | Tasks CRUD, assignees, watchers, calendar |
+| tasks | /api | Tasks CRUD, assignees, calendar |
 | subtasks | /api | Subtasks CRUD, move, assignees |
 | project-notes | /api | Project notes, categories, versions |
 | workspaces | /api | Workspace CRUD, members |

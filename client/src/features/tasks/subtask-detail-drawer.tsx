@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Pencil, Activity, Eye } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Pencil, Activity } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RichTextEditor, richTextToPlainText, toPlainText } from "@/components/richtext";
+import { RichTextEditor } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -22,20 +21,17 @@ import { StatusBadge } from "@/components/status-badge";
 import { PrioritySelector, type PriorityLevel } from "@/components/forms/priority-selector";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { CommentThread } from "@/components/comment-thread";
-import { ActivityFeed } from "@/components/activity-feed";
+import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { normalizeRichTextValue } from "@/components/richtext/richTextUtils";
-import { mergeMentionUsers } from "@/components/richtext/mentionUtils";
 import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
-import { hasTenantAdminAccess } from "@shared/roles";
 
 import {
   AlertDialog,
@@ -98,6 +94,13 @@ interface ActiveTimer {
   lastStartedAt: string | null;
 }
 
+interface ProjectContext {
+  id: string;
+  name: string;
+  clientId?: string | null;
+  client?: { id: string; companyName: string; displayName: string | null } | null;
+}
+
 interface TimeEntryListItem {
   id: string;
   title?: string | null;
@@ -140,28 +143,18 @@ export function SubtaskDetailDrawer({
     queryKey: ["/api/tenant/users"],
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
-  const { data: workspaceUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-    enabled: open && (!availableUsers || availableUsers.length === 0),
-  });
-  const mentionUsers = useMemo(() => {
-    if (availableUsers && availableUsers.length > 0) {
-      return availableUsers;
-    }
-    return mergeMentionUsers(tenantUsers, workspaceUsers);
-  }, [availableUsers, tenantUsers, workspaceUsers]);
+  const mentionUsers = availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers;
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
-  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
-  const [description, setDescription] = useState<string>(() => normalizeRichTextValue(subtask?.description));
-  const displayedDescriptionSource = useMemo(() => {
-    const candidates = [subtask?.description, description];
-    return candidates.find((candidate) => toPlainText(candidate).trim()) ?? subtask?.description ?? description;
-  }, [subtask?.description, description]);
+  const [description, setDescription] = useState<string>(
+    typeof subtask?.description === 'string' 
+      ? subtask.description 
+      : subtask?.description ? (typeof subtask.description === 'object' ? JSON.stringify(subtask.description) : String(subtask.description)) : ""
+  );
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
@@ -396,17 +389,39 @@ export function SubtaskDetailDrawer({
   useEffect(() => {
     if (subtask) {
       setTitle(subtask.title);
-      setDescription(normalizeRichTextValue(subtask.description));
-      setEditingDescription(!toPlainText(subtask.description ?? description).trim());
+      setDescription(
+        typeof subtask.description === 'string' 
+          ? subtask.description 
+          : subtask.description ? JSON.stringify(subtask.description) : ""
+      );
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
-      setShowHistory(false);
     }
-  }, [subtask?.id, subtask?.description, subtask?.title, subtask?.dueDate]);
+  }, [subtask?.id]);
 
   const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
     queryKey: ["/api/timer/current"],
     enabled: open,
     refetchInterval: 30000,
+  });
+
+  const { data: projectContext, isLoading: projectContextLoading, isError: projectContextError } = useQuery<ProjectContext | null>({
+    queryKey: ["/api/projects", projectId, "context"],
+    queryFn: async () => {
+      if (!projectId) return null;
+      const projectRes = await fetch(`/api/projects/${projectId}`, { credentials: "include" });
+      if (!projectRes.ok) throw new Error("Failed to load project");
+      const project = await projectRes.json();
+      let client = null;
+      if (project?.clientId) {
+        const clientRes = await fetch(`/api/clients/${project.clientId}`, { credentials: "include" });
+        if (clientRes.ok) {
+          client = await clientRes.json();
+        }
+      }
+      return { ...project, client };
+    },
+    enabled: !!projectId && open,
+    retry: 1,
   });
 
   const isTimerOnThisTask = isActualSubtask
@@ -422,11 +437,11 @@ export function SubtaskDetailDrawer({
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
-      if (projectId && !isActualSubtask) {
-        // Handle case where we might need more context for non-subtask items if any
+      if (projectId && !projectContext?.clientId) {
+        throw new Error("Client context required for project subtasks");
       }
       return apiRequest("POST", "/api/timer/start", {
-        clientId: (subtask as any).project?.clientId || null,
+        clientId: projectContext?.clientId || null,
         projectId: projectId || null,
         taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
         subtaskId: isActualSubtask ? subtask?.id || null : null,
@@ -438,7 +453,11 @@ export function SubtaskDetailDrawer({
       toast({ title: "Timer started", description: `Tracking time for "${subtask?.title}"` });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to start timer", variant: "destructive" });
+      toast({
+        title: "Failed to start timer",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
     },
   });
 
@@ -499,6 +518,8 @@ export function SubtaskDetailDrawer({
     activeTimer && isTimerOnThisTask && isTimerRunning ? "running" :
     activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
     activeTimer && !isTimerOnThisTask ? "other_task" :
+    projectContextLoading && !!projectId ? "loading" :
+    (!activeTimer && !!projectId && !projectContext?.clientId) || projectContextError ? "hidden" :
     "idle";
 
   const creatorUser = subtask?.createdBy
@@ -516,11 +537,6 @@ export function SubtaskDetailDrawer({
   const assigneeUsers: Partial<User>[] = isActualSubtask 
     ? subtaskAssignees.map((a) => a.user).filter(Boolean) as Partial<User>[]
     : childTaskAssignees.map((a) => a.user).filter(Boolean) as Partial<User>[];
-  const isSubtaskAssignee = isActualSubtask
-    ? subtaskAssignees.some((assignee) => assignee.userId === currentUser?.id || assignee.user?.id === currentUser?.id)
-    : childTaskAssignees.some((assignee) => assignee.userId === currentUser?.id || assignee.user?.id === currentUser?.id);
-  const canSendToReview = Boolean(subtask && isSubtaskAssignee && subtask.status !== "in_review" && subtask.status !== "done");
-  const canApproveReview = Boolean(subtask && hasTenantAdminAccess(currentUser?.role) && subtask.status === "in_review");
 
   const assignedTagIds = new Set(
     isActualSubtask
@@ -534,28 +550,6 @@ export function SubtaskDetailDrawer({
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
-  };
-
-  const handleSendToReview = async () => {
-    if (!subtask) return;
-    try {
-      await apiRequest("PATCH", `/api/subtasks/${subtask.id}`, { status: "in_review" });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Subtask sent to review", description: `"${subtask.title}" is ready for approval` });
-    } catch (error: any) {
-      toast({ title: "Failed to send subtask to review", description: error?.message, variant: "destructive" });
-    }
-  };
-
-  const handleApproveReview = async () => {
-    if (!subtask) return;
-    try {
-      await apiRequest("PATCH", `/api/subtasks/${subtask.id}`, { status: "in_progress", completed: false });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Review approved", description: `"${subtask.title}" returned to the assignee for final completion` });
-    } catch (error: any) {
-      toast({ title: "Failed to approve subtask review", description: error?.message, variant: "destructive" });
-    }
   };
 
   const openTimeEntryEditor = (entry: TimeEntryListItem) => {
@@ -720,17 +714,8 @@ export function SubtaskDetailDrawer({
                 ) : null}
 
                 {showHistory && isActualSubtask && (
-                  <div className="border rounded-lg overflow-hidden">
-                    <ActivityFeed
-                      entityType="subtask"
-                      entityId={subtask.id}
-                      height="240px"
-                      emptyTitle="No subtask history yet"
-                      emptyDescription="Subtask activity will appear here as changes are made"
-                    />
-                  </div>
+                  <TaskHistoryTab entityType="subtask" entityId={subtask.id} />
                 )}
-
                 <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -760,7 +745,6 @@ export function SubtaskDetailDrawer({
                       <SelectContent>
                         <SelectItem value="todo">To Do</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="in_review">In Review</SelectItem>
                         <SelectItem value="blocked">Blocked</SelectItem>
                         <SelectItem value="done">Done</SelectItem>
                       </SelectContent>
@@ -869,43 +853,24 @@ export function SubtaskDetailDrawer({
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
-                {editingDescription || !toPlainText(displayedDescriptionSource).trim() ? (
-                  <RichTextEditor
-                    key={`subtask-description-${subtask.id}-${subtask.updatedAt ? new Date(subtask.updatedAt).getTime() : "static"}`}
-                    value={description}
-                    onChange={handleDescriptionChange}
-                    placeholder="Add a description... Type @ to mention someone"
-                    minHeight="100px"
-                    users={mentionUsers}
-                    autoFocus
-                    data-testid="textarea-subtask-description"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditingDescription(true)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-left transition-premium hover:border-ring/40"
-                    data-testid="button-edit-subtask-description"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>Click to edit</span>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="whitespace-pre-wrap text-sm text-foreground">
-                      {richTextToPlainText(displayedDescriptionSource)}
-                    </div>
-                  </button>
-                )}
+                <RichTextEditor
+                  value={description}
+                  onChange={handleDescriptionChange}
+                  placeholder="Add a description... Type @ to mention someone"
+                  minHeight="100px"
+                  users={mentionUsers}
+                  data-testid="textarea-subtask-description"
+                />
               </div>
 
               <Separator />
 
-              {projectId && isActualSubtask && (
+              {projectId && (
                 <div 
                   className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
                   style={{ borderRadius: "10px" }}
                 >
-                  <AttachmentUploader taskId={subtask.taskId} subtaskId={subtask.id} projectId={projectId} />
+                  <AttachmentUploader taskId={subtask.id} projectId={projectId} />
                 </div>
               )}
 
@@ -1216,36 +1181,10 @@ export function SubtaskDetailDrawer({
           showSave={true}
           onSave={handleSaveAll}
           saveLabel="Save Subtask"
-          showComplete={isActualSubtask && subtask.status !== "in_review"}
+          showComplete={isActualSubtask}
           onMarkComplete={handleMarkComplete}
           isCompleting={toggleCompleteMutation.isPending}
           completeLabel={(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
-          extraActions={
-            <div className="flex items-center gap-2 flex-wrap">
-              {canSendToReview && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSendToReview}
-                  data-testid="button-send-subtask-to-review"
-                >
-                  <Eye className="h-4 w-4 mr-1.5" />
-                  Send to Review
-                </Button>
-              )}
-              {canApproveReview && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleApproveReview}
-                  data-testid="button-approve-subtask-review"
-                >
-                  <Check className="h-4 w-4 mr-1.5" />
-                  Approve Review
-                </Button>
-              )}
-            </div>
-          }
           className="sticky bottom-0 z-10"
         />
         </div>

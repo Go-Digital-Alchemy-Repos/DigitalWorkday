@@ -195,7 +195,7 @@ export function ActivityFeed({
 
   const endpoint = apiEndpoint || `/api/activity-log/${entityType}/${entityId}`;
 
-  const { data: rawData, isLoading } = useQuery<ActivityItem[] | ActivityLogEntry[]>({
+  const { data: rawData, isLoading, isError, error, refetch } = useQuery<ActivityItem[] | ActivityLogEntry[]>({
     queryKey: [endpoint],
     enabled: !externalItems && !!entityId,
   });
@@ -259,6 +259,26 @@ export function ActivityFeed({
 
   if (isLoading && !externalItems) {
     return <ActivitySkeleton />;
+  }
+
+  if (isError && !externalItems) {
+    return (
+      <div
+        className="flex h-full min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center"
+        data-testid="activity-feed-error"
+      >
+        <Activity className="h-8 w-8 text-destructive" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Could not load activity</p>
+          <p className="text-xs text-muted-foreground">
+            {error instanceof Error ? error.message : "The activity feed request failed."}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
   }
 
   const hasActiveFilters = selectedTypes.size > 0 || dateRange !== "all";

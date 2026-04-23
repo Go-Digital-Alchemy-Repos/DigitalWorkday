@@ -1,7 +1,6 @@
 import {
   type Task, type InsertTask,
   type TaskAssignee, type InsertTaskAssignee,
-  type TaskWatcher, type InsertTaskWatcher,
   type Subtask, type InsertSubtask,
   type SubtaskAssignee, type InsertSubtaskAssignee,
   type SubtaskTag, type InsertSubtaskTag,
@@ -13,12 +12,12 @@ import {
   type TaskAttachment, type InsertTaskAttachment,
   type User, type Section, type Project,
   type TaskWithRelations, type TaskAttachmentWithUser,
-  tasks, taskAssignees, taskWatchers, subtasks, subtaskAssignees, subtaskTags,
+  tasks, taskAssignees, subtasks, subtaskAssignees, subtaskTags,
   tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   projects, users, timeEntries, activeTimers, sections,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, gte, lte, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, inArray, sql } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export type CalendarTask = {
@@ -78,6 +77,7 @@ export class TasksRepository {
     return {
       ...task,
       assignees,
+      watchers: [],
       tags: taskTagsList,
       subtasks: subtasksList,
       childTasks: childTasksList,
@@ -101,6 +101,7 @@ export class TasksRepository {
       result.push({
         ...task,
         assignees,
+        watchers: [],
         tags: taskTagsList,
         subtasks: [],
         childTasks: [],
@@ -423,27 +424,6 @@ export class TasksRepository {
   async removeTaskAssignee(taskId: string, userId: string): Promise<void> {
     await db.delete(taskAssignees).where(
       and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId))
-    );
-  }
-
-  async getTaskWatchers(taskId: string): Promise<(TaskWatcher & { user?: User })[]> {
-    const watchers = await db.select().from(taskWatchers).where(eq(taskWatchers.taskId, taskId));
-    const result = [];
-    for (const watcher of watchers) {
-      const user = await this.getUser(watcher.userId);
-      result.push({ ...watcher, user });
-    }
-    return result;
-  }
-
-  async addTaskWatcher(watcher: InsertTaskWatcher): Promise<TaskWatcher> {
-    const [result] = await db.insert(taskWatchers).values(watcher).returning();
-    return result;
-  }
-
-  async removeTaskWatcher(taskId: string, userId: string): Promise<void> {
-    await db.delete(taskWatchers).where(
-      and(eq(taskWatchers.taskId, taskId), eq(taskWatchers.userId, userId))
     );
   }
 
@@ -803,22 +783,9 @@ export class TasksRepository {
 
   async getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]> {
     const attachmentsList = await db.select().from(taskAttachments)
-      .where(and(eq(taskAttachments.taskId, taskId), isNull(taskAttachments.subtaskId)))
+      .where(eq(taskAttachments.taskId, taskId))
       .orderBy(desc(taskAttachments.createdAt));
     
-    const result: TaskAttachmentWithUser[] = [];
-    for (const attachment of attachmentsList) {
-      const user = await this.getUser(attachment.uploadedByUserId);
-      result.push({ ...attachment, uploadedByUser: user });
-    }
-    return result;
-  }
-
-  async getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]> {
-    const attachmentsList = await db.select().from(taskAttachments)
-      .where(eq(taskAttachments.subtaskId, subtaskId))
-      .orderBy(desc(taskAttachments.createdAt));
-
     const result: TaskAttachmentWithUser[] = [];
     for (const attachment of attachmentsList) {
       const user = await this.getUser(attachment.uploadedByUserId);

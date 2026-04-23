@@ -50,6 +50,16 @@ describe("Tasks Router – authTenant policy drift tests", () => {
     expect(res.status).toBe(401);
   });
 
+  it("GET /api/tasks/review-queue rejects unauthenticated with 401", async () => {
+    const res = await request(buildApp()).get("/api/tasks/review-queue");
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/dashboard/review-queue rejects unauthenticated with 401", async () => {
+    const res = await request(buildApp()).get("/api/dashboard/review-queue");
+    expect(res.status).toBe(401);
+  });
+
   it("GET /api/tasks/:id rejects unauthenticated with 401", async () => {
     const res = await request(buildApp()).get("/api/tasks/some-id");
     expect(res.status).toBe(401);
@@ -101,6 +111,7 @@ describe("Tasks Router – authTenant policy drift tests", () => {
     expect(res.status).toBe(401);
   });
 
+  // Task Watchers
   // Personal Task Sections
   it("GET /api/v1/my-tasks/sections rejects unauthenticated with 401", async () => {
     const res = await request(buildApp()).get("/api/v1/my-tasks/sections");

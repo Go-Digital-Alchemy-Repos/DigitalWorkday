@@ -733,16 +733,6 @@ export class TenantIntegrationService {
     }
   }
 
-  async getDecryptedSecrets<T extends SecretConfig>(tenantId: string, provider: IntegrationProvider): Promise<T | null> {
-    const condition = and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider));
-    const [integration] = await db.select().from(tenantIntegrations).where(condition).limit(1);
-    if (!integration?.configEncrypted || !isEncryptionAvailable()) return null;
-    try {
-      return JSON.parse(decryptValue(integration.configEncrypted)) as T;
-    } catch {
-      return null;
-    }
-  }
 }
 
 export const tenantIntegrationService = new TenantIntegrationService();
