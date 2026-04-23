@@ -1034,7 +1034,6 @@ export class DatabaseStorage implements IStorage {
     if (!task) return undefined;
 
     const assignees = await this.getTaskAssignees(id);
-    const watchers = await this.getTaskWatchers(id);
     const taskTagsList = await this.getTaskTags(id);
     const subtasksList = await this.getSubtasksByTask(id);
     const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
@@ -1045,7 +1044,7 @@ export class DatabaseStorage implements IStorage {
     return {
       ...task,
       assignees,
-      watchers,
+      watchers: [],
       tags: taskTagsList,
       subtasks: subtasksList,
       childTasks: childTasksList,
@@ -1062,7 +1061,6 @@ export class DatabaseStorage implements IStorage {
     const result: TaskWithRelations[] = [];
     for (const task of childTasksList) {
       const assignees = await this.getTaskAssignees(task.id);
-      const watchers = await this.getTaskWatchers(task.id);
       const taskTagsList = await this.getTaskTags(task.id);
       const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
       const project = task.projectId ? await this.getProject(task.projectId) : undefined;
@@ -1070,7 +1068,7 @@ export class DatabaseStorage implements IStorage {
       result.push({
         ...task,
         assignees,
-        watchers,
+        watchers: [],
         tags: taskTagsList,
         subtasks: [],
         childTasks: [],

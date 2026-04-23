@@ -25,11 +25,6 @@
  *     POST   /tasks/:taskId/assignees               — add assignee
  *     DELETE /tasks/:taskId/assignees/:userId        — remove assignee
  *
- *   Task Watchers:
- *     GET    /tasks/:taskId/watchers                — list watchers
- *     POST   /tasks/:taskId/watchers                — add watcher
- *     DELETE /tasks/:taskId/watchers/:userId         — remove watcher
- *
  *   Personal Task Sections (My Tasks):
  *     GET    /v1/my-tasks/sections                  — list personal sections
  *     POST   /v1/my-tasks/sections                  — create personal section
@@ -1308,43 +1303,6 @@ router.delete("/tasks/:taskId/assignees/:userId", async (req, res) => {
     res.status(204).send();
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/tasks/:taskId/assignees/:userId", req);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Task Watchers
-// ---------------------------------------------------------------------------
-
-router.get("/tasks/:taskId/watchers", async (req, res) => {
-  try {
-    const watchers = await storage.getTaskWatchers(req.params.taskId);
-    res.json(watchers);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/tasks/:taskId/watchers", req);
-  }
-});
-
-router.post("/tasks/:taskId/watchers", async (req, res) => {
-  try {
-    const data = validateBody(req.body, addAssigneeSchema, res);
-    if (!data) return;
-    
-    const watcher = await storage.addTaskWatcher({
-      taskId: req.params.taskId,
-      userId: data.userId,
-    });
-    res.status(201).json(watcher);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/tasks/:taskId/watchers", req);
-  }
-});
-
-router.delete("/tasks/:taskId/watchers/:userId", async (req, res) => {
-  try {
-    await storage.removeTaskWatcher(req.params.taskId, req.params.userId);
-    res.status(204).send();
-  } catch (error) {
-    return handleRouteError(res, error, "DELETE /api/tasks/:taskId/watchers/:userId", req);
   }
 });
 

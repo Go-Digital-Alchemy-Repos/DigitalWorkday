@@ -1,7 +1,6 @@
 import {
   type Task, type InsertTask,
   type TaskAssignee, type InsertTaskAssignee,
-  type TaskWatcher, type InsertTaskWatcher,
   type Subtask, type InsertSubtask,
   type SubtaskAssignee, type InsertSubtaskAssignee,
   type SubtaskTag, type InsertSubtaskTag,
@@ -13,7 +12,7 @@ import {
   type TaskAttachment, type InsertTaskAttachment,
   type User, type Section, type Project,
   type TaskWithRelations, type TaskAttachmentWithUser,
-  tasks, taskAssignees, taskWatchers, subtasks, subtaskAssignees, subtaskTags,
+  tasks, taskAssignees, subtasks, subtaskAssignees, subtaskTags,
   tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   projects, users, timeEntries, activeTimers, sections,
 } from "@shared/schema";
@@ -68,7 +67,6 @@ export class TasksRepository {
     if (!task) return undefined;
 
     const assignees = await this.getTaskAssignees(id);
-    const watchers = await this.getTaskWatchers(id);
     const taskTagsList = await this.getTaskTags(id);
     const subtasksList = await this.getSubtasksByTask(id);
     const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
@@ -79,7 +77,7 @@ export class TasksRepository {
     return {
       ...task,
       assignees,
-      watchers,
+      watchers: [],
       tags: taskTagsList,
       subtasks: subtasksList,
       childTasks: childTasksList,
@@ -96,7 +94,6 @@ export class TasksRepository {
     const result: TaskWithRelations[] = [];
     for (const task of childTasksList) {
       const assignees = await this.getTaskAssignees(task.id);
-      const watchers = await this.getTaskWatchers(task.id);
       const taskTagsList = await this.getTaskTags(task.id);
       const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
       const project = task.projectId ? await this.getProject(task.projectId) : undefined;
@@ -104,7 +101,7 @@ export class TasksRepository {
       result.push({
         ...task,
         assignees,
-        watchers,
+        watchers: [],
         tags: taskTagsList,
         subtasks: [],
         childTasks: [],
@@ -427,27 +424,6 @@ export class TasksRepository {
   async removeTaskAssignee(taskId: string, userId: string): Promise<void> {
     await db.delete(taskAssignees).where(
       and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId))
-    );
-  }
-
-  async getTaskWatchers(taskId: string): Promise<(TaskWatcher & { user?: User })[]> {
-    const watchers = await db.select().from(taskWatchers).where(eq(taskWatchers.taskId, taskId));
-    const result = [];
-    for (const watcher of watchers) {
-      const user = await this.getUser(watcher.userId);
-      result.push({ ...watcher, user });
-    }
-    return result;
-  }
-
-  async addTaskWatcher(watcher: InsertTaskWatcher): Promise<TaskWatcher> {
-    const [result] = await db.insert(taskWatchers).values(watcher).returning();
-    return result;
-  }
-
-  async removeTaskWatcher(taskId: string, userId: string): Promise<void> {
-    await db.delete(taskWatchers).where(
-      and(eq(taskWatchers.taskId, taskId), eq(taskWatchers.userId, userId))
     );
   }
 

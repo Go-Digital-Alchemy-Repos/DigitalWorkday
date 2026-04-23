@@ -144,7 +144,7 @@ export function ReviewQueueCard({
   onApproveItem,
   approvingItemKey,
 }: ReviewQueueCardProps) {
-  const { data, isLoading } = useQuery<DashboardReviewQueueResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<DashboardReviewQueueResponse>({
     queryKey: ["/api/dashboard/review-queue"],
     enabled,
     staleTime: 15000,
@@ -163,6 +163,30 @@ export function ReviewQueueCard({
             <Skeleton className="h-48 w-full" />
             <Skeleton className="h-48 w-full" />
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className="mb-6 border-destructive/30" data-testid="pm-review-queue-error">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5 text-destructive" />
+            <CardTitle className="text-lg">Review Workflow</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            The review queue failed to load, so this card may appear empty until the request succeeds.
+          </p>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <p className="text-sm text-destructive">
+            {error instanceof Error ? error.message : "Failed to load review queue"}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
