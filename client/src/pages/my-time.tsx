@@ -72,8 +72,8 @@ function StatCard({ title, stats, icon: Icon, description }: {
   const billablePercent = stats.total > 0 ? (stats.billable / stats.total) * 100 : 0;
   
   return (
-    <Card data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
+    <Card className="border-border/70 bg-card/90 shadow-[var(--shadow-soft)]" data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
         <div>
           <CardTitle className="font-medium">{title}</CardTitle>
           {description && <CardDescription className="text-xs">{description}</CardDescription>}
@@ -81,7 +81,7 @@ function StatCard({ title, stats, icon: Icon, description }: {
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{formatDuration(stats.total)}</div>
+        <div className="text-3xl font-semibold tracking-tight">{formatDuration(stats.total)}</div>
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-purple-600 dark:text-purple-400">Billable</span>
@@ -106,7 +106,7 @@ function WeeklyChart({ data }: { data: DailyBreakdown[] }) {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
   return (
-    <Card data-testid="weekly-chart">
+    <Card className="border-border/70 bg-card/90 shadow-[var(--shadow-soft)]" data-testid="weekly-chart">
       <CardHeader>
         <CardTitle className="font-medium">This Week</CardTitle>
         <CardDescription>Daily time breakdown</CardDescription>
@@ -168,7 +168,7 @@ function WarningsPanel({ warnings, onEditEntry }: {
   }
   
   return (
-    <Card className="border-amber-200 dark:border-amber-800" data-testid="warnings-panel">
+    <Card className="border-amber-200/70 bg-amber-50/30 shadow-[var(--shadow-soft)] dark:border-amber-800 dark:bg-amber-950/10" data-testid="warnings-panel">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -242,7 +242,7 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
   onStartTimer: () => void;
 }) {
   return (
-    <div className="bg-muted/30 rounded-lg p-4 border border-border/50" data-testid="quick-actions">
+    <div className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)]" data-testid="quick-actions">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
       <div className="flex flex-wrap gap-2">
         <Button 
@@ -342,24 +342,28 @@ export default function MyTimePage() {
   }
   
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4 border-b border-border shrink-0">
+    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+      <div className="shrink-0 border-b border-border/70 bg-background/95 backdrop-blur-xl">
+        <div className="px-4 py-4 sm:px-5 lg:px-8 md:py-5">
+          <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5">
         <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="page-title">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" data-testid="page-title">
             <Clock className="h-6 w-6" />
             My Time
           </h1>
           <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
         </div>
-        <Button onClick={handleStartTimer} data-testid="button-start-timer">
+        <Button className="rounded-xl shadow-[var(--shadow-soft)]" onClick={handleStartTimer} data-testid="button-start-timer">
           <Play className="h-4 w-4 mr-2" />
           Start Timer
         </Button>
+          </div>
+        </div>
       </div>
       
-      <div className="flex-1 overflow-auto px-3 sm:px-4 lg:px-6 py-4 md:py-6">
+      <div className="flex-1 overflow-auto px-4 py-5 sm:px-5 lg:px-8 md:py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <TabsList className="mb-4">
+          <TabsList className="mb-5 h-10 rounded-2xl border border-border/70 bg-card/90 p-1 shadow-[var(--shadow-soft)]">
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard

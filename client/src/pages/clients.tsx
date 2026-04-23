@@ -172,6 +172,7 @@ function getInitials(name: string) {
 }
 
 function KPIStrip({ summary, isLoading }: { summary?: ClientSummary; isLoading: boolean }) {
+  const summaryCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)]";
   const kpis = [
     { label: "Total Clients", value: summary?.total ?? 0, icon: Building2, color: "text-foreground" },
     { label: "Active", value: summary?.active ?? 0, icon: TrendingUp, color: "text-green-600 dark:text-green-400" },
@@ -182,15 +183,21 @@ function KPIStrip({ summary, isLoading }: { summary?: ClientSummary; isLoading: 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" data-testid="kpi-strip">
       {kpis.map((kpi) => (
-        <Card key={kpi.label} data-testid={`kpi-${kpi.label.toLowerCase().replace(/\s+/g, "-")}`}>
-          <CardContent className="p-4">
+        <Card
+          key={kpi.label}
+          className={summaryCardClass}
+          data-testid={`kpi-${kpi.label.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <CardContent className="p-4 md:p-5">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground truncate">{kpi.label}</p>
+                <p className="text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted-foreground truncate">
+                  {kpi.label}
+                </p>
                 {isLoading ? (
                   <Skeleton className="h-7 w-12 mt-1" />
                 ) : (
-                  <p className={cn("text-2xl font-semibold", kpi.color)}>{kpi.value}</p>
+                  <p className={cn("mt-1 text-[1.75rem] font-semibold tracking-tight", kpi.color)}>{kpi.value}</p>
                 )}
               </div>
               <kpi.icon className={cn("h-5 w-5 shrink-0", kpi.color)} />
@@ -245,8 +252,11 @@ function PipelineBar({
   }
 
   return (
-    <div className="mb-4 space-y-3" data-testid="pipeline-bar">
-      <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted">
+    <div
+      className="mb-4 rounded-3xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)] md:p-5"
+      data-testid="pipeline-bar"
+    >
+      <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted/80">
         {CLIENT_STAGES_ORDERED.map((stage) => {
           const count = stageCountMap[stage] || 0;
           const pct = totalClients > 0 ? (count / totalClients) * 100 : 0;
@@ -268,12 +278,12 @@ function PipelineBar({
         })}
       </div>
 
-      <div className="flex items-center gap-1 overflow-x-auto pb-1" data-testid="pipeline-tabs">
+      <div className="mt-4 flex items-center gap-1 overflow-x-auto pb-1" data-testid="pipeline-tabs">
         <Button
           variant={activeStage === "all" ? "secondary" : "ghost"}
           size="sm"
           onClick={() => onStageChange("all")}
-          className="shrink-0"
+          className="shrink-0 rounded-xl"
           data-testid="tab-all"
         >
           All
@@ -288,7 +298,7 @@ function PipelineBar({
               variant={activeStage === stage ? "secondary" : "ghost"}
               size="sm"
               onClick={() => onStageChange(stage as SegmentTab)}
-              className="shrink-0"
+              className="shrink-0 rounded-xl"
               data-testid={`tab-${stage}`}
             >
               <span className={cn("h-2 w-2 rounded-full mr-1.5 shrink-0", STAGE_COLORS[stage])} />
@@ -302,7 +312,7 @@ function PipelineBar({
           variant={activeStage === "needs-attention" ? "secondary" : "ghost"}
           size="sm"
           onClick={() => onStageChange("needs-attention")}
-          className="shrink-0"
+          className="shrink-0 rounded-xl"
           data-testid="tab-needs-attention"
         >
           <AlertTriangle className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
@@ -1969,6 +1979,7 @@ export default function ClientsPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               onClick={() => setCreateDrawerOpen(true)}
+              className="rounded-xl shadow-[var(--shadow-soft)]"
               data-testid="button-add-client"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -2002,11 +2013,11 @@ export default function ClientsPage() {
         onSortChange={setSortValue}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center border rounded-md">
+            <div className="flex items-center rounded-2xl border border-border/70 bg-card/90 p-1 shadow-[var(--shadow-soft)]">
               <Button
                 variant={density === "comfortable" ? "secondary" : "ghost"}
                 size="icon"
-                className="rounded-r-none"
+                className="rounded-xl"
                 onClick={() => setDensity("comfortable")}
                 aria-label="Comfortable view"
                 data-testid="button-density-comfortable"
@@ -2017,7 +2028,7 @@ export default function ClientsPage() {
               <Button
                 variant={density === "compact" ? "secondary" : "ghost"}
                 size="icon"
-                className="rounded-l-none"
+                className="rounded-xl"
                 onClick={() => setDensity("compact")}
                 aria-label="Compact view"
                 data-testid="button-density-compact"
@@ -2027,11 +2038,11 @@ export default function ClientsPage() {
               </Button>
             </div>
 
-            <div className="flex items-center border rounded-md">
+            <div className="flex items-center rounded-2xl border border-border/70 bg-card/90 p-1 shadow-[var(--shadow-soft)]">
               <Button
                 variant={viewMode === "grid" ? "secondary" : "ghost"}
                 size="icon"
-                className="rounded-r-none"
+                className="rounded-xl"
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
                 data-testid="button-view-grid"
@@ -2041,7 +2052,7 @@ export default function ClientsPage() {
               <Button
                 variant={viewMode === "table" ? "secondary" : "ghost"}
                 size="icon"
-                className="rounded-l-none"
+                className="rounded-xl"
                 onClick={() => setViewMode("table")}
                 aria-label="Table view"
                 data-testid="button-view-table"
@@ -2055,6 +2066,7 @@ export default function ClientsPage() {
                 <Button
                   variant="outline"
                   size="icon"
+                  className="rounded-xl border-border/70 bg-card/90 shadow-[var(--shadow-soft)]"
                   aria-label="Saved views"
                   data-testid="button-saved-views"
                   title="Saved views"
