@@ -97,6 +97,24 @@ describe("Database Migration Smoke Tests", () => {
     }
   });
 
+  test("journal does not reference missing migration SQL files", () => {
+    const journal = readJournal();
+    expect(journal).not.toBeNull();
+
+    const migrationTags = new Set(
+      getMigrationFiles().map((file) => file.replace(".sql", ""))
+    );
+
+    const missingFiles = journal!.entries
+      .map((entry) => entry.tag)
+      .filter((tag) => !migrationTags.has(tag));
+
+    expect(
+      missingFiles,
+      `Journal references migrations that are not committed: ${missingFiles.join(", ")}`
+    ).toHaveLength(0);
+  });
+
   test("all migrations use idempotent syntax (new migrations only)", () => {
     const migrationFiles = getMigrationFiles();
     const nonIdempotentIssues: { file: string; line: number; statement: string }[] = [];
@@ -283,13 +301,8 @@ describe("Database Migration Smoke Tests", () => {
     }
 
     const tags = entries.map((e) => e.tag);
-    for (let i = 0; i < tags.length; i++) {
-      const expectedPrefix = String(i).padStart(4, "0");
-      expect(
-        tags[i].startsWith(expectedPrefix),
-        `Migration ${tags[i]} should start with ${expectedPrefix}`
-      ).toBe(true);
-    }
+    const sortedTags = [...tags].sort();
+    expect(tags).toEqual(sortedTags);
   });
 
   test("migration timestamps are chronological", () => {

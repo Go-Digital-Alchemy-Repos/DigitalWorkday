@@ -16,39 +16,23 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 import path from "path";
-import { readFileSync, existsSync } from "fs";
+import { getTrackedMigrationEntries } from "../lib/migrationJournal";
 
 // Migrations folder is always at project root/migrations
 // process.cwd() is the project root in all environments
 const PROJECT_ROOT = process.cwd();
-
-interface JournalEntry {
-  idx: number;
-  version: string;
-  when: number;
-  tag: string;
-  breakpoints: boolean;
-}
-
-interface Journal {
-  version: string;
-  dialect: string;
-  entries: JournalEntry[];
-}
 
 /**
  * Auto-baseline migrations for databases created via db:push.
  * This marks all existing migrations as "applied" without running them.
  */
 async function autoBaseline(pool: pg.Pool): Promise<void> {
-  const journalPath = path.resolve(PROJECT_ROOT, "migrations/meta/_journal.json");
-  
-  if (!existsSync(journalPath)) {
-    console.log("[migrate] No migrations journal found, skipping baseline");
+  const entries = getTrackedMigrationEntries();
+
+  if (entries.length === 0) {
+    console.log("[migrate] No committed migration files found, skipping baseline");
     return;
   }
-
-  const journal: Journal = JSON.parse(readFileSync(journalPath, "utf-8"));
   
   // Ensure drizzle migrations table exists
   await pool.query(`
@@ -68,7 +52,7 @@ async function autoBaseline(pool: pg.Pool): Promise<void> {
 
   // Insert missing entries
   let baselined = 0;
-  for (const entry of journal.entries) {
+  for (const entry of entries) {
     if (!existingHashes.has(entry.tag)) {
       await pool.query(
         "INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
