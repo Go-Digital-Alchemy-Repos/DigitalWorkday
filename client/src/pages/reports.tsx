@@ -15,6 +15,7 @@ import {
   Clock, 
   Users, 
   TrendingUp, 
+  AlertTriangle,
   ArrowLeft,
   FileText,
   Calendar,
