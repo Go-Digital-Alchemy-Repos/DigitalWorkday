@@ -1664,38 +1664,72 @@ export class DatabaseStorage implements IStorage {
     const activityItems: ProjectActivityItem[] = [];
     const userIds = new Set<string>();
     const taskCache = new Map<string, { id: string; title: string }>();
+    const subtaskCache = new Map<string, { id: string; title: string; taskId: string }>();
+    const toSafeDate = (value: string | Date | null | undefined): Date | null => {
+      if (!value) return null;
+      if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+      }
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
 
-    // Build tenant filter conditions
-    const taskFilters = tenantId 
-      ? and(eq(tasks.projectId, projectId), eq(tasks.tenantId, tenantId))
-      : eq(tasks.projectId, projectId);
+    // Scope through the project relationship so legacy null tenantId task rows still show activity.
+    const projectFilters = tenantId
+      ? and(eq(projects.id, projectId), eq(projects.tenantId, tenantId))
+      : eq(projects.id, projectId);
 
     const timeEntryFilters = tenantId
       ? and(eq(timeEntries.projectId, projectId), eq(timeEntries.tenantId, tenantId))
       : eq(timeEntries.projectId, projectId);
 
     // 1. Get ALL task IDs in this project (for comment lookup)
-    const allProjectTasks = await db.select({ id: tasks.id, title: tasks.title })
+    const allProjectTasks = await db
+      .select({ id: tasks.id, title: tasks.title })
       .from(tasks)
-      .where(taskFilters);
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .where(projectFilters);
     
     const allTaskIds = allProjectTasks.map(t => t.id);
     for (const t of allProjectTasks) {
       taskCache.set(t.id, t);
     }
 
+    const allProjectSubtasks = allTaskIds.length > 0
+      ? await db
+          .select({ id: subtasks.id, title: subtasks.title, taskId: subtasks.taskId })
+          .from(subtasks)
+          .where(inArray(subtasks.taskId, allTaskIds))
+      : [];
+
+    const allSubtaskIds = allProjectSubtasks.map((s) => s.id);
+    for (const subtask of allProjectSubtasks) {
+      subtaskCache.set(subtask.id, subtask);
+    }
+
     // 2. Get recently created/updated tasks
-    const recentTasks = await db.select().from(tasks)
-      .where(taskFilters)
+    const recentTasks = await db
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        createdBy: tasks.createdBy,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .where(projectFilters)
       .orderBy(desc(tasks.createdAt))
       .limit(limit);
 
     for (const task of recentTasks) {
       if (task.createdBy) userIds.add(task.createdBy);
+      const createdAt = toSafeDate(task.createdAt) || new Date();
+      const updatedAt = toSafeDate(task.updatedAt);
       activityItems.push({
         id: `task-created-${task.id}`,
         type: "task_created",
-        timestamp: task.createdAt,
+        timestamp: createdAt,
         actorId: task.createdBy || "system",
         actorName: "",
         actorEmail: "",
@@ -1705,12 +1739,13 @@ export class DatabaseStorage implements IStorage {
       });
 
       // Add task_updated if updatedAt differs from createdAt by more than 1 minute
-      const timeDiff = task.updatedAt.getTime() - task.createdAt.getTime();
-      if (timeDiff > 60000) {
+      const timeDiff =
+        createdAt && updatedAt ? updatedAt.getTime() - createdAt.getTime() : 0;
+      if (updatedAt && timeDiff > 60000) {
         activityItems.push({
-          id: `task-updated-${task.id}-${task.updatedAt.getTime()}`,
+          id: `task-updated-${task.id}-${updatedAt.getTime()}`,
           type: "task_updated",
-          timestamp: task.updatedAt,
+          timestamp: updatedAt,
           actorId: task.createdBy || "system",
           actorName: "",
           actorEmail: "",
@@ -1724,7 +1759,10 @@ export class DatabaseStorage implements IStorage {
     // 3. Get recent comments on ALL tasks in this project (not just recentTasks)
     if (allTaskIds.length > 0) {
       const recentComments = await db.select().from(comments)
-        .where(inArray(comments.taskId, allTaskIds))
+        .where(and(
+          inArray(comments.taskId, allTaskIds),
+          eq(comments.subtaskId, null as any),
+        ))
         .orderBy(desc(comments.createdAt))
         .limit(limit);
 
@@ -1746,6 +1784,31 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // 3b. Include subtask comments for project tasks
+    if (allSubtaskIds.length > 0) {
+      const recentSubtaskComments = await db.select().from(comments)
+        .where(inArray(comments.subtaskId, allSubtaskIds))
+        .orderBy(desc(comments.createdAt))
+        .limit(limit);
+
+      for (const comment of recentSubtaskComments) {
+        userIds.add(comment.userId);
+        const subtask = comment.subtaskId ? subtaskCache.get(comment.subtaskId) : null;
+        activityItems.push({
+          id: `subtask-comment-${comment.id}`,
+          type: "comment_added",
+          timestamp: toSafeDate(comment.createdAt) || new Date(),
+          actorId: comment.userId,
+          actorName: "",
+          actorEmail: "",
+          actorAvatarUrl: null,
+          entityId: comment.subtaskId || projectId,
+          entityTitle: subtask?.title || "Subtask",
+          metadata: { commentBody: typeof comment.body === "string" ? comment.body.substring(0, 100) : "" },
+        });
+      }
+    }
+
     // 4. Get time entries for this project
     const recentTimeEntries = await db.select().from(timeEntries)
       .where(timeEntryFilters)
@@ -1758,7 +1821,7 @@ export class DatabaseStorage implements IStorage {
       activityItems.push({
         id: `time-entry-${entry.id}`,
         type: "time_logged",
-        timestamp: entry.createdAt,
+        timestamp: toSafeDate(entry.createdAt) || new Date(),
         actorId: entry.userId,
         actorName: "",
         actorEmail: "",
@@ -1767,6 +1830,44 @@ export class DatabaseStorage implements IStorage {
         entityTitle: task?.title || entry.description || "Time logged",
         metadata: { durationSeconds: entry.durationSeconds },
       });
+    }
+
+    // 4b. Include structured activity-log events for tasks and subtasks in this project.
+    if (allTaskIds.length > 0 || allSubtaskIds.length > 0) {
+      const conditions = [];
+      if (allTaskIds.length > 0) {
+        conditions.push(and(eq(activityLog.entityType, "task"), inArray(activityLog.entityId, allTaskIds)));
+      }
+      if (allSubtaskIds.length > 0) {
+        conditions.push(and(eq(activityLog.entityType, "subtask"), inArray(activityLog.entityId, allSubtaskIds)));
+      }
+
+      const recentLogEvents = conditions.length === 1
+        ? await db.select().from(activityLog).where(conditions[0]).orderBy(desc(activityLog.createdAt)).limit(limit)
+        : await db.select().from(activityLog).where(sql`${conditions[0]} OR ${conditions[1]}`).orderBy(desc(activityLog.createdAt)).limit(limit);
+
+      for (const log of recentLogEvents) {
+        userIds.add(log.actorUserId);
+        const diff = (log.diffJson || {}) as Record<string, unknown>;
+        const task = log.entityType === "task" ? taskCache.get(log.entityId) : null;
+        const subtask = log.entityType === "subtask" ? subtaskCache.get(log.entityId) : null;
+        activityItems.push({
+          id: `activity-log-${log.id}`,
+          type: log.action,
+          timestamp: toSafeDate(log.createdAt) || new Date(),
+          actorId: log.actorUserId,
+          actorName: typeof diff.actorName === "string" ? diff.actorName : "",
+          actorEmail: typeof diff.actorEmail === "string" ? diff.actorEmail : "",
+          actorAvatarUrl: typeof diff.actorAvatarUrl === "string" ? diff.actorAvatarUrl : null,
+          entityId: log.entityId,
+          entityTitle:
+            (typeof diff.entityTitle === "string" && diff.entityTitle) ||
+            task?.title ||
+            subtask?.title ||
+            "Project activity",
+          metadata: diff,
+        });
+      }
     }
 
     // 5. Batch fetch all users
@@ -1795,7 +1896,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Sort all items by timestamp descending and limit
-    activityItems.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    activityItems.sort((a, b) => {
+      const aTime = toSafeDate(a.timestamp)?.getTime() || 0;
+      const bTime = toSafeDate(b.timestamp)?.getTime() || 0;
+      return bTime - aTime;
+    });
     return activityItems.slice(0, limit);
   }
 

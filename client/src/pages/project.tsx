@@ -102,6 +102,34 @@ import { hasTenantAdminAccess } from "@shared/roles";
 
 type ViewType = "board" | "list" | "calendar";
 
+function isTaskDone(status: string | null | undefined): boolean {
+  return status === "done" || status === "completed";
+}
+
+function getDueDateRank(task: TaskWithRelations): number {
+  if (isTaskDone(task.status)) return 2;
+  if (!task.dueDate) return 1;
+  return 0;
+}
+
+function getDueTimestamp(task: TaskWithRelations): number {
+  if (!task.dueDate) return Number.MAX_SAFE_INTEGER;
+  const parsed = new Date(task.dueDate).getTime();
+  return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+}
+
+function sortTasksForProjectDisplay(tasks: TaskWithRelations[]): TaskWithRelations[] {
+  return [...tasks].sort((a, b) => {
+    const rankDiff = getDueDateRank(a) - getDueDateRank(b);
+    if (rankDiff !== 0) return rankDiff;
+
+    const dueDiff = getDueTimestamp(a) - getDueTimestamp(b);
+    if (dueDiff !== 0) return dueDiff;
+
+    return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+  });
+}
+
 export default function ProjectPage() {
   const [, params] = useRoute("/projects/:id");
   const projectId = params?.id;
@@ -179,9 +207,17 @@ export default function ProjectPage() {
   });
 
   const displaySections = localSections || sections;
+  const orderedSections = useMemo(
+    () =>
+      displaySections?.map((section) => ({
+        ...section,
+        tasks: sortTasksForProjectDisplay(section.tasks || []),
+      })) || [],
+    [displaySections],
+  );
 
   const activeTask = activeTaskId
-    ? displaySections?.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
+    ? orderedSections.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
     : null;
 
   const [urlTaskId] = useState(() => {
@@ -197,7 +233,7 @@ export default function ProjectPage() {
 
   useEffect(() => {
     if (deepLinkHandled || sectionsLoading || selectedTask || !urlTaskId) return;
-    const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
+    const allTasks = orderedSections.flatMap((s) => s.tasks || []);
     const found = allTasks.find(t => t.id === urlTaskId) || tasks?.find(t => t.id === urlTaskId);
     if (found) {
       setSelectedTask(found);
@@ -208,7 +244,7 @@ export default function ProjectPage() {
       setSelectedTask(linkedTask);
       setDeepLinkHandled(true);
     }
-  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, displaySections, deepLinkHandled]);
+  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, orderedSections, deepLinkHandled]);
 
   const createTaskMutation = useCreateTask();
 
@@ -487,7 +523,7 @@ export default function ProjectPage() {
       const { active, over } = event;
       setActiveTaskId(null);
 
-      const currentSections = displaySections;
+      const currentSections = orderedSections;
       if (!over || !currentSections) return;
 
       const activeId = active.id as string;
@@ -706,7 +742,7 @@ export default function ProjectPage() {
       taskId,
       data: { status: "done" },
     });
-    const pendingTask = displaySections?.flatMap(s => s.tasks || []).find(t => t.id === taskId);
+    const pendingTask = orderedSections.flatMap(s => s.tasks || []).find(t => t.id === taskId);
     toast({ title: "Task completed", description: `"${pendingTask?.title}" marked as done` });
     resetCompletionState();
   };
@@ -733,7 +769,7 @@ export default function ProjectPage() {
       return;
     }
 
-    const pendingTask = displaySections?.flatMap(s => s.tasks || []).find(t => t.id === pendingCompletionTaskId);
+    const pendingTask = orderedSections.flatMap(s => s.tasks || []).find(t => t.id === pendingCompletionTaskId);
     
     if (projectId && !project?.clientId) {
       toast({ 
@@ -1156,7 +1192,7 @@ export default function ProjectPage() {
             onDragEnd={handleDragEnd}
           >
             <div className="flex gap-3 md:gap-4 px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-x-auto snap-x snap-mandatory sm:snap-none scroll-smooth">
-              {displaySections?.map((section) => (
+              {orderedSections.map((section) => (
                 <div key={section.id} className="snap-center sm:snap-align-none">
                   <SectionColumn
                     section={section}
@@ -1201,7 +1237,7 @@ export default function ProjectPage() {
             onDragEnd={handleDragEnd}
           >
             <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-y-auto">
-              {displaySections?.map((section) => (
+              {orderedSections.map((section) => (
                 <ListSectionDroppable
                   key={section.id}
                   section={section}

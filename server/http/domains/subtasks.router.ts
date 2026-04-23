@@ -31,6 +31,13 @@ const router = createApiRouter({
   skipEnvelope: true,
 });
 
+function normalizeReviewStatus(status: string | null | undefined): string | null {
+  if (!status) return null;
+  if (status === "review") return "in_review";
+  if (status === "completed") return "done";
+  return status;
+}
+
 router.get("/tasks/:taskId/subtasks", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -115,6 +122,35 @@ router.patch("/subtasks/:id", async (req, res) => {
     const subtask = await storage.updateSubtask(req.params.id, updateData);
     if (!subtask) {
       return sendError(res, AppError.notFound("Subtask"), req);
+    }
+
+    if (parentTask?.projectId && updateData.status && updateData.status !== existingSubtask.status) {
+      const project = await storage.getProject(parentTask.projectId);
+      const actor = await storage.getUser(getCurrentUserId(req));
+      const normalizedBefore = normalizeReviewStatus(existingSubtask.status) || existingSubtask.status;
+      const normalizedAfter = normalizeReviewStatus(updateData.status) || updateData.status;
+
+      if (project?.workspaceId) {
+        await storage.createActivityLog({
+          workspaceId: project.workspaceId,
+          actorUserId: getCurrentUserId(req),
+          entityType: "subtask",
+          entityId: subtask.id,
+          action:
+            normalizedAfter === "in_review"
+              ? "review_submitted"
+              : normalizedBefore === "in_review" && normalizedAfter === "in_progress"
+                ? "review_approved"
+                : "status_changed",
+          diffJson: {
+            actorName: actor?.name || actor?.email || "Someone",
+            actorEmail: actor?.email || "",
+            entityTitle: subtask.title,
+            from: normalizedBefore,
+            to: normalizedAfter,
+          },
+        });
+      }
     }
 
     if (parentTask && parentTask.projectId) {

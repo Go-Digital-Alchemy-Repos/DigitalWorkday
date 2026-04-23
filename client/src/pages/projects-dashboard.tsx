@@ -120,6 +120,17 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     staleTime: 30000,
   });
 
+  const {
+    data: overdueItems = [],
+    isLoading: overdueItemsLoading,
+    isError: overdueItemsError,
+    refetch: refetchOverdueItems,
+  } = useQuery<DashboardReviewQueueItem[]>({
+    queryKey: ["/api/dashboard/overdue-tasks"],
+    enabled: isPmDashboard && canAccessPmDashboard,
+    staleTime: 15000,
+  });
+
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/projects", data);
@@ -234,6 +245,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     onSuccess: (_, item) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/review-queue"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/overdue-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects/analytics/summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       if (item.projectId) {
@@ -422,12 +434,86 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
       )}
 
       {isPmDashboard && (
-        <ReviewQueueCard
-          enabled={canAccessPmDashboard}
-          onOpenItem={handleOpenReviewItem}
-          onApproveItem={(item) => approveReviewMutation.mutate(item)}
-          approvingItemKey={approveReviewMutation.variables ? `${approveReviewMutation.variables.type}-${approveReviewMutation.variables.id}` : null}
-        />
+        <>
+          <ReviewQueueCard
+            enabled={canAccessPmDashboard}
+            onOpenItem={handleOpenReviewItem}
+            onApproveItem={(item) => approveReviewMutation.mutate(item)}
+            approvingItemKey={approveReviewMutation.variables ? `${approveReviewMutation.variables.type}-${approveReviewMutation.variables.id}` : null}
+          />
+          <Card className="mb-6" data-testid="pm-overdue-tasks">
+            <CardContent className="pt-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <h2 className="text-lg font-semibold">Overdue Across Projects</h2>
+                    <Badge variant="destructive">{overdueItems.length}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    A PM-level view of work that is already past due across active projects.
+                  </p>
+                </div>
+                {overdueItemsError && (
+                  <Button variant="outline" size="sm" onClick={() => refetchOverdueItems()}>
+                    Retry
+                  </Button>
+                )}
+              </div>
+
+              {overdueItemsLoading ? (
+                <LoadingState type="table" rows={4} />
+              ) : overdueItemsError ? (
+                <ErrorState
+                  error={new Error("Failed to load overdue tasks")}
+                  title="Could not load overdue tasks"
+                  onRetry={() => refetchOverdueItems()}
+                />
+              ) : overdueItems.length === 0 ? (
+                <EmptyState
+                  icon={<AlertTriangle className="h-8 w-8" />}
+                  title="No overdue work right now"
+                  description="Anything that slips past its due date will show up here."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {overdueItems.map((item) => (
+                    <div
+                      key={`overdue-${item.type}-${item.id}`}
+                      className="rounded-lg border border-destructive/20 bg-destructive/5 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate font-medium">{item.title}</span>
+                            <Badge variant="outline">{item.type === "task" ? "Task" : "Subtask"}</Badge>
+                            {item.projectName ? <Badge variant="secondary">{item.projectName}</Badge> : null}
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {item.clientName ? <span>{item.clientName}</span> : null}
+                            {item.dueDate ? (
+                              <span className="text-destructive">
+                                Due {format(new Date(item.dueDate), "MMM d, yyyy")}
+                              </span>
+                            ) : null}
+                            {item.assignees.length > 0 ? (
+                              <span>
+                                Assigned to {item.assignees.map((assignee) => assignee.name).join(", ")}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => handleOpenReviewItem(item)}>
+                          Open
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
       <div className="mb-6" data-testid="projects-pipeline-bar">
         <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted mb-3">
