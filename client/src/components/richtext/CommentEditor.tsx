@@ -117,11 +117,11 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              selectUser(index);
             }}
             onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              selectUser(index);
             }}
             onClick={(event) => {
               event.preventDefault();
@@ -492,20 +492,19 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
           )}
         />
         {mentionPopupOpen && mentionCommand && mentionRect && createPortal(
-          <div
-            className="fixed z-[9999] pointer-events-auto select-none"
-            style={{
-              top: mentionRect.top - 4,
-              left: mentionRect.left,
-              transform: "translateY(-100%)",
-            }}
-            onPointerDownCapture={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+        <div
+          className="fixed z-[9999] pointer-events-auto select-none"
+          style={{
+            top: mentionRect.top - 4,
+            left: mentionRect.left,
+            transform: "translateY(-100%)",
+          }}
+          onPointerDownCapture={(e) => {
+            e.stopPropagation();
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             }}
           >
             <MentionList

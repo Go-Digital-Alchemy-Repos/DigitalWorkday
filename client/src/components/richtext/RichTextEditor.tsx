@@ -130,11 +130,11 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              selectUser(index);
             }}
             onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              selectUser(index);
             }}
             onClick={(event) => {
               event.preventDefault();
@@ -565,7 +565,6 @@ export function RichTextEditor({
             transform: "translateY(-100%)",
           }}
           onPointerDownCapture={(e) => {
-            e.preventDefault();
             e.stopPropagation();
           }}
           onMouseDown={(e) => {
