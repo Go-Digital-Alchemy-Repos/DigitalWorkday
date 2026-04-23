@@ -1577,7 +1577,7 @@ export default function ClientsPage() {
     "name-asc"
   );
   const { views, saveView, deleteView } = useSavedViews("clients-saved-views");
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   const {
     data: hierarchyClients,
@@ -1599,6 +1599,24 @@ export default function ClientsPage() {
   const { data: clients } = useQuery<ClientWithContacts[]>({
     queryKey: ["/api/clients"],
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stageParam = params.get("stage");
+
+    if (!stageParam) {
+      return;
+    }
+
+    if (CLIENT_STAGES_ORDERED.includes(stageParam as ClientStageType)) {
+      setActiveSegment(stageParam as SegmentTab);
+      return;
+    }
+
+    if (stageParam === "all" || stageParam === "needs-attention") {
+      setActiveSegment(stageParam as SegmentTab);
+    }
+  }, [location]);
 
   const industries = useMemo(() => {
     if (!hierarchyClients) return [];

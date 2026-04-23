@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
-import { Redirect } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { WorkloadReportsV2 } from "@/components/reports/workload-reports-v2";
@@ -270,9 +270,23 @@ function PipelineReport() {
                       <span className="text-sm">{CLIENT_STAGE_LABELS[stage]}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[stage])}>
-                        {count} client{count !== 1 ? "s" : ""}
-                      </Badge>
+                      {count > 0 ? (
+                        <Link href={`/clients?stage=${stage}`}>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "cursor-pointer text-xs transition-colors hover:border-foreground/30 hover:bg-muted/80",
+                              STAGE_TEXT_COLORS[stage]
+                            )}
+                          >
+                            {count} client{count !== 1 ? "s" : ""}
+                          </Badge>
+                        </Link>
+                      ) : (
+                        <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[stage])}>
+                          {count} client{count !== 1 ? "s" : ""}
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">{projects} proj.</span>
                     </div>
                   </div>
