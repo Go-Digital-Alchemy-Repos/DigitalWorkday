@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
+import { ReportEmptyState } from "./report-empty-state";
 
 interface DateRange {
   label: string;
@@ -200,6 +201,16 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  if (!data?.team?.length) {
+    return (
+      <ReportEmptyState
+        icon={Users}
+        title="No workload data in this range"
+        description="There are no assigned tasks or tracked workload signals for the selected period yet. Try a wider range or revisit after more team activity is recorded."
+      />
+    );
+  }
 
   const range = `${rangeDays}d`;
 

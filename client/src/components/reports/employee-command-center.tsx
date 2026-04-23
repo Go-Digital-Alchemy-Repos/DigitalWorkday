@@ -25,6 +25,7 @@ import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
+import { ReportEmptyState } from "./report-empty-state";
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -1162,6 +1163,16 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  if (!data?.employees.length) {
+    return (
+      <ReportEmptyState
+        icon={Award}
+        title="No performance data in this range"
+        description="This tab needs completed work, tracked time, and current task context to score performance. Try a wider date range or come back after more activity is logged."
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">

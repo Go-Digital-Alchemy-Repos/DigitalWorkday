@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import { ReportEmptyState } from "./report-empty-state";
 
 const MessagesCharts = lazy(() => import("./messages-charts"));
 
@@ -136,7 +137,15 @@ export default function MessagesReports() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <ReportEmptyState
+        icon={MessageSquare}
+        title="No message analytics for this range"
+        description="There are no support or message threads in the selected period yet, so this report has nothing meaningful to summarize."
+      />
+    );
+  }
 
   const { summary, openByPriority } = data;
   const totalOpen = Object.values(openByPriority).reduce((a, b) => a + Number(b), 0);

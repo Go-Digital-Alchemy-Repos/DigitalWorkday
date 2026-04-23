@@ -15,6 +15,7 @@ import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
 import { getClientReportDrilldownPath, getClientReportPath } from "./report-paths";
+import { ReportEmptyState } from "./report-empty-state";
 
 function formatComparisonSub(current: number, prior: number, suffix = "") {
   const delta = Math.round((current - prior) * 10) / 10;
@@ -981,6 +982,16 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  if (!data?.clients.length) {
+    return (
+      <ReportEmptyState
+        icon={HeartPulse}
+        title="No client health data in this range"
+        description="This tab needs recent client activity, task, time, and SLA signals. Try a wider date range or come back after more client work is logged."
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
