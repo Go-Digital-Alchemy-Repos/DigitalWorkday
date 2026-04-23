@@ -877,21 +877,29 @@ export default function ClientDetailPage() {
                 <p className="text-sm text-muted-foreground">{client.displayName}</p>
               )}
             </div>
-            <Select
-              value={client.stage}
-              onValueChange={(val) => updateStageMutation.mutate(val)}
-            >
-              <SelectTrigger className="w-auto gap-1.5" data-testid="select-client-stage">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CLIENT_STAGES_ORDERED.map((stage) => (
-                  <SelectItem key={stage} value={stage} data-testid={`stage-option-${stage}`}>
-                    {CLIENT_STAGE_LABELS[stage]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select
+                value={client.stage}
+                onValueChange={(val) => updateStageMutation.mutate(val)}
+              >
+                <SelectTrigger className="w-auto gap-1.5" data-testid="select-client-stage">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLIENT_STAGES_ORDERED.map((stage) => (
+                    <SelectItem key={stage} value={stage} data-testid={`stage-option-${stage}`}>
+                      {CLIENT_STAGE_LABELS[stage]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Badge
+                className={`${getStatusColor(client.status)} no-default-hover-elevate no-default-active-elevate`}
+                data-testid="header-value-status"
+              >
+                {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
+              </Badge>
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -1332,12 +1340,6 @@ export default function ClientDetailPage() {
                               <p className="text-sm" data-testid="value-founded-date">{client.foundedDate}</p>
                             </div>
                           )}
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground">Status</p>
-                            <Badge className={`${getStatusColor(client.status)} no-default-hover-elevate no-default-active-elevate`} data-testid="value-status">
-                              {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
-                            </Badge>
-                          </div>
                           {client.parentClientId && (
                             <div>
                               <p className="text-xs font-medium text-muted-foreground">Parent Client</p>

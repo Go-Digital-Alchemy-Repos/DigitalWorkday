@@ -164,6 +164,10 @@ function getStatusColor(status: string) {
   }
 }
 
+function isInactiveLikeStatus(status: string | null | undefined) {
+  return status === "inactive" || status === "lost";
+}
+
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -361,6 +365,7 @@ function ClientGridCard({
         <Card
           className={cn(
             "cursor-pointer transition-colors hover-elevate overflow-hidden",
+            isInactiveLikeStatus(client.status) && "opacity-70 saturate-[0.72]",
             isSelected && "ring-2 ring-primary"
           )}
           data-testid={`card-client-${client.id}`}
@@ -504,6 +509,7 @@ function ClientGroupCard({
       <Card
         className={cn(
           "transition-colors overflow-hidden",
+          isInactiveLikeStatus(parent.status) && "opacity-70 saturate-[0.72]",
           selectedIds.has(parent.id) && "ring-2 ring-primary"
         )}
         data-testid={`card-client-group-${parent.id}`}
@@ -586,6 +592,7 @@ function ClientGroupCard({
                 onClick={() => onOpenProfile(child.id)}
                 className={cn(
                   "flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate min-w-0",
+                  isInactiveLikeStatus(child.status) && "opacity-70 saturate-[0.72]",
                   selectedIds.has(child.id) && "ring-1 ring-primary"
                 )}
                 data-testid={`card-child-client-${child.id}`}
@@ -699,6 +706,7 @@ function ClientTableRow({
       className={cn(
         "flex items-center gap-3 border-b border-border hover:bg-accent/50 transition-colors cursor-pointer",
         compact ? "px-3 py-2" : "px-4 py-3",
+        isInactiveLikeStatus(client.status) && "opacity-70 saturate-[0.72]",
         isSelected && "bg-primary/5"
       )}
       data-testid={`row-client-${client.id}`}
@@ -1839,6 +1847,12 @@ export default function ClientsPage() {
     });
 
     result.sort((a, b) => {
+      const inactiveDelta =
+        Number(isInactiveLikeStatus(a.status)) - Number(isInactiveLikeStatus(b.status));
+      if (inactiveDelta !== 0) {
+        return inactiveDelta;
+      }
+
       switch (sortValue) {
         case "name-asc":
           return a.companyName.localeCompare(b.companyName);
