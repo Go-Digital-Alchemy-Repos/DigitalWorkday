@@ -24,6 +24,7 @@ import { ReportCommandCenterLayout, buildDateParams } from "./report-command-cen
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
+import { getEmployeeReportPath } from "./report-paths";
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -183,7 +184,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                   <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                   <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                 </Avatar>
-                <Link href={`/reports/employees/${e.userId}`} className="text-sm font-semibold truncate hover:underline text-primary cursor-pointer">
+                <Link href={getEmployeeReportPath(window.location.pathname, e.userId)} className="text-sm font-semibold truncate hover:underline text-primary cursor-pointer">
                   {userName(e)}
                 </Link>
               </div>
@@ -245,7 +246,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                             <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                             <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                           </Avatar>
-                          <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium truncate max-w-[140px] hover:underline text-primary cursor-pointer">
+                          <Link href={getEmployeeReportPath(window.location.pathname, e.userId)} className="text-sm font-medium truncate max-w-[140px] hover:underline text-primary cursor-pointer">
                             {userName(e)}
                           </Link>
                         </div>
@@ -342,7 +343,7 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
               {(data?.employees ?? []).map((e) => (
                 <TableRow key={e.userId} data-testid={`row-employee-workload-${e.userId}`}>
                   <TableCell>
-                    <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer">
+                    <Link href={getEmployeeReportPath(window.location.pathname, e.userId)} className="text-sm font-medium hover:underline text-primary cursor-pointer">
                       {userName(e)}
                     </Link>
                   </TableCell>
@@ -442,7 +443,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
               {(data?.employees ?? []).map((e) => (
                 <TableRow key={e.userId} data-testid={`row-employee-time-${e.userId}`}>
                   <TableCell>
-                    <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer">
+                    <Link href={getEmployeeReportPath(window.location.pathname, e.userId)} className="text-sm font-medium hover:underline text-primary cursor-pointer">
                       {userName(e)}
                     </Link>
                   </TableCell>
@@ -557,7 +558,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
                 {data.users.map((u) => (
                   <tr key={u.userId} className="border-b last:border-0">
                     <td className="p-3">
-                      <Link href={`/reports/employees/${u.userId}`} className="font-medium text-sm truncate max-w-[130px] block hover:underline text-primary cursor-pointer">
+                      <Link href={getEmployeeReportPath(window.location.pathname, u.userId)} className="font-medium text-sm truncate max-w-[130px] block hover:underline text-primary cursor-pointer">
                         {userName(u)}
                       </Link>
                     </td>
@@ -666,7 +667,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <Link href={`/reports/employees/${u.userId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer">
+                    <Link href={getEmployeeReportPath(window.location.pathname, u.userId)} className="font-semibold text-sm hover:underline text-primary cursor-pointer">
                       {userName(u)}
                     </Link>
                     <Badge variant={variant}>{label}</Badge>
@@ -982,7 +983,7 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
                           <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                           <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                         </Avatar>
-                        <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium truncate max-w-[130px] hover:underline text-primary cursor-pointer">
+                        <Link href={getEmployeeReportPath(window.location.pathname, e.userId)} className="text-sm font-medium truncate max-w-[130px] hover:underline text-primary cursor-pointer">
                           {userName(e)}
                         </Link>
                       </div>
@@ -1243,7 +1244,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                       >
                         <td className="py-2 px-3 font-medium">
                           <Link
-                            href={`/reports/employees/${u.userId}`}
+                            href={getEmployeeReportPath(window.location.pathname, u.userId)}
                             className="hover:underline text-primary cursor-pointer"
                             onClick={(e: React.MouseEvent) => e.stopPropagation()}
                             data-testid={`link-forecast-employee-${u.userId}`}

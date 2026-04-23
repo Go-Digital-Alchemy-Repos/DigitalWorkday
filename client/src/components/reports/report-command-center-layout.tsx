@@ -8,6 +8,7 @@ export interface ReportCommandCenterLayoutProps {
   children: React.ReactNode;
   rangeDays: number;
   onRangeChange: (days: number) => void;
+  extraControls?: React.ReactNode;
 }
 
 const DATE_RANGES = [
@@ -36,10 +37,12 @@ export function ReportCommandCenterLayout({
   children,
   rangeDays,
   onRangeChange,
+  extraControls,
 }: ReportCommandCenterLayoutProps) {
   return (
     <div className="space-y-3 sm:space-y-4" data-testid="report-command-center-layout">
       <div className="flex items-start sm:items-center justify-end gap-3 flex-wrap">
+        {extraControls}
         <Select value={String(rangeDays)} onValueChange={(v) => onRangeChange(Number(v))}>
           <SelectTrigger className="w-full sm:w-44 shrink-0" data-testid="select-date-range">
             <CalendarRange className="h-3.5 w-3.5 mr-1.5 shrink-0" />

@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { getClientReportPath, getReportBasePath } from "@/components/reports/report-paths";
 
 interface ClientProfileData {
   client: {
@@ -195,9 +196,10 @@ function AgingBar({ aging }: { aging: ClientProfileData["taskAging"] }) {
 
 export default function ClientProfileReportPage() {
   const { clientId } = useParams<{ clientId: string }>();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
+  const reportBasePath = getReportBasePath(location);
 
   const { data, isLoading, error, refetch } = useQuery<ClientProfileData>({
     queryKey: ["/api/reports/v2/client", clientId, "profile", range],
@@ -216,7 +218,7 @@ export default function ClientProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    setLocation(`/reports/clients/${clientId}?range=${value}`);
+    setLocation(`${getClientReportPath(location, clientId)}?range=${value}`);
   };
 
   if (error) {
@@ -269,7 +271,7 @@ export default function ClientProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/reports">
+            <Link href={reportBasePath}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
                 Back

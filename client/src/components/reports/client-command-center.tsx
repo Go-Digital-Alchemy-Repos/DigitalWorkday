@@ -14,6 +14,7 @@ import { ReportCommandCenterLayout, buildDateParams } from "./report-command-cen
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
+import { getClientReportPath } from "./report-paths";
 
 interface MetricCardProps {
   label: string;
@@ -50,6 +51,28 @@ function relativeDate(dateStr: string | null): string {
   return `${diff} days ago`;
 }
 
+type ProjectStatusFilter = "all" | "active" | "completed" | "on_hold" | "archived";
+
+const PROJECT_STATUS_OPTIONS: Array<{ value: ProjectStatusFilter; label: string }> = [
+  { value: "all", label: "All Project Statuses" },
+  { value: "active", label: "Active Projects" },
+  { value: "completed", label: "Completed Projects" },
+  { value: "on_hold", label: "On Hold Projects" },
+  { value: "archived", label: "Archived Projects" },
+];
+
+function buildProjectStatusParams(
+  rangeDays: number,
+  projectStatus: ProjectStatusFilter,
+  extra?: Record<string, string>,
+): string {
+  const params = { ...(extra ?? {}) };
+  if (projectStatus !== "all") {
+    params.status = projectStatus;
+  }
+  return buildDateParams(rangeDays, params);
+}
+
 interface ClientOverviewItem {
   clientId: string;
   companyName: string;
@@ -63,11 +86,11 @@ interface ClientOverviewItem {
   completedInRange: number;
 }
 
-function OverviewTab({ rangeDays }: { rangeDays: number }) {
+function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientOverviewItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/overview", rangeDays],
+    queryKey: ["/api/reports/v2/client/overview", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/overview?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -113,7 +136,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             <Card key={c.clientId} data-testid={`mobile-card-client-${c.clientId}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
+                  <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
                   <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-mobile-${c.clientId}`}>
                     {c.engagementScore}%
                   </Badge>
@@ -149,7 +172,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                 <TableBody>
                   {data?.clients.map((c) => (
                     <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
-                      <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                      <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
                       <TableCell className="text-sm">{c.activeProjects}</TableCell>
                       <TableCell className="text-sm">{c.openTasks}</TableCell>
                       <TableCell>
@@ -190,11 +213,11 @@ interface ClientActivityItem {
   inactivityDays: number;
 }
 
-function ActivityTab({ rangeDays }: { rangeDays: number }) {
+function ActivityTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/activity", rangeDays],
+    queryKey: ["/api/reports/v2/client/activity", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/activity?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -224,7 +247,7 @@ function ActivityTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
                   <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
                   <TableCell className="text-sm">{c.commentsInRange}</TableCell>
@@ -258,11 +281,11 @@ interface ClientTimeItem {
   varianceHours: number;
 }
 
-function TimeTab({ rangeDays }: { rangeDays: number }) {
+function TimeTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/time", rangeDays],
+    queryKey: ["/api/reports/v2/client/time", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/time?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -298,7 +321,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.totalHours}h</TableCell>
                   <TableCell className="text-sm">{c.billableHours}h</TableCell>
                   <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
@@ -335,11 +358,11 @@ interface ClientTaskItem {
   agingOver30: number;
 }
 
-function TasksTab({ rangeDays }: { rangeDays: number }) {
+function TasksTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/tasks", rangeDays],
+    queryKey: ["/api/reports/v2/client/tasks", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/tasks?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -390,7 +413,7 @@ function TasksTab({ rangeDays }: { rangeDays: number }) {
               <TableBody>
                 {data?.clients.map((c) => (
                   <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
-                    <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                    <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
                     <TableCell className="text-sm">{c.openTaskCount}</TableCell>
                     <TableCell>
                       <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
@@ -426,11 +449,11 @@ interface ClientSlaItem {
   completedWithinDuePct: number;
 }
 
-function SlaTab({ rangeDays }: { rangeDays: number }) {
+function SlaTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/sla", rangeDays],
+    queryKey: ["/api/reports/v2/client/sla", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/sla?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -467,7 +490,7 @@ function SlaTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.totalTasks}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[140px]">
@@ -514,11 +537,11 @@ interface ClientRiskItem {
   };
 }
 
-function RiskTab({ rangeDays }: { rangeDays: number }) {
+function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/risk", rangeDays],
+    queryKey: ["/api/reports/v2/client/risk", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays)}`);
+      const res = await fetch(`/api/reports/v2/client/risk?${buildProjectStatusParams(rangeDays, projectStatus)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -569,7 +592,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
+                    <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
@@ -763,7 +786,7 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
                 return (
                   <TableRow key={c.clientId} data-testid={`row-client-health-${c.clientId}`}>
                     <TableCell>
-                      <Link href={`/reports/clients/${c.clientId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
+                      <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
                     </TableCell>
                     <TableCell>
                       <span className={cn(
@@ -1009,7 +1032,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                         data-testid={`forecast-client-row-${c.clientId}`}
                       >
                         <TableCell className="font-medium max-w-[160px]">
-                          <Link href={`/reports/clients/${c.clientId}`} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
+                          <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <ScoreBar current={c.currentHealthScore} predicted={c.predictedHealthScore} />
@@ -1077,6 +1100,7 @@ export function ClientCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
   const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
+  const [projectStatus, setProjectStatus] = useState<ProjectStatusFilter>("all");
   const flags = useFeatureFlags();
 
   return (
@@ -1086,6 +1110,21 @@ export function ClientCommandCenter() {
       icon={<Building2 className="h-4 w-4" />}
       rangeDays={rangeDays}
       onRangeChange={setRangeDays}
+      extraControls={
+        <Select value={projectStatus} onValueChange={(value) => setProjectStatus(value as ProjectStatusFilter)}>
+          <SelectTrigger className="w-full sm:w-56 shrink-0" data-testid="select-client-command-center-project-status">
+            <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+            <SelectValue placeholder="Project status" />
+          </SelectTrigger>
+          <SelectContent>
+            {PROJECT_STATUS_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value} data-testid={`project-status-option-${option.value}`}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <MobileTabSelect
@@ -1145,22 +1184,22 @@ export function ClientCommandCenter() {
         </div>
 
         <TabsContent value="overview" className="mt-4">
-          <OverviewTab rangeDays={rangeDays} />
+          <OverviewTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="activity" className="mt-4">
-          <ActivityTab rangeDays={rangeDays} />
+          <ActivityTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="time" className="mt-4">
-          <TimeTab rangeDays={rangeDays} />
+          <TimeTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="tasks" className="mt-4">
-          <TasksTab rangeDays={rangeDays} />
+          <TasksTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="sla" className="mt-4">
-          <SlaTab rangeDays={rangeDays} />
+          <SlaTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="risk" className="mt-4">
-          <RiskTab rangeDays={rangeDays} />
+          <RiskTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         {flags.enableClientHealthIndex && (
           <TabsContent value="health" className="mt-4">

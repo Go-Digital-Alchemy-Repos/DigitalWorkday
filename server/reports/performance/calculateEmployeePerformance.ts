@@ -95,38 +95,67 @@ export async function calculateEmployeePerformance(
       u.last_name,
       u.email,
       u.avatar_url,
-      COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') THEN t.id END) AS active_tasks,
-      COUNT(DISTINCT CASE
-        WHEN t.status NOT IN ('done','cancelled') AND t.due_date < NOW() THEN t.id
-      END) AS overdue_tasks,
-      COUNT(DISTINCT CASE
-        WHEN t.status = 'done'
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+      ) AS active_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+          AND t.due_date < NOW()
+      ) AS overdue_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status = 'done'
           AND t.updated_at >= ${startDate}
           AND t.updated_at <= ${endDate}
-        THEN t.id
-      END) AS completed_in_range,
-      COALESCE(SUM(
-        CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-        THEN te.duration_seconds ELSE 0 END
-      ), 0) AS total_seconds,
-      COALESCE(SUM(
-        CASE WHEN t.status NOT IN ('done','cancelled')
-        THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END
-      ), 0) AS estimated_minutes,
-      COUNT(DISTINCT
-        CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-        THEN DATE(te.start_time) END
+      ) AS completed_in_range,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0)
+        FROM time_entries te
+        WHERE te.user_id = u.id
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= ${startDate}
+          AND te.start_time <= ${endDate}
+      ) AS total_seconds,
+      (
+        SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+      ) AS estimated_minutes,
+      (
+        SELECT COUNT(DISTINCT DATE(te.start_time))
+        FROM time_entries te
+        WHERE te.user_id = u.id
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= ${startDate}
+          AND te.start_time <= ${endDate}
       ) AS logged_days,
       COUNT(*) OVER() AS total_count
     FROM users u
-    LEFT JOIN task_assignees ta ON ta.user_id = u.id AND ta.tenant_id = ${tenantId}
-    LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
-    LEFT JOIN time_entries te ON te.user_id = u.id AND te.tenant_id = ${tenantId}
     WHERE u.tenant_id = ${tenantId}
       AND u.role IN ('admin', 'employee')
       AND u.is_active = true
       ${userFilter}
-    GROUP BY u.id, u.first_name, u.last_name, u.email, u.avatar_url
     ORDER BY u.first_name ASC, u.last_name ASC
     LIMIT ${limit} OFFSET ${offset}
   `);

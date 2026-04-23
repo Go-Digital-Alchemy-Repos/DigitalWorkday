@@ -14,6 +14,26 @@ const router = Router();
 
 router.use(reportingGuard);
 
+function projectStatusFilterClause(statuses: string[]) {
+  return statuses.length > 0
+    ? sql`AND p.status = ANY(ARRAY[${sql.join(statuses.map((status) => sql`${status}`), sql`, `)}]::text[])`
+    : sql``;
+}
+
+function clientCountFilterClause(tenantId: string, statuses: string[]) {
+  return statuses.length > 0
+    ? sql`
+        AND EXISTS (
+          SELECT 1
+          FROM projects p
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND p.status = ANY(ARRAY[${sql.join(statuses.map((status) => sql`${status}`), sql`, `)}]::text[])
+        )
+      `
+    : sql``;
+}
+
 function firstRow<T>(result: unknown): T | null {
   if (Array.isArray(result)) return (result[0] ?? null) as T | null;
   if (result && typeof result === "object" && "rows" in result) {
@@ -43,6 +63,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
     const clientFilter = filters.clientIds.length > 0
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
+    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
@@ -69,6 +90,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
       LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
+        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY open_tasks DESC, total_hours DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -77,6 +99,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
     const countRow = firstRow(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
+      ${clientCountFilterClause(tenantId, filters.statuses)}
     `));
 
     const clients = rows.map((r) => {
@@ -130,6 +153,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
     const clientFilter = filters.clientIds.length > 0
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
+    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
@@ -153,6 +177,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
       LEFT JOIN comments cm ON cm.task_id = t.id
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
+        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY time_logged_in_range DESC, tasks_created_in_range DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -161,6 +186,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
     const countRow = firstRow(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
+      ${clientCountFilterClause(tenantId, filters.statuses)}
     `));
 
     const clients = rows.map((r) => {
@@ -203,6 +229,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
     const clientFilter = filters.clientIds.length > 0
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
+    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
@@ -221,6 +248,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
       LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
+        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY total_seconds DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -242,6 +270,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
       LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
+        ${projectStatusFilter}
       GROUP BY c.id, p.id, p.name
       HAVING COALESCE(SUM(CASE WHEN te.start_time BETWEEN ${startDate} AND ${endDate} THEN te.duration_seconds ELSE 0 END), 0) > 0
       ORDER BY c.id, hours DESC
@@ -265,6 +294,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
     const countRow = firstRow(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
+      ${clientCountFilterClause(tenantId, filters.statuses)}
     `));
 
     const clients = rows.map((r) => {
@@ -313,6 +343,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
     const clientFilter = filters.clientIds.length > 0
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
+    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
@@ -352,6 +383,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
       LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
+        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY open_task_count DESC, overdue_count DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -360,6 +392,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
     const countRow = firstRow(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
+      ${clientCountFilterClause(tenantId, filters.statuses)}
     `));
 
     const clients = rows.map((r) => ({
@@ -398,6 +431,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
     const clientFilter = filters.clientIds.length > 0
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
+    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
@@ -423,6 +457,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
       LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
         ${clientFilter}
+        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
       ORDER BY overdue_count DESC, total_tasks DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -431,6 +466,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
     const countRow = firstRow(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
+      ${clientCountFilterClause(tenantId, filters.statuses)}
     `));
 
     const clients = rows.map((r) => {
@@ -475,7 +511,9 @@ router.get("/client/sla", async (req: Request, res: Response) => {
 router.get("/client/risk", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
+    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
@@ -501,6 +539,7 @@ router.get("/client/risk", async (req: Request, res: Response) => {
       LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
       LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
       WHERE c.tenant_id = ${tenantId}
+        ${projectStatusFilter}
       GROUP BY c.id, c.company_name
     `);
 

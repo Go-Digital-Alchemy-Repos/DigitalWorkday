@@ -13,6 +13,7 @@ import { trackChunkLoad } from "@/lib/perf";
 
 const SuperAdminPage = lazy(trackChunkLoad("SuperAdmin", () => import("@/pages/super-admin")));
 const SuperAdminDashboardPage = lazy(trackChunkLoad("SuperDashboard", () => import("@/pages/super-admin-dashboard")));
+const SuperAdminReportsPage = lazy(trackChunkLoad("SuperReports", () => import("@/pages/super-admin-reports")));
 const SuperAdminSettingsPage = lazy(trackChunkLoad("SuperSettings", () => import("@/pages/super-admin-settings")));
 const SuperAdminStatusPage = lazy(trackChunkLoad("SuperStatus", () => import("@/pages/super-admin-status")));
 const SuperAdminDocsPage = lazy(trackChunkLoad("SuperDocs", () => import("@/pages/super-admin-docs")));
@@ -21,6 +22,8 @@ const SuperChatMonitoringPage = lazy(trackChunkLoad("SuperChat", () => import("@
 const SuperAdminUsersPage = lazy(trackChunkLoad("SuperUsers", () => import("@/pages/super-admin-users")));
 const SuperAdminRetentionPage = lazy(trackChunkLoad("SuperRetention", () => import("@/pages/super-admin-retention")));
 const UserProfilePage = lazy(trackChunkLoad("SuperProfile", () => import("@/pages/user-profile")));
+const EmployeeProfileReportPage = lazy(trackChunkLoad("SuperEmployeeReport", () => import("@/pages/employee-profile-report")));
+const ClientProfileReportPage = lazy(trackChunkLoad("SuperClientReport", () => import("@/pages/client-profile-report")));
 
 function SuperAdminRouter() {
   return (
@@ -35,8 +38,14 @@ function SuperAdminRouter() {
         <Route path="/super-admin/tenants">
           {() => <SuperRouteGuard component={SuperAdminPage} />}
         </Route>
+        <Route path="/super-admin/reports/employees/:employeeId">
+          {() => <SuperRouteGuard component={EmployeeProfileReportPage} />}
+        </Route>
+        <Route path="/super-admin/reports/clients/:clientId">
+          {() => <SuperRouteGuard component={ClientProfileReportPage} />}
+        </Route>
         <Route path="/super-admin/reports">
-          {() => <Redirect to="/super-admin/dashboard" />}
+          {() => <SuperRouteGuard component={SuperAdminReportsPage} />}
         </Route>
         <Route path="/super-admin/settings">
           {() => <SuperRouteGuard component={SuperAdminSettingsPage} />}

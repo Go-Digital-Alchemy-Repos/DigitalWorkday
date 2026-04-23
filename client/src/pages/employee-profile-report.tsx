@@ -63,6 +63,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getEmployeeReportPath, getReportBasePath } from "@/components/reports/report-paths";
 
 interface ProfileData {
   employee: {
@@ -502,10 +503,11 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
 export default function EmployeeProfileReportPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const { openTask } = useTaskDrawer();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
   const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+  const reportBasePath = getReportBasePath(location);
 
   const { data, isLoading, error, refetch } = useQuery<ProfileData>({
     queryKey: ["/api/reports/v2/employee", employeeId, "profile", range],
@@ -524,7 +526,7 @@ export default function EmployeeProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    setLocation(`/reports/employees/${employeeId}?range=${value}`);
+    setLocation(`${getEmployeeReportPath(location, employeeId)}?range=${value}`);
   };
 
   if (error) {
@@ -577,7 +579,7 @@ export default function EmployeeProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/reports">
+            <Link href={reportBasePath}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
                 Back

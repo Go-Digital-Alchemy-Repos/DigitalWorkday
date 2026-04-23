@@ -557,6 +557,33 @@ export default function ClientDetailPage() {
     },
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: async (status: "active" | "inactive" | "prospect") => {
+      return apiRequest("PATCH", `/api/clients/${clientId}`, { status });
+    },
+    onMutate: async (newStatus) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId] });
+      const prev = queryClient.getQueryData<ClientWithContacts>(["/api/clients", clientId]);
+      if (prev) {
+        queryClient.setQueryData<ClientWithContacts>(["/api/clients", clientId], { ...prev, status: newStatus });
+      }
+      return { prev };
+    },
+    onError: (_err, _status, context) => {
+      if (context?.prev) {
+        queryClient.setQueryData(["/api/clients", clientId], context.prev);
+      }
+      toast({ title: "Failed to update status", variant: "destructive" });
+    },
+    onSuccess: () => {
+      toast({ title: "Client status updated" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+    },
+  });
+
   const deleteContactMutation = useMutation({
     mutationFn: async (contactId: string) => {
       return apiRequest("DELETE", `/api/clients/${clientId}/contacts/${contactId}`);
@@ -893,12 +920,22 @@ export default function ClientDetailPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Badge
-                className={`${getStatusColor(client.status)} no-default-hover-elevate no-default-active-elevate`}
-                data-testid="header-value-status"
+              <Select
+                value={client.status}
+                onValueChange={(value) => updateStatusMutation.mutate(value as "active" | "inactive" | "prospect")}
               >
-                {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
-              </Badge>
+                <SelectTrigger
+                  className={`w-auto min-w-[132px] gap-1.5 ${getStatusColor(client.status)}`}
+                  data-testid="select-header-client-status"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="prospect">Prospect</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button
               variant="ghost"
@@ -1156,28 +1193,6 @@ export default function ClientDetailPage() {
                                   <FormControl>
                                     <Input {...field} placeholder="e.g. 2020" data-testid="input-founded-date" />
                                   </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={clientForm.control}
-                              name="status"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Status</FormLabel>
-                                  <Select onValueChange={field.onChange} value={field.value}>
-                                    <FormControl>
-                                      <SelectTrigger data-testid="select-status">
-                                        <SelectValue placeholder="Select status" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      <SelectItem value="active">Active</SelectItem>
-                                      <SelectItem value="inactive">Inactive</SelectItem>
-                                      <SelectItem value="prospect">Prospect</SelectItem>
-                                    </SelectContent>
-                                  </Select>
                                   <FormMessage />
                                 </FormItem>
                               )}

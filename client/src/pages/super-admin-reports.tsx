@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, FolderKanban, Users, CheckSquare, Clock, AlertTriangle, TrendingUp } from "lucide-react";
+import { Loader2, Building2, FolderKanban, Users, CheckSquare, Clock, AlertTriangle, TrendingUp, BarChart3 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
+import { PageHeader, PageShell, SurfacePanel } from "@/components/layout";
 
 interface TenantsSummary {
   total: number;
@@ -108,16 +109,21 @@ export default function SuperAdminReportsPage() {
   });
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-3 sm:p-4 lg:p-6 border-b shrink-0">
-        <h1 className="text-xl md:text-2xl font-bold">Global Reports</h1>
-        <p className="text-muted-foreground mt-1 text-sm">Cross-tenant analytics and platform overview</p>
-      </div>
+    <PageShell maxWidth="full" className="space-y-6">
+      <PageHeader
+        title="Super Admin Reports"
+        subtitle="Cross-tenant delivery, user, project, task, and time intelligence across the full platform."
+        icon={<BarChart3 className="h-5 w-5" />}
+        actions={<Badge variant="secondary" className="rounded-full px-3 py-1 text-xs font-medium">Global View</Badge>}
+      />
 
-      <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
+      <SurfacePanel padding="lg" className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 mb-6">
-            <TabsList className="inline-flex w-auto min-w-full sm:min-w-0" data-testid="reports-tabs">
+          <div className="overflow-x-auto -mx-1 px-1 pb-1">
+            <TabsList
+              className="inline-flex h-auto min-w-full flex-wrap justify-start gap-1 rounded-2xl border border-border/70 bg-background/80 p-1 shadow-[var(--shadow-soft)] sm:min-w-0"
+              data-testid="reports-tabs"
+            >
               <TabsTrigger value="tenants" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tenants">
                 <Building2 className="h-4 w-4 mr-1.5 sm:mr-2" />
                 Tenants
@@ -356,7 +362,7 @@ export default function SuperAdminReportsPage() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+      </SurfacePanel>
+    </PageShell>
   );
 }
