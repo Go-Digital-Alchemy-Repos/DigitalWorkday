@@ -21,7 +21,6 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { VirtualizedList } from "@/components/ui/virtualized-list";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +111,11 @@ function getInitials(name: string): string {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+function toValidDate(value: string | Date): Date | null {
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function formatDescription(item: ActivityItem): string {
@@ -239,7 +243,10 @@ export function ActivityFeed({
         default:
           cutoff = subDays(now, 365);
       }
-      result = result.filter((item) => isAfter(new Date(item.timestamp), cutoff));
+      result = result.filter((item) => {
+        const timestamp = toValidDate(item.timestamp);
+        return timestamp ? isAfter(timestamp, cutoff) : false;
+      });
     }
 
     return result;
@@ -363,61 +370,61 @@ export function ActivityFeed({
         </div>
       )}
 
-      <div style={{ height, flex: 1 }}>
-        <VirtualizedList
-          data={filteredItems as ActivityItem[]}
-          style={{ height: "100%" }}
-          overscan={200}
-          emptyContent={
-            <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-              {emptyIcon || <Activity className="h-8 w-8 mb-2 opacity-20" />}
-              <p className="text-sm">{emptyTitle}</p>
-              <p className="text-xs mt-1">{emptyDescription}</p>
-            </div>
-          }
-          itemContent={(_index, item) => {
-            const config = getActionConfig(item.type);
-            const Icon = config.icon;
+      <div className="overflow-y-auto" style={{ height, flex: 1 }} data-testid="activity-feed-scroll">
+        {filteredItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+            {emptyIcon || <Activity className="h-8 w-8 mb-2 opacity-20" />}
+            <p className="text-sm">{emptyTitle}</p>
+            <p className="text-xs mt-1">{emptyDescription}</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/50">
+            {filteredItems.map((item) => {
+              const config = getActionConfig(item.type);
+              const Icon = config.icon;
+              const timestamp = toValidDate(item.timestamp);
 
-            return (
-              <div
-                className={cn(
-                  "flex items-start gap-3 px-3 py-2.5",
-                  onItemClick && "hover-elevate cursor-pointer rounded-md"
-                )}
-                onClick={() => onItemClick?.(item.entityId)}
-                data-testid={`activity-item-${item.id}`}
-              >
-                <div className="relative mt-0.5">
-                  <Avatar className="h-7 w-7">
-                    {item.actorAvatarUrl && (
-                      <AvatarImage src={getStorageUrl(item.actorAvatarUrl)} alt={item.actorName} />
-                    )}
-                    <AvatarFallback className="text-xs bg-muted">
-                      {getInitials(item.actorName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div
-                    className={cn(
-                      "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background flex items-center justify-center"
-                    )}
-                  >
-                    <Icon className={cn("h-2.5 w-2.5", config.color)} />
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "flex items-start gap-3 px-3 py-2.5",
+                    onItemClick && "hover-elevate cursor-pointer rounded-md"
+                  )}
+                  onClick={() => onItemClick?.(item.entityId)}
+                  data-testid={`activity-item-${item.id}`}
+                >
+                  <div className="relative mt-0.5">
+                    <Avatar className="h-7 w-7">
+                      {item.actorAvatarUrl && (
+                        <AvatarImage src={getStorageUrl(item.actorAvatarUrl)} alt={item.actorName} />
+                      )}
+                      <AvatarFallback className="text-xs bg-muted">
+                        {getInitials(item.actorName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div
+                      className={cn(
+                        "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background flex items-center justify-center"
+                      )}
+                    >
+                      <Icon className={cn("h-2.5 w-2.5", config.color)} />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">
+                      <span className="font-medium">{item.actorName}</span>{" "}
+                      <span className="text-muted-foreground">{formatDescription(item)}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground/70 mt-0.5">
+                      {timestamp ? formatDistanceToNow(timestamp, { addSuffix: true }) : "Recently"}
+                    </p>
                   </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm">
-                    <span className="font-medium">{item.actorName}</span>{" "}
-                    <span className="text-muted-foreground">{formatDescription(item)}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-0.5">
-                    {formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })}
-                  </p>
-                </div>
-              </div>
-            );
-          }}
-        />
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
