@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getPreviewText } from "@/components/richtext";
@@ -30,7 +30,9 @@ import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { fetchTaskDetail } from "@/lib/task-detail";
 import { useAuth } from "@/lib/auth";
+import { useWorkspaceRealtime } from "@/lib/realtime";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 
@@ -712,6 +714,7 @@ function EmployeeDashboardSection({
 
 export default function Home() {
   const { user } = useAuth();
+  useWorkspaceRealtime({ enableMyTasks: true, enableDashboard: hasTenantAdminAccess(user?.role), enableTimer: true });
   const [, setLocation] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
@@ -724,6 +727,8 @@ export default function Home() {
 
   const { data: myTasks, isLoading: tasksLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: teams } = useQuery<Team[]>({
@@ -741,6 +746,8 @@ export default function Home() {
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
     enabled: !!user && isAdmin,
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: workload, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
@@ -761,6 +768,8 @@ export default function Home() {
   const { data: timeStats, isLoading: timeStatsLoading } = useQuery<MyTimeStats>({
     queryKey: ["/api/time-entries/my/stats"],
     enabled: !!user && !isAdmin,
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const createProjectMutation = useMutation({
@@ -824,18 +833,27 @@ export default function Home() {
 
   const refetchSelectedTask = async () => {
     if (selectedTask) {
-      const response = await fetch(`/api/tasks/${selectedTask.id}`);
-      const updatedTask = await response.json();
+      const updatedTask = await fetchTaskDetail(selectedTask.id);
       setSelectedTask(updatedTask);
     }
   };
+
+  const openTaskDrawer = useCallback(async (taskId: string) => {
+    const fullTask = await queryClient.fetchQuery({
+      queryKey: ["/api/tasks", taskId],
+      queryFn: () => fetchTaskDetail(taskId),
+      staleTime: 5000,
+    });
+
+    setSelectedTask(fullTask);
+  }, []);
 
   const handleCreateProject = (data: any) => {
     createProjectMutation.mutate(data);
   };
 
   const handleTaskClick = (task: TaskWithRelations) => {
-    setSelectedTask(task);
+    void openTaskDrawer(task.id);
   };
 
   const taskStats = useMemo(() => {

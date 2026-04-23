@@ -12,8 +12,7 @@
 
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
-import * as fs from 'fs';
-import * as path from 'path';
+import { getTrackedMigrationEntries } from '../lib/migrationJournal';
 
 const isDryRun = process.argv.includes('--dry-run');
 
@@ -22,21 +21,14 @@ async function markMigrationsApplied() {
   console.log('[markMigrations] Mode:', isDryRun ? 'DRY RUN' : 'LIVE');
   
   try {
-    // Read the migration journal
-    const journalPath = path.join(process.cwd(), 'migrations', 'meta', '_journal.json');
-    if (!fs.existsSync(journalPath)) {
-      console.error('[markMigrations] No migration journal found at:', journalPath);
-      process.exit(1);
-    }
+    const entries = getTrackedMigrationEntries();
     
-    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
-    const entries = journal.entries || [];
+    console.log(`[markMigrations] Found ${entries.length} committed migration files`);
     
-    console.log(`[markMigrations] Found ${entries.length} migrations in journal`);
-    
-    // Create __drizzle_migrations table if it doesn't exist
+    // Create drizzle.__drizzle_migrations table if it doesn't exist
     const createTableSQL = `
-      CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      CREATE SCHEMA IF NOT EXISTS drizzle;
+      CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
         id SERIAL PRIMARY KEY,
         hash TEXT NOT NULL,
         created_at BIGINT NOT NULL
@@ -53,7 +45,7 @@ async function markMigrationsApplied() {
     // Check which migrations are already recorded
     let existingHashes: Set<string> = new Set();
     try {
-      const existing = await db.execute(sql`SELECT hash FROM "__drizzle_migrations"`);
+      const existing = await db.execute(sql`SELECT hash FROM drizzle.__drizzle_migrations`);
       existingHashes = new Set((existing.rows as any[]).map(r => r.hash));
       console.log(`[markMigrations] Found ${existingHashes.size} already applied migrations`);
     } catch (e) {
@@ -78,7 +70,7 @@ async function markMigrationsApplied() {
         console.log(`[markMigrations] Would INSERT: ${hash} (created_at: ${createdAt})`);
       } else {
         await db.execute(sql`
-          INSERT INTO "__drizzle_migrations" (hash, created_at)
+          INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
           VALUES (${hash}, ${createdAt})
         `);
         console.log(`[markMigrations] INSERTED: ${hash}`);

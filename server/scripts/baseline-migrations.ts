@@ -13,25 +13,7 @@
  */
 
 import pg from "pg";
-import { readFileSync } from "fs";
-import path from "path";
-
-// Use process.cwd() for bundled environments
-const __dirname = process.cwd();
-
-interface JournalEntry {
-  idx: number;
-  version: string;
-  when: number;
-  tag: string;
-  breakpoints: boolean;
-}
-
-interface Journal {
-  version: string;
-  dialect: string;
-  entries: JournalEntry[];
-}
+import { getTrackedMigrationEntries } from "../lib/migrationJournal";
 
 async function baselineMigrations() {
   console.log("[baseline] Starting migration baseline...");
@@ -47,11 +29,9 @@ async function baselineMigrations() {
   });
 
   try {
-    // Read the migrations journal
-    const journalPath = path.resolve(__dirname, "../../migrations/meta/_journal.json");
-    const journal: Journal = JSON.parse(readFileSync(journalPath, "utf-8"));
-    
-    console.log(`[baseline] Found ${journal.entries.length} migrations to baseline`);
+    const entries = getTrackedMigrationEntries();
+
+    console.log(`[baseline] Found ${entries.length} committed migrations to baseline`);
 
     // Ensure drizzle migrations table exists
     await pool.query(`
@@ -70,7 +50,7 @@ async function baselineMigrations() {
     const existingHashes = new Set(existing.map(r => r.hash));
 
     // Insert missing entries
-    for (const entry of journal.entries) {
+    for (const entry of entries) {
       if (existingHashes.has(entry.tag)) {
         console.log(`[baseline] Already baselined: ${entry.tag}`);
         continue;

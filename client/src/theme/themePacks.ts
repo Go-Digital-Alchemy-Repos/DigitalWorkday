@@ -761,15 +761,31 @@ export const THEME_PACK_MAP = new Map<string, ThemePack>(
   THEME_PACKS.map((p) => [p.id, p])
 );
 
+export const PRIMARY_THEME_PACK_IDS = ["light", "dark"] as const;
+
+export const PRIMARY_THEME_PACKS: ThemePack[] = PRIMARY_THEME_PACK_IDS.map(
+  (id) => THEME_PACK_MAP.get(id)!
+);
+
+export function normalizeThemePackId(id: string | null | undefined): string {
+  if (!id) return "light";
+  if (id === "system") return "light";
+
+  const pack = THEME_PACK_MAP.get(id);
+  if (!pack) return "light";
+  return pack.kind === "dark" ? "dark" : "light";
+}
+
 export function getThemePack(id: string): ThemePack {
-  return THEME_PACK_MAP.get(id) ?? THEME_PACK_MAP.get("light")!;
+  const normalizedId = normalizeThemePackId(id);
+  return THEME_PACK_MAP.get(normalizedId) ?? THEME_PACK_MAP.get("light")!;
 }
 
 export function resolveThemePackId(
   userOverride: string | null | undefined,
   tenantDefault: string | null | undefined
 ): string {
-  if (userOverride && THEME_PACK_MAP.has(userOverride)) return userOverride;
-  if (tenantDefault && THEME_PACK_MAP.has(tenantDefault)) return tenantDefault;
+  if (userOverride) return normalizeThemePackId(userOverride);
+  if (tenantDefault) return normalizeThemePackId(tenantDefault);
   return "light";
 }

@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { sql, eq, isNull, and } from "drizzle-orm";
 import { AppError, handleRouteError } from "../lib/errors";
+import { getTrackedMigrationEntries, getMigrationJournalPath } from "../lib/migrationJournal";
 
 const router = createApiRouter({ policy: "authOnly" });
 
@@ -1045,11 +1046,10 @@ router.post("/v1/super/tenancy/remediate", requireAuth, requireSuperUser, async 
 
 router.get("/v1/super/migrations/status", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
   try {
-    const fs = await import('fs');
-    const path = await import('path');
-    const journalPath = path.join(process.cwd(), 'migrations', 'meta', '_journal.json');
-    
-    if (!fs.existsSync(journalPath)) {
+    const journalPath = getMigrationJournalPath();
+    const journalMigrations = getTrackedMigrationEntries();
+
+    if (journalMigrations.length === 0) {
       return res.json({ 
         journalExists: false, 
         migrations: [], 
@@ -1057,13 +1057,10 @@ router.get("/v1/super/migrations/status", requireAuth, requireSuperUser, async (
         pendingMigrations: [] 
       });
     }
-    
-    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
-    const journalMigrations = journal.entries || [];
-    
+
     let appliedHashes: string[] = [];
     try {
-      const result = await db.execute(sql`SELECT hash, created_at FROM "__drizzle_migrations" ORDER BY id`);
+      const result = await db.execute(sql`SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id`);
       appliedHashes = (result.rows as any[]).map(r => r.hash);
     } catch (e) {
     }
@@ -1073,6 +1070,7 @@ router.get("/v1/super/migrations/status", requireAuth, requireSuperUser, async (
     
     res.json({
       journalExists: true,
+      journalPath,
       totalInJournal: journalMigrations.length,
       totalApplied: appliedHashes.length,
       totalPending: pendingMigrations.length,
@@ -1090,19 +1088,15 @@ router.get("/v1/super/migrations/status", requireAuth, requireSuperUser, async (
 
 router.post("/v1/super/migrations/mark-applied", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
   try {
-    const fs = await import('fs');
-    const path = await import('path');
-    const journalPath = path.join(process.cwd(), 'migrations', 'meta', '_journal.json');
-    
-    if (!fs.existsSync(journalPath)) {
+    const entries = getTrackedMigrationEntries();
+
+    if (entries.length === 0) {
       throw AppError.badRequest("No migration journal found");
     }
     
-    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
-    const entries = journal.entries || [];
-    
     await db.execute(sql.raw(`
-      CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      CREATE SCHEMA IF NOT EXISTS drizzle;
+      CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
         id SERIAL PRIMARY KEY,
         hash TEXT NOT NULL,
         created_at BIGINT NOT NULL
@@ -1111,7 +1105,7 @@ router.post("/v1/super/migrations/mark-applied", requireAuth, requireSuperUser, 
     
     let existingHashes: Set<string> = new Set();
     try {
-      const existing = await db.execute(sql`SELECT hash FROM "__drizzle_migrations"`);
+      const existing = await db.execute(sql`SELECT hash FROM drizzle.__drizzle_migrations`);
       existingHashes = new Set((existing.rows as any[]).map(r => r.hash));
     } catch (e) {
     }
@@ -1129,7 +1123,7 @@ router.post("/v1/super/migrations/mark-applied", requireAuth, requireSuperUser, 
       }
       
       await db.execute(sql`
-        INSERT INTO "__drizzle_migrations" (hash, created_at)
+        INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
         VALUES (${hash}, ${createdAt})
       `);
       inserted++;

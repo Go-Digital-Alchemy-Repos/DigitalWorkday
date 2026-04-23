@@ -68,6 +68,7 @@ export function GlobalActiveTimer() {
   const [stopClientId, setStopClientId] = useState<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const hasShownRecoveryToast = useRef(false);
+  const initialTimerCheckComplete = useRef(false);
 
   const isEligible = isAuthenticated && user?.role !== "super_user";
 
@@ -150,12 +151,18 @@ export function GlobalActiveTimer() {
     return () => clearInterval(intervalId);
   }, [isEligible, timer?.status, refetchTimer]);
 
-  // Show recovery toast on app boot if timer exists
+  // Show recovery toast only on the initial app boot fetch if a timer already exists.
   useEffect(() => {
-    if (timer && !hasShownRecoveryToast.current && !timerLoading) {
+    if (timerLoading || initialTimerCheckComplete.current) {
+      return;
+    }
+
+    initialTimerCheckComplete.current = true;
+
+    if (timer && !hasShownRecoveryToast.current) {
       const sessionKey = `timer-recovered-${timer.id}`;
       const alreadyShown = sessionStorage.getItem(sessionKey);
-      
+
       if (!alreadyShown) {
         toast({
           title: "Timer recovered",
@@ -348,6 +355,10 @@ export function GlobalActiveTimer() {
       toast({ title: "Title is required", variant: "destructive" });
       return;
     }
+    if (!stopDescription.trim()) {
+      toast({ title: "Description is required", variant: "destructive" });
+      return;
+    }
     if (!stopClientId) {
       toast({ title: "Client is required", variant: "destructive" });
       return;
@@ -470,12 +481,12 @@ export function GlobalActiveTimer() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>Description <span className="text-destructive">*</span></Label>
               <Textarea
                 value={stopDescription}
                 onChange={(e) => setStopDescription(e.target.value)}
                 placeholder="Additional details about the work performed..."
-                className="min-h-[80px] resize-none"
+                className={`min-h-[80px] resize-none ${!stopDescription.trim() ? "border-destructive/50" : ""}`}
                 data-testid="input-global-stop-description"
               />
             </div>
@@ -523,7 +534,7 @@ export function GlobalActiveTimer() {
             </Button>
             <Button
               onClick={handleSaveEntry}
-              disabled={stopMutation.isPending || !stopTitle.trim() || !stopClientId}
+              disabled={stopMutation.isPending || !stopTitle.trim() || !stopClientId || !stopDescription.trim()}
               data-testid="button-global-save-entry"
             >
               {stopMutation.isPending ? (

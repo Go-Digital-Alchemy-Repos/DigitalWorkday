@@ -124,12 +124,21 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             key={user.id}
             type="button"
             className={cn(
-              "w-full px-3 py-2 text-left text-sm flex flex-col",
+              "w-full px-3 py-2 text-left text-sm flex flex-col select-none",
               index === selectedIndex && "bg-accent"
             )}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
             onMouseDown={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               selectUser(index);
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
             }}
             data-testid={`mention-option-${user.id}`}
           >
@@ -549,13 +558,20 @@ export function RichTextEditor({
       />
       {mentionPopupOpen && mentionCommand && mentionRect && createPortal(
         <div
-          className="fixed z-[9999]"
+          className="fixed z-[9999] pointer-events-auto select-none"
           style={{
             top: mentionRect.top - 4,
             left: mentionRect.left,
             transform: "translateY(-100%)",
           }}
-          onMouseDown={(e) => e.preventDefault()}
+          onPointerDownCapture={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
         >
           <MentionList
             ref={mentionListRef}

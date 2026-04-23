@@ -39,6 +39,7 @@ export function useActiveTimer() {
   const { toast } = useToast();
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const hasShownRecoveryToast = useRef(false);
+  const initialTimerCheckComplete = useRef(false);
 
   const isEligible = user && user.role !== "super_user";
 
@@ -123,12 +124,18 @@ export function useActiveTimer() {
     return () => clearInterval(intervalId);
   }, [isEligible, timer?.status, refetch]);
 
-  // Show recovery toast on app boot if timer exists
+  // Show recovery toast only for a timer that already exists on the initial app boot fetch.
   useEffect(() => {
-    if (timer && !hasShownRecoveryToast.current && !isLoading) {
+    if (isLoading || initialTimerCheckComplete.current) {
+      return;
+    }
+
+    initialTimerCheckComplete.current = true;
+
+    if (timer && !hasShownRecoveryToast.current) {
       const sessionKey = `timer-recovered-${timer.id}`;
       const alreadyShown = sessionStorage.getItem(sessionKey);
-      
+
       if (!alreadyShown) {
         toast({
           title: "Timer recovered",
