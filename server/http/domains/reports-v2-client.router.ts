@@ -53,108 +53,165 @@ async function dbRows<T extends Record<string, unknown>>(
   return result as unknown as T[];
 }
 
+function previousRange(startDate: Date, endDate: Date) {
+  const durationMs = Math.max(endDate.getTime() - startDate.getTime(), 24 * 60 * 60 * 1000);
+  return {
+    startDate: new Date(startDate.getTime() - durationMs),
+    endDate: new Date(endDate.getTime() - durationMs),
+  };
+}
+
+type ClientOverviewRow = {
+  client_id: string;
+  company_name: string;
+  active_projects: string;
+  open_tasks: string;
+  overdue_tasks: string;
+  completed_in_range: string;
+  total_hours: string;
+  last_activity_date: string | null;
+};
+
+async function loadClientOverviewRows({
+  tenantId,
+  startDate,
+  endDate,
+  clientIds,
+  statuses,
+  limit,
+  offset,
+}: {
+  tenantId: string;
+  startDate: Date;
+  endDate: Date;
+  clientIds: string[];
+  statuses: string[];
+  limit?: number;
+  offset?: number;
+}) {
+  const clientFilter = clientIds.length > 0
+    ? sql`AND c.id = ANY(ARRAY[${sql.join(clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+    : sql``;
+  const projectStatusFilter = projectStatusFilterClause(statuses);
+  const paginationClause = limit != null
+    ? sql`LIMIT ${limit} OFFSET ${offset ?? 0}`
+    : sql``;
+
+  return dbRows<ClientOverviewRow>(sql`
+    SELECT
+      c.id AS client_id,
+      c.company_name,
+      (
+        SELECT COUNT(DISTINCT p.id)
+        FROM projects p
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND p.status = 'active'
+          ${projectStatusFilter}
+      ) AS active_projects,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done', 'cancelled')
+          ${projectStatusFilter}
+      ) AS open_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done', 'cancelled')
+          AND t.due_date < NOW()
+          ${projectStatusFilter}
+      ) AS overdue_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status = 'done'
+          AND t.updated_at BETWEEN ${startDate} AND ${endDate}
+          ${projectStatusFilter}
+      ) AS completed_in_range,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0)::float / 3600.0
+        FROM projects p
+        JOIN time_entries te ON te.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time BETWEEN ${startDate} AND ${endDate}
+          ${projectStatusFilter}
+      ) AS total_hours,
+      GREATEST(
+        (
+          SELECT MAX(t.updated_at)
+          FROM projects p
+          JOIN tasks t ON t.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            ${projectStatusFilter}
+        ),
+        (
+          SELECT MAX(te.start_time)
+          FROM projects p
+          JOIN time_entries te ON te.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND te.tenant_id = ${tenantId}
+            ${projectStatusFilter}
+        )
+      ) AS last_activity_date
+    FROM clients c
+    WHERE c.tenant_id = ${tenantId}
+      ${clientFilter}
+    GROUP BY c.id, c.company_name
+    ORDER BY open_tasks DESC, total_hours DESC
+    ${paginationClause}
+  `);
+}
+
 router.get("/client/overview", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
-
-    const clientFilter = filters.clientIds.length > 0
-      ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
-      : sql``;
-    const projectStatusFilter = projectStatusFilterClause(filters.statuses);
-
-    const rows = await dbRows<{
-      client_id: string;
-      company_name: string;
-      active_projects: string;
-      open_tasks: string;
-      overdue_tasks: string;
-      completed_in_range: string;
-      total_hours: string;
-      last_activity_date: string | null;
-    }>(sql`
-      SELECT
-        c.id AS client_id,
-        c.company_name,
-        (
-          SELECT COUNT(DISTINCT p.id)
-          FROM projects p
-          WHERE p.client_id = c.id
-            AND p.tenant_id = ${tenantId}
-            AND p.status = 'active'
-            ${projectStatusFilter}
-        ) AS active_projects,
-        (
-          SELECT COUNT(DISTINCT t.id)
-          FROM projects p
-          JOIN tasks t ON t.project_id = p.id
-          WHERE p.client_id = c.id
-            AND p.tenant_id = ${tenantId}
-            AND t.tenant_id = ${tenantId}
-            AND t.status NOT IN ('done', 'cancelled')
-            ${projectStatusFilter}
-        ) AS open_tasks,
-        (
-          SELECT COUNT(DISTINCT t.id)
-          FROM projects p
-          JOIN tasks t ON t.project_id = p.id
-          WHERE p.client_id = c.id
-            AND p.tenant_id = ${tenantId}
-            AND t.tenant_id = ${tenantId}
-            AND t.status NOT IN ('done', 'cancelled')
-            AND t.due_date < NOW()
-            ${projectStatusFilter}
-        ) AS overdue_tasks,
-        (
-          SELECT COUNT(DISTINCT t.id)
-          FROM projects p
-          JOIN tasks t ON t.project_id = p.id
-          WHERE p.client_id = c.id
-            AND p.tenant_id = ${tenantId}
-            AND t.tenant_id = ${tenantId}
-            AND t.status = 'done'
-            AND t.updated_at BETWEEN ${startDate} AND ${endDate}
-            ${projectStatusFilter}
-        ) AS completed_in_range,
-        (
-          SELECT COALESCE(SUM(te.duration_seconds), 0)::float / 3600.0
-          FROM projects p
-          JOIN time_entries te ON te.project_id = p.id
-          WHERE p.client_id = c.id
-            AND p.tenant_id = ${tenantId}
-            AND te.tenant_id = ${tenantId}
-            AND te.start_time BETWEEN ${startDate} AND ${endDate}
-            ${projectStatusFilter}
-        ) AS total_hours,
-        GREATEST(
-          (
-            SELECT MAX(t.updated_at)
-            FROM projects p
-            JOIN tasks t ON t.project_id = p.id
-            WHERE p.client_id = c.id
-              AND p.tenant_id = ${tenantId}
-              AND t.tenant_id = ${tenantId}
-              ${projectStatusFilter}
-          ),
-          (
-            SELECT MAX(te.start_time)
-            FROM projects p
-            JOIN time_entries te ON te.project_id = p.id
-            WHERE p.client_id = c.id
-              AND p.tenant_id = ${tenantId}
-              AND te.tenant_id = ${tenantId}
-              ${projectStatusFilter}
-          )
-        ) AS last_activity_date
-      FROM clients c
-      WHERE c.tenant_id = ${tenantId}
-        ${clientFilter}
-      GROUP BY c.id, c.company_name
-      ORDER BY open_tasks DESC, total_hours DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `);
+    const prior = previousRange(startDate, endDate);
+    const [rows, currentSummaryRows, priorSummaryRows] = await Promise.all([
+      loadClientOverviewRows({
+        tenantId,
+        startDate,
+        endDate,
+        clientIds: filters.clientIds,
+        statuses: filters.statuses,
+        limit,
+        offset,
+      }),
+      loadClientOverviewRows({
+        tenantId,
+        startDate,
+        endDate,
+        clientIds: filters.clientIds,
+        statuses: filters.statuses,
+      }),
+      loadClientOverviewRows({
+        tenantId,
+        startDate: prior.startDate,
+        endDate: prior.endDate,
+        clientIds: filters.clientIds,
+        statuses: filters.statuses,
+      }),
+    ]);
 
     const countRow = firstRow(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
@@ -189,8 +246,37 @@ router.get("/client/overview", async (req: Request, res: Response) => {
       };
     });
 
+    function buildSummary(summaryRows: ClientOverviewRow[]) {
+      const mapped = summaryRows.map((r) => {
+        const totalHours = Math.round(Number(r.total_hours) * 10) / 10;
+        const openTasks = Number(r.open_tasks);
+        const completedInRange = Number(r.completed_in_range);
+        const engagementScore = Math.min(
+          100,
+          Math.round(
+            Math.min(totalHours, 40) / 40 * 40 +
+            Math.min(openTasks, 20) / 20 * 40 +
+            Math.min(completedInRange, 10) / 10 * 20
+          )
+        );
+        return { totalHours, openTasks, engagementScore };
+      });
+      return {
+        totalClients: mapped.length,
+        totalOpenTasks: mapped.reduce((sum, row) => sum + row.openTasks, 0),
+        totalHours: Math.round(mapped.reduce((sum, row) => sum + row.totalHours, 0) * 10) / 10,
+        avgEngagement: mapped.length > 0
+          ? Math.round(mapped.reduce((sum, row) => sum + row.engagementScore, 0) / mapped.length)
+          : 0,
+      };
+    }
+
     res.json({
       clients,
+      summary: {
+        current: buildSummary(currentSummaryRows),
+        prior: buildSummary(priorSummaryRows),
+      },
       pagination: {
         total: Number(countRow?.total ?? 0),
         limit,

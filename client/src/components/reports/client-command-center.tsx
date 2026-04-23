@@ -16,6 +16,15 @@ import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
 import { getClientReportDrilldownPath, getClientReportPath } from "./report-paths";
 
+function formatComparisonSub(current: number, prior: number, suffix = "") {
+  const delta = Math.round((current - prior) * 10) / 10;
+  if (delta === 0) return "Flat vs previous period";
+  const direction = delta > 0 ? "Up" : "Down";
+  const value = Math.abs(delta);
+  const display = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+  return `${direction} ${display}${suffix} vs previous period`;
+}
+
 interface MetricCardProps {
   label: string;
   value: string | number;
@@ -87,7 +96,25 @@ interface ClientOverviewItem {
 }
 
 function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
-  const { data, isLoading } = useQuery<{ clients: ClientOverviewItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
+  const { data, isLoading } = useQuery<{
+    clients: ClientOverviewItem[];
+    summary?: {
+      current: {
+        totalClients: number;
+        totalOpenTasks: number;
+        totalHours: number;
+        avgEngagement: number;
+      };
+      prior: {
+        totalClients: number;
+        totalOpenTasks: number;
+        totalHours: number;
+        avgEngagement: number;
+      };
+    };
+    pagination: { total: number; limit: number; offset: number };
+    range: { startDate: string; endDate: string };
+  }>({
     queryKey: ["/api/reports/v2/client/overview", rangeDays, projectStatus],
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/client/overview?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
@@ -98,6 +125,15 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
   });
 
   const totals = useMemo(() => {
+    if (data?.summary) {
+      return {
+        totalClients: data.summary.current.totalClients,
+        totalOpenTasks: data.summary.current.totalOpenTasks,
+        totalHours: data.summary.current.totalHours,
+        avgEngagement: data.summary.current.avgEngagement,
+        prior: data.summary.prior,
+      };
+    }
     if (!data?.clients) return null;
     const clients = data.clients;
     return {
@@ -105,7 +141,33 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
       totalOpenTasks: clients.reduce((s, c) => s + c.openTasks, 0),
       totalHours: Math.round(clients.reduce((s, c) => s + c.totalHours, 0) * 10) / 10,
       avgEngagement: clients.length > 0 ? Math.round(clients.reduce((s, c) => s + c.engagementScore, 0) / clients.length) : 0,
+      prior: null,
     };
+  }, [data?.clients, data?.summary]);
+
+  const exceptionRows = useMemo(() => {
+    if (!data?.clients) return { atRisk: [], inactive: [] } as const;
+    const atRisk = [...data.clients]
+      .filter((c) => c.overdueTasks > 0 || c.engagementScore < 50)
+      .sort((a, b) => {
+        const overdueDelta = b.overdueTasks - a.overdueTasks;
+        if (overdueDelta !== 0) return overdueDelta;
+        return a.engagementScore - b.engagementScore;
+      })
+      .slice(0, 5);
+    const inactive = [...data.clients]
+      .filter((c) => {
+        if (!c.lastActivityDate) return true;
+        const inactivityDays = Math.floor((Date.now() - new Date(c.lastActivityDate).getTime()) / 86400000);
+        return inactivityDays >= 14;
+      })
+      .sort((a, b) => {
+        const aDays = a.lastActivityDate ? Math.floor((Date.now() - new Date(a.lastActivityDate).getTime()) / 86400000) : Number.MAX_SAFE_INTEGER;
+        const bDays = b.lastActivityDate ? Math.floor((Date.now() - new Date(b.lastActivityDate).getTime()) / 86400000) : Number.MAX_SAFE_INTEGER;
+        return bDays - aDays;
+      })
+      .slice(0, 5);
+    return { atRisk, inactive };
   }, [data?.clients]);
 
   if (isLoading) return (
@@ -126,10 +188,96 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Total Clients" value={totals.totalClients} icon={<Users className="h-4 w-4 text-white" />} color="bg-blue-500" />
-          <MetricCard label="Open Tasks" value={totals.totalOpenTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-violet-500" />
-          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Avg Engagement" value={`${totals.avgEngagement}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-orange-500" />
+          <MetricCard
+            label="Total Clients"
+            value={totals.totalClients}
+            sub={totals.prior ? formatComparisonSub(totals.totalClients, totals.prior.totalClients) : undefined}
+            icon={<Users className="h-4 w-4 text-white" />}
+            color="bg-blue-500"
+          />
+          <MetricCard
+            label="Open Tasks"
+            value={totals.totalOpenTasks}
+            sub={totals.prior ? formatComparisonSub(totals.totalOpenTasks, totals.prior.totalOpenTasks) : undefined}
+            icon={<CheckSquare className="h-4 w-4 text-white" />}
+            color="bg-violet-500"
+          />
+          <MetricCard
+            label="Hours Tracked"
+            value={`${totals.totalHours}h`}
+            sub={totals.prior ? formatComparisonSub(totals.totalHours, totals.prior.totalHours, "h") : undefined}
+            icon={<Clock className="h-4 w-4 text-white" />}
+            color="bg-green-500"
+          />
+          <MetricCard
+            label="Avg Engagement"
+            value={`${totals.avgEngagement}%`}
+            sub={totals.prior ? formatComparisonSub(totals.avgEngagement, totals.prior.avgEngagement, "%") : undefined}
+            icon={<TrendingUp className="h-4 w-4 text-white" />}
+            color="bg-orange-500"
+          />
+        </div>
+      )}
+      {(exceptionRows.atRisk.length > 0 || exceptionRows.inactive.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                At-Risk Clients
+              </CardTitle>
+              <CardDescription className="text-xs">Clients with overdue work or low engagement</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptionRows.atRisk.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No at-risk clients right now.</p>
+              ) : exceptionRows.atRisk.map((c) => (
+                <Link
+                  key={c.clientId}
+                  href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.companyName}</p>
+                    <p className="text-xs text-muted-foreground">{c.overdueTasks} overdue, {c.openTasks} open tasks</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{c.engagementScore}%</p>
+                    <p className="text-xs text-muted-foreground">engagement</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Activity className="h-4 w-4 text-amber-500" />
+                No Recent Activity
+              </CardTitle>
+              <CardDescription className="text-xs">Clients with stale recent activity windows</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptionRows.inactive.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No inactive clients in this range.</p>
+              ) : exceptionRows.inactive.map((c) => (
+                <Link
+                  key={c.clientId}
+                  href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.companyName}</p>
+                    <p className="text-xs text-muted-foreground">Last activity {relativeDate(c.lastActivityDate)}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{c.overdueTasks}</p>
+                    <p className="text-xs text-muted-foreground">overdue</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       )}
       {data?.clients && data.clients.length > 0 && (
@@ -602,6 +750,15 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
     </div>
   );
 
+  const range = `${rangeDays}d`;
+  const topReasons = useMemo(() => {
+    const counts = new Map<string, number>();
+    (data?.flagged ?? []).flatMap((c) => c.reasons).forEach((reason) => {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [data?.flagged]);
+
   function scoreColor(score: number) {
     if (score >= 5) return "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800";
     if (score >= 3) return "bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800";
@@ -622,6 +779,22 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
           <span>Checked {data.totalChecked} clients — {data.flagged.length} flagged for attention</span>
         </div>
       )}
+      {topReasons.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Top Client Risk Drivers</CardTitle>
+            <CardDescription className="text-xs">Most common reasons clients are being flagged</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {topReasons.map(([reason, count]) => (
+              <div key={reason} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <span className="truncate">{reason}</span>
+                <Badge variant="secondary">{count}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {data?.flagged.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
@@ -636,11 +809,11 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
         return (
           <Card key={c.clientId} className={cn("border", scoreColor(c.score))} data-testid={`risk-card-${c.clientId}`}>
             <CardContent className="p-4">
-              <div className="flex items-start gap-3">
+              <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })} className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
+                    <span className="font-semibold text-sm text-primary" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</span>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
@@ -658,7 +831,7 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
                     ))}
                   </div>
                 </div>
-              </div>
+              </Link>
             </CardContent>
           </Card>
         );
@@ -794,6 +967,15 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
     };
   }, [data?.clients]);
 
+  const range = `${rangeDays}d`;
+  const topFlags = useMemo(() => {
+    const counts = new Map<string, number>();
+    (data?.clients ?? []).flatMap((c) => c.riskFlags).forEach((flag) => {
+      counts.set(flag, (counts.get(flag) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [data?.clients]);
+
   if (isLoading) return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -809,6 +991,22 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
           <MetricCard label="Critical" value={summary.critical} sub="score < 50" icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
           <MetricCard label="With Risk Flags" value={summary.withFlags} sub="one or more flags" icon={<ShieldAlert className="h-4 w-4 text-white" />} color="bg-orange-500" />
         </div>
+      )}
+      {topFlags.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Most Common Health Flags</CardTitle>
+            <CardDescription className="text-xs">Drivers most often pulling client health down</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {topFlags.map(([flag, count]) => (
+              <div key={flag} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <span className="truncate">{flag}</span>
+                <Badge variant="secondary">{count}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       <Card>
@@ -837,33 +1035,47 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
                       <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
                     </TableCell>
                     <TableCell>
-                      <span className={cn(
-                        "text-base font-bold tabular-nums",
-                        c.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
-                        c.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
-                        c.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
-                        "text-red-600 dark:text-red-400"
-                      )}>
-                        {c.overallScore}
-                      </span>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                        <span className={cn(
+                          "text-base font-bold tabular-nums hover:underline",
+                          c.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
+                          c.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
+                          c.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
+                          "text-red-600 dark:text-red-400"
+                        )}>
+                          {c.overallScore}
+                        </span>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <Badge className={cn("text-xs font-medium", className)}>{c.healthTier}</Badge>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                        <Badge className={cn("text-xs font-medium cursor-pointer hover:opacity-90", className)}>{c.healthTier}</Badge>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.overdue} colorClass="[&>div]:bg-blue-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}>
+                        <ChiScoreBar value={c.componentScores.overdue} colorClass="[&>div]:bg-blue-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.engagement} colorClass="[&>div]:bg-violet-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                        <ChiScoreBar value={c.componentScores.engagement} colorClass="[&>div]:bg-violet-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.timeOverrun} colorClass="[&>div]:bg-amber-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })}>
+                        <ChiScoreBar value={c.componentScores.timeOverrun} colorClass="[&>div]:bg-amber-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.slaCompliance} colorClass="[&>div]:bg-cyan-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })}>
+                        <ChiScoreBar value={c.componentScores.slaCompliance} colorClass="[&>div]:bg-cyan-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.activity} colorClass="[&>div]:bg-green-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}>
+                        <ChiScoreBar value={c.componentScores.activity} colorClass="[&>div]:bg-green-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
                       {c.riskFlags.length > 0 ? (
@@ -1080,7 +1292,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                         data-testid={`forecast-client-row-${c.clientId}`}
                       >
                         <TableCell className="font-medium max-w-[160px]">
-                          <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
+                          <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { section: "risk" })} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <ScoreBar current={c.currentHealthScore} predicted={c.predictedHealthScore} />
@@ -1098,11 +1310,15 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                             {c.predictedHealthScore}
                           </span>
                         </TableCell>
-                        <TableCell className="text-center text-sm">{c.metrics.currOpenTasks}</TableCell>
+                        <TableCell className="text-center text-sm">
+                          <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { section: "projects" })} onClick={(e: React.MouseEvent) => e.stopPropagation()} className="text-primary hover:underline">
+                            {c.metrics.currOpenTasks}
+                          </Link>
+                        </TableCell>
                         <TableCell className="text-center">
-                          <span className={c.metrics.currOverdueTasks > 0 ? "text-red-600 font-medium" : ""}>
+                          <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { section: "risk" })} onClick={(e: React.MouseEvent) => e.stopPropagation()} className={cn("hover:underline", c.metrics.currOverdueTasks > 0 ? "text-red-600 font-medium" : "text-primary")}>
                             {c.metrics.currOverdueTasks}
-                          </span>
+                          </Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge className={cn("text-xs", CLIENT_RISK_COLORS[c.clientRisk])}>

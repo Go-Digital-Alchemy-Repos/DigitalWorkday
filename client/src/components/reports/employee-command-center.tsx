@@ -39,6 +39,15 @@ function userInitials(u: { firstName?: string | null; lastName?: string | null; 
 
 type SortDir = "asc" | "desc";
 
+function formatComparisonSub(current: number, prior: number, suffix = "") {
+  const delta = Math.round((current - prior) * 10) / 10;
+  if (delta === 0) return `Flat vs previous period`;
+  const direction = delta > 0 ? "Up" : "Down";
+  const value = Math.abs(delta);
+  const display = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+  return `${direction} ${display}${suffix} vs previous period`;
+}
+
 function MetricCard({ label, value, sub, icon, color }: {
   label: string;
   value: string | number;
@@ -96,6 +105,20 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
 
   const { data, isLoading } = useQuery<{
     employees: OverviewEmployee[];
+    summary?: {
+      current: {
+        activeTasks: number;
+        overdueTasks: number;
+        totalHours: number;
+        avgUtilization: number;
+      };
+      prior: {
+        activeTasks: number;
+        overdueTasks: number;
+        totalHours: number;
+        avgUtilization: number;
+      };
+    };
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
@@ -109,6 +132,15 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
   });
 
   const totals = useMemo(() => {
+    if (data?.summary) {
+      return {
+        activeTasks: data.summary.current.activeTasks,
+        overdueTasks: data.summary.current.overdueTasks,
+        totalHours: data.summary.current.totalHours,
+        avgUtilization: data.summary.current.avgUtilization,
+        prior: data.summary.prior,
+      };
+    }
     if (!data?.employees) return null;
     const emps = data.employees;
     return {
@@ -118,8 +150,9 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
       avgUtilization: emps.length > 0
         ? Math.round(emps.filter(e => e.utilizationPct !== null).reduce((s, e) => s + (e.utilizationPct ?? 0), 0) / Math.max(emps.filter(e => e.utilizationPct !== null).length, 1))
         : 0,
+      prior: null,
     };
-  }, [data?.employees]);
+  }, [data?.employees, data?.summary]);
 
   const sorted = useMemo(() => {
     if (!data?.employees) return [];
@@ -138,6 +171,23 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
       return sortDir === "asc" ? av - (bv as number) : (bv as number) - av;
     });
   }, [data?.employees, sortBy, sortDir]);
+
+  const exceptionRows = useMemo(() => {
+    if (!data?.employees) return { overloaded: [], lowCompliance: [] } as const;
+    const overloaded = [...data.employees]
+      .filter((e) => e.overdueCount > 0 || (e.utilizationPct ?? 0) >= 100)
+      .sort((a, b) => {
+        const overdueDelta = b.overdueCount - a.overdueCount;
+        if (overdueDelta !== 0) return overdueDelta;
+        return (b.utilizationPct ?? 0) - (a.utilizationPct ?? 0);
+      })
+      .slice(0, 5);
+    const lowCompliance = [...data.employees]
+      .filter((e) => e.activeTasksNow > 0 && e.totalHours <= 0)
+      .sort((a, b) => b.activeTasksNow - a.activeTasksNow)
+      .slice(0, 5);
+    return { overloaded, lowCompliance };
+  }, [data?.employees]);
 
   function toggleSort(field: OverviewSortField) {
     if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -171,10 +221,96 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Total Active Tasks" value={totals.activeTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" />
-          <MetricCard label="Total Overdue" value={totals.overdueTasks} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" />
-          <MetricCard label="Avg Utilization" value={`${totals.avgUtilization}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
+          <MetricCard
+            label="Total Active Tasks"
+            value={totals.activeTasks}
+            sub={totals.prior ? formatComparisonSub(totals.activeTasks, totals.prior.activeTasks) : undefined}
+            icon={<CheckSquare className="h-4 w-4 text-white" />}
+            color="bg-blue-500"
+          />
+          <MetricCard
+            label="Total Overdue"
+            value={totals.overdueTasks}
+            sub={totals.prior ? formatComparisonSub(totals.overdueTasks, totals.prior.overdueTasks) : undefined}
+            icon={<AlertTriangle className="h-4 w-4 text-white" />}
+            color="bg-red-500"
+          />
+          <MetricCard
+            label="Hours Tracked"
+            value={`${totals.totalHours}h`}
+            sub={totals.prior ? formatComparisonSub(totals.totalHours, totals.prior.totalHours, "h") : undefined}
+            icon={<Clock className="h-4 w-4 text-white" />}
+            color="bg-violet-500"
+          />
+          <MetricCard
+            label="Avg Utilization"
+            value={`${totals.avgUtilization}%`}
+            sub={totals.prior ? formatComparisonSub(totals.avgUtilization, totals.prior.avgUtilization, "%") : undefined}
+            icon={<TrendingUp className="h-4 w-4 text-white" />}
+            color="bg-green-500"
+          />
+        </div>
+      )}
+      {(exceptionRows.overloaded.length > 0 || exceptionRows.lowCompliance.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                Overloaded Or Overdue
+              </CardTitle>
+              <CardDescription className="text-xs">Highest-risk employees in the current window</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptionRows.overloaded.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No overloaded employees right now.</p>
+              ) : exceptionRows.overloaded.map((e) => (
+                <Link
+                  key={e.userId}
+                  href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName(e)}</p>
+                    <p className="text-xs text-muted-foreground">{e.overdueCount} overdue, {e.activeTasksNow} active</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{e.overdueCount}</p>
+                    <p className="text-xs text-muted-foreground">{e.utilizationPct ?? 0}% util</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
+                Active Work, No Time Logged
+              </CardTitle>
+              <CardDescription className="text-xs">Employees with active tasks but no tracked time in range</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptionRows.lowCompliance.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No low-compliance employees in this range.</p>
+              ) : exceptionRows.lowCompliance.map((e) => (
+                <Link
+                  key={e.userId}
+                  href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName(e)}</p>
+                    <p className="text-xs text-muted-foreground">{e.activeTasksNow} active tasks</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">0h</p>
+                    <p className="text-xs text-muted-foreground">tracked</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       )}
       <div className="md:hidden space-y-3">
@@ -356,6 +492,8 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   return (
     <Card>
       <CardContent className="p-0">
@@ -379,31 +517,50 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
                       {userName(e)}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-sm">{e.assignedCount}</TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="text-primary hover:underline">
+                      {e.assignedCount}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     {e.dueSoonCount > 0 ? (
-                      <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
-                        {e.dueSoonCount}
-                      </Badge>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })}>
+                        <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 cursor-pointer hover:opacity-90">
+                          {e.dueSoonCount}
+                        </Badge>
+                      </Link>
                     ) : (
                       <span className="text-sm text-muted-foreground">{e.dueSoonCount}</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className={cn("text-sm font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                    <Link
+                      href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
+                      className={cn("text-sm font-medium hover:underline", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
+                    >
                       {e.overdueCount}
-                    </span>
+                    </Link>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {e.avgCompletionDays !== null ? `${Math.round(e.avgCompletionDays * 10) / 10}d` : "—"}
+                    {e.avgCompletionDays !== null ? (
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "assigned-tasks" })} className="text-primary hover:underline">
+                        {`${Math.round(e.avgCompletionDays * 10) / 10}d`}
+                      </Link>
+                    ) : "—"}
                   </TableCell>
                   <TableCell>
                     {e.backlogCount >= 5 ? (
-                      <Badge variant="destructive">{e.backlogCount}</Badge>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })}>
+                        <Badge variant="destructive" className="cursor-pointer hover:opacity-90">{e.backlogCount}</Badge>
+                      </Link>
                     ) : e.backlogCount >= 3 ? (
-                      <Badge variant="default" className="bg-orange-500">{e.backlogCount}</Badge>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })}>
+                        <Badge variant="default" className="bg-orange-500 cursor-pointer hover:opacity-90">{e.backlogCount}</Badge>
+                      </Link>
                     ) : (
-                      <span className="text-sm text-muted-foreground">{e.backlogCount}</span>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="text-sm text-primary hover:underline">
+                        {e.backlogCount}
+                      </Link>
                     )}
                   </TableCell>
                 </TableRow>
@@ -455,6 +612,8 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   return (
     <Card>
       <CardContent className="p-0">
@@ -479,25 +638,46 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
                       {userName(e)}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-sm font-medium">{e.totalHours}h</TableCell>
+                  <TableCell className="text-sm font-medium">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
+                      {e.totalHours}h
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <div className="space-y-1 min-w-[80px]">
-                      <span className="text-sm">{e.billableHours}h</span>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-sm text-primary hover:underline">
+                        {e.billableHours}h
+                      </Link>
                       {e.totalHours > 0 && (
                         <Progress value={Math.round(e.billableHours / e.totalHours * 100)} className="h-1" />
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{e.nonBillableHours}h</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{e.avgHoursPerDay}h</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{e.estimatedHours}h</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
+                      {e.nonBillableHours}h
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
+                      {e.avgHoursPerDay}h
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
+                      {e.estimatedHours}h
+                    </Link>
+                  </TableCell>
                   <TableCell>
-                    <span className={cn(
-                      "text-sm font-medium",
-                      e.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
-                    )}>
+                    <Link
+                      href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })}
+                      className={cn(
+                        "text-sm font-medium hover:underline",
+                        e.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                      )}
+                    >
                       {e.varianceHours > 0 ? "+" : ""}{e.varianceHours}h
-                    </span>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
@@ -553,6 +733,8 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   const weeks = data.users[0]?.weeks.map(w => w.weekStart) ?? [];
 
   function utilizationColor(pct: number | null) {
@@ -606,7 +788,9 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
                         >
                           <span>{w.actualHours}h</span>
                           {w.utilizationPct !== null && (
-                            <span className="opacity-80">{w.utilizationPct}%</span>
+                            <Link href={getEmployeeReportDrilldownPath(window.location.pathname, u.userId, { range, section: "capacity" })} className="opacity-80 hover:underline">
+                              {w.utilizationPct}%
+                            </Link>
                           )}
                         </div>
                       </td>
@@ -658,6 +842,15 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = `${rangeDays}d`;
+  const topReasons = useMemo(() => {
+    const counts = new Map<string, number>();
+    (data?.flagged ?? []).flatMap((u) => u.reasons).forEach((reason) => {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [data?.flagged]);
+
   function scoreColor(score: number) {
     if (score >= 5) return "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800";
     if (score >= 3) return "bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800";
@@ -678,6 +871,22 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
           <span>Checked {data.totalChecked} employees — {data.flagged.length} flagged for attention</span>
         </div>
       )}
+      {topReasons.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Top Risk Drivers</CardTitle>
+            <CardDescription className="text-xs">Most common reasons employees are being flagged</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {topReasons.map(([reason, count]) => (
+              <div key={reason} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <span className="truncate">{reason}</span>
+                <Badge variant="secondary">{count}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {data?.flagged.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
@@ -692,16 +901,16 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
         return (
           <Card key={u.userId} className={cn("border", scoreColor(u.score))} data-testid={`risk-card-employee-${u.userId}`}>
             <CardContent className="p-4">
-              <div className="flex items-start gap-3">
+              <Link href={getEmployeeReportDrilldownPath(window.location.pathname, u.userId, { range, section: "risk" })} className="flex items-start gap-3">
                 <Avatar className="h-9 w-9 shrink-0">
                   <AvatarImage src={getStorageUrl(u.avatarUrl) ?? ""} alt={userName(u)} />
                   <AvatarFallback className="text-xs">{userInitials(u)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <Link href={getEmployeeReportPath(window.location.pathname, u.userId)} className="font-semibold text-sm hover:underline text-primary cursor-pointer">
+                    <span className="font-semibold text-sm text-primary">
                       {userName(u)}
-                    </Link>
+                    </span>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
@@ -719,7 +928,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                     ))}
                   </div>
                 </div>
-              </div>
+              </Link>
             </CardContent>
           </Card>
         );
@@ -946,6 +1155,8 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
     };
   }, [data?.employees]);
 
+  const range = `${rangeDays}d`;
+
   if (isLoading) return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -1021,33 +1232,47 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={cn(
-                        "text-base font-bold tabular-nums",
-                        e.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
-                        e.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
-                        e.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
-                        "text-red-600 dark:text-red-400"
-                      )}>
-                        {e.overallScore}
-                      </span>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}>
+                        <span className={cn(
+                          "text-base font-bold tabular-nums hover:underline",
+                          e.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
+                          e.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
+                          e.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
+                          "text-red-600 dark:text-red-400"
+                        )}>
+                          {e.overallScore}
+                        </span>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <Badge className={cn("text-xs font-medium", className)}>{label}</Badge>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}>
+                        <Badge className={cn("text-xs font-medium cursor-pointer hover:opacity-90", className)}>{label}</Badge>
+                      </Link>
                     </TableCell>
                     <TableCell className="min-w-[90px]">
-                      <ScoreBar value={e.componentScores.completion} color="[&>div]:bg-blue-500" />
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "assigned-tasks" })}>
+                        <ScoreBar value={e.componentScores.completion} color="[&>div]:bg-blue-500" />
+                      </Link>
                     </TableCell>
                     <TableCell className="min-w-[90px]">
-                      <ScoreBar value={e.componentScores.overdue} color="[&>div]:bg-green-500" />
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}>
+                        <ScoreBar value={e.componentScores.overdue} color="[&>div]:bg-green-500" />
+                      </Link>
                     </TableCell>
                     <TableCell className="min-w-[90px]">
-                      <ScoreBar value={e.componentScores.utilization} color="[&>div]:bg-violet-500" />
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "capacity" })}>
+                        <ScoreBar value={e.componentScores.utilization} color="[&>div]:bg-violet-500" />
+                      </Link>
                     </TableCell>
                     <TableCell className="min-w-[90px]">
-                      <ScoreBar value={e.componentScores.efficiency} color="[&>div]:bg-amber-500" />
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })}>
+                        <ScoreBar value={e.componentScores.efficiency} color="[&>div]:bg-amber-500" />
+                      </Link>
                     </TableCell>
                     <TableCell className="min-w-[90px]">
-                      <ScoreBar value={e.componentScores.compliance} color="[&>div]:bg-cyan-500" />
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })}>
+                        <ScoreBar value={e.componentScores.compliance} color="[&>div]:bg-cyan-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
                       {e.riskFlags.length > 0 ? (

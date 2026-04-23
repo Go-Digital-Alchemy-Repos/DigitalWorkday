@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 
 interface DateRange {
   label: string;
@@ -182,6 +184,8 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   return (
     <div className="space-y-4">
       {totals && (
@@ -217,22 +221,44 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
                         <AvatarImage src={getStorageUrl(m.avatarUrl) ?? ""} alt={userName(m)} />
                         <AvatarFallback className="text-xs">{userInitials(m)}</AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium truncate max-w-[140px]">{userName(m)}</span>
+                      <Link
+                        href={getEmployeeReportPath(window.location.pathname, m.userId)}
+                        className="text-sm font-medium truncate max-w-[140px] text-primary hover:underline"
+                      >
+                        {userName(m)}
+                      </Link>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm font-medium">{m.activeTasksNow}</TableCell>
-                  <TableCell>
-                    <span className={cn("text-sm font-medium", m.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                      {m.overdueCount}
-                    </span>
+                  <TableCell className="text-sm font-medium">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "workload" })} className="text-primary hover:underline">
+                      {m.activeTasksNow}
+                    </Link>
                   </TableCell>
-                  <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{m.completedCount}</TableCell>
-                  <TableCell className="text-sm">{m.totalHours}h</TableCell>
+                  <TableCell>
+                    <Link
+                      href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "risk" })}
+                      className={cn("text-sm font-medium hover:underline", m.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
+                    >
+                      {m.overdueCount}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "assigned-tasks" })} className="hover:underline">
+                      {m.completedCount}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "time" })} className="text-primary hover:underline">
+                      {m.totalHours}h
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     {m.efficiencyRatio !== null ? (
-                      <Badge variant={m.efficiencyRatio > 1.2 ? "destructive" : m.efficiencyRatio > 0.8 ? "default" : "secondary"}>
-                        {(m.efficiencyRatio * 100).toFixed(0)}%
-                      </Badge>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "time" })}>
+                        <Badge variant={m.efficiencyRatio > 1.2 ? "destructive" : m.efficiencyRatio > 0.8 ? "default" : "secondary"} className="cursor-pointer hover:opacity-90">
+                          {(m.efficiencyRatio * 100).toFixed(0)}%
+                        </Badge>
+                      </Link>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -240,7 +266,9 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[80px]">
                       <Progress value={m.overdueRate} className="h-1.5 flex-1" />
-                      <span className="text-xs text-muted-foreground w-8 text-right">{m.overdueRate}%</span>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "risk" })} className="text-xs text-primary w-8 text-right hover:underline">
+                        {m.overdueRate}%
+                      </Link>
                     </div>
                   </TableCell>
                 </TableRow>
