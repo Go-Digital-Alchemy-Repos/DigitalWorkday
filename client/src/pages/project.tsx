@@ -84,6 +84,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { fetchTaskDetail } from "@/lib/task-detail";
 import { useProjectSocket, useWorkspaceRealtime } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth";
 import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
@@ -232,20 +233,34 @@ export default function ProjectPage() {
     enabled: !!urlTaskId && !deepLinkHandled && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
   });
 
+  const openTaskDrawer = useCallback(async (taskId: string) => {
+    const fullTask = await queryClient.fetchQuery({
+      queryKey: ["/api/tasks", taskId],
+      queryFn: () => fetchTaskDetail(taskId),
+      staleTime: 5000,
+    });
+
+    setSelectedTask(fullTask);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("task", taskId);
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, []);
+
   useEffect(() => {
     if (deepLinkHandled || sectionsLoading || selectedTask || !urlTaskId) return;
     const allTasks = orderedSections.flatMap((s) => s.tasks || []);
     const found = allTasks.find(t => t.id === urlTaskId) || tasks?.find(t => t.id === urlTaskId);
     if (found) {
-      setSelectedTask(found);
+      void openTaskDrawer(urlTaskId);
       setDeepLinkHandled(true);
       return;
     }
     if (linkedTask) {
-      setSelectedTask(linkedTask);
+      void openTaskDrawer(urlTaskId);
       setDeepLinkHandled(true);
     }
-  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, orderedSections, deepLinkHandled]);
+  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, orderedSections, deepLinkHandled, openTaskDrawer]);
 
   const createTaskMutation = useCreateTask();
 
@@ -620,8 +635,7 @@ export default function ProjectPage() {
 
   const refetchSelectedTask = async () => {
     if (selectedTask) {
-      const response = await fetch(`/api/tasks/${selectedTask.id}`);
-      const updatedTask = await response.json();
+      const updatedTask = await fetchTaskDetail(selectedTask.id);
       setSelectedTask(updatedTask);
     }
   };
@@ -697,10 +711,7 @@ export default function ProjectPage() {
   };
 
   const handleTaskSelect = (task: TaskWithRelations) => {
-    setSelectedTask(task);
-    const url = new URL(window.location.href);
-    url.searchParams.set('task', task.id);
-    window.history.replaceState({}, '', url.pathname + url.search);
+    void openTaskDrawer(task.id);
   };
 
   const handleCloseTaskDrawer = () => {

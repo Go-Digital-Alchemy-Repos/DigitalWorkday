@@ -98,6 +98,7 @@ import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-drawer";
 import { isToday, isPast, isFuture, subDays, isWithinInterval, addDays, startOfDay } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { fetchTaskDetail } from "@/lib/task-detail";
 import { useAuth } from "@/lib/auth";
 import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
@@ -536,24 +537,28 @@ export default function MyTasks() {
     enabled: !!urlTaskId && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
   });
 
+  const openTaskDrawer = useCallback(async (taskId: string) => {
+    const fullTask = await queryClient.fetchQuery({
+      queryKey: ["/api/tasks", taskId],
+      queryFn: () => fetchTaskDetail(taskId),
+      staleTime: 5000,
+    });
+
+    setSelectedTask(fullTask);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("taskId", taskId);
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, []);
+
   // Deep linking: open task from URL param (from tasks list or dedicated fetch)
   useEffect(() => {
     if (isLoading || selectedTask || !urlTaskId) return;
-    
-    // First check if the task is in our loaded list
-    if (tasks) {
-      const task = tasks.find(t => t.id === urlTaskId);
-      if (task) {
-        setSelectedTask(task);
-        return;
-      }
+
+    if (tasks?.some((task) => task.id === urlTaskId) || linkedTask) {
+      void openTaskDrawer(urlTaskId);
     }
-    
-    // If not in list, use the separately fetched task
-    if (linkedTask) {
-      setSelectedTask(linkedTask);
-    }
-  }, [tasks, linkedTask, isLoading, selectedTask, urlTaskId]);
+  }, [tasks, linkedTask, isLoading, selectedTask, urlTaskId, openTaskDrawer]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -687,8 +692,7 @@ export default function MyTasks() {
 
   const refetchSelectedTask = async () => {
     if (selectedTask) {
-      const response = await fetch(`/api/tasks/${selectedTask.id}`);
-      const updatedTask = await response.json();
+      const updatedTask = await fetchTaskDetail(selectedTask.id);
       setSelectedTask(updatedTask);
     }
   };
@@ -705,11 +709,7 @@ export default function MyTasks() {
   };
 
   const handleTaskSelect = (task: TaskWithRelations) => {
-    setSelectedTask(task);
-    // Add taskId to URL for deep linking
-    const url = new URL(window.location.href);
-    url.searchParams.set('taskId', task.id);
-    window.history.replaceState({}, '', url.pathname + url.search);
+    void openTaskDrawer(task.id);
   };
 
   const handleStatusChange = useCallback((taskId: string, completed: boolean) => {

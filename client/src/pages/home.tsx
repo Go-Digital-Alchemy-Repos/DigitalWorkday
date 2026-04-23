@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getPreviewText } from "@/components/richtext";
@@ -30,6 +30,7 @@ import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { fetchTaskDetail } from "@/lib/task-detail";
 import { useAuth } from "@/lib/auth";
 import { useWorkspaceRealtime } from "@/lib/realtime";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
@@ -832,18 +833,27 @@ export default function Home() {
 
   const refetchSelectedTask = async () => {
     if (selectedTask) {
-      const response = await fetch(`/api/tasks/${selectedTask.id}`);
-      const updatedTask = await response.json();
+      const updatedTask = await fetchTaskDetail(selectedTask.id);
       setSelectedTask(updatedTask);
     }
   };
+
+  const openTaskDrawer = useCallback(async (taskId: string) => {
+    const fullTask = await queryClient.fetchQuery({
+      queryKey: ["/api/tasks", taskId],
+      queryFn: () => fetchTaskDetail(taskId),
+      staleTime: 5000,
+    });
+
+    setSelectedTask(fullTask);
+  }, []);
 
   const handleCreateProject = (data: any) => {
     createProjectMutation.mutate(data);
   };
 
   const handleTaskClick = (task: TaskWithRelations) => {
-    setSelectedTask(task);
+    void openTaskDrawer(task.id);
   };
 
   const taskStats = useMemo(() => {
