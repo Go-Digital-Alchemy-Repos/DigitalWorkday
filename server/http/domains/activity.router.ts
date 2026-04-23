@@ -24,6 +24,15 @@ type HistoryItem = {
   metadata?: Record<string, unknown>;
 };
 
+function toSafeDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function getUserLabel(user?: { name: string | null; firstName: string | null; lastName: string | null; email: string | null }) {
   if (!user) return "Unknown";
   if (user.name?.trim()) return user.name.trim();
@@ -116,13 +125,15 @@ async function buildTaskHistory(taskId: string): Promise<HistoryItem[]> {
   });
 
   const existingTypes = new Set(items.map((item) => item.type));
+  const taskCreatedAt = toSafeDate(task.createdAt);
+  const taskUpdatedAt = toSafeDate(task.updatedAt);
 
   if (!existingTypes.has("task_created")) {
     const creator = task.createdBy ? userMap.get(task.createdBy) : undefined;
     items.push({
       id: `task-created-${task.id}`,
       type: "task_created",
-      timestamp: task.createdAt,
+      timestamp: taskCreatedAt || task.createdAt,
       actorId: task.createdBy || "system",
       actorName: getUserLabel(creator),
       actorEmail: creator?.email || "",
@@ -132,12 +143,17 @@ async function buildTaskHistory(taskId: string): Promise<HistoryItem[]> {
     });
   }
 
-  if (!existingTypes.has("task_updated") && task.updatedAt.getTime() - task.createdAt.getTime() > 60_000) {
+  if (
+    !existingTypes.has("task_updated") &&
+    taskCreatedAt &&
+    taskUpdatedAt &&
+    taskUpdatedAt.getTime() - taskCreatedAt.getTime() > 60_000
+  ) {
     const creator = task.createdBy ? userMap.get(task.createdBy) : undefined;
     items.push({
-      id: `task-updated-${task.id}-${task.updatedAt.getTime()}`,
+      id: `task-updated-${task.id}-${taskUpdatedAt.getTime()}`,
       type: "task_updated",
-      timestamp: task.updatedAt,
+      timestamp: taskUpdatedAt,
       actorId: task.createdBy || "system",
       actorName: getUserLabel(creator),
       actorEmail: creator?.email || "",
@@ -160,7 +176,7 @@ async function buildTaskHistory(taskId: string): Promise<HistoryItem[]> {
         actorAvatarUrl: author?.avatarUrl || null,
         entityId: task.id,
         entityTitle: task.title,
-        metadata: { commentBody: comment.body.substring(0, 140) },
+        metadata: { commentBody: typeof comment.body === "string" ? comment.body.substring(0, 140) : "" },
       });
     });
   }
@@ -269,7 +285,7 @@ async function buildSubtaskHistory(subtaskId: string): Promise<HistoryItem[]> {
         actorAvatarUrl: author?.avatarUrl || null,
         entityId: subtask.id,
         entityTitle: subtask.title,
-        metadata: { commentBody: comment.body.substring(0, 140) },
+        metadata: { commentBody: typeof comment.body === "string" ? comment.body.substring(0, 140) : "" },
       });
     });
   }

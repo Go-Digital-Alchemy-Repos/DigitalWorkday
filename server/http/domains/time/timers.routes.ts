@@ -24,6 +24,34 @@ import { normalizeTimeTrackingAssignment } from "../../../lib/timeTrackingAssign
 
 const router = Router();
 
+async function resolveTimerWorkspaceId(req: Parameters<typeof getCurrentUserId>[0]): Promise<string> {
+  try {
+    return await getCurrentWorkspaceIdOrThrow(req);
+  } catch (error) {
+    let projectId = req.body?.projectId || null;
+
+    if (!projectId && req.body?.taskId) {
+      const task = await storage.getTask(req.body.taskId);
+      projectId = task?.projectId || null;
+    }
+
+    if (!projectId && req.body?.subtaskId) {
+      const subtask = await storage.getSubtask(req.body.subtaskId);
+      const task = subtask?.taskId ? await storage.getTask(subtask.taskId) : undefined;
+      projectId = task?.projectId || null;
+    }
+
+    if (projectId) {
+      const project = await storage.getProject(projectId);
+      if (project?.workspaceId) {
+        return project.workspaceId;
+      }
+    }
+
+    throw error;
+  }
+}
+
 router.get("/timer/current", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
@@ -56,7 +84,7 @@ router.post("/timer/start", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
-    const workspaceId = await getCurrentWorkspaceIdOrThrow(req);
+    const workspaceId = await resolveTimerWorkspaceId(req);
     
     let existingTimer;
     if (tenantId && isStrictMode()) {
