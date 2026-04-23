@@ -40,6 +40,7 @@ import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
 import { AttachmentUploader } from "@/components/attachment-uploader";
+import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { StatusBadge } from "@/components/status-badge";
 import { TagBadge } from "@/components/tag-badge";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -119,7 +120,15 @@ interface TaskDetailDrawerProps {
   isError?: boolean;
 }
 
-export function TaskDetailDrawer({
+export function TaskDetailDrawer(props: TaskDetailDrawerProps) {
+  if (!props.open && !props.task && !props.isLoading && !props.isError) {
+    return null;
+  }
+
+  return <TaskDetailDrawerContent {...props} />;
+}
+
+function TaskDetailDrawerContent({
   task: taskProp,
   open,
   onOpenChange,
@@ -168,6 +177,7 @@ export function TaskDetailDrawer({
   const [selectedSubtask, setSelectedSubtask] = useState<any | null>(null);
   const [subtaskDrawerOpen, setSubtaskDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const closingRef = useRef(false);
 
   useEffect(() => {
@@ -1135,8 +1145,21 @@ export function TaskDetailDrawer({
                   Created by {creatorLabel}
                 </Badge>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setShowHistory((value) => !value)}
+                data-testid="button-task-history"
+              >
+                <Activity className="h-3.5 w-3.5 mr-1" />
+                {showHistory ? "Hide History" : "Task History"}
+              </Button>
             </div>
 
+            {showHistory && (
+              <TaskHistoryTab entityType="task" entityId={task.id} />
+            )}
             <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
               <FormFieldWrapper
                 label="Assignees"

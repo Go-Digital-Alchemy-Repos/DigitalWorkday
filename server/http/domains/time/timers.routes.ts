@@ -12,6 +12,7 @@ import {
   logTenancyWarning,
   getCurrentUserId,
   getCurrentWorkspaceId,
+  getCurrentWorkspaceIdOrThrow,
   emitTimerStarted,
   emitTimerPaused,
   emitTimerResumed,
@@ -55,6 +56,7 @@ router.post("/timer/start", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
+    const workspaceId = await getCurrentWorkspaceIdOrThrow(req);
     
     let existingTimer;
     if (tenantId && isStrictMode()) {
@@ -88,7 +90,7 @@ router.post("/timer/start", async (req, res) => {
 
     const now = new Date();
     const data = insertActiveTimerSchema.parse({
-      workspaceId: getCurrentWorkspaceId(req),
+      workspaceId,
       userId: userId,
       clientId: req.body.clientId || null,
       projectId: req.body.projectId || null,
@@ -129,7 +131,7 @@ router.post("/timer/start", async (req, res) => {
         lastStartedAt: timer.lastStartedAt || now,
         createdAt: timer.createdAt,
       },
-      getCurrentWorkspaceId(req),
+      workspaceId,
     );
 
     res.status(201).json(enrichedTimer);

@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
+import { ReviewQueueCard, type DashboardReviewQueueItem, type DashboardReviewQueueResponse } from "@/components/review-queue-card";
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
@@ -178,6 +179,81 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     await updateProjectMutation.mutateAsync({ projectId: editingProject.id, data });
   };
 
+  const approveReviewMutation = useMutation({
+    mutationFn: async (item: DashboardReviewQueueItem) => {
+      const endpoint =
+        item.type === "task" ? `/api/tasks/${item.id}` : `/api/subtasks/${item.id}`;
+      await apiRequest("PATCH", endpoint, { status: "in_progress" });
+    },
+    onMutate: async (item) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks/review-queue"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/dashboard/review-queue"] });
+
+      const previousReviewQueue =
+        queryClient.getQueryData<DashboardReviewQueueItem[]>(["/api/tasks/review-queue"]) || [];
+      const previousDashboardQueue =
+        queryClient.getQueryData<DashboardReviewQueueResponse>(["/api/dashboard/review-queue"]);
+      const approverName =
+        [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "A project manager";
+      const now = new Date().toISOString();
+
+      queryClient.setQueryData<DashboardReviewQueueItem[]>(
+        ["/api/tasks/review-queue"],
+        (current = []) =>
+          current.filter(
+            (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
+          ),
+      );
+
+      queryClient.setQueryData<DashboardReviewQueueResponse>(
+        ["/api/dashboard/review-queue"],
+        (current) => {
+          if (!current) return current;
+          return {
+            items: current.items.filter(
+              (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
+            ),
+            clearedItems: [
+              {
+                ...item,
+                status: "in_progress",
+                approvedAt: now,
+                updatedAt: now,
+                approverName,
+              },
+              ...current.clearedItems.filter(
+                (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
+              ),
+            ].slice(0, 20),
+          };
+        },
+      );
+
+      return { previousReviewQueue, previousDashboardQueue };
+    },
+    onSuccess: (_, item) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects/analytics/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      if (item.projectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", item.projectId, "tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", item.projectId, "sections"] });
+      }
+      toast({
+        title: item.type === "task" ? "Task returned to assignee" : "Subtask returned to assignee",
+      });
+    },
+    onError: (_, __, context) => {
+      if (context?.previousReviewQueue) {
+        queryClient.setQueryData(["/api/tasks/review-queue"], context.previousReviewQueue);
+      }
+      if (context?.previousDashboardQueue) {
+        queryClient.setQueryData(["/api/dashboard/review-queue"], context.previousDashboardQueue);
+      }
+      toast({ title: "Failed to approve review", variant: "destructive" });
+    },
+  });
   const getProjectStats = (projectId: string) => {
     if (!analytics?.perProject) return null;
     return analytics.perProject.find(p => p.projectId === projectId);
@@ -236,6 +312,11 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
     navigate(`/projects/${project.id}`);
   };
 
+  const handleOpenReviewItem = (item: DashboardReviewQueueItem) => {
+    if (!item.projectId) return;
+    const taskId = item.type === "task" ? item.id : item.taskId;
+    navigate(`/projects/${item.projectId}?task=${taskId}`);
+  };
   const getClientName = (clientId: string | null) => {
     if (!clientId || !clients) return "-";
     const client = clients.find(c => c.id === clientId);
@@ -340,6 +421,14 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         </div>
       )}
 
+      {isPmDashboard && (
+        <ReviewQueueCard
+          enabled={canAccessPmDashboard}
+          onOpenItem={handleOpenReviewItem}
+          onApproveItem={(item) => approveReviewMutation.mutate(item)}
+          approvingItemKey={approveReviewMutation.variables ? `${approveReviewMutation.variables.type}-${approveReviewMutation.variables.id}` : null}
+        />
+      )}
       <div className="mb-6" data-testid="projects-pipeline-bar">
         <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted mb-3">
           {projects && projects.length > 0 && (

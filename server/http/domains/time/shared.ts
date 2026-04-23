@@ -15,6 +15,7 @@ export {
 export {
   getCurrentUserId,
   getCurrentWorkspaceId,
+  getCurrentWorkspaceIdOrThrow,
 } from "../../../routes/helpers";
 export {
   emitTimerStarted,

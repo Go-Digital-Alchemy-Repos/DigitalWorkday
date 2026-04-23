@@ -21,6 +21,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { PrioritySelector, type PriorityLevel } from "@/components/forms/priority-selector";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { CommentThread } from "@/components/comment-thread";
+import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -155,6 +156,7 @@ export function SubtaskDetailDrawer({
   const [localDueDate, setLocalDueDate] = useState<Date | null>(
     subtask?.dueDate ? new Date(subtask.dueDate) : null
   );
+  const [showHistory, setShowHistory] = useState(false);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntryListItem | null>(null);
   const [timeEntryTitle, setTimeEntryTitle] = useState("");
@@ -665,9 +667,22 @@ export function SubtaskDetailDrawer({
                         Created by {creatorLabel}
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => setShowHistory((value) => !value)}
+                      data-testid="button-subtask-history"
+                    >
+                      <Activity className="h-3.5 w-3.5 mr-1" />
+                      {showHistory ? "Hide History" : "Subtask History"}
+                    </Button>
                   </div>
                 ) : null}
 
+                {showHistory && isActualSubtask && (
+                  <TaskHistoryTab entityType="subtask" entityId={subtask.id} />
+                )}
                 <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
