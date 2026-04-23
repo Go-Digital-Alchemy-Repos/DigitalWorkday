@@ -200,6 +200,8 @@ function TaskDetailDrawerContent({
   const [timeEntryTitle, setTimeEntryTitle] = useState("");
   const [timeEntryDescription, setTimeEntryDescription] = useState("");
   const [timeEntryScope, setTimeEntryScope] = useState<"in_scope" | "out_of_scope">("in_scope");
+  const [showStopTimerDialog, setShowStopTimerDialog] = useState(false);
+  const [stopTimerDescription, setStopTimerDescription] = useState("");
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -559,7 +561,8 @@ function TaskDetailDrawerContent({
         clientId: projectContext?.clientId || null,
         projectId: task?.projectId || null,
         taskId: task?.id || null,
-        description: task?.title || "",
+        title: task?.title || undefined,
+        description: null,
       });
     },
     onSuccess: () => {
@@ -601,10 +604,20 @@ function TaskDetailDrawerContent({
   });
 
   const stopTimerMutation = useMutation({
-    mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
+    mutationFn: async (description: string) =>
+      apiRequest("POST", "/api/timer/stop", {
+        scope: "in_scope",
+        title: task?.title || null,
+        description,
+        clientId: projectContext?.clientId || null,
+        projectId: task?.projectId || null,
+        taskId: task?.id || null,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
+      setShowStopTimerDialog(false);
+      setStopTimerDescription("");
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
   });
@@ -1506,7 +1519,7 @@ function TaskDetailDrawerContent({
                         <Pause className="h-3.5 w-3.5 mr-1.5" />
                         Pause
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                      <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-8">
                         <Square className="h-3.5 w-3.5 mr-1.5" />
                         Stop
                       </Button>
@@ -1518,7 +1531,7 @@ function TaskDetailDrawerContent({
                         <Play className="h-3.5 w-3.5 mr-1.5" />
                         Resume
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                      <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-8">
                         <Square className="h-3.5 w-3.5 mr-1.5" />
                         Stop
                       </Button>
@@ -1794,6 +1807,43 @@ function TaskDetailDrawerContent({
             <Button onClick={handleTimeEntrySave} disabled={updateTimeEntryMutation.isPending}>
               {updateTimeEntryMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showStopTimerDialog} onOpenChange={setShowStopTimerDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Save Time Entry</DialogTitle>
+            <DialogDescription>Add a description before saving time for this task.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input value={task?.title || ""} readOnly data-testid="input-task-stop-title" />
+            </div>
+            <div className="space-y-2">
+              <Label>Description <span className="text-destructive">*</span></Label>
+              <Textarea
+                value={stopTimerDescription}
+                onChange={(e) => setStopTimerDescription(e.target.value)}
+                placeholder="What work did you complete?"
+                className={cn("min-h-[140px] resize-none", !stopTimerDescription.trim() && "border-destructive/50")}
+                data-testid="textarea-task-stop-description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStopTimerDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => stopTimerMutation.mutate(stopTimerDescription.trim())}
+              disabled={stopTimerMutation.isPending || !stopTimerDescription.trim()}
+              data-testid="button-task-stop-save"
+            >
+              {stopTimerMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Entry
             </Button>
           </DialogFooter>
         </DialogContent>
