@@ -118,6 +118,8 @@ async function checkRequiredTables(): Promise<void> {
 async function checkRequiredColumns(): Promise<void> {
   const columnChecks = [
     { table: "active_timers", column: "title" },
+    { table: "active_timers", column: "tenant_id" },
+    { table: "active_timers", column: "subtask_id" },
     { table: "tenants", column: "chat_retention_days" },
     { table: "error_logs", column: "request_id" }
   ];
@@ -215,12 +217,16 @@ async function checkCoreServicesDirectly(): Promise<void> {
     logCheck("Error Logging Service", false, `Cannot query error_logs: ${error.message}`, true);
   }
   
-  // Check 2: Active timers table with title column (tests timer/current endpoint dependency)
+  // Check 2: Active timers table with current timer-route columns
   try {
-    await db.execute(sql`SELECT id, title, status FROM active_timers LIMIT 1`);
-    logCheck("Timer Service (title column)", true, "active_timers.title accessible");
+    await db.execute(sql`
+      SELECT id, tenant_id, subtask_id, title, status
+      FROM active_timers
+      LIMIT 1
+    `);
+    logCheck("Timer Service", true, "active_timers tenant/title/subtask columns accessible");
   } catch (error: any) {
-    logCheck("Timer Service (title column)", false, `Cannot query active_timers.title: ${error.message}`, true);
+    logCheck("Timer Service", false, `Cannot query active_timers timer columns: ${error.message}`, true);
   }
   
   // Check 3: Chat retention days in tenants (tests chat settings)
