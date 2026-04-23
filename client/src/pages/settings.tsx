@@ -2,7 +2,7 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings as SettingsIcon, Puzzle, FileText, Mail, MessageSquare, Zap, FileArchive, Bell, Newspaper } from "lucide-react";
-import { PageHeader, PageShell } from "@/components/layout";
+import { PageHeader, PageShell, SurfacePanel } from "@/components/layout";
 import { cn } from "@/lib/utils";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
@@ -56,7 +56,7 @@ export default function SettingsPage() {
       />
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <div className="rounded-3xl border border-border/70 bg-card/90 p-3 shadow-[var(--shadow-soft)] md:p-4">
+        <SurfacePanel radius="3xl" padding="sm">
           <TabsList className="flex h-auto w-full flex-wrap gap-1 rounded-2xl border border-border/70 bg-background/80 p-1 shadow-[inset_0_1px_0_hsl(var(--background)/0.7)]">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
@@ -73,7 +73,7 @@ export default function SettingsPage() {
               </TabsTrigger>
             ))}
           </TabsList>
-        </div>
+        </SurfacePanel>
 
         <TabsContent value="integrations" className="mt-0">
           <IntegrationsTab />
@@ -99,9 +99,9 @@ export default function SettingsPage() {
           {user?.tenantId ? (
             <DefaultTenantDocumentsManager tenantId={user.tenantId} mode="tenantAdmin" />
           ) : (
-            <div className="rounded-3xl border border-border/70 bg-card/90 p-6 text-sm text-muted-foreground shadow-[var(--shadow-soft)]">
+            <SurfacePanel radius="3xl" padding="lg" className="text-sm text-muted-foreground">
               No tenant context available.
-            </div>
+            </SurfacePanel>
           )}
         </TabsContent>
 

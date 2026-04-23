@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
 import { TimeTrackingContent } from "./time-tracking";
+import { SurfacePanel } from "@/components/layout";
 
 interface TimeStats {
   total: number;
@@ -242,7 +243,7 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
   onStartTimer: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)]" data-testid="quick-actions">
+    <SurfacePanel className="p-4" data-testid="quick-actions">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
       <div className="flex flex-wrap gap-2">
         <Button 
@@ -276,7 +277,7 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
           </Button>
         </Link>
       </div>
-    </div>
+    </SurfacePanel>
   );
 }
 
@@ -345,7 +346,7 @@ export default function MyTimePage() {
     <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
       <div className="shrink-0 border-b border-border/70 bg-background/95 backdrop-blur-xl">
         <div className="px-4 py-4 sm:px-5 lg:px-8 md:py-5">
-          <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5">
+          <SurfacePanel padding="none" className="flex items-center justify-between px-4 py-4 md:px-5">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" data-testid="page-title">
             <Clock className="h-6 w-6" />
@@ -357,7 +358,7 @@ export default function MyTimePage() {
           <Play className="h-4 w-4 mr-2" />
           Start Timer
         </Button>
-          </div>
+          </SurfacePanel>
         </div>
       </div>
       

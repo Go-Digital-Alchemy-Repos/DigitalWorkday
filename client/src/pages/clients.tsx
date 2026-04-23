@@ -51,6 +51,8 @@ import {
   DataToolbar,
   EmptyState,
   ErrorState,
+  SurfaceButtonGroup,
+  SurfacePanel,
 } from "@/components/layout";
 import type { FilterConfig, SortOption } from "@/components/layout";
 import {
@@ -252,8 +254,9 @@ function PipelineBar({
   }
 
   return (
-    <div
-      className="mb-4 rounded-3xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)] md:p-5"
+    <SurfacePanel
+      radius="3xl"
+      className="mb-4"
       data-testid="pipeline-bar"
     >
       <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted/80">
@@ -320,7 +323,7 @@ function PipelineBar({
           <span className="ml-1.5 text-xs text-muted-foreground">{needsAttentionCount}</span>
         </Button>
       </div>
-    </div>
+    </SurfacePanel>
   );
 }
 
@@ -2013,7 +2016,7 @@ export default function ClientsPage() {
         onSortChange={setSortValue}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-2xl border border-border/70 bg-card/90 p-1 shadow-[var(--shadow-soft)]">
+            <SurfaceButtonGroup>
               <Button
                 variant={density === "comfortable" ? "secondary" : "ghost"}
                 size="icon"
@@ -2036,9 +2039,9 @@ export default function ClientsPage() {
               >
                 <AlignCenter className="h-4 w-4" />
               </Button>
-            </div>
+            </SurfaceButtonGroup>
 
-            <div className="flex items-center rounded-2xl border border-border/70 bg-card/90 p-1 shadow-[var(--shadow-soft)]">
+            <SurfaceButtonGroup>
               <Button
                 variant={viewMode === "grid" ? "secondary" : "ghost"}
                 size="icon"
@@ -2059,7 +2062,7 @@ export default function ClientsPage() {
               >
                 <Rows3 className="h-4 w-4" />
               </Button>
-            </div>
+            </SurfaceButtonGroup>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

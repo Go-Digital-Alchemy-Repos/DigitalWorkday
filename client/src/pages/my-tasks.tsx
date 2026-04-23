@@ -103,7 +103,7 @@ import { useAuth } from "@/lib/auth";
 import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
-import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
+import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar, SurfacePanel } from "@/components/layout";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
 import type { TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
@@ -954,7 +954,7 @@ export default function MyTasks() {
       )}
       <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
         <div className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:px-8 md:py-5">
-          <div className="rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5">
+          <SurfacePanel className="px-4 py-4 md:px-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
               <CheckSquare className="h-5 w-5 md:h-6 md:w-6 text-primary" />
@@ -981,17 +981,17 @@ export default function MyTasks() {
               >
                 <Plus className="h-4 w-4" />
               </Button>
-              <Button
-                onClick={() => setShowNewTaskDrawer(true)}
-                data-testid="button-add-personal-task-desktop"
-                className="hidden rounded-xl shadow-[var(--shadow-soft)] md:flex"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Personal Task
-              </Button>
-            </div>
-          </div>
-          </div>
+	              <Button
+	                onClick={() => setShowNewTaskDrawer(true)}
+	                data-testid="button-add-personal-task-desktop"
+	                className="hidden rounded-xl shadow-[var(--shadow-soft)] md:flex"
+	              >
+	                <Plus className="h-4 w-4 mr-1" />
+	                Personal Task
+	              </Button>
+	            </div>
+	          </div>
+	          </SurfacePanel>
           <DataToolbar
             searchValue={searchQuery}
             onSearchChange={setSearchQuery}
@@ -1020,7 +1020,7 @@ export default function MyTasks() {
           <div className="block md:hidden">
             {!isLoading && (
               <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth -mx-1 px-1">
-                  <div className="flex min-w-fit shrink-0 snap-center items-center gap-2 rounded-2xl border border-border/70 bg-card/90 px-3 py-2 shadow-[var(--shadow-soft)]">
+                  <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                   </div>
@@ -1028,9 +1028,9 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">Completion</p>
                     <p className="text-sm font-semibold">{dashboardStats.completionRate}%</p>
                   </div>
-                </div>
+                </SurfacePanel>
                 {dashboardStats.overdueCount > 0 && (
-                  <div className="flex min-w-fit shrink-0 snap-center items-center gap-2 rounded-2xl border border-red-200/70 bg-red-50/40 px-3 py-2 shadow-[var(--shadow-soft)] dark:border-red-800 dark:bg-red-950/10">
+                  <SurfacePanel tone="warning" padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                     <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center">
                       <AlertCircle className="h-4 w-4 text-red-500" />
                     </div>
@@ -1038,9 +1038,9 @@ export default function MyTasks() {
                       <p className="text-xs text-muted-foreground">Overdue</p>
                       <p className="text-sm font-semibold text-red-600 dark:text-red-400">{dashboardStats.overdueCount}</p>
                     </div>
-                  </div>
+                  </SurfacePanel>
                 )}
-                <div className="flex min-w-fit shrink-0 snap-center items-center gap-2 rounded-2xl border border-border/70 bg-card/90 px-3 py-2 shadow-[var(--shadow-soft)]">
+                <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
                     <Target className="h-4 w-4 text-amber-500" />
                   </div>
@@ -1048,8 +1048,8 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">Today</p>
                     <p className="text-sm font-semibold">{dashboardStats.todayCount}</p>
                   </div>
-                </div>
-                <div className="flex min-w-fit shrink-0 snap-center items-center gap-2 rounded-2xl border border-border/70 bg-card/90 px-3 py-2 shadow-[var(--shadow-soft)]">
+                </SurfacePanel>
+                <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center">
                     <Flame className="h-4 w-4 text-orange-500" />
                   </div>
@@ -1057,8 +1057,8 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">High Priority</p>
                     <p className="text-sm font-semibold">{dashboardStats.highPriorityCount}</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                </SurfacePanel>
+                <SurfacePanel padding="none" radius="xl" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                   </div>
@@ -1066,7 +1066,7 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">This Week</p>
                     <p className="text-sm font-semibold">{dashboardStats.completedThisWeek}</p>
                   </div>
-                </div>
+                </SurfacePanel>
               </div>
             )}
           </div>
@@ -1085,7 +1085,7 @@ export default function MyTasks() {
             </div>
           ) : totalTasks > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-4 rounded-2xl border border-border/70 bg-card/75 p-4 shadow-[var(--shadow-soft)]">
+              <SurfacePanel tone="subtle" className="space-y-4">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scheduled Tasks</h2>
                 {leftColumn.map((section) => (
                   <TaskSectionList
@@ -1099,9 +1099,9 @@ export default function MyTasks() {
                     onDragEnd={handleDragEnd}
                   />
                 ))}
-              </div>
+              </SurfacePanel>
 
-              <div className="space-y-4 rounded-2xl border border-border/70 bg-card/75 p-4 shadow-[var(--shadow-soft)]">
+              <SurfacePanel tone="subtle" className="space-y-4">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Personal & Unscheduled</h2>
                 {rightColumn.map((section) => (
                   <TaskSectionList
@@ -1117,7 +1117,7 @@ export default function MyTasks() {
                     supportsAddTask={section.id === "personal"}
                   />
                 ))}
-              </div>
+              </SurfacePanel>
             </div>
           ) : (
             <EmptyState

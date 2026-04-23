@@ -165,6 +165,17 @@ function getTaskIdFromPayload(payload: unknown): string | null {
   return null;
 }
 
+function getTaskIdFromHref(href: string | null): string | null {
+  if (!href) return null;
+
+  try {
+    const url = new URL(href, window.location.origin);
+    return url.searchParams.get("taskId");
+  } catch {
+    return null;
+  }
+}
+
 type FilterTab = "all" | "unread" | "mentions" | "tasks" | "messages" | "tickets";
 
 const FILTER_TAB_CONFIG: { value: FilterTab; label: string; typeFilter?: string }[] = [
@@ -638,18 +649,26 @@ export function NotificationCenter() {
       markAsReadMutation.mutate(notification.id);
     }
 
+    const taskId =
+      getTaskIdFromPayload(notification.payloadJson) ||
+      (notification.entityType === "task" ? notification.entityId : null) ||
+      getTaskIdFromHref(notification.href);
+
+    const isTaskLinkedNotification =
+      isTaskNotification(notification.type) ||
+      notification.entityType === "task" ||
+      !!getTaskIdFromHref(notification.href);
+
+    if (isTaskLinkedNotification && taskId && openTask) {
+      setIsOpen(false);
+      openTask(taskId);
+      return;
+    }
+
     if (notification.href) {
       setIsOpen(false);
       setLocation(notification.href);
       return;
-    }
-
-    if (isTaskNotification(notification.type)) {
-      const taskId = getTaskIdFromPayload(notification.payloadJson);
-      if (taskId && openTask) {
-        setIsOpen(false);
-        openTask(taskId);
-      }
     }
   }, [markAsReadMutation, openTask, setIsOpen, setLocation]);
 
