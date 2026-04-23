@@ -68,6 +68,7 @@ export function GlobalActiveTimer() {
   const [stopClientId, setStopClientId] = useState<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const hasShownRecoveryToast = useRef(false);
+  const initialTimerCheckComplete = useRef(false);
 
   const isEligible = isAuthenticated && user?.role !== "super_user";
 
@@ -150,12 +151,18 @@ export function GlobalActiveTimer() {
     return () => clearInterval(intervalId);
   }, [isEligible, timer?.status, refetchTimer]);
 
-  // Show recovery toast on app boot if timer exists
+  // Show recovery toast only on the initial app boot fetch if a timer already exists.
   useEffect(() => {
-    if (timer && !hasShownRecoveryToast.current && !timerLoading) {
+    if (timerLoading || initialTimerCheckComplete.current) {
+      return;
+    }
+
+    initialTimerCheckComplete.current = true;
+
+    if (timer && !hasShownRecoveryToast.current) {
       const sessionKey = `timer-recovered-${timer.id}`;
       const alreadyShown = sessionStorage.getItem(sessionKey);
-      
+
       if (!alreadyShown) {
         toast({
           title: "Timer recovered",

@@ -1622,37 +1622,41 @@ function TaskDetailDrawerContent({
         </div>
       </SheetContent>
 
-      <SubtaskDetailDrawer
-        subtask={selectedSubtask}
-        parentTaskTitle={task.title}
-        projectId={task.projectId || undefined}
-        workspaceId={workspaceId}
-        open={subtaskDrawerOpen}
-        onOpenChange={(open) => {
-          setSubtaskDrawerOpen(open);
-          if (!open) setSelectedSubtask(null);
-        }}
-        onUpdate={(subtaskId, data) => {
-          apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
-            invalidateTaskQueries();
-            if (selectedSubtask && selectedSubtask.id === subtaskId) {
-              setSelectedSubtask({ ...selectedSubtask, ...data });
-            }
-          }).catch(console.error);
-        }}
-        onBack={() => {
-          setSubtaskDrawerOpen(false);
-          setSelectedSubtask(null);
-        }}
-        availableUsers={mentionUsers}
-      />
+      {subtaskDrawerOpen && selectedSubtask && (
+        <SubtaskDetailDrawer
+          subtask={selectedSubtask}
+          parentTaskTitle={task.title}
+          projectId={task.projectId || undefined}
+          workspaceId={workspaceId}
+          open={subtaskDrawerOpen}
+          onOpenChange={(open) => {
+            setSubtaskDrawerOpen(open);
+            if (!open) setSelectedSubtask(null);
+          }}
+          onUpdate={(subtaskId, data) => {
+            apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
+              invalidateTaskQueries();
+              if (selectedSubtask && selectedSubtask.id === subtaskId) {
+                setSelectedSubtask({ ...selectedSubtask, ...data });
+              }
+            }).catch(console.error);
+          }}
+          onBack={() => {
+            setSubtaskDrawerOpen(false);
+            setSelectedSubtask(null);
+          }}
+          availableUsers={mentionUsers}
+        />
+      )}
 
-      <StartTimerDrawer
-        open={timerDrawerOpen}
-        onOpenChange={setTimerDrawerOpen}
-        initialTaskId={task.id}
-        initialProjectId={task.projectId || null}
-      />
+      {timerDrawerOpen && (
+        <StartTimerDrawer
+          open={timerDrawerOpen}
+          onOpenChange={setTimerDrawerOpen}
+          initialTaskId={task.id}
+          initialProjectId={task.projectId || null}
+        />
+      )}
 
       <Dialog open={showTimeTrackingPrompt} onOpenChange={setShowTimeTrackingPrompt}>
         <DialogContent className="sm:max-w-md">
@@ -1848,7 +1852,7 @@ function TaskDetailDrawerContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {task && (
+      {task && shareModalOpen && (
         <ShareModal
           type="task"
           itemId={task.id}
