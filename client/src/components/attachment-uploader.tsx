@@ -352,14 +352,6 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
     },
   });
 
-  const removeUploadingFile = useCallback((id: string) => {
-    setUploadingFiles(prev => prev.filter(f => f.id !== id));
-  }, []);
-
-  if (!config?.configured) {
-    return null;
-  }
-
   const completedAttachments = attachments.filter(a => a.uploadStatus === "complete");
 
   useEffect(() => {
@@ -395,6 +387,14 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
       cancelled = true;
     };
   }, [attachmentPath, completedAttachments, previewUrls]);
+
+  const removeUploadingFile = useCallback((id: string) => {
+    setUploadingFiles(prev => prev.filter(f => f.id !== id));
+  }, []);
+
+  if (!config?.configured) {
+    return null;
+  }
 
   return (
     <div className="space-y-3">
