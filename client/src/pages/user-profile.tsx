@@ -443,9 +443,8 @@ function PackPreview({ pack, isActive, onClick }: { pack: ThemePack; isActive: b
 
 function AppearanceCard() {
   const { packId, setPackId, availablePacks } = useTheme();
-
-  const lightPacks = availablePacks.filter((p) => p.kind === "light");
-  const darkPacks = availablePacks.filter((p) => p.kind === "dark");
+  const lightPack = availablePacks.find((pack) => pack.id === "light");
+  const darkPack = availablePacks.find((pack) => pack.id === "dark");
 
   return (
     <Card>
@@ -455,42 +454,25 @@ function AppearanceCard() {
           Appearance
         </CardTitle>
         <CardDescription>
-          Choose a color theme for the application
+          Choose between the default light and dark themes
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-3">
-          <Label className="flex items-center gap-1.5">
-            <Sun className="h-3.5 w-3.5" />
-            Light Themes
-          </Label>
-          <div className="flex gap-2 flex-wrap">
-            {lightPacks.map((pack) => (
-              <PackPreview
-                key={pack.id}
-                pack={pack}
-                isActive={packId === pack.id}
-                onClick={() => setPackId(pack.id)}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <Label className="flex items-center gap-1.5">
-            <Moon className="h-3.5 w-3.5" />
-            Dark Themes
-          </Label>
-          <div className="flex gap-2 flex-wrap">
-            {darkPacks.map((pack) => (
-              <PackPreview
-                key={pack.id}
-                pack={pack}
-                isActive={packId === pack.id}
-                onClick={() => setPackId(pack.id)}
-              />
-            ))}
-          </div>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2 flex-wrap">
+          {lightPack && (
+            <PackPreview
+              pack={lightPack}
+              isActive={packId === lightPack.id}
+              onClick={() => setPackId(lightPack.id)}
+            />
+          )}
+          {darkPack && (
+            <PackPreview
+              pack={darkPack}
+              isActive={packId === darkPack.id}
+              onClick={() => setPackId(darkPack.id)}
+            />
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground">
