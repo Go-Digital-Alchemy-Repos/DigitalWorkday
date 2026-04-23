@@ -881,10 +881,10 @@ export default function ProjectPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="border-b border-border bg-background sticky top-0 z-10">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
         {/* Breadcrumbs: Client > Project (or just Project if no client) */}
-        <div className="px-3 sm:px-4 lg:px-6 pt-3 hidden md:block">
+        <div className="hidden px-4 pt-4 sm:px-5 lg:px-8 md:block">
           <Breadcrumb>
             <BreadcrumbList>
               {client ? (
@@ -920,17 +920,18 @@ export default function ProjectPage() {
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4">
+        <div className="px-4 py-4 sm:px-5 lg:px-8 md:py-5">
+          <div className="flex items-start justify-between gap-4 rounded-2xl border border-border/70 bg-card/85 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <div
-              className="h-7 w-7 md:h-8 md:w-8 rounded-md flex items-center justify-center text-white text-sm font-medium shrink-0"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-base font-semibold text-white shadow-[var(--shadow-soft)] md:h-11 md:w-11"
               style={{ backgroundColor: project.color || "#3B82F6" }}
             >
               {project.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base md:text-xl font-semibold truncate">{project.name}</h1>
+                <h1 className="truncate text-lg font-semibold tracking-tight md:text-[1.7rem]">{project.name}</h1>
                 {project.visibility === "private" && (
                   <Badge variant="outline" className="gap-1 text-xs shrink-0" data-testid="badge-private-project">
                     <Lock className="h-3 w-3" />
@@ -945,22 +946,35 @@ export default function ProjectPage() {
                 )}
               </div>
               {project.description && (
-                <div className="hidden md:block mt-1">
+                <div className="mt-2 hidden md:block">
                   <RichTextRenderer
                     value={project.description}
-                    className="text-muted-foreground text-[13px] leading-relaxed [&>*]:m-0"
+                    className="text-[13px] leading-relaxed text-muted-foreground [&>*]:m-0"
                     data-testid="text-project-description"
                   />
                 </div>
               )}
             </div>
           </div>
+          <div className="hidden shrink-0 items-center gap-2 lg:flex">
+            {project.status === "archived" ? (
+              <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
+                Read-only
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                Active workspace
+              </Badge>
+            )}
+          </div>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 pb-3">
+        <div className="px-4 pb-4 sm:px-5 lg:px-8">
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-card/90 px-3 py-3 shadow-[var(--shadow-soft)] md:px-4">
           <div className="flex items-center gap-2 md:gap-4">
             <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
-              <TabsList className="h-8 md:h-9">
+              <TabsList className="h-10 rounded-2xl border border-border/70 bg-muted/60 p-1">
                 <TabsTrigger value="board" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-board">
                   <LayoutGrid className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Board</span>
@@ -980,7 +994,7 @@ export default function ProjectPage() {
               <Button 
                 variant="default" 
                 size="icon"
-                className="md:hidden"
+                className="rounded-xl md:hidden"
                 onClick={() => setTimerDrawerOpen(true)}
                 aria-label="Start timer"
                 data-testid="button-start-timer-project-mobile"
@@ -990,7 +1004,7 @@ export default function ProjectPage() {
               <Button 
                 variant="default" 
                 size="sm"
-                className="hidden md:flex"
+                className="hidden rounded-xl shadow-[var(--shadow-soft)] md:flex"
                 onClick={() => setTimerDrawerOpen(true)}
                 data-testid="button-start-timer-project"
               >
@@ -1001,7 +1015,7 @@ export default function ProjectPage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="md:hidden"
+                  className="rounded-xl md:hidden"
                   onClick={() => setAiPlannerOpen(true)}
                   aria-label="AI planner"
                   data-testid="button-ai-planner-mobile"
@@ -1013,7 +1027,7 @@ export default function ProjectPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="hidden md:flex"
+                  className="hidden rounded-xl md:flex"
                   onClick={() => setAiPlannerOpen(true)}
                   data-testid="button-ai-planner"
                 >
@@ -1027,7 +1041,7 @@ export default function ProjectPage() {
                 onClick={() => setMembersOpen(true)}
                 aria-label="Project members"
                 data-testid="button-project-members"
-                className="hidden md:flex"
+                className="hidden rounded-xl md:flex"
               >
                 <Users className="h-4 w-4" />
               </Button>
@@ -1037,7 +1051,7 @@ export default function ProjectPage() {
                 onClick={() => setActivityOpen(true)}
                 aria-label="Project activity"
                 data-testid="button-project-activity"
-                className="hidden md:flex"
+                className="hidden rounded-xl md:flex"
               >
                 <Activity className="h-4 w-4" />
               </Button>
@@ -1047,7 +1061,7 @@ export default function ProjectPage() {
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Project settings"
                 data-testid="button-project-settings"
-                className="hidden md:flex"
+                className="hidden rounded-xl md:flex"
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -1056,7 +1070,7 @@ export default function ProjectPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="md:hidden"
+                    className="rounded-xl md:hidden"
                     aria-label="More options"
                     data-testid="button-project-more-mobile"
                   >
@@ -1102,7 +1116,7 @@ export default function ProjectPage() {
                     aria-label="Apply template"
                     title="Apply Template"
                     data-testid="button-apply-template"
-                    className="hidden md:flex"
+                    className="hidden rounded-xl md:flex"
                   >
                     <FileStack className="h-4 w-4" />
                   </Button>
@@ -1161,7 +1175,7 @@ export default function ProjectPage() {
                 aria-label="Copy project link"
                 title="Copy Project Link"
                 data-testid="button-copy-project-link"
-                className="hidden md:flex"
+                className="hidden rounded-xl md:flex"
                 onClick={() => {
                   const url = `${window.location.origin}/projects/${projectId}`;
                   navigator.clipboard.writeText(url).then(() => {
@@ -1176,6 +1190,7 @@ export default function ProjectPage() {
           {project.status === "archived" ? (
             <Button
               size="sm"
+              className="rounded-xl"
               onClick={() => restoreProjectMutation.mutate()}
               disabled={restoreProjectMutation.isPending}
               data-testid="button-restore-project"
@@ -1188,14 +1203,15 @@ export default function ProjectPage() {
               <span className="hidden md:inline">Restore Project</span>
             </Button>
           ) : (
-            <Button size="sm" onClick={() => handleAddTask()} data-testid="button-add-task">
+            <Button size="sm" className="rounded-xl shadow-[var(--shadow-soft)]" onClick={() => handleAddTask()} data-testid="button-add-task">
               <Plus className="h-4 w-4 md:mr-1" />
               <span className="hidden md:inline">Add Task</span>
             </Button>
           )}
         </div>
+        </div>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_45%)]">
         {view === "board" && (
           <DndContext
             sensors={sensors}
@@ -1203,7 +1219,7 @@ export default function ProjectPage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-3 md:gap-4 px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-x-auto snap-x snap-mandatory sm:snap-none scroll-smooth">
+            <div className="flex h-full gap-4 overflow-x-auto px-4 py-5 sm:px-5 lg:px-8 md:py-6 snap-x snap-mandatory sm:snap-none scroll-smooth">
               {orderedSections.map((section) => (
                 <div key={section.id} className="snap-center sm:snap-align-none">
                   <SectionColumn
@@ -1217,10 +1233,10 @@ export default function ProjectPage() {
                   />
                 </div>
               ))}
-              <div className="min-w-[85vw] max-w-[85vw] sm:min-w-[280px] sm:max-w-[280px] shrink-0 snap-center sm:snap-align-none">
+              <div className="min-w-[85vw] max-w-[85vw] shrink-0 snap-center sm:max-w-[280px] sm:min-w-[280px] sm:snap-align-none">
                 <Button
                   variant="outline"
-                  className="w-full h-12 border-dashed justify-center"
+                  className="h-14 w-full justify-center rounded-2xl border-dashed bg-card/80"
                   onClick={handleAddSection}
                   data-testid="button-add-section"
                 >
@@ -1248,7 +1264,7 @@ export default function ProjectPage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-y-auto">
+            <div className="h-full overflow-y-auto px-4 py-5 sm:px-5 lg:px-8 md:py-6">
               {orderedSections.map((section) => (
                 <ListSectionDroppable
                   key={section.id}
@@ -1260,7 +1276,7 @@ export default function ProjectPage() {
               ))}
               <Button
                 variant="outline"
-                className="w-full h-12 border-dashed justify-center"
+                className="h-14 w-full justify-center rounded-2xl border-dashed bg-card/80"
                 onClick={handleAddSection}
                 data-testid="button-add-section-list"
               >
