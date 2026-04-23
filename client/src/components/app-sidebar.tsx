@@ -102,17 +102,19 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <img src={iconUrl || logoUrl || appLogo} alt={appName} className="h-8 w-8 flex-shrink-0 rounded-sm object-contain" />
+    <Sidebar className="bg-sidebar/95 backdrop-blur-xl">
+      <SidebarHeader className="border-b border-sidebar-border/80 px-4 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-sidebar-border/80 bg-sidebar-accent/60 shadow-[var(--shadow-soft)]">
+            <img src={iconUrl || logoUrl || appLogo} alt={appName} className="h-8 w-8 rounded-lg object-contain" />
+          </div>
           <span className="font-['Inter',sans-serif] text-base font-semibold text-sidebar-foreground leading-tight truncate" data-testid="text-app-name">
             {appName}
           </span>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="gap-3 px-2 py-3">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -121,6 +123,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location === item.url}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
                       <item.icon className={cn("h-4 w-4", item.color)} />
@@ -137,7 +140,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <div className="flex items-center justify-between pr-2">
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="cursor-pointer rounded-xl px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
                   <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                   <span className="ml-1">Projects</span>
                 </SidebarGroupLabel>
@@ -145,7 +148,7 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-7 w-7 rounded-xl"
                 onClick={() => setCreateProjectOpen(true)}
                 data-testid="button-add-project"
               >
@@ -169,6 +172,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === `/projects/${project.id}`}
+                        className="rounded-xl px-2.5"
                       >
                         <Link
                           href={`/projects/${project.id}`}
@@ -201,7 +205,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <div className="flex items-center justify-between pr-2">
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="cursor-pointer rounded-xl px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
                   <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                   <span className="ml-1">Teams</span>
                 </SidebarGroupLabel>
@@ -209,7 +213,7 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-7 w-7 rounded-xl"
                 data-testid="button-add-team"
               >
                 <Plus className="h-3 w-3" />
@@ -223,6 +227,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === `/teams/${team.id}`}
+                        className="rounded-xl px-2.5"
                       >
                         <Link
                           href={`/teams/${team.id}`}
@@ -249,7 +254,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <div className="flex items-center justify-between pr-2">
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="cursor-pointer rounded-xl px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
                   <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                   <span className="ml-1">Workspaces</span>
                 </SidebarGroupLabel>
@@ -257,7 +262,7 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-7 w-7 rounded-xl"
                 data-testid="button-add-workspace"
               >
                 <Plus className="h-3 w-3" />
@@ -267,7 +272,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton className="justify-between">
+                    <SidebarMenuButton className="justify-between rounded-xl px-2.5">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         <span className="truncate">{workspace?.name || "Default Workspace"}</span>
@@ -289,6 +294,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.startsWith("/account")}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href="/account" data-testid="link-account-settings">
                       <UserCog className="h-4 w-4" />
@@ -300,6 +306,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.startsWith("/settings")}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href="/settings" data-testid="link-global-settings">
                       <Cog className="h-4 w-4" />
@@ -313,6 +320,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/clients" || location.startsWith("/clients/")}
+                        className="rounded-xl px-2.5"
                       >
                         <Link href="/clients" data-testid="link-crm-clients">
                           <ContactRound className="h-4 w-4" />
@@ -324,6 +332,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/crm/pipeline"}
+                        className="rounded-xl px-2.5"
                       >
                         <Link href="/crm/pipeline" data-testid="link-crm-pipeline">
                           <Columns3 className="h-4 w-4" />
@@ -335,6 +344,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/crm/followups"}
+                        className="rounded-xl px-2.5"
                       >
                         <Link href="/crm/followups" data-testid="link-crm-followups">
                           <CalendarClock className="h-4 w-4" />
@@ -351,7 +361,7 @@ export function AppSidebar() {
         
         {isSuperUser && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wide text-muted-foreground px-2">
+            <SidebarGroupLabel className="rounded-xl px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/60">
               Super Admin
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -360,6 +370,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location === "/super-admin"}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href="/super-admin" data-testid="link-super-admin">
                       <Building2 className="h-4 w-4" />
@@ -371,6 +382,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.startsWith("/super-admin/reports")}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href="/super-admin/reports" data-testid="link-super-admin-reports">
                       <BarChart3 className="h-4 w-4" />
@@ -382,6 +394,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.startsWith("/super-admin/settings")}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href="/super-admin/settings" data-testid="link-super-admin-settings">
                       <Wrench className="h-4 w-4" />
@@ -393,6 +406,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.startsWith("/super-admin/status")}
+                    className="rounded-xl px-2.5"
                   >
                     <Link href="/super-admin/status" data-testid="link-super-admin-status">
                       <Activity className="h-4 w-4" />
@@ -406,8 +420,8 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3">
+      <SidebarFooter className="border-t border-sidebar-border/80 p-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/40 px-3 py-2.5 shadow-[var(--shadow-soft)]">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary/10 text-primary text-xs">
               U
@@ -419,7 +433,7 @@ export function AppSidebar() {
               pm@demo.com
             </span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="button-settings">
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" data-testid="button-settings">
             <Settings className="h-4 w-4" />
           </Button>
         </div>

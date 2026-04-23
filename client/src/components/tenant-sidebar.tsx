@@ -383,21 +383,23 @@ export function TenantSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
+    <Sidebar className="bg-sidebar/95 backdrop-blur-xl">
+      <SidebarHeader className="border-b border-sidebar-border/80 px-4 py-4">
         <div className="flex items-center gap-3 min-w-0">
-          <img src={iconUrl || logoUrl || appLogo} alt={appName} className="h-8 w-8 flex-shrink-0 rounded-sm object-contain" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sidebar-border/70 bg-background/75 shadow-[var(--shadow-soft)]">
+            <img src={iconUrl || logoUrl || appLogo} alt={appName} className="h-7 w-7 flex-shrink-0 rounded-sm object-contain" />
+          </div>
           <span className="font-['Inter',sans-serif] text-base font-semibold text-sidebar-foreground leading-tight truncate" data-testid="text-app-name">
             {appName}
           </span>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="gap-3 px-2 py-3">
         <SidebarGroup>
           <Collapsible defaultOpen className="group/collapsible">
             <CollapsibleTrigger asChild>
-              <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <SidebarGroupLabel className="cursor-pointer rounded-xl px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground hover:bg-sidebar-accent/70">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                 <span className="ml-1">Navigation</span>
               </SidebarGroupLabel>
@@ -410,6 +412,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === item.url || (item.url !== "/" && location.startsWith(item.url))}
+                        className="rounded-xl px-2.5"
                       >
                         <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
                           <item.icon className={cn("h-4 w-4", item.color)} />
@@ -439,7 +442,7 @@ export function TenantSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <div className="flex items-center justify-between pr-2">
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="cursor-pointer rounded-xl px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground hover:bg-sidebar-accent/70">
                   <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                   <span className="ml-1">Projects</span>
                 </SidebarGroupLabel>
@@ -448,6 +451,7 @@ export function TenantSidebar() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setCreateProjectOpen(true)}
+                className="rounded-xl"
                 data-testid="button-add-project"
               >
                 <Plus className="h-4 w-4" />
@@ -465,6 +469,7 @@ export function TenantSidebar() {
                           <SidebarMenuButton
                             asChild
                             isActive={location === `/projects/${project.id}`}
+                            className="rounded-xl px-2.5"
                           >
                             <Link
                               href={`/projects/${project.id}`}
@@ -547,7 +552,7 @@ export function TenantSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <div className="flex items-center justify-between pr-2">
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="cursor-pointer rounded-xl px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground hover:bg-sidebar-accent/70">
                   <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                   <span className="ml-1">Teams</span>
                 </SidebarGroupLabel>
@@ -556,6 +561,7 @@ export function TenantSidebar() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setCreateTeamOpen(true)}
+                className="rounded-xl"
                 data-testid="button-add-team"
               >
                 <Plus className="h-4 w-4" />
@@ -569,6 +575,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === `/teams/${team.id}`}
+                        className="rounded-xl px-2.5"
                       >
                         <Link
                           href={`/teams/${team.id}`}
@@ -595,7 +602,7 @@ export function TenantSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <div className="flex items-center justify-between pr-2">
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <SidebarGroupLabel className="cursor-pointer rounded-xl px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground hover:bg-sidebar-accent/70">
                   <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                   <span className="ml-1">Workspaces</span>
                 </SidebarGroupLabel>
@@ -604,6 +611,7 @@ export function TenantSidebar() {
                 variant="ghost"
                 size="icon"
                 onClick={handleAddWorkspace}
+                className="rounded-xl"
                 data-testid="button-add-workspace"
               >
                 <Plus className="h-4 w-4" />
@@ -630,7 +638,7 @@ export function TenantSidebar() {
         <SidebarGroup>
           <Collapsible defaultOpen className="group/collapsible">
             <CollapsibleTrigger asChild>
-              <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <SidebarGroupLabel className="cursor-pointer rounded-xl px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground hover:bg-sidebar-accent/70">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
                 <span className="ml-1">System Management</span>
               </SidebarGroupLabel>
@@ -704,8 +712,8 @@ export function TenantSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3">
+      <SidebarFooter className="border-t border-sidebar-border/80 p-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-sidebar-border/70 bg-background/60 px-3 py-3 shadow-[var(--shadow-soft)]">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary/10 text-primary text-xs">
               {user?.firstName?.charAt(0) || "U"}

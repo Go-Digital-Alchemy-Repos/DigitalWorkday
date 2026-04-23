@@ -26,9 +26,10 @@ export function PageShell({
   return (
     <div 
       className={cn(
-        "w-full h-full overflow-auto",
-        !noPadding && "px-3 sm:px-4 lg:px-6 py-4 md:py-6",
+        "w-full h-full overflow-auto mx-auto",
+        !noPadding && "px-4 sm:px-5 lg:px-8 py-5 md:py-7",
         maxWidthClasses[maxWidth],
+        "pb-24 md:pb-7",
         className
       )}
       data-testid="page-shell"
