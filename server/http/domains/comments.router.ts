@@ -1,9 +1,10 @@
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
-import { getCurrentUserId } from "../../routes/helpers";
+import { getCurrentUserId, getCurrentWorkspaceId } from "../../routes/helpers";
 import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "../../utils/mentionUtils";
 import { insertCommentSchema, updateCommentSchema } from "@shared/schema";
+import { logEntityActivity } from "../../lib/taskActivity";
 import {
   notifyCommentAdded,
   notifyCommentMention,
@@ -57,6 +58,22 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
     const task = await storage.getTask(req.params.taskId);
     const commenter = await storage.getUser(currentUserId);
     const tenantId = task?.tenantId || null;
+    const project = task?.projectId ? await storage.getProject(task.projectId) : null;
+    if (task) {
+      await logEntityActivity({
+        storage,
+        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: currentUserId,
+        entityType: "task",
+        entityId: task.id,
+        entityTitle: task.title,
+        action: "comment_added",
+        metadata: {
+          projectId: task.projectId || null,
+          commentId: comment.id,
+        },
+      }).catch(() => {});
+    }
 
     console.log(`[mentions] requestId=${requestId} commentId=${comment.id} authorId=${currentUserId} tenantId=${tenantId} mentionCount=${mentionedUserIds.length}`);
 

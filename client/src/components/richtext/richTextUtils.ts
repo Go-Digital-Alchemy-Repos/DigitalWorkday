@@ -14,8 +14,33 @@ export function isValidTipTapDoc(value: unknown): value is JSONContent {
   return obj.type === "doc" && Array.isArray(obj.content);
 }
 
-export function parseRichTextValue(value: string | null | undefined): ParsedRichText {
-  if (!value || value.trim() === "") {
+export function normalizeRichTextValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (isValidTipTapDoc(value)) {
+    return JSON.stringify(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export function parseRichTextValue(value: unknown): ParsedRichText {
+  if (value == null) {
+    return { type: "text", text: "" };
+  }
+
+  if (isValidTipTapDoc(value)) {
+    return { type: "tiptap", doc: value };
+  }
+
+  if (typeof value !== "string") {
+    return { type: "text", text: normalizeRichTextValue(value) };
+  }
+
+  if (value.trim() === "") {
     return { type: "text", text: "" };
   }
 
@@ -38,7 +63,7 @@ export function parseRichTextValue(value: string | null | undefined): ParsedRich
   return { type: "text", text: value };
 }
 
-export function toPlainText(value: string | null | undefined): string {
+export function toPlainText(value: unknown): string {
   const parsed = parseRichTextValue(value);
 
   if (parsed.type === "text") {
@@ -55,6 +80,12 @@ export function toPlainText(value: string | null | undefined): string {
 function extractTextFromDoc(node: JSONContent): string {
   if (node.type === "text" && node.text) {
     return node.text;
+  }
+
+  if (node.type === "mention" && node.attrs) {
+    const attrs = node.attrs as Record<string, unknown>;
+    const label = attrs.label || attrs.id || "";
+    return label ? `@${String(label)}` : "";
   }
 
   if (node.content && Array.isArray(node.content)) {
@@ -85,7 +116,7 @@ export function wrapPlainTextAsDoc(text: string): JSONContent {
   };
 }
 
-export function getDocForEditor(value: string | null | undefined): JSONContent {
+export function getDocForEditor(value: unknown): JSONContent {
   const parsed = parseRichTextValue(value);
 
   if (parsed.type === "tiptap" && parsed.doc) {
@@ -104,7 +135,7 @@ export function truncateText(text: string, maxLength: number = 100): string {
   return text.slice(0, maxLength).trim() + "...";
 }
 
-export function getPreviewText(value: string | null | undefined, maxLength: number = 100): string {
+export function getPreviewText(value: unknown, maxLength: number = 100): string {
   const plainText = toPlainText(value);
   return truncateText(plainText.replace(/\n/g, " "), maxLength);
 }

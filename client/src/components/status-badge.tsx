@@ -2,6 +2,7 @@ import { Circle, Clock, AlertCircle, CheckCircle2, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { STATUS_CLASSES, type TaskStatus } from "@/design/tokens";
+import { normalizeTaskStatus } from "@shared/taskStatus";
 
 type Status = "todo" | "in_progress" | "in_review" | "blocked" | "done" | "completed";
 
@@ -30,7 +31,8 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, showLabel = true, size = "default" }: StatusBadgeProps) {
-  const config = statusConfig[status] ?? statusConfig.todo;
+  const normalized = (normalizeTaskStatus(status) || "todo") as Exclude<Status, "completed">;
+  const config = statusConfig[normalized] ?? statusConfig.todo;
   const Icon = config.icon;
 
   return (
@@ -38,10 +40,10 @@ export function StatusBadge({ status, showLabel = true, size = "default" }: Stat
       variant="secondary"
       className={cn(
         "gap-1 border-0 font-normal",
-        STATUS_CLASSES[statusToTaskStatus[status]],
+        STATUS_CLASSES[statusToTaskStatus[normalized]],
         size === "sm" && "px-1.5 py-0 text-[10px]"
       )}
-      data-testid={`badge-status-${status}`}
+      data-testid={`badge-status-${normalized}`}
     >
       <Icon className={cn("h-3 w-3", size === "sm" && "h-2.5 w-2.5")} />
       {showLabel && <span>{config.label}</span>}

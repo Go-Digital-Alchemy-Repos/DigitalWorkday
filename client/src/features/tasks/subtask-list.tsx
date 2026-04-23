@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Subtask, User, WorkspaceMember } from "@shared/schema";
+import { toPlainText } from "@/components/richtext";
 
 interface SubtaskListProps {
   subtasks: Subtask[];
@@ -30,21 +31,6 @@ interface SubtaskListProps {
   onUpdate?: (subtaskId: string, title: string) => void;
   onSubtaskUpdate?: () => void;
   onSubtaskClick?: (subtask: Subtask) => void;
-}
-
-function extractPlainText(doc: unknown): string {
-  if (!doc || typeof doc !== "object") return "";
-  const root = doc as { content?: Array<{ content?: Array<{ text?: string }> }> };
-  if (!root.content) return "";
-  const parts: string[] = [];
-  for (const block of root.content) {
-    if (block.content) {
-      for (const inline of block.content) {
-        if (inline.text) parts.push(inline.text);
-      }
-    }
-  }
-  return parts.join(" ").trim();
 }
 
 function getInitials(name: string): string {
@@ -376,7 +362,7 @@ function SubtaskListInner({
                       {subtask.title}
                     </span>
                     {subtask.description && (() => {
-                      const plain = extractPlainText(subtask.description);
+                      const plain = toPlainText(subtask.description);
                       return plain ? (
                         <span className="text-xs text-muted-foreground truncate block" data-testid={`subtask-description-preview-${subtask.id}`}>
                           {plain}

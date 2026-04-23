@@ -12,6 +12,7 @@ import {
   UserMinus,
   CheckCircle2,
   FileText,
+  Eye,
   Filter,
   Calendar,
 } from "lucide-react";
@@ -93,6 +94,9 @@ const ACTION_CONFIG: Record<string, { icon: typeof Activity; color: string; labe
   completed: { icon: CheckCircle2, color: "text-green-600 dark:text-green-400", label: "completed" },
   status_changed: { icon: Activity, color: "text-blue-600 dark:text-blue-400", label: "changed status of" },
   file_uploaded: { icon: FileText, color: "text-cyan-600 dark:text-cyan-400", label: "uploaded a file to" },
+  file_deleted: { icon: Trash2, color: "text-red-600 dark:text-red-400", label: "removed a file from" },
+  review_requested: { icon: Eye, color: "text-purple-600 dark:text-purple-400", label: "sent for review" },
+  review_approved: { icon: CheckCircle2, color: "text-green-600 dark:text-green-400", label: "approved review for" },
   member_added: { icon: UserPlus, color: "text-indigo-600 dark:text-indigo-400", label: "added a member to" },
   member_removed: { icon: UserMinus, color: "text-slate-600 dark:text-slate-400", label: "removed a member from" },
 };
@@ -130,6 +134,11 @@ function formatDescription(item: ActivityItem): string {
     if (from && to) {
       return `changed status from "${from}" to "${to}" on ${title}`;
     }
+  }
+
+  if (item.type === "updated" && item.metadata?.field) {
+    const field = String(item.metadata.field);
+    return `updated ${field} on ${title}`;
   }
 
   return `${config.label} ${title}`;

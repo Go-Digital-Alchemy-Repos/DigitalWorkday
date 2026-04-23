@@ -1686,6 +1686,7 @@ export const UploadStatus = {
 export const taskAttachments = pgTable("task_attachments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   taskId: varchar("task_id").references(() => tasks.id).notNull(),
+  subtaskId: varchar("subtask_id").references(() => subtasks.id),
   projectId: varchar("project_id").references(() => projects.id).notNull(),
   uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id).notNull(),
   originalFileName: text("original_file_name").notNull(),
@@ -1697,6 +1698,7 @@ export const taskAttachments = pgTable("task_attachments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("task_attachments_task").on(table.taskId),
+  index("task_attachments_subtask").on(table.subtaskId),
   index("task_attachments_project").on(table.projectId),
   index("task_attachments_uploader_idx").on(table.uploadedByUserId),
 ]);
@@ -2290,6 +2292,10 @@ export const taskAttachmentsRelations = relations(taskAttachments, ({ one }) => 
     fields: [taskAttachments.taskId],
     references: [tasks.id],
   }),
+  subtask: one(subtasks, {
+    fields: [taskAttachments.subtaskId],
+    references: [subtasks.id],
+  }),
   project: one(projects, {
     fields: [taskAttachments.projectId],
     references: [projects.id],
@@ -2392,6 +2398,7 @@ export const subtasksRelations = relations(subtasks, ({ one, many }) => ({
   }),
   assignees: many(subtaskAssignees),
   tags: many(subtaskTags),
+  attachments: many(taskAttachments),
 }));
 
 export const subtaskAssigneesRelations = relations(subtaskAssignees, ({ one }) => ({

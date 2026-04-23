@@ -8,8 +8,9 @@ import {
 } from "@/components/ui/select";
 import { Circle, Play, AlertTriangle, CheckCircle2, Eye } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { CANONICAL_TASK_STATUSES, normalizeTaskStatus, type CanonicalTaskStatus } from "@shared/taskStatus";
 
-export type TaskStatus = "todo" | "in_progress" | "in_review" | "blocked" | "done" | "completed";
+export type TaskStatus = CanonicalTaskStatus | "completed";
 
 interface StatusSelectorProps {
   value: TaskStatus;
@@ -20,7 +21,7 @@ interface StatusSelectorProps {
   "data-testid"?: string;
 }
 
-const statusConfig: Record<TaskStatus, { label: string; icon: LucideIcon; color: string }> = {
+const statusConfig: Record<CanonicalTaskStatus, { label: string; icon: LucideIcon; color: string }> = {
   todo: { 
     label: "To Do", 
     icon: Circle,
@@ -46,15 +47,11 @@ const statusConfig: Record<TaskStatus, { label: string; icon: LucideIcon; color:
     icon: CheckCircle2,
     color: "text-green-500"
   },
-  completed: {
-    label: "Completed",
-    icon: CheckCircle2,
-    color: "text-green-600"
-  },
 };
 
 function StatusIndicator({ status }: { status: TaskStatus }) {
-  const config = statusConfig[status] ?? statusConfig.todo;
+  const normalized = normalizeTaskStatus(status) || "todo";
+  const config = statusConfig[normalized] ?? statusConfig.todo;
   const Icon = config.icon;
   return (
     <span className="flex items-center gap-2">
@@ -72,8 +69,9 @@ export function StatusSelector({
   className,
   "data-testid": testId,
 }: StatusSelectorProps) {
+  const normalizedValue = normalizeTaskStatus(value) || "todo";
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as TaskStatus)} disabled={disabled}>
+    <Select value={normalizedValue} onValueChange={(v) => onChange(v as TaskStatus)} disabled={disabled}>
       <SelectTrigger
         className={cn(
           "w-full",
@@ -83,11 +81,11 @@ export function StatusSelector({
         data-testid={testId}
       >
         <SelectValue>
-          <StatusIndicator status={value} />
+          <StatusIndicator status={normalizedValue} />
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {(Object.keys(statusConfig) as TaskStatus[]).map((status) => (
+        {CANONICAL_TASK_STATUSES.map((status) => (
           <SelectItem key={status} value={status}>
             <StatusIndicator status={status} />
           </SelectItem>

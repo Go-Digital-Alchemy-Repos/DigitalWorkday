@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { 
   Paperclip, 
@@ -7,6 +7,9 @@ import {
   FileText, 
   Image, 
   File, 
+  FileSpreadsheet,
+  FileArchive,
+  FileCode2,
   Download, 
   Trash2,
   Loader2,
@@ -20,6 +23,7 @@ import type { TaskAttachmentWithUser } from "@shared/schema";
 interface AttachmentUploaderProps {
   taskId: string;
   projectId: string | null;
+  subtaskId?: string | null;
   onUploadSuccess?: () => void;
   onDeleteSuccess?: () => void;
 }
@@ -41,10 +45,23 @@ function getFileIcon(mimeType: string) {
   if (mimeType.startsWith("image/")) {
     return Image;
   }
-  if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("text")) {
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel") || mimeType.includes("sheet") || mimeType.includes("csv")) {
+    return FileSpreadsheet;
+  }
+  if (mimeType.includes("zip") || mimeType.includes("archive") || mimeType.includes("compressed")) {
+    return FileArchive;
+  }
+  if (mimeType.includes("json") || mimeType.includes("javascript") || mimeType.includes("typescript") || mimeType.includes("html") || mimeType.includes("xml")) {
+    return FileCode2;
+  }
+  if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("word") || mimeType.includes("text")) {
     return FileText;
   }
   return File;
+}
+
+function isImageAttachment(mimeType: string) {
+  return mimeType.startsWith("image/");
 }
 
 function formatFileSize(bytes: number): string {
@@ -136,19 +153,31 @@ async function compressImageIfNeeded(file: File): Promise<{ file: File; mimeType
   });
 }
 
-export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDeleteSuccess }: AttachmentUploaderProps) {
+export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUploadSuccess, onDeleteSuccess }: AttachmentUploaderProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+
+  const attachmentPath = subtaskId
+    ? `/api/projects/${projectId}/subtasks/${subtaskId}/attachments`
+    : `/api/projects/${projectId}/tasks/${taskId}/attachments`;
 
   const { data: config } = useQuery<AttachmentConfig>({
     queryKey: ["/api/attachments/config"],
   });
 
   const { data: attachments = [], isLoading } = useQuery<TaskAttachmentWithUser[]>({
-    queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"],
+    queryKey: ["/api/projects", projectId, subtaskId ? "subtasks" : "tasks", subtaskId || taskId, "attachments"],
     enabled: !!taskId && !!projectId,
+    queryFn: async () => {
+      const response = await fetch(attachmentPath, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to load attachments");
+      }
+      return response.json();
+    },
   });
 
   const uploadFile = useCallback(async (file: File) => {
@@ -167,7 +196,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
       formData.append("file", processedFile);
 
       const uploadResponse = await fetch(
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/upload`,
+        `${attachmentPath}/upload`,
         {
           method: "POST",
           body: formData,
@@ -189,7 +218,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
       setUploadingFiles(prev => prev.filter(f => f.id !== uploadId));
       
       queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
+        queryKey: ["/api/projects", projectId, subtaskId ? "subtasks" : "tasks", subtaskId || taskId, "attachments"]
       });
 
       onUploadSuccess?.();
@@ -215,7 +244,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
         variant: "destructive",
       });
     }
-  }, [taskId, projectId, toast]);
+  }, [attachmentPath, projectId, subtaskId, taskId, toast]);
 
   const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files || !config?.configured) return;
@@ -281,7 +310,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
     mutationFn: async (attachmentId: string) => {
       const response = await apiRequest(
         "GET",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/download`
+        `${attachmentPath}/${attachmentId}/download`
       );
       return response.json();
     },
@@ -301,12 +330,12 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
     mutationFn: async (attachmentId: string) => {
       return apiRequest(
         "DELETE",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`
+        `${attachmentPath}/${attachmentId}`
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
+      queryClient.invalidateQueries({
+        queryKey: ["/api/projects", projectId, subtaskId ? "subtasks" : "tasks", subtaskId || taskId, "attachments"]
       });
       onDeleteSuccess?.();
       toast({
@@ -332,6 +361,40 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
   }
 
   const completedAttachments = attachments.filter(a => a.uploadStatus === "complete");
+
+  useEffect(() => {
+    const imageAttachments = completedAttachments.filter((attachment) => isImageAttachment(attachment.mimeType));
+    const missingPreviewAttachments = imageAttachments.filter((attachment) => !previewUrls[attachment.id]);
+    if (missingPreviewAttachments.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        missingPreviewAttachments.map(async (attachment) => {
+          try {
+            const response = await apiRequest("GET", `${attachmentPath}/${attachment.id}/download`);
+            const data = await response.json();
+            return [attachment.id, data.url] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      if (cancelled) return;
+      setPreviewUrls((prev) => {
+        const next = { ...prev };
+        for (const entry of entries) {
+          if (entry) next[entry[0]] = entry[1];
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attachmentPath, completedAttachments, previewUrls]);
 
   return (
     <div className="space-y-3">
@@ -422,13 +485,25 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
           <div className="space-y-2">
             {completedAttachments.map((attachment) => {
               const FileIcon = getFileIcon(attachment.mimeType);
+              const isImage = isImageAttachment(attachment.mimeType);
+              const previewUrl = previewUrls[attachment.id];
               return (
                 <div
                   key={attachment.id}
                   className="flex items-center gap-2 p-2 bg-muted/30 rounded-md group"
                   data-testid={`attachment-item-${attachment.id}`}
                 >
-                  <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  {isImage && previewUrl ? (
+                    <img
+                      src={previewUrl}
+                      alt={attachment.originalFileName}
+                      className="h-12 w-12 rounded-md object-cover border shrink-0"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-md border bg-background flex items-center justify-center shrink-0">
+                      <FileIcon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate">{attachment.originalFileName}</p>
                     <p className="text-xs text-muted-foreground">

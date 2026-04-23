@@ -1,6 +1,8 @@
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { handleRouteError, AppError, sendError, validateBody } from "../../lib/errors";
+import { getCurrentUserId, getCurrentWorkspaceId } from "../../routes/helpers";
+import { logEntityActivity } from "../../lib/taskActivity";
 import {
   insertTagSchema,
   updateTagSchema,
@@ -67,6 +69,24 @@ router.post("/tasks/:taskId/tags", async (req, res) => {
       taskId: req.params.taskId,
       tagId: data.tagId,
     });
+    const task = await storage.getTask(req.params.taskId);
+    const project = task?.projectId ? await storage.getProject(task.projectId) : null;
+    if (task) {
+      await logEntityActivity({
+        storage,
+        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: getCurrentUserId(req),
+        entityType: "task",
+        entityId: task.id,
+        entityTitle: task.title,
+        action: "updated",
+        metadata: {
+          field: "tags",
+          to: data.tagId,
+          projectId: task.projectId || null,
+        },
+      }).catch(() => {});
+    }
     res.status(201).json(taskTag);
   } catch (error) {
     return handleRouteError(res, error, "POST /api/tasks/:taskId/tags", req);
@@ -75,7 +95,25 @@ router.post("/tasks/:taskId/tags", async (req, res) => {
 
 router.delete("/tasks/:taskId/tags/:tagId", async (req, res) => {
   try {
+    const task = await storage.getTask(req.params.taskId);
+    const project = task?.projectId ? await storage.getProject(task.projectId) : null;
     await storage.removeTaskTag(req.params.taskId, req.params.tagId);
+    if (task) {
+      await logEntityActivity({
+        storage,
+        workspaceId: project?.workspaceId || getCurrentWorkspaceId(req),
+        actorUserId: getCurrentUserId(req),
+        entityType: "task",
+        entityId: task.id,
+        entityTitle: task.title,
+        action: "updated",
+        metadata: {
+          field: "tags",
+          from: req.params.tagId,
+          projectId: task.projectId || null,
+        },
+      }).catch(() => {});
+    }
     res.status(204).send();
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/tasks/:taskId/tags/:tagId", req);
