@@ -95,6 +95,18 @@ function canApproveReview(user: { role?: string | null } | undefined): boolean {
   return hasTenantAdminAccess(user?.role);
 }
 
+function normalizeTaskStatus(status: string | null | undefined): string | null {
+  if (!status) return null;
+  if (status === "review") return "in_review";
+  if (status === "completed") return "done";
+  return status;
+}
+
+function isTaskReviewStatus(status: string | null | undefined): boolean {
+  const normalized = normalizeTaskStatus(status);
+  return normalized === "in_review";
+}
+
 type ReviewQueueAssignee = {
   id: string;
   name: string;

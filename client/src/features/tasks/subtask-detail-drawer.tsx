@@ -94,6 +94,13 @@ interface ActiveTimer {
   lastStartedAt: string | null;
 }
 
+interface ProjectContext {
+  id: string;
+  name: string;
+  clientId?: string | null;
+  client?: { id: string; companyName: string; displayName: string | null } | null;
+}
+
 interface TimeEntryListItem {
   id: string;
   title?: string | null;
@@ -397,6 +404,26 @@ export function SubtaskDetailDrawer({
     refetchInterval: 30000,
   });
 
+  const { data: projectContext, isLoading: projectContextLoading, isError: projectContextError } = useQuery<ProjectContext | null>({
+    queryKey: ["/api/projects", projectId, "context"],
+    queryFn: async () => {
+      if (!projectId) return null;
+      const projectRes = await fetch(`/api/projects/${projectId}`, { credentials: "include" });
+      if (!projectRes.ok) throw new Error("Failed to load project");
+      const project = await projectRes.json();
+      let client = null;
+      if (project?.clientId) {
+        const clientRes = await fetch(`/api/clients/${project.clientId}`, { credentials: "include" });
+        if (clientRes.ok) {
+          client = await clientRes.json();
+        }
+      }
+      return { ...project, client };
+    },
+    enabled: !!projectId && open,
+    retry: 1,
+  });
+
   const isTimerOnThisTask = isActualSubtask
     ? activeTimer?.subtaskId === subtask?.id
     : activeTimer?.taskId === subtask?.id && !activeTimer?.subtaskId;
@@ -410,11 +437,11 @@ export function SubtaskDetailDrawer({
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
-      if (projectId && !isActualSubtask) {
-        // Handle case where we might need more context for non-subtask items if any
+      if (projectId && !projectContext?.clientId) {
+        throw new Error("Client context required for project subtasks");
       }
       return apiRequest("POST", "/api/timer/start", {
-        clientId: (subtask as any).project?.clientId || null,
+        clientId: projectContext?.clientId || null,
         projectId: projectId || null,
         taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
         subtaskId: isActualSubtask ? subtask?.id || null : null,
@@ -426,7 +453,11 @@ export function SubtaskDetailDrawer({
       toast({ title: "Timer started", description: `Tracking time for "${subtask?.title}"` });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to start timer", variant: "destructive" });
+      toast({
+        title: "Failed to start timer",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
     },
   });
 
@@ -487,6 +518,8 @@ export function SubtaskDetailDrawer({
     activeTimer && isTimerOnThisTask && isTimerRunning ? "running" :
     activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
     activeTimer && !isTimerOnThisTask ? "other_task" :
+    projectContextLoading && !!projectId ? "loading" :
+    (!activeTimer && !!projectId && !projectContext?.clientId) || projectContextError ? "hidden" :
     "idle";
 
   const creatorUser = subtask?.createdBy

@@ -576,7 +576,11 @@ function TaskDetailDrawerContent({
         });
         setTimerDrawerOpen(true);
       } else {
-        toast({ title: "Failed to start timer", variant: "destructive" });
+        toast({
+          title: "Failed to start timer",
+          description: error.message || "Please try again",
+          variant: "destructive",
+        });
       }
     },
   });

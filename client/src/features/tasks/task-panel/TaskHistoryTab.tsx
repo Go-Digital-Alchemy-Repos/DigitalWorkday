@@ -12,6 +12,8 @@ export function TaskHistoryTab({ entityType, entityId, enabled = true }: TaskHis
     return null;
   }
 
+  const apiEndpoint = `/api/activity-log/${entityType}/${entityId}/rich`;
+
   const emptyTitle = entityType === "task" ? "No task history yet" : "No subtask history yet";
   const emptyDescription =
     entityType === "task"
@@ -29,6 +31,7 @@ export function TaskHistoryTab({ entityType, entityId, enabled = true }: TaskHis
       <ActivityFeed
         entityType={entityType}
         entityId={entityId}
+        apiEndpoint={apiEndpoint}
         height="260px"
         emptyTitle={emptyTitle}
         emptyDescription={emptyDescription}
