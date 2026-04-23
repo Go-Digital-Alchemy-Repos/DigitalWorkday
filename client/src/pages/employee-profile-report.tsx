@@ -1,7 +1,7 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { 
   ChevronLeft, 
   Users, 
@@ -506,6 +506,7 @@ export default function EmployeeProfileReportPage() {
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
+  const section = searchParams.get("section");
   const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
   const reportBasePath = getReportBasePath(location);
 
@@ -526,8 +527,17 @@ export default function EmployeeProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    setLocation(`${getEmployeeReportPath(location, employeeId)}?range=${value}`);
+    const params = new URLSearchParams({ range: value });
+    if (section) params.set("section", section);
+    setLocation(`${getEmployeeReportPath(location, employeeId)}?${params.toString()}`);
   };
+
+  useEffect(() => {
+    if (!data || !section) return;
+    const target = document.getElementById(section);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [data, section]);
 
   if (error) {
     return (
@@ -723,7 +733,7 @@ export default function EmployeeProfileReportPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Workload Section */}
-                <Card data-testid="section-workload">
+              <Card id="section-workload" data-testid="section-workload">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <CheckSquare className="h-5 w-5 text-primary" />
@@ -770,7 +780,7 @@ export default function EmployeeProfileReportPage() {
                 </Card>
 
                 {/* Time Tracking Section */}
-                <Card data-testid="section-time">
+                <Card id="section-time" data-testid="section-time">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Clock className="h-5 w-5 text-primary" />
@@ -816,7 +826,7 @@ export default function EmployeeProfileReportPage() {
               </div>
 
               {/* Assigned Tasks Section */}
-              <Card data-testid="section-assigned-tasks">
+              <Card id="section-assigned-tasks" data-testid="section-assigned-tasks">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <ListChecks className="h-5 w-5 text-primary" />
@@ -914,7 +924,7 @@ export default function EmployeeProfileReportPage() {
               </Card>
 
               {/* Capacity Section */}
-              <Card data-testid="section-capacity">
+              <Card id="section-capacity" data-testid="section-capacity">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <CalendarRange className="h-5 w-5 text-primary" />
@@ -974,7 +984,7 @@ export default function EmployeeProfileReportPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Risk Section */}
-                <Card data-testid="section-risk">
+                <Card id="section-risk" data-testid="section-risk">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <ShieldAlert className="h-5 w-5 text-primary" />
@@ -1014,7 +1024,7 @@ export default function EmployeeProfileReportPage() {
                 </Card>
 
                 {/* Project Focus Section */}
-                <Card data-testid="section-trend">
+                <Card id="section-trend" data-testid="section-trend">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <TrendingUp className="h-5 w-5 text-primary" />

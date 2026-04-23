@@ -1,6 +1,6 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronLeft,
   Building2,
@@ -199,6 +199,7 @@ export default function ClientProfileReportPage() {
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
+  const section = searchParams.get("section");
   const reportBasePath = getReportBasePath(location);
 
   const { data, isLoading, error, refetch } = useQuery<ClientProfileData>({
@@ -218,8 +219,17 @@ export default function ClientProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    setLocation(`${getClientReportPath(location, clientId)}?range=${value}`);
+    const params = new URLSearchParams({ range: value });
+    if (section) params.set("section", section);
+    setLocation(`${getClientReportPath(location, clientId)}?${params.toString()}`);
   };
+
+  useEffect(() => {
+    if (!data || !section) return;
+    const target = document.getElementById(section);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [data, section]);
 
   if (error) {
     return (
@@ -420,7 +430,7 @@ export default function ClientProfileReportPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card data-testid="section-workload">
+                <Card id="section-workload" data-testid="section-workload">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <CheckSquare className="h-5 w-5 text-primary" />
@@ -471,7 +481,7 @@ export default function ClientProfileReportPage() {
                   </CardContent>
                 </Card>
 
-                <Card data-testid="section-time">
+                <Card id="section-time" data-testid="section-time">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Clock className="h-5 w-5 text-primary" />
@@ -525,7 +535,7 @@ export default function ClientProfileReportPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card data-testid="section-sla">
+                <Card id="section-sla" data-testid="section-sla">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Target className="h-5 w-5 text-primary" />
@@ -565,7 +575,7 @@ export default function ClientProfileReportPage() {
                 </Card>
 
                 {data.healthIndex && (
-                  <Card data-testid="section-health-index">
+                  <Card id="section-health-index" data-testid="section-health-index">
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <HeartPulse className="h-5 w-5 text-primary" />
@@ -602,7 +612,7 @@ export default function ClientProfileReportPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card data-testid="section-risk">
+                <Card id="section-risk" data-testid="section-risk">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <ShieldAlert className="h-5 w-5 text-primary" />
@@ -641,7 +651,7 @@ export default function ClientProfileReportPage() {
                   </CardContent>
                 </Card>
 
-                <Card data-testid="section-projects">
+                <Card id="section-projects" data-testid="section-projects">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Building2 className="h-5 w-5 text-primary" />

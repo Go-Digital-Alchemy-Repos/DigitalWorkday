@@ -24,7 +24,7 @@ import { ReportCommandCenterLayout, buildDateParams } from "./report-command-cen
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
-import { getEmployeeReportPath } from "./report-paths";
+import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -165,6 +165,8 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   return (
     <div className="space-y-4">
       {totals && (
@@ -191,19 +193,30 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-muted-foreground">Active</span>
-                  <p className="font-medium">{e.activeTasksNow}</p>
+                  <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="font-medium text-primary hover:underline">
+                    {e.activeTasksNow}
+                  </Link>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Overdue</span>
-                  <p className={cn("font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "")}>{e.overdueCount}</p>
+                  <Link
+                    href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
+                    className={cn("font-medium hover:underline", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
+                  >
+                    {e.overdueCount}
+                  </Link>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Completed</span>
-                  <p className="font-medium text-green-600 dark:text-green-400">{e.completedInRange}</p>
+                  <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "assigned-tasks" })} className="font-medium text-green-600 hover:underline dark:text-green-400">
+                    {e.completedInRange}
+                  </Link>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Hours</span>
-                  <p className="font-medium">{e.totalHours}h</p>
+                  <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="font-medium text-primary hover:underline">
+                    {e.totalHours}h
+                  </Link>
                 </div>
               </div>
               <div className="mt-3">
@@ -251,25 +264,44 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                           </Link>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm font-medium">{e.activeTasksNow}</TableCell>
-                      <TableCell>
-                        <span className={cn("text-sm font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                          {e.overdueCount}
-                        </span>
+                      <TableCell className="text-sm font-medium">
+                        <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="text-primary hover:underline">
+                          {e.activeTasksNow}
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{e.completedInRange}</TableCell>
-                      <TableCell className="text-sm">{e.totalHours}h</TableCell>
+                      <TableCell>
+                        <Link
+                          href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
+                          className={cn("text-sm font-medium hover:underline", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
+                        >
+                          {e.overdueCount}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
+                        <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "assigned-tasks" })} className="hover:underline">
+                          {e.completedInRange}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
+                          {e.totalHours}h
+                        </Link>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 min-w-[80px]">
                           <Progress value={e.utilizationPct ?? 0} className="h-1.5 flex-1" />
-                          <span className="text-xs text-muted-foreground w-10 text-right">{e.utilizationPct ?? 0}%</span>
+                          <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "capacity" })} className="text-xs text-primary w-10 text-right hover:underline">
+                            {e.utilizationPct ?? 0}%
+                          </Link>
                         </div>
                       </TableCell>
                       <TableCell>
                         {e.efficiencyRatio !== null ? (
-                          <Badge variant={e.efficiencyRatio > 1.2 ? "destructive" : e.efficiencyRatio > 0.8 ? "default" : "secondary"}>
-                            {(e.efficiencyRatio * 100).toFixed(0)}%
-                          </Badge>
+                          <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })}>
+                            <Badge variant={e.efficiencyRatio > 1.2 ? "destructive" : e.efficiencyRatio > 0.8 ? "default" : "secondary"} className="cursor-pointer hover:opacity-90">
+                              {(e.efficiencyRatio * 100).toFixed(0)}%
+                            </Badge>
+                          </Link>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}

@@ -14,7 +14,7 @@ import { ReportCommandCenterLayout, buildDateParams } from "./report-command-cen
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
-import { getClientReportPath } from "./report-paths";
+import { getClientReportDrilldownPath, getClientReportPath } from "./report-paths";
 
 interface MetricCardProps {
   label: string;
@@ -114,6 +114,8 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   function engagementBadgeVariant(score: number): "default" | "secondary" | "destructive" {
     if (score >= 70) return "default";
     if (score >= 40) return "secondary";
@@ -142,10 +144,10 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>Active Projects: <span className="text-foreground font-medium">{c.activeProjects}</span></span>
-                  <span>Open Tasks: <span className="text-foreground font-medium">{c.openTasks}</span></span>
-                  <span>Overdue: <span className={cn("font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{c.overdueTasks}</span></span>
-                  <span>Hours: <span className="text-foreground font-medium">{c.totalHours}h</span></span>
+                  <span>Active Projects: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "projects" })} className="text-foreground font-medium hover:underline">{c.activeProjects}</Link></span>
+                  <span>Open Tasks: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-foreground font-medium hover:underline">{c.openTasks}</Link></span>
+                  <span>Overdue: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className={cn("font-medium hover:underline", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{c.overdueTasks}</Link></span>
+                  <span>Hours: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-foreground font-medium hover:underline">{c.totalHours}h</Link></span>
                   <span className="col-span-2">Last Activity: <span className="text-foreground font-medium">{relativeDate(c.lastActivityDate)}</span></span>
                 </div>
               </CardContent>
@@ -173,19 +175,33 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
                   {data?.clients.map((c) => (
                     <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
                       <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                      <TableCell className="text-sm">{c.activeProjects}</TableCell>
-                      <TableCell className="text-sm">{c.openTasks}</TableCell>
-                      <TableCell>
-                        <span className={cn("text-sm font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                          {c.overdueTasks}
-                        </span>
+                      <TableCell className="text-sm">
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "projects" })} className="text-primary hover:underline">
+                          {c.activeProjects}
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-sm">{c.totalHours}h</TableCell>
+                      <TableCell className="text-sm">
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-primary hover:underline">
+                          {c.openTasks}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className={cn("text-sm font-medium hover:underline", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}>
+                          {c.overdueTasks}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">
+                          {c.totalHours}h
+                        </Link>
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{relativeDate(c.lastActivityDate)}</TableCell>
                       <TableCell>
-                        <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-${c.clientId}`}>
-                          {c.engagementScore}%
-                        </Badge>
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                          <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-${c.clientId}`} className="cursor-pointer hover:opacity-90">
+                            {c.engagementScore}%
+                          </Badge>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -230,6 +246,8 @@ function ActivityTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   return (
     <Card>
       <CardContent className="p-0">
@@ -248,13 +266,25 @@ function ActivityTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
                   <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
-                  <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
-                  <TableCell className="text-sm">{c.commentsInRange}</TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-primary hover:underline">
+                      {c.tasksCreatedInRange}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">
+                      {Math.round(c.timeLoggedInRange * 10) / 10}h
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })} className="text-primary hover:underline">
+                      {c.commentsInRange}
+                    </Link>
+                  </TableCell>
                   <TableCell>
-                    <span className={cn("text-sm font-medium", c.inactivityDays > 14 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })} className={cn("text-sm font-medium hover:underline", c.inactivityDays > 14 ? "text-red-600 dark:text-red-400" : "text-primary")}>
                       {c.inactivityDays}d
-                    </span>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
@@ -298,6 +328,8 @@ function TimeTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   function formatVariance(v: number) {
     if (v === 0) return "0h";
     return v > 0 ? `+${v.toFixed(1)}h` : `${v.toFixed(1)}h`;
@@ -322,14 +354,14 @@ function TimeTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
                   <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm">{c.totalHours}h</TableCell>
-                  <TableCell className="text-sm">{c.billableHours}h</TableCell>
-                  <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
-                  <TableCell className="text-sm">{c.estimatedHours}h</TableCell>
+                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.totalHours}h</Link></TableCell>
+                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.billableHours}h</Link></TableCell>
+                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.nonBillableHours}h</Link></TableCell>
+                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.estimatedHours}h</Link></TableCell>
                   <TableCell>
-                    <span className={cn("text-sm font-medium", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className={cn("text-sm font-medium hover:underline", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
                       {formatVariance(c.varianceHours)}
-                    </span>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
@@ -375,6 +407,8 @@ function TasksTab({ rangeDays, projectStatus }: { rangeDays: number; projectStat
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   function AgingBar({ item }: { item: ClientTaskItem }) {
     const total = item.agingUnder7 + item.aging7To14 + item.aging14To30 + item.agingOver30;
     if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
@@ -414,13 +448,21 @@ function TasksTab({ rangeDays, projectStatus }: { rangeDays: number; projectStat
                 {data?.clients.map((c) => (
                   <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
                     <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                    <TableCell className="text-sm">{c.openTaskCount}</TableCell>
-                    <TableCell>
-                      <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                        {c.overdueCount}
-                      </span>
+                    <TableCell className="text-sm">
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-primary hover:underline">
+                        {c.openTaskCount}
+                      </Link>
                     </TableCell>
-                    <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{c.completedInRange}</TableCell>
+                    <TableCell>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className={cn("text-sm font-medium hover:underline", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}>
+                        {c.overdueCount}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="hover:underline">
+                        {c.completedInRange}
+                      </Link>
+                    </TableCell>
                     <TableCell><AgingBar item={c} /></TableCell>
                   </TableRow>
                 ))}
@@ -466,6 +508,8 @@ function SlaTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus
     </div>
   );
 
+  const range = `${rangeDays}d`;
+
   function progressColor(pct: number, invert = false) {
     const high = invert ? pct < 20 : pct > 80;
     const mid = invert ? pct < 40 : pct > 60;
@@ -491,7 +535,11 @@ function SlaTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
                   <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm">{c.totalTasks}</TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className="text-primary hover:underline">
+                      {c.totalTasks}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[140px]">
                       <Progress value={c.overdueTaskPct} className="h-1.5 flex-1" />
