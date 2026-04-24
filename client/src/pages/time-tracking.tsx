@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo, useMemo } from "react";
+import { useState, useEffect, useCallback, memo, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
@@ -60,10 +60,15 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
-import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { RichTextEditor } from "@/components/richtext";
 import { GroupedVirtuoso } from "react-virtuoso";
+
+const LazyStartTimerDrawer = lazy(() =>
+  import("@/features/timer/start-timer-drawer").then((module) => ({
+    default: module.StartTimerDrawer,
+  })),
+);
 
 type ActiveTimer = {
   id: string;
@@ -1973,10 +1978,12 @@ export function TimeTrackingContent() {
         </TabsContent>
       </Tabs>
 
-      <StartTimerDrawer
-        open={startTimerDrawerOpen}
-        onOpenChange={setStartTimerDrawerOpen}
-      />
+      <Suspense fallback={null}>
+        <LazyStartTimerDrawer
+          open={startTimerDrawerOpen}
+          onOpenChange={setStartTimerDrawerOpen}
+        />
+      </Suspense>
 
       <ManualEntryDialog
         open={manualEntryDrawerOpen}

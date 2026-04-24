@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -103,7 +103,6 @@ import { useAuth } from "@/lib/auth";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
-import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
@@ -118,6 +117,12 @@ interface DivisionWithCounts extends ClientDivision {
   memberCount: number;
   projectCount: number;
 }
+
+const LazyStartTimerDrawer = lazy(() =>
+  import("@/features/timer/start-timer-drawer").then((module) => ({
+    default: module.StartTimerDrawer,
+  })),
+);
 
 const createContactSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -2714,11 +2719,13 @@ export default function ClientDetailPage() {
         </SheetContent>
       </Sheet>
 
-      <StartTimerDrawer
-        open={timerDrawerOpen}
-        onOpenChange={setTimerDrawerOpen}
-        initialClientId={clientId}
-      />
+      <Suspense fallback={null}>
+        <LazyStartTimerDrawer
+          open={timerDrawerOpen}
+          onOpenChange={setTimerDrawerOpen}
+          initialClientId={clientId}
+        />
+      </Suspense>
 
       <AlertDialog open={convertToPortalOpen} onOpenChange={setConvertToPortalOpen}>
         <AlertDialogContent>

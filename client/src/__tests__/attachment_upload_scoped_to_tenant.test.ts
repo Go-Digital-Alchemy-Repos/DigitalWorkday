@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { sanitizeFilename } from "../../../server/http/middleware/uploadGuards";
 
 describe("Chat Attachment Upload - Tenant Scoping", () => {
   describe("Upload endpoint tenant isolation", () => {
@@ -86,17 +87,9 @@ describe("Chat Attachment Upload - Tenant Scoping", () => {
     });
 
     it("should prevent path traversal in file names", () => {
-      const sanitizeFilename = (filename: string): string => {
-        return filename
-          .replace(/[/\\:*?"<>|]/g, "_")
-          .replace(/\s+/g, "_")
-          .toLowerCase()
-          .slice(0, 100);
-      };
-
-      expect(sanitizeFilename("../../../etc/passwd")).toBe("_.._.._.._etc_passwd");
+      expect(sanitizeFilename("../../../etc/passwd")).toBe("passwd");
       expect(sanitizeFilename("normal-file.pdf")).toBe("normal-file.pdf");
-      expect(sanitizeFilename("file with spaces.pdf")).toBe("file_with_spaces.pdf");
+      expect(sanitizeFilename("file with spaces.pdf")).toBe("file with spaces.pdf");
     });
   });
 

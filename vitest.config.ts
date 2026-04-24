@@ -5,7 +5,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["server/tests/**/*.test.ts"],
+    include: [
+      "server/tests/**/*.test.ts",
+      "client/src/**/*.test.ts",
+      "client/src/**/*.test.tsx",
+    ],
     setupFiles: ["server/tests/setup.ts"],
     testTimeout: 30000,
     // Run test files sequentially to avoid database conflicts
@@ -17,6 +21,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@": path.resolve(__dirname, "./client/src"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
   },

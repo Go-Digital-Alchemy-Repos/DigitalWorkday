@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useCreateTask } from "@/hooks/use-create-task";
@@ -43,7 +43,6 @@ import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
-import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import {
   Sheet,
   SheetContent,
@@ -100,6 +99,12 @@ import {
 } from "@/components/ui/breadcrumb";
 import type { Client } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
+
+const LazyStartTimerDrawer = lazy(() =>
+  import("@/features/timer/start-timer-drawer").then((module) => ({
+    default: module.StartTimerDrawer,
+  })),
+);
 
 type ViewType = "board" | "list" | "calendar";
 
@@ -1364,12 +1369,14 @@ export default function ProjectPage() {
           )}
         </SheetContent>
       </Sheet>
-      <StartTimerDrawer
-        open={timerDrawerOpen}
-        onOpenChange={setTimerDrawerOpen}
-        initialProjectId={projectId}
-        initialClientId={project?.clientId}
-      />
+      <Suspense fallback={null}>
+        <LazyStartTimerDrawer
+          open={timerDrawerOpen}
+          onOpenChange={setTimerDrawerOpen}
+          initialProjectId={projectId}
+          initialClientId={project?.clientId}
+        />
+      </Suspense>
       <Sheet open={activityOpen} onOpenChange={setActivityOpen}>
         <SheetContent className="w-[380px] sm:w-[440px]">
           <SheetHeader>

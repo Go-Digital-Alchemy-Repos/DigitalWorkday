@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2, Pencil, Activity } from "lucide-react";
 import { useAuth } from "@/lib/auth";
@@ -47,9 +47,12 @@ import { ColorPicker } from "@/components/ui/color-picker";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
+import {
+  buildStopTimerPayload,
+  buildTaskQuickStartTimerPayload,
+} from "./timer-payloads";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
 import {
   Select,
@@ -62,6 +65,12 @@ import { hasTenantAdminAccess } from "@shared/roles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShareModal } from "@/features/sharing/share-modal";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
+
+const LazyStartTimerDrawer = lazy(() =>
+  import("@/features/timer/start-timer-drawer").then((module) => ({
+    default: module.StartTimerDrawer,
+  })),
+);
 
 type ActiveTimer = {
   id: string;
@@ -561,13 +570,16 @@ function TaskDetailDrawerContent({
       if (task?.projectId && !projectContext?.clientId) {
         throw new Error("Client context required for project tasks");
       }
-      return apiRequest("POST", "/api/timer/start", {
-        clientId: projectContext?.clientId || null,
-        projectId: task?.projectId || null,
-        taskId: task?.id || null,
-        title: task?.title || undefined,
-        description: null,
-      });
+      return apiRequest(
+        "POST",
+        "/api/timer/start",
+        buildTaskQuickStartTimerPayload({
+          clientId: projectContext?.clientId,
+          projectId: task?.projectId,
+          taskId: task?.id,
+          title: task?.title,
+        }),
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
@@ -609,14 +621,17 @@ function TaskDetailDrawerContent({
 
   const stopTimerMutation = useMutation({
     mutationFn: async (description: string) =>
-      apiRequest("POST", "/api/timer/stop", {
-        scope: "in_scope",
-        title: task?.title || null,
-        description,
-        clientId: projectContext?.clientId || null,
-        projectId: task?.projectId || null,
-        taskId: task?.id || null,
-      }),
+      apiRequest(
+        "POST",
+        "/api/timer/stop",
+        buildStopTimerPayload({
+          title: task?.title,
+          description,
+          clientId: projectContext?.clientId,
+          projectId: task?.projectId,
+          taskId: task?.id,
+        }),
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
@@ -1635,12 +1650,14 @@ function TaskDetailDrawerContent({
       )}
 
       {timerDrawerOpen && (
-        <StartTimerDrawer
-          open={timerDrawerOpen}
-          onOpenChange={setTimerDrawerOpen}
-          initialTaskId={task.id}
-          initialProjectId={task.projectId || null}
-        />
+        <Suspense fallback={null}>
+          <LazyStartTimerDrawer
+            open={timerDrawerOpen}
+            onOpenChange={setTimerDrawerOpen}
+            initialTaskId={task.id}
+            initialProjectId={task.projectId || null}
+          />
+        </Suspense>
       )}
 
       <Dialog open={showTimeTrackingPrompt} onOpenChange={setShowTimeTrackingPrompt}>

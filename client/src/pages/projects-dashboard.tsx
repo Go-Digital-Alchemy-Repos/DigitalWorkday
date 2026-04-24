@@ -31,6 +31,7 @@ import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
 import { ReviewQueueCard, type DashboardReviewQueueItem, type DashboardReviewQueueResponse } from "@/components/review-queue-card";
+import { applyApprovedReviewToDashboardQueue } from "@/components/reports/review-queue-utils";
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
@@ -222,24 +223,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
       queryClient.setQueryData<DashboardReviewQueueResponse>(
         ["/api/dashboard/review-queue"],
         (current) => {
-          if (!current) return current;
-          return {
-            items: current.items.filter(
-              (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
-            ),
-            clearedItems: [
-              {
-                ...item,
-                status: "in_progress",
-                approvedAt: now,
-                updatedAt: now,
-                approverName,
-              },
-              ...current.clearedItems.filter(
-                (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
-              ),
-            ].slice(0, 20),
-          };
+          return applyApprovedReviewToDashboardQueue(current, item, approverName, now);
         },
       );
 

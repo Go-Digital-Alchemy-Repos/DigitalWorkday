@@ -16,6 +16,7 @@ import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
 import { getClientReportDrilldownPath, getClientReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
+import { getReportViewState } from "./report-view-state";
 
 function formatComparisonSub(current: number, prior: number, suffix = "") {
   const delta = Math.round((current - prior) * 10) / 10;
@@ -171,13 +172,19 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     return { atRisk, inactive };
   }, [data?.clients]);
 
-  if (isLoading) return (
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.clients?.length ?? 0) > 0,
+  });
+
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
 
-  if (isError || !data) {
+  if (viewState === "error") {
     return (
       <ReportEmptyState
         icon={Building2}
@@ -187,7 +194,7 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     );
   }
 
-  if (!data.clients.length) {
+  if (viewState === "empty") {
     return (
       <ReportEmptyState
         icon={Building2}

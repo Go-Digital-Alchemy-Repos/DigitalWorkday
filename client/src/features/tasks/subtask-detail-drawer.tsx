@@ -32,6 +32,10 @@ import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
+import {
+  buildStopTimerPayload,
+  buildSubtaskQuickStartTimerPayload,
+} from "./timer-payloads";
 
 import {
   AlertDialog,
@@ -446,14 +450,17 @@ export function SubtaskDetailDrawer({
       if (projectId && !projectContext?.clientId) {
         throw new Error("Client context required for project subtasks");
       }
-      return apiRequest("POST", "/api/timer/start", {
-        clientId: projectContext?.clientId || null,
-        projectId: projectId || null,
-        taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
-        subtaskId: isActualSubtask ? subtask?.id || null : null,
-        title: subtask?.title || undefined,
-        description: null,
-      });
+      return apiRequest(
+        "POST",
+        "/api/timer/start",
+        buildSubtaskQuickStartTimerPayload({
+          clientId: projectContext?.clientId,
+          projectId,
+          taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id,
+          subtaskId: isActualSubtask ? subtask?.id : null,
+          title: subtask?.title,
+        }),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
@@ -486,15 +493,18 @@ export function SubtaskDetailDrawer({
 
   const stopTimerMutation = useMutation({
     mutationFn: async (description: string) =>
-      apiRequest("POST", "/api/timer/stop", {
-        scope: "in_scope",
-        title: subtask?.title || null,
-        description,
-        clientId: projectContext?.clientId || null,
-        projectId: projectId || null,
-        taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
-        subtaskId: isActualSubtask ? subtask?.id || null : null,
-      }),
+      apiRequest(
+        "POST",
+        "/api/timer/stop",
+        buildStopTimerPayload({
+          title: subtask?.title,
+          description,
+          clientId: projectContext?.clientId,
+          projectId,
+          taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id,
+          subtaskId: isActualSubtask ? subtask?.id : null,
+        }),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
       queryClient.invalidateQueries({ queryKey: timeEntriesQueryKey });

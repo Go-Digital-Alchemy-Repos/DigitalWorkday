@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
+import { getReportViewState } from "./report-view-state";
 
 interface DateRange {
   label: string;
@@ -176,6 +177,12 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     return { overdue, lowEfficiency };
   }, [data?.team]);
 
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.team?.length ?? 0) > 0,
+  });
+
   function toggleSort(field: SortField) {
     if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortBy(field); setSortDir("desc"); }
@@ -196,13 +203,13 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     );
   }
 
-  if (isLoading) return (
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
 
-  if (isError || !data) {
+  if (viewState === "error") {
     return (
       <ReportEmptyState
         icon={Users}
@@ -212,7 +219,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     );
   }
 
-  if (!data?.team?.length) {
+  if (viewState === "empty") {
     return (
       <ReportEmptyState
         icon={Users}
@@ -612,13 +619,19 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
     },
   });
 
-  if (isLoading) return (
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.users?.length ?? 0) > 0,
+  });
+
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
     </div>
   );
 
-  if (isError || !data) {
+  if (viewState === "error") {
     return (
       <ReportEmptyState
         icon={CalendarRange}
@@ -628,12 +641,15 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
     );
   }
 
-  if (!data?.users.length) return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-      <CalendarRange className="h-10 w-10 opacity-30" />
-      <p className="text-sm">No capacity data available</p>
-    </div>
-  );
+  if (viewState === "empty") {
+    return (
+      <ReportEmptyState
+        icon={CalendarRange}
+        title="No capacity data available"
+        description="There are no estimated or tracked weekly workload signals for the selected period yet."
+      />
+    );
+  }
 
   const weeks = data.users[0]?.weeks.map(w => w.weekStart) ?? [];
 
@@ -730,18 +746,34 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
     },
   });
 
-  if (isLoading) return (
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.flagged?.length ?? 0) > 0,
+  });
+
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
     </div>
   );
 
-  if (isError || !data) {
+  if (viewState === "error") {
     return (
       <ReportEmptyState
         icon={ShieldAlert}
         title="Risk flags are unavailable"
         description="We couldn't load workload risk signals for this range. Refresh and try again, or change the date range to confirm available data."
+      />
+    );
+  }
+
+  if (viewState === "empty") {
+    return (
+      <ReportEmptyState
+        icon={ShieldAlert}
+        title="No risk flags in this range"
+        description="No employees crossed the current workload-risk thresholds for the selected period."
       />
     );
   }
