@@ -20,7 +20,6 @@ import {
   FileText,
   Calendar,
   Target,
-  MessageSquare,
   Building2,
   FolderKanban,
   LayoutDashboard,
@@ -46,14 +45,13 @@ function buildReportRangeParams(days: number) {
   }).toString();
 }
 
-const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
 const OverviewDashboard = lazy(() => import("@/components/reports/overview-dashboard"));
 const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
 const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics"));
 const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
 const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 
-type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
+type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
 
 const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
   { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
@@ -64,7 +62,6 @@ const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; 
   { view: "workload",        label: "Workload Reports",        Icon: Users },
   { view: "time",            label: "Time Tracking",           Icon: Clock },
   { view: "projects",        label: "Project Analysis",        Icon: Target },
-  { view: "messages",        label: "Messages",                Icon: MessageSquare },
   { view: "pipeline",        label: "Client Pipeline",         Icon: Building2 },
 ];
 
@@ -498,13 +495,6 @@ export default function ReportsPage() {
       color: "bg-purple-500",
     },
     {
-      icon: <MessageSquare className="h-6 w-6 text-white" />,
-      title: "Messages",
-      description: "Response times, resolution rates, overdue threads, and conversation volume by client",
-      view: "messages" as ReportView,
-      color: "bg-amber-500",
-    },
-    {
       icon: <Building2 className="h-6 w-6 text-white" />,
       title: "Client Pipeline",
       description: "Stage breakdown, pipeline distribution, and client progression through your workflow stages",
@@ -631,7 +621,6 @@ export default function ReportsPage() {
       case "workload": return "Workload Reports";
       case "time": return "Time Tracking Reports";
       case "projects": return "Project Analytics";
-      case "messages": return "Messages Reports";
       case "pipeline": return "Client Pipeline";
       default: return "Reports";
     }
@@ -644,7 +633,6 @@ export default function ReportsPage() {
       case "overview": return "Executive KPIs and trends across your entire organization";
       case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
       case "client-analytics": return "Client profitability, budget utilization, and activity breakdown";
-      case "messages": return "Response times, SLA compliance, and conversation analytics";
       case "pipeline": return "Pipeline stage distribution and client progression";
       default: return "Detailed analytics and exportable reports";
     }
@@ -657,7 +645,6 @@ export default function ReportsPage() {
       case "overview": return <LayoutDashboard className="h-5 w-5 text-primary" />;
       case "task-analytics": return <CheckSquare className="h-5 w-5 text-primary" />;
       case "client-analytics": return <PieChart className="h-5 w-5 text-primary" />;
-      case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
       case "pipeline": return <Building2 className="h-5 w-5 text-primary" />;
       default: return <BarChart3 className="h-5 w-5 text-primary" />;
     }
@@ -743,8 +730,6 @@ export default function ReportsPage() {
             <TaskAnalytics />
           ) : currentView === "client-analytics" ? (
             <ClientAnalytics />
-          ) : currentView === "messages" ? (
-            <MessagesReports />
           ) : currentView === "pipeline" ? (
             <PipelineReport />
           ) : currentView === "workload" && flags?.reportWorkloadV2 ? (
