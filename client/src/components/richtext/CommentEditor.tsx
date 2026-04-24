@@ -55,6 +55,16 @@ interface MentionSuggestionProps {
   command: (props: { id: string; label: string }) => void;
 }
 
+interface MentionSuggestionRenderProps {
+  query: string;
+  editor: Editor;
+  range: {
+    from: number;
+    to: number;
+  };
+  clientRect?: (() => DOMRect | null) | null;
+}
+
 const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
   function MentionList({ query, users, command }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -348,15 +358,29 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
               return usersRef.current.filter((user) => matchesMentionUser(user, query)).slice(0, 5);
             },
             render: () => {
+              const createMentionCommand = (props: MentionSuggestionRenderProps) => {
+                return ({ id, label }: { id: string; label: string }) => {
+                  props.editor
+                    .chain()
+                    .focus()
+                    .insertContentAt(props.range, [
+                      { type: "mention", attrs: { id, label } },
+                      { type: "text", text: " " },
+                    ])
+                    .run();
+                };
+              };
+
               return {
-                onStart: (props: { query: string; command: (props: { id: string; label: string }) => void; clientRect?: (() => DOMRect | null) | null }) => {
+                onStart: (props: MentionSuggestionRenderProps) => {
                   setMentionQuery(props.query);
-                  setMentionCommand(() => props.command);
+                  setMentionCommand(() => createMentionCommand(props));
                   setMentionPopupOpen(true);
                   updateMentionRect(props.clientRect);
                 },
-                onUpdate: (props: { query: string; clientRect?: (() => DOMRect | null) | null }) => {
+                onUpdate: (props: MentionSuggestionRenderProps) => {
                   setMentionQuery(props.query);
+                  setMentionCommand(() => createMentionCommand(props));
                   updateMentionRect(props.clientRect);
                 },
                 onKeyDown: (props: { event: KeyboardEvent }) => {
