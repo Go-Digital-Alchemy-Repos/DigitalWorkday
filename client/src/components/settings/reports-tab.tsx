@@ -353,7 +353,7 @@ interface TimeEntryWithRelations extends TimeEntry {
 }
 
 interface ReportsTabProps {
-  defaultTab?: "workload" | "time" | "projects" | "employees" | "teams";
+  defaultTab?: "workload" | "time" | "employees" | "teams";
 }
 
 export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
@@ -598,11 +598,10 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
 
       <Tabs defaultValue={tabDefaultValue} className="space-y-4">
         <TabsList className="flex-wrap">
-          <TabsTrigger value="time-tracking">Time Tracking</TabsTrigger>
+          <TabsTrigger value="time-tracking">Time &amp; Projects</TabsTrigger>
           <TabsTrigger value="workload">Workload</TabsTrigger>
           <TabsTrigger value="employees">Employees</TabsTrigger>
           <TabsTrigger value="teams">Teams</TabsTrigger>
-          <TabsTrigger value="projects">Projects</TabsTrigger>
         </TabsList>
 
         <TabsContent value="time-tracking" className="space-y-4">
@@ -698,6 +697,123 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Project Time Summary</CardTitle>
+                <CardDescription>Top projects and their tracked hours in this reporting view</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Project</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Hours Logged</TableHead>
+                      <TableHead>Team</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {projects?.slice(0, 10).map((project) => {
+                      const hours = projectHours.find((p) => p.name.startsWith(project.name.slice(0, 15)))?.hours || 0;
+                      const team = teams?.find((t) => t.id === project.teamId);
+                      return (
+                        <TableRow key={project.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-3 w-3 rounded-sm"
+                                style={{ backgroundColor: project.color || COLORS[0] }}
+                              />
+                              <span className="font-medium">{project.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={project.status === "active" ? "default" : "secondary"}>
+                              {project.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{hours}h</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {team?.name || "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {(!projects || projects.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                          No projects found
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Hours by Project</CardTitle>
+                  <CardDescription>Top projects by time tracked</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={projectHours.slice(0, 8)}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="name" className="text-xs" />
+                        <YAxis className="text-xs" />
+                        <Tooltip />
+                        <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
+                          {projectHours.slice(0, 8).map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Project Status Mix</CardTitle>
+                  <CardDescription>Current project breakdown</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: "Active", value: projects?.filter((p) => p.status === "active").length || 0 },
+                            { name: "Archived", value: projects?.filter((p) => p.status === "archived").length || 0 },
+                            { name: "Completed", value: projects?.filter((p) => p.status === "completed").length || 0 },
+                          ].filter((d) => d.value > 0)}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          <Cell fill="#10B981" />
+                          <Cell fill="#6B7280" />
+                          <Cell fill="#3B82F6" />
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
@@ -951,122 +1067,6 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
           </div>
         </TabsContent>
 
-        <TabsContent value="projects" className="space-y-4">
-          <div className="flex items-center justify-end">
-            <Button variant="outline" size="sm" onClick={() => handleExportCSV("project")} data-testid="button-export-project-csv">
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Project Summary</CardTitle>
-              <CardDescription>Overview of all projects</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Hours Logged</TableHead>
-                    <TableHead>Team</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projects?.slice(0, 10).map((project) => {
-                    const hours = projectHours.find((p) => p.name.startsWith(project.name.slice(0, 15)))?.hours || 0;
-                    const team = teams?.find((t) => t.id === project.teamId);
-                    return (
-                      <TableRow key={project.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="h-3 w-3 rounded-sm"
-                              style={{ backgroundColor: project.color || COLORS[0] }}
-                            />
-                            <span className="font-medium">{project.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={project.status === "active" ? "default" : "secondary"}>
-                            {project.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{hours}h</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {team?.name || "-"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Hours by Project</CardTitle>
-                <CardDescription>Top projects by time tracked</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={projectHours.slice(0, 8)}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="name" className="text-xs" />
-                      <YAxis className="text-xs" />
-                      <Tooltip />
-                      <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
-                        {projectHours.slice(0, 8).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Project Status</CardTitle>
-                <CardDescription>Current project breakdown</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: "Active", value: projects?.filter((p) => p.status === "active").length || 0 },
-                          { name: "Archived", value: projects?.filter((p) => p.status === "archived").length || 0 },
-                          { name: "Completed", value: projects?.filter((p) => p.status === "completed").length || 0 },
-                        ].filter((d) => d.value > 0)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        <Cell fill="#10B981" />
-                        <Cell fill="#6B7280" />
-                        <Cell fill="#3B82F6" />
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
       </Tabs>
     </div>
   );
