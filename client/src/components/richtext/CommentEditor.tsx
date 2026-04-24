@@ -499,14 +499,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
             left: mentionRect.left,
             transform: "translateY(-100%)",
           }}
-          onPointerDownCapture={(e) => {
-            e.stopPropagation();
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            }}
-          >
+        >
             <MentionList
               ref={mentionListRef}
               query={mentionQuery}
