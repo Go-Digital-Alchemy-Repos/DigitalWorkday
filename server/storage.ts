@@ -123,6 +123,7 @@ import { encryptValue, decryptValue } from "./lib/encryption";
 import { SupportRepository } from "./storage/support.repo";
 import { ChatRepository } from "./storage/chat.repo";
 import { NotificationsRepository } from "./storage/notifications.repo";
+import { ClientsRepository } from "./storage/clients.repo";
 
 const supportRepo = new SupportRepository();
 const chatRepo = new ChatRepository();
@@ -618,6 +619,11 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private readonly clientsRepo = new ClientsRepository({
+    getUser: (id) => this.getUser(id),
+    getProjectsByClient: (clientId) => this.getProjectsByClient(clientId),
+  });
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -1927,53 +1933,27 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getClient(id: string): Promise<Client | undefined> {
-    const [client] = await db.select().from(clients).where(eq(clients.id, id));
-    return client || undefined;
+    return this.clientsRepo.getClient(id);
   }
 
   async getClientsByIds(ids: string[]): Promise<Client[]> {
-    return clientsRepo.getClientsByIds(ids);
+    return this.clientsRepo.getClientsByIds(ids);
   }
 
   async getClientWithContacts(id: string): Promise<ClientWithContacts | undefined> {
-    const client = await this.getClient(id);
-    if (!client) return undefined;
-    
-    const contacts = await this.getContactsByClient(id);
-    const clientProjects = await this.getProjectsByClient(id);
-    
-    return { ...client, contacts, projects: clientProjects };
+    return this.clientsRepo.getClientWithContacts(id);
   }
 
   async getClientsByWorkspace(workspaceId: string): Promise<ClientWithContacts[]> {
-    const clientsList = await db.select()
-      .from(clients)
-      .where(eq(clients.workspaceId, workspaceId))
-      .orderBy(asc(clients.companyName));
-    
-    const result: ClientWithContacts[] = [];
-    for (const client of clientsList) {
-      const contacts = await this.getContactsByClient(client.id);
-      const clientProjects = await this.getProjectsByClient(client.id);
-      result.push({ ...client, contacts, projects: clientProjects });
-    }
-    return result;
+    return this.clientsRepo.getClientsByWorkspace(workspaceId);
   }
 
   async createClient(insertClient: InsertClient): Promise<Client> {
-    const [client] = await db.insert(clients).values(insertClient).returning();
-    return client;
+    return this.clientsRepo.createClient(insertClient);
   }
 
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
-    const normalizedClient = client.status === "inactive"
-      ? { ...client, stage: null }
-      : client;
-    const [updated] = await db.update(clients)
-      .set({ ...normalizedClient, updatedAt: new Date() })
-      .where(eq(clients.id, id))
-      .returning();
-    return updated || undefined;
+    return this.clientsRepo.updateClient(id, client);
   }
 
   async deleteClient(id: string): Promise<void> {
@@ -2130,10 +2110,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContactsByClient(clientId: string): Promise<ClientContact[]> {
-    return db.select()
-      .from(clientContacts)
-      .where(eq(clientContacts.clientId, clientId))
-      .orderBy(desc(clientContacts.isPrimary), asc(clientContacts.firstName));
+    return this.clientsRepo.getContactsByClient(clientId);
   }
 
   async createClientContact(insertContact: InsertClientContact): Promise<ClientContact> {
@@ -2609,18 +2586,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientsByTenant(tenantId: string, _workspaceId?: string): Promise<ClientWithContacts[]> {
-    const clientsList = await db.select()
-      .from(clients)
-      .where(eq(clients.tenantId, tenantId))
-      .orderBy(asc(clients.companyName));
-    
-    const result: ClientWithContacts[] = [];
-    for (const client of clientsList) {
-      const contacts = await this.getContactsByClient(client.id);
-      const clientProjects = await this.getProjectsByClient(client.id);
-      result.push({ ...client, contacts, projects: clientProjects });
-    }
-    return result;
+    return this.clientsRepo.getClientsByTenant(tenantId, _workspaceId);
   }
 
   async getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]> {
@@ -2974,10 +2940,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildClients(parentClientId: string): Promise<Client[]> {
-    return db.select()
-      .from(clients)
-      .where(eq(clients.parentClientId, parentClientId))
-      .orderBy(asc(clients.companyName));
+    return this.clientsRepo.getChildClients(parentClientId);
   }
 
   async validateParentClient(parentClientId: string, tenantId: string): Promise<boolean> {
@@ -3659,8 +3622,7 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getClientDivision(id: string): Promise<ClientDivision | undefined> {
-    const results = await db.select().from(clientDivisions).where(eq(clientDivisions.id, id));
-    return results[0];
+    return this.clientsRepo.getClientDivision(id);
   }
 
   async getClientDivisionsByClient(clientId: string, tenantId: string): Promise<ClientDivision[]> {

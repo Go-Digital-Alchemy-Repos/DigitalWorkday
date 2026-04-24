@@ -26,53 +26,14 @@ import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
-
-function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
-  if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
-  return u.email;
-}
-
-function userInitials(u: { firstName?: string | null; lastName?: string | null; email: string }) {
-  if (u.firstName && u.lastName) return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
-  if (u.firstName) return u.firstName[0].toUpperCase();
-  return u.email[0].toUpperCase();
-}
+import {
+  formatComparisonSub,
+  MetricCard,
+  reportUserInitials as userInitials,
+  reportUserName as userName,
+} from "./report-shared";
 
 type SortDir = "asc" | "desc";
-
-function formatComparisonSub(current: number, prior: number, suffix = "") {
-  const delta = Math.round((current - prior) * 10) / 10;
-  if (delta === 0) return `Flat vs previous period`;
-  const direction = delta > 0 ? "Up" : "Down";
-  const value = Math.abs(delta);
-  const display = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
-  return `${direction} ${display}${suffix} vs previous period`;
-}
-
-function MetricCard({ label, value, sub, icon, color }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon: React.ReactNode;
-  color: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", color)}>
-            {icon}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{label}</p>
-            <p className="text-xl font-bold leading-none mt-0.5">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 type OverviewSortField = "name" | "activeTasksNow" | "overdueCount" | "completedInRange" | "totalHours" | "utilizationPct" | "efficiencyRatio";
 
