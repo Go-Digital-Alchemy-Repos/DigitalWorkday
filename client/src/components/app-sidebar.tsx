@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useAnyCrmEnabled } from "@/hooks/use-crm-flags";
 import { useTenantTheme } from "@/lib/tenant-theme-loader";
 import { cn } from "@/lib/utils";
+import { ProjectClientBadge } from "@/components/project-client-badge";
 import {
   Home,
   FolderKanban,
@@ -52,7 +53,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { ProjectDrawer } from "@/features/projects";
-import type { Project, Team, Workspace } from "@shared/schema";
+import type { Client, Project, Team, Workspace } from "@shared/schema";
 import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/roles";
 
 const mainNavItems = [
@@ -86,6 +87,16 @@ export function AppSidebar() {
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
   });
+
+  const { data: clients } = useQuery<Client[]>({
+    queryKey: ["/api/clients"],
+  });
+
+  const getClientName = (clientId: string | null) => {
+    if (!clientId || !clients) return null;
+    const client = clients.find((item) => item.id === clientId);
+    return client ? (client.displayName || client.companyName) : null;
+  };
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -182,7 +193,15 @@ export function AppSidebar() {
                             className="h-3 w-3 rounded-sm"
                             style={{ backgroundColor: project.color || "#3B82F6" }}
                           />
-                          <span className={`truncate${project.stickyAt ? " font-semibold" : ""}`}>{project.name}</span>
+                          <div className="min-w-0 flex-1">
+                            <span className={`block truncate${project.stickyAt ? " font-semibold" : ""}`}>{project.name}</span>
+                            <ProjectClientBadge
+                              clientName={getClientName(project.clientId)}
+                              className="mt-1"
+                              maxLength={11}
+                              testId={`badge-project-client-${project.id}`}
+                            />
+                          </div>
                           {project.stickyAt && (
                             <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
                           )}

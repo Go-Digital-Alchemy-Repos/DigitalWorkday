@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ProjectClientBadge } from "@/components/project-client-badge";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { TaskCard } from "@/features/tasks/task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
@@ -879,6 +880,17 @@ export default function Home() {
     return "Good evening";
   }, []);
 
+  const clientNamesById = useMemo(
+    () =>
+      new Map(
+        (clients ?? []).map((client) => [
+          client.id,
+          client.displayName || client.companyName,
+        ]),
+      ),
+    [clients],
+  );
+
   return (
     <div className="flex h-full flex-col overflow-auto bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
       <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
@@ -1015,8 +1027,14 @@ export default function Home() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{project.name}</p>
+                          <ProjectClientBadge
+                            clientName={clientNamesById.get(project.clientId ?? "") ?? null}
+                            className="mt-1"
+                            maxLength={16}
+                            testId={`badge-home-project-client-${project.id}`}
+                          />
                           {project.description && (
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="mt-1 text-xs text-muted-foreground truncate">
                               {getPreviewText(project.description)}
                             </p>
                           )}
