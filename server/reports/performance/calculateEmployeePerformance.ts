@@ -57,6 +57,7 @@ export interface CalculateOptions {
   startDate: Date;
   endDate: Date;
   userId?: string | null;
+  userIds?: string[];
   limit?: number;
   offset?: number;
 }
@@ -64,15 +65,16 @@ export interface CalculateOptions {
 export async function calculateEmployeePerformance(
   opts: CalculateOptions
 ): Promise<{ results: EmployeePerformanceResult[]; total: number }> {
-  const { tenantId, startDate, endDate, userId, limit = 50, offset = 0 } = opts;
+  const { tenantId, startDate, endDate, userId, userIds = [], limit = 50, offset = 0 } = opts;
 
   const daysInRange = Math.max(
     Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1,
     1
   );
 
-  const userFilter = userId
-    ? sql`AND u.id = ${userId}`
+  const scopedUserIds = userId ? [userId] : userIds;
+  const userFilter = scopedUserIds.length > 0
+    ? sql`AND u.id = ANY(ARRAY[${sql.join(scopedUserIds.map(id => sql`${id}`), sql`, `)}]::text[])`
     : sql``;
 
   const rowsResult = await db.execute<{

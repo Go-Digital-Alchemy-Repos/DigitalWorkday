@@ -621,7 +621,11 @@ router.get("/employee/capacity", async (req: Request, res: Response) => {
 router.get("/employee/risk", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
+    const userFilter = filters.userIds.length > 0
+      ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+      : sql``;
 
     const rows = await dbRows<{
       user_id: string;
@@ -684,6 +688,7 @@ router.get("/employee/risk", async (req: Request, res: Response) => {
         GREATEST(${Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))}, 1) AS days_in_range
       FROM users u
       WHERE u.tenant_id = ${tenantId} AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
+        ${userFilter}
     `);
 
     const WEEKLY_HOURS_THRESHOLD = 50;
@@ -760,15 +765,17 @@ router.get("/employee/risk", async (req: Request, res: Response) => {
 router.get("/employee/trends", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
     const userId = req.query.userId as string | undefined;
+    const scopedUserIds = userId ? [userId] : filters.userIds;
 
-    const userJoinFilter = userId
-      ? sql`AND ta.user_id = ${userId}`
+    const userJoinFilter = scopedUserIds.length > 0
+      ? sql`AND ta.user_id = ANY(ARRAY[${sql.join(scopedUserIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const timeUserFilter = userId
-      ? sql`AND te.user_id = ${userId}`
+    const timeUserFilter = scopedUserIds.length > 0
+      ? sql`AND te.user_id = ANY(ARRAY[${sql.join(scopedUserIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
     const rows = await dbRows<{
@@ -813,6 +820,7 @@ router.get("/employee/trends", async (req: Request, res: Response) => {
         hoursTracked: Math.round(Number(r.hours_tracked) * 10) / 10,
       })),
       userId: userId ?? null,
+      userIds: scopedUserIds,
       range: { startDate, endDate },
     });
   } catch (error) {
@@ -837,6 +845,7 @@ router.get("/employee/performance", async (req: Request, res: Response) => {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       userId,
+      userIds: filters.userIds,
       limit,
       offset,
     });

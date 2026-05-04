@@ -3,9 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
@@ -16,7 +21,7 @@ import {
 import {
   Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
   ChevronUp, ChevronDown, ArrowUpDown, CalendarRange, Activity,
-  ShieldAlert, User, Award, Sparkles, FolderKanban, Info, Camera,
+  ShieldAlert, User, Award, Sparkles, FolderKanban, Info, Camera, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
@@ -62,7 +67,140 @@ interface OverviewEmployee {
   completionRate: number | null;
 }
 
-function OverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+interface EmployeeGroupUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  name?: string | null;
+  email: string;
+  avatarUrl: string | null;
+  role: string;
+  isActive?: boolean;
+}
+
+function buildEmployeeReportParams(rangeDays: ReportRangeValue, selectedUserIds: string[], extra?: Record<string, string>): string {
+  return buildDateParams(rangeDays, {
+    ...(selectedUserIds.length > 0 ? { userIds: selectedUserIds.join(",") } : {}),
+    ...(extra ?? {}),
+  });
+}
+
+function EmployeeGroupFilter({
+  selectedUserIds,
+  onSelectedUserIdsChange,
+}: {
+  selectedUserIds: string[];
+  onSelectedUserIdsChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selectedSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
+
+  const { data: users = [], isLoading } = useQuery<EmployeeGroupUser[]>({
+    queryKey: ["/api/users"],
+    enabled: open || selectedUserIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const reportUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users
+      .filter((u) => u.isActive !== false && ["admin", "project_manager", "employee"].includes(u.role))
+      .filter((u) => {
+        if (!q) return true;
+        return [userName(u), u.email, u.role].some((v) => v.toLowerCase().includes(q));
+      })
+      .sort((a, b) => userName(a).localeCompare(userName(b)));
+  }, [search, users]);
+
+  const selectedUsers = useMemo(() => {
+    return users
+      .filter((u) => selectedSet.has(u.id))
+      .sort((a, b) => userName(a).localeCompare(userName(b)));
+  }, [selectedSet, users]);
+
+  function toggleUser(userId: string) {
+    if (selectedSet.has(userId)) {
+      onSelectedUserIdsChange(selectedUserIds.filter((id) => id !== userId));
+      return;
+    }
+    onSelectedUserIdsChange([...selectedUserIds, userId]);
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2 h-9" data-testid="button-employee-group-filter">
+            <Users className="h-3.5 w-3.5" />
+            {selectedUserIds.length > 0 ? `${selectedUserIds.length} selected` : "All employees"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 p-0">
+          <div className="p-2 border-b">
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search employees..."
+              className="h-8"
+              data-testid="input-search-employee-group"
+            />
+          </div>
+          <ScrollArea className="max-h-72">
+            <div className="p-1">
+              {isLoading ? (
+                <div className="px-2 py-4 text-sm text-muted-foreground">Loading employees...</div>
+              ) : reportUsers.length === 0 ? (
+                <div className="px-2 py-4 text-sm text-muted-foreground">No employees found</div>
+              ) : (
+                reportUsers.map((u) => {
+                  const selected = selectedSet.has(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      className={cn("w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover-elevate", selected && "bg-primary/5")}
+                      onClick={() => toggleUser(u.id)}
+                      data-testid={`button-toggle-report-employee-${u.id}`}
+                    >
+                      <Checkbox checked={selected} aria-hidden className="pointer-events-none" />
+                      <Avatar className="h-6 w-6">
+                        {u.avatarUrl && <AvatarImage src={getStorageUrl(u.avatarUrl)} alt={userName(u)} />}
+                        <AvatarFallback className="text-[10px]">{userInitials(u)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{userName(u)}</div>
+                        <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+          {selectedUserIds.length > 0 && (
+            <div className="border-t p-2">
+              <Button variant="ghost" size="sm" className="w-full h-8" onClick={() => onSelectedUserIdsChange([])} data-testid="button-clear-employee-group">
+                Clear selection
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+      {selectedUsers.slice(0, 3).map((u) => (
+        <Badge key={u.id} variant="secondary" className="gap-1 max-w-40">
+          <span className="truncate">{userName(u)}</span>
+          <button type="button" onClick={() => toggleUser(u.id)} className="rounded hover:bg-background/80" aria-label={`Remove ${userName(u)}`}>
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      ))}
+      {selectedUsers.length > 3 && <Badge variant="outline">+{selectedUsers.length - 3}</Badge>}
+    </div>
+  );
+}
+
+function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const [sortBy, setSortBy] = useState<OverviewSortField>("overdueCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -85,9 +223,9 @@ function OverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/overview", rangeDays],
+    queryKey: ["/api/reports/v2/employee/overview", rangeDays, selectedUserIds],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/employee/overview?${buildEmployeeReportParams(rangeDays, selectedUserIds, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -185,18 +323,18 @@ function OverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <MetricCard
-            label="Total Active Tasks"
+            label="Active Tasks Now"
             value={totals.activeTasks}
-            sub={totals.prior ? formatComparisonSub(totals.activeTasks, totals.prior.activeTasks) : undefined}
+            sub="Current snapshot"
             icon={<CheckSquare className="h-4 w-4 text-white" />}
             color="bg-blue-500"
             definition="Open, non-cancelled tenant work currently assigned to reportable users. Personal tasks are excluded."
             source="tasks + task assignees"
           />
           <MetricCard
-            label="Total Overdue"
+            label="Overdue Now"
             value={totals.overdueTasks}
-            sub={totals.prior ? formatComparisonSub(totals.overdueTasks, totals.prior.overdueTasks) : undefined}
+            sub="Current snapshot"
             icon={<AlertTriangle className="h-4 w-4 text-white" />}
             color="bg-red-500"
             definition="Assigned open work with a due date earlier than now. Personal tasks are excluded."
@@ -442,15 +580,15 @@ interface WorkloadEmployee {
   backlogCount: number;
 }
 
-function WorkloadTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+function WorkloadTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const { data, isLoading } = useQuery<{
     employees: WorkloadEmployee[];
     pagination: { total: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/workload", rangeDays],
+    queryKey: ["/api/reports/v2/employee/workload", rangeDays, selectedUserIds],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/workload?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/employee/workload?${buildEmployeeReportParams(rangeDays, selectedUserIds, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -566,15 +704,15 @@ interface TimeEmployee {
   varianceHours: number;
 }
 
-function TimeTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+function TimeTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const { data, isLoading } = useQuery<{
     employees: TimeEmployee[];
     pagination: { total: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/time", rangeDays],
+    queryKey: ["/api/reports/v2/employee/time", rangeDays, selectedUserIds],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/time?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/employee/time?${buildEmployeeReportParams(rangeDays, selectedUserIds, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -669,7 +807,7 @@ function TimeTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   );
 }
 
-function CapacityTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+function CapacityTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const { data, isLoading } = useQuery<{
     users: Array<{
       userId: string;
@@ -686,9 +824,9 @@ function CapacityTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     }>;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/capacity", rangeDays],
+    queryKey: ["/api/reports/v2/employee/capacity", rangeDays, selectedUserIds],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/capacity?${buildDateParams(rangeDays)}`);
+      const res = await fetch(`/api/reports/v2/employee/capacity?${buildEmployeeReportParams(rangeDays, selectedUserIds)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -781,7 +919,7 @@ function CapacityTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   );
 }
 
-function RiskTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+function RiskTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const { data, isLoading } = useQuery<{
     flagged: Array<{
       userId: string;
@@ -802,9 +940,9 @@ function RiskTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     totalChecked: number;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/risk", rangeDays],
+    queryKey: ["/api/reports/v2/employee/risk", rangeDays, selectedUserIds],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/risk?${buildDateParams(rangeDays)}`);
+      const res = await fetch(`/api/reports/v2/employee/risk?${buildEmployeeReportParams(rangeDays, selectedUserIds)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -925,29 +1063,33 @@ interface TrendWeek {
   hoursTracked: number;
 }
 
-function TrendsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+function TrendsTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("__all__");
 
   const { data: teamData } = useQuery<{ employees: Array<{ userId: string; firstName: string | null; lastName: string | null; email: string }> }>({
-    queryKey: ["/api/reports/v2/employee/overview", rangeDays],
+    queryKey: ["/api/reports/v2/employee/overview", rangeDays, selectedUserIds, "trend-options"],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/employee/overview?${buildEmployeeReportParams(rangeDays, selectedUserIds, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     staleTime: 2 * 60 * 1000,
   });
 
+  const trendParams = buildEmployeeReportParams(
+    rangeDays,
+    selectedUserId && selectedUserId !== "__all__" ? [selectedUserId] : selectedUserIds,
+  );
   const trendsUrl = selectedUserId && selectedUserId !== "__all__"
-    ? `/api/reports/v2/employee/trends?${buildDateParams(rangeDays)}&userId=${selectedUserId}`
-    : `/api/reports/v2/employee/trends?${buildDateParams(rangeDays)}`;
+    ? `/api/reports/v2/employee/trends?${trendParams}&userId=${selectedUserId}`
+    : `/api/reports/v2/employee/trends?${trendParams}`;
 
   const { data, isLoading } = useQuery<{
     weeks: TrendWeek[];
     userId: string | null;
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/trends", rangeDays, selectedUserId],
+    queryKey: ["/api/reports/v2/employee/trends", rangeDays, selectedUserIds, selectedUserId],
     queryFn: async () => {
       const res = await fetch(trendsUrl);
       if (!res.ok) throw new Error("Failed");
@@ -967,7 +1109,9 @@ function TrendsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                 <SelectValue placeholder="All Team" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__" data-testid="option-trends-all">All Team</SelectItem>
+                <SelectItem value="__all__" data-testid="option-trends-all">
+                  {selectedUserIds.length > 0 ? "Selected Group" : "All Team"}
+                </SelectItem>
                 {(teamData?.employees ?? []).map((e) => (
                   <SelectItem key={e.userId} value={e.userId} data-testid={`option-trends-${e.userId}`}>
                     {userName(e)}
@@ -1070,7 +1214,7 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
   );
 }
 
-function PerformanceTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+function PerformanceTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; selectedUserIds: string[] }) {
   const [sortBy, setSortBy] = useState<EpiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -1079,9 +1223,9 @@ function PerformanceTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/employee/performance", rangeDays],
+    queryKey: ["/api/reports/v2/employee/performance", rangeDays, selectedUserIds],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/performance?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/employee/performance?${buildEmployeeReportParams(rangeDays, selectedUserIds, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1391,7 +1535,7 @@ function ExplanationsPanel({ explanations, dataQualityFlags }: { explanations: s
   );
 }
 
-function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
+function ForecastsTab({ horizonWeeks, selectedUserIds }: { horizonWeeks: number; selectedUserIds: string[] }) {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
@@ -1431,8 +1575,15 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const highRiskUsers = capData?.users.filter(u => u.weeks.some(w => w.overloadRisk === "High")).length ?? 0;
-  const mediumRiskUsers = capData?.users.filter(u => u.weeks.some(w => w.overloadRisk === "Medium") && !u.weeks.some(w => w.overloadRisk === "High")).length ?? 0;
+  const capacityUsers = useMemo(() => {
+    if (!capData?.users) return [];
+    if (selectedUserIds.length === 0) return capData.users;
+    const selected = new Set(selectedUserIds);
+    return capData.users.filter((u) => selected.has(u.userId));
+  }, [capData?.users, selectedUserIds]);
+
+  const highRiskUsers = capacityUsers.filter(u => u.weeks.some(w => w.overloadRisk === "High")).length;
+  const mediumRiskUsers = capacityUsers.filter(u => u.weeks.some(w => w.overloadRisk === "Medium") && !u.weeks.some(w => w.overloadRisk === "High")).length;
   const highRiskProjects = projData?.projects.filter(p => p.deadlineRisk === "High").length ?? 0;
 
   if (capLoading || projLoading) {
@@ -1483,7 +1634,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
           </div>
         </CardHeader>
         <CardContent className="pt-0 overflow-x-auto">
-          {!capData?.users.length ? (
+          {!capacityUsers.length ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No employee data found</p>
           ) : (
             <>
@@ -1491,7 +1642,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-2 px-3 font-medium min-w-[160px]">Employee</th>
-                    {capData.users[0]?.weeks.map(w => (
+                    {capacityUsers[0]?.weeks.map(w => (
                       <th key={w.weekStart} className="text-center py-2 px-2 font-medium min-w-[80px]">
                         {formatWeekLabel(w.weekStart)}
                       </th>
@@ -1499,7 +1650,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {capData.users.map(u => (
+                  {capacityUsers.map(u => (
                     <>
                       <tr
                         key={u.userId}
@@ -1651,6 +1802,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
 
 export function EmployeeCommandCenter() {
   const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
   const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
   const flags = useFeatureFlags();
@@ -1662,6 +1814,12 @@ export function EmployeeCommandCenter() {
       icon={<Users className="h-4 w-4" />}
       rangeDays={rangeDays}
       onRangeChange={setRangeDays}
+      extraControls={
+        <EmployeeGroupFilter
+          selectedUserIds={selectedUserIds}
+          onSelectedUserIdsChange={setSelectedUserIds}
+        />
+      }
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="employee-cc-tabs">
         <MobileTabSelect
@@ -1721,26 +1879,26 @@ export function EmployeeCommandCenter() {
         </div>
 
         <TabsContent value="overview" className="mt-4">
-          <OverviewTab rangeDays={rangeDays} />
+          <OverviewTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
         </TabsContent>
         <TabsContent value="workload" className="mt-4">
-          <WorkloadTab rangeDays={rangeDays} />
+          <WorkloadTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
         </TabsContent>
         <TabsContent value="time" className="mt-4">
-          <TimeTab rangeDays={rangeDays} />
+          <TimeTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
         </TabsContent>
         <TabsContent value="capacity" className="mt-4">
-          <CapacityTab rangeDays={rangeDays} />
+          <CapacityTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
         </TabsContent>
         <TabsContent value="risk" className="mt-4">
-          <RiskTab rangeDays={rangeDays} />
+          <RiskTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
         </TabsContent>
         <TabsContent value="trends" className="mt-4">
-          <TrendsTab rangeDays={rangeDays} />
+          <TrendsTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
         </TabsContent>
         {flags.enableEmployeePerformanceIndex && (
           <TabsContent value="performance" className="mt-4">
-            <PerformanceTab rangeDays={rangeDays} />
+            <PerformanceTab rangeDays={rangeDays} selectedUserIds={selectedUserIds} />
           </TabsContent>
         )}
         {flags.enableForecastingLayer && (
@@ -1772,7 +1930,7 @@ export function EmployeeCommandCenter() {
                     </SelectContent>
                   </Select>
                 </div>
-                <ForecastsTab horizonWeeks={horizonWeeks} />
+                <ForecastsTab horizonWeeks={horizonWeeks} selectedUserIds={selectedUserIds} />
               </TabsContent>
               {flags.enableForecastSnapshots && (
                 <TabsContent value="snapshots">

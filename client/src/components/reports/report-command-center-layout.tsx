@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,6 +49,17 @@ export function defaultCustomRange(): CustomReportRange {
     mode: "custom",
     startDate: toDateInputValue(start),
     endDate: toDateInputValue(now),
+  };
+}
+
+function dateInputsForRange(rangeDays: ReportRangeValue): CustomReportRange {
+  if (typeof rangeDays !== "number") return rangeDays;
+  const end = new Date();
+  const start = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+  return {
+    mode: "custom",
+    startDate: toDateInputValue(start),
+    endDate: toDateInputValue(end),
   };
 }
 
@@ -122,10 +133,16 @@ export function ReportCommandCenterLayout({
   extraControls,
 }: ReportCommandCenterLayoutProps) {
   const isCustom = typeof rangeDays !== "number";
-  const initialCustom = useMemo(() => isCustom ? rangeDays : defaultCustomRange(), [isCustom, rangeDays]);
+  const initialCustom = useMemo(() => dateInputsForRange(rangeDays), [rangeDays]);
   const [customStart, setCustomStart] = useState(initialCustom.startDate);
   const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
   const customInvalid = !customStart || !customEnd || customStart > customEnd;
+
+  useEffect(() => {
+    const inputs = dateInputsForRange(rangeDays);
+    setCustomStart(inputs.startDate);
+    setCustomEnd(inputs.endDate);
+  }, [rangeDays]);
 
   function handlePresetChange(value: string) {
     if (value === "custom") {
@@ -135,12 +152,23 @@ export function ReportCommandCenterLayout({
       onRangeChange(custom);
       return;
     }
-    onRangeChange(Number(value));
+    const preset = Number(value);
+    const inputs = dateInputsForRange(preset);
+    setCustomStart(inputs.startDate);
+    setCustomEnd(inputs.endDate);
+    onRangeChange(preset);
   }
 
   function applyCustomRange() {
     if (customInvalid) return;
     onRangeChange({ mode: "custom", startDate: customStart, endDate: customEnd });
+  }
+
+  function updateCustomRange(nextStart: string, nextEnd: string) {
+    setCustomStart(nextStart);
+    setCustomEnd(nextEnd);
+    if (!nextStart || !nextEnd || nextStart > nextEnd) return;
+    onRangeChange({ mode: "custom", startDate: nextStart, endDate: nextEnd });
   }
 
   return (
@@ -163,37 +191,35 @@ export function ReportCommandCenterLayout({
             </SelectItem>
           </SelectContent>
         </Select>
-        {isCustom && (
-          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto" data-testid="custom-date-range-controls">
-            <Input
-              type="date"
-              value={customStart}
-              onChange={(event) => setCustomStart(event.target.value)}
-              className="w-full sm:w-36 h-9"
-              data-testid="input-custom-start-date"
-              aria-label="Custom start date"
-            />
-            <span className="text-xs text-muted-foreground hidden sm:inline">to</span>
-            <Input
-              type="date"
-              value={customEnd}
-              onChange={(event) => setCustomEnd(event.target.value)}
-              className="w-full sm:w-36 h-9"
-              data-testid="input-custom-end-date"
-              aria-label="Custom end date"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={customInvalid}
-              onClick={applyCustomRange}
-              data-testid="button-apply-custom-range"
-            >
-              Apply
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto" data-testid="custom-date-range-controls">
+          <Input
+            type="date"
+            value={customStart}
+            onChange={(event) => updateCustomRange(event.target.value, customEnd)}
+            className="w-full sm:w-36 h-9"
+            data-testid="input-custom-start-date"
+            aria-label="Custom start date"
+          />
+          <span className="text-xs text-muted-foreground hidden sm:inline">to</span>
+          <Input
+            type="date"
+            value={customEnd}
+            onChange={(event) => updateCustomRange(customStart, event.target.value)}
+            className="w-full sm:w-36 h-9"
+            data-testid="input-custom-end-date"
+            aria-label="Custom end date"
+          />
+          <Button
+            type="button"
+            variant={isCustom ? "default" : "outline"}
+            size="sm"
+            disabled={customInvalid}
+            onClick={applyCustomRange}
+            data-testid="button-apply-custom-range"
+          >
+            Apply
+          </Button>
+        </div>
       </div>
       {children}
     </div>
