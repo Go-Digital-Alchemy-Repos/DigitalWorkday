@@ -16,9 +16,6 @@ import {
   Users, 
   TrendingUp, 
   AlertTriangle,
-  ArrowLeft,
-  FileText,
-  Calendar,
   Building2,
   FolderKanban,
   LayoutDashboard,
@@ -50,12 +47,12 @@ const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics
 const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
 const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 
-type ReportView = "landing" | "overview" | "workload" | "time" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
+type ReportView = "overview" | "workload" | "time" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
 
-const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
+const REPORT_TABS: Array<{ view: ReportView; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
+  { view: "overview",        label: "Overview",                Icon: LayoutDashboard },
   { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
   { view: "client-cc",       label: "Client Command Center",   Icon: Building2,      flag: "enableClientCommandCenter" },
-  { view: "overview",        label: "Overview",                Icon: LayoutDashboard },
   { view: "task-analytics",  label: "Task Analysis",           Icon: CheckSquare },
   { view: "client-analytics",label: "Client Analytics",        Icon: PieChart },
   { view: "workload",        label: "Workload Reports",        Icon: Users },
@@ -388,9 +385,9 @@ function PipelineReport() {
 
 export default function ReportsPage() {
   const { user, isLoading } = useAuth();
-  const [currentView, setCurrentView] = useState<ReportView>("landing");
+  const [currentView, setCurrentView] = useState<ReportView>("overview");
   const flags = useFeatureFlags();
-  const landingRangeParams = useMemo(() => buildReportRangeParams(30), []);
+  const overviewRangeParams = useMemo(() => buildReportRangeParams(30), []);
 
   const isAdmin = hasTenantAdminAccess(user?.role);
 
@@ -403,9 +400,9 @@ export default function ReportsPage() {
     enabled: isAdmin && (flags.enableEmployeeCommandCenter || flags.enableClientCommandCenter),
   });
   const { data: employeeRisk } = useQuery<{ flagged: Array<unknown> }>({
-    queryKey: ["/api/reports/v2/employee/risk", "landing"],
+    queryKey: ["/api/reports/v2/employee/risk", "overview"],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/risk?${landingRangeParams}`);
+      const res = await fetch(`/api/reports/v2/employee/risk?${overviewRangeParams}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -413,9 +410,9 @@ export default function ReportsPage() {
     staleTime: 2 * 60 * 1000,
   });
   const { data: clientRisk } = useQuery<{ flagged: Array<unknown> }>({
-    queryKey: ["/api/reports/v2/client/risk", "landing"],
+    queryKey: ["/api/reports/v2/client/risk", "overview"],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/risk?${landingRangeParams}`);
+      const res = await fetch(`/api/reports/v2/client/risk?${overviewRangeParams}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -450,13 +447,6 @@ export default function ReportsPage() {
       view: "client-cc" as ReportView,
       color: "bg-violet-600",
     }] : []),
-    {
-      icon: <LayoutDashboard className="h-6 w-6 text-white" />,
-      title: "Overview",
-      description: "Executive dashboard with KPIs across tasks, projects, time, clients, and tickets",
-      view: "overview" as ReportView,
-      color: "bg-slate-700",
-    },
     {
       icon: <CheckSquare className="h-6 w-6 text-white" />,
       title: "Task Analytics",
@@ -493,114 +483,6 @@ export default function ReportsPage() {
       color: "bg-indigo-500",
     },
   ];
-
-  if (currentView === "landing") {
-    return (
-      <ScrollArea className="h-full">
-        <div className="container max-w-7xl p-3 sm:p-6">
-          <div className="flex items-center gap-3 mb-4 sm:mb-6">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold">Reports & Analytics</h1>
-              <p className="text-muted-foreground text-xs sm:text-sm">
-                Comprehensive insights into time tracking, workload, and project performance
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6 sm:mb-8">
-            {reportCategories.map((category) => (
-              <ReportCard
-                key={category.title}
-                icon={category.icon}
-                title={category.title}
-                description={category.description}
-                onClick={() => setCurrentView(category.view)}
-                color={category.color}
-              />
-            ))}
-          </div>
-
-          <Card className="mb-6 sm:mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-                Management Exceptions
-              </CardTitle>
-              <CardDescription>
-                The highest-priority issues across delivery, reviews, client health, and employee risk
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <button
-                type="button"
-                onClick={() => setCurrentView("employee-cc")}
-                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
-              >
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <span className="text-sm font-medium">Sent For Review</span>
-                  <Badge variant="secondary">{reviewQueue?.items.length ?? 0}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Open the command center and PM views to inspect review backlog.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentView("overview")}
-                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
-              >
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <span className="text-sm font-medium">Overdue Across Projects</span>
-                  <Badge variant="destructive">{overdueItems.length}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Use this as the top-level overdue exception queue across active work.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentView("client-cc")}
-                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
-              >
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <span className="text-sm font-medium">Clients At Risk</span>
-                  <Badge variant="secondary">{clientRisk?.flagged.length ?? 0}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Jump into Client Command Center risk and health views for evidence.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentView("employee-cc")}
-                className="rounded-xl border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
-              >
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <span className="text-sm font-medium">Employees At Risk</span>
-                  <Badge variant="secondary">{employeeRisk?.flagged.length ?? 0}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Open Employee Command Center for workload, risk, and compliance detail.</p>
-              </button>
-            </CardContent>
-          </Card>
-
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Quick Stats
-              </CardTitle>
-              <CardDescription>
-                Overview of your organization's key metrics
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Select a report category above to view detailed analytics and export options.
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </ScrollArea>
-    );
-  }
 
   const getViewTitle = () => {
     switch (currentView) {
@@ -645,16 +527,6 @@ export default function ReportsPage() {
     <ScrollArea className="h-full">
       <div className="container max-w-7xl p-3 sm:p-4 lg:p-6">
         <div className="mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 mb-2 sm:mb-3">
-            <button
-              onClick={() => setCurrentView("landing")}
-              data-testid="button-back-to-reports"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] sm:min-h-0"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              All Reports
-            </button>
-          </div>
           <div className="flex items-center gap-3 mb-3 sm:mb-4">
             <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               {getViewIcon()}
@@ -711,12 +583,85 @@ export default function ReportsPage() {
             </div>
           }
         >
-          {currentView === "employee-cc" && flags.enableEmployeeCommandCenter ? (
+          {currentView === "overview" ? (
+            <div className="space-y-6">
+              <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {reportCategories.map((category) => (
+                  <ReportCard
+                    key={category.title}
+                    icon={category.icon}
+                    title={category.title}
+                    description={category.description}
+                    onClick={() => setCurrentView(category.view)}
+                    color={category.color}
+                  />
+                ))}
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    Management Exceptions
+                  </CardTitle>
+                  <CardDescription>
+                    Highest-priority issues across delivery, reviews, client health, and employee risk
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("employee-cc")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Sent For Review</span>
+                      <Badge variant="secondary">{reviewQueue?.items.length ?? 0}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Open the command center and PM views to inspect review backlog.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("task-analytics")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Overdue Across Projects</span>
+                      <Badge variant="destructive">{overdueItems.length}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Open task analytics for overdue and completion detail.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("client-cc")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Clients At Risk</span>
+                      <Badge variant="secondary">{clientRisk?.flagged.length ?? 0}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Jump into Client Command Center risk and health views for evidence.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("employee-cc")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Employees At Risk</span>
+                      <Badge variant="secondary">{employeeRisk?.flagged.length ?? 0}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Open Employee Command Center for workload, risk, and compliance detail.</p>
+                  </button>
+                </CardContent>
+              </Card>
+
+              <OverviewDashboard />
+            </div>
+          ) : currentView === "employee-cc" && flags.enableEmployeeCommandCenter ? (
             <EmployeeCommandCenter />
           ) : currentView === "client-cc" && flags.enableClientCommandCenter ? (
             <ClientCommandCenter />
-          ) : currentView === "overview" ? (
-            <OverviewDashboard />
           ) : currentView === "task-analytics" ? (
             <TaskAnalytics />
           ) : currentView === "client-analytics" ? (
