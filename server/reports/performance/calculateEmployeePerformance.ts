@@ -75,7 +75,7 @@ export async function calculateEmployeePerformance(
     ? sql`AND u.id = ${userId}`
     : sql``;
 
-  const rows = await db.execute<{
+  const rowsResult = await db.execute<{
     user_id: string;
     first_name: string | null;
     last_name: string | null;
@@ -102,6 +102,7 @@ export async function calculateEmployeePerformance(
         WHERE ta.user_id = u.id
           AND ta.tenant_id = ${tenantId}
           AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
           AND t.status NOT IN ('done','cancelled')
       ) AS active_tasks,
       (
@@ -111,6 +112,7 @@ export async function calculateEmployeePerformance(
         WHERE ta.user_id = u.id
           AND ta.tenant_id = ${tenantId}
           AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
           AND t.status NOT IN ('done','cancelled')
           AND t.due_date < NOW()
       ) AS overdue_tasks,
@@ -121,6 +123,7 @@ export async function calculateEmployeePerformance(
         WHERE ta.user_id = u.id
           AND ta.tenant_id = ${tenantId}
           AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
           AND t.status = 'done'
           AND t.updated_at >= ${startDate}
           AND t.updated_at <= ${endDate}
@@ -140,6 +143,7 @@ export async function calculateEmployeePerformance(
         WHERE ta.user_id = u.id
           AND ta.tenant_id = ${tenantId}
           AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
           AND t.status NOT IN ('done','cancelled')
       ) AS estimated_minutes,
       (
@@ -153,19 +157,16 @@ export async function calculateEmployeePerformance(
       COUNT(*) OVER() AS total_count
     FROM users u
     WHERE u.tenant_id = ${tenantId}
-      AND u.role IN ('admin', 'employee')
+      AND u.role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
       AND u.is_active = true
       ${userFilter}
     ORDER BY u.first_name ASC, u.last_name ASC
     LIMIT ${limit} OFFSET ${offset}
   `);
 
-  const normalizedRows = Array.isArray(rows)
-    ? rows
-    : (rows && typeof rows === "object" && "rows" in rows)
-      ? (rows as { rows: typeof rows }).rows
-      : rows;
-  const rowsArr = normalizedRows as any[];
+  const rowsArr = Array.isArray(rowsResult)
+    ? rowsResult
+    : ((rowsResult as unknown as { rows?: unknown[] }).rows ?? []);
 
   const total = rowsArr.length > 0 ? Number(rowsArr[0].total_count) : 0;
 

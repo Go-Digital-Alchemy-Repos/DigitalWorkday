@@ -1,13 +1,13 @@
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 
-async function dbRows<T extends Record<string, unknown>>(
+async function dbRows<T>(
   q: Parameters<typeof db.execute>[0]
 ): Promise<T[]> {
-  const result = await db.execute<T>(q);
-  if (Array.isArray(result)) return result as T[];
+  const result = await db.execute<Record<string, unknown>>(q);
+  if (Array.isArray(result)) return result as unknown as T[];
   if (result && typeof result === "object" && "rows" in result) {
-    return (result as { rows: T[] }).rows;
+    return (result as { rows: unknown[] }).rows as T[];
   }
   return result as unknown as T[];
 }
@@ -115,7 +115,7 @@ export async function computeCapacityOverload(
       AND te.start_time >= ${isoDate(historyStart)}
       AND te.start_time < ${isoDate(historyEnd)}
     WHERE u.tenant_id = ${tenantId}
-      AND u.role IN ('admin', 'employee')
+      AND u.role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
     GROUP BY u.id, u.first_name, u.last_name, u.email, date_trunc('week', te.start_time)
     ORDER BY u.id, week_start
   `);
@@ -129,7 +129,7 @@ export async function computeCapacityOverload(
     SELECT id AS user_id, first_name, last_name, email
     FROM users
     WHERE tenant_id = ${tenantId}
-      AND role IN ('admin', 'employee')
+      AND role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
     ORDER BY last_name, first_name
   `);
 

@@ -90,7 +90,7 @@ router.get("/forecasting/snapshots/:snapshotId/export", async (req: Request, res
     const payload = snapshot.payloadJson as Record<string, unknown>;
 
     if (snapshot.snapshotType === "capacity_overload") {
-      const data = payload as CapacityOverloadResult;
+      const data = payload as unknown as CapacityOverloadResult;
       res.write("user_id,name,email,week_start,predicted_hours,utilization_pct,overload_risk\n");
       for (const u of data.users ?? []) {
         for (const w of u.weeks ?? []) {
@@ -99,13 +99,13 @@ router.get("/forecasting/snapshots/:snapshotId/export", async (req: Request, res
         }
       }
     } else if (snapshot.snapshotType === "project_deadline_risk") {
-      const data = payload as ProjectDeadlineRiskResult;
+      const data = payload as unknown as ProjectDeadlineRiskResult;
       res.write("project_id,project_name,due_date,weeks_until_due,open_tasks,overdue_tasks,throughput_per_week,predicted_weeks_to_clear,deadline_risk\n");
       for (const p of data.projects ?? []) {
         res.write(`${p.projectId},"${p.projectName}",${p.dueDate ?? ""},${p.weeksUntilDue ?? ""},${p.openTaskCount},${p.overdueCount},${p.throughputPerWeek},${p.predictedWeeksToClear},${p.deadlineRisk}\n`);
       }
     } else if (snapshot.snapshotType === "client_risk_trend") {
-      const data = payload as ClientRiskTrendResult;
+      const data = payload as unknown as ClientRiskTrendResult;
       res.write("client_id,company_name,current_health_score,prior_health_score,predicted_health_score,risk_trend,client_risk,weekly_slope\n");
       for (const c of data.clients ?? []) {
         res.write(`${c.clientId},"${c.companyName}",${c.currentHealthScore},${c.priorHealthScore},${c.predictedHealthScore},${c.riskTrend},${c.clientRisk},${c.weeklySlope}\n`);

@@ -108,7 +108,7 @@ router.get("/forecasting/capacity-overload", async (req: Request, res: Response)
         AND te.start_time >= ${isoDate(historyStart)}
         AND te.start_time < ${isoDate(historyEnd)}
       WHERE u.tenant_id = ${tenantId}
-        AND u.role IN ('admin', 'employee')
+        AND u.role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
       GROUP BY u.id, u.first_name, u.last_name, u.email, date_trunc('week', te.start_time)
       ORDER BY u.id, week_start
     `);
@@ -122,7 +122,7 @@ router.get("/forecasting/capacity-overload", async (req: Request, res: Response)
       SELECT id AS user_id, first_name, last_name, email
       FROM users
       WHERE tenant_id = ${tenantId}
-        AND role IN ('admin', 'employee')
+        AND role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
       ORDER BY last_name, first_name
     `);
 
@@ -268,6 +268,7 @@ router.get("/forecasting/project-deadline-risk", async (req: Request, res: Respo
       overdue_count: string;
       open_estimated_hours: string;
       completed_in_history: string;
+      recent_actual_hours: string;
     }>(sql`
       SELECT
         p.id AS project_id,
@@ -285,7 +286,14 @@ router.get("/forecasting/project-deadline-risk", async (req: Request, res: Respo
           WHEN t.status = 'done'
           AND t.updated_at >= ${isoDate(historyStart)}
           THEN t.id
-        END) AS completed_in_history
+        END) AS completed_in_history,
+        COALESCE((
+          SELECT SUM(te.duration_seconds) / 3600.0
+          FROM time_entries te
+          WHERE te.project_id = p.id
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time >= ${isoDate(historyStart)}
+        ), 0) AS recent_actual_hours
       FROM projects p
       LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
       WHERE p.tenant_id = ${tenantId}
