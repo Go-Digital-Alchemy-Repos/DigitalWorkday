@@ -136,7 +136,7 @@ function EmployeeGroupFilter({
             {selectedUserIds.length > 0 ? `${selectedUserIds.length} selected` : "All employees"}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0">
+        <PopoverContent align="end" className="w-[28rem] max-w-[calc(100vw-2rem)] p-0">
           <div className="p-2 border-b">
             <Input
               value={search}
@@ -146,7 +146,10 @@ function EmployeeGroupFilter({
               data-testid="input-search-employee-group"
             />
           </div>
-          <ScrollArea className="max-h-72">
+          <div className="border-b px-3 py-1.5 text-xs text-muted-foreground">
+            {isLoading ? "Loading employees..." : `${reportUsers.length} employee${reportUsers.length === 1 ? "" : "s"}`}
+          </div>
+          <ScrollArea className="max-h-[min(70vh,640px)]">
             <div className="p-1">
               {isLoading ? (
                 <div className="px-2 py-4 text-sm text-muted-foreground">Loading employees...</div>
