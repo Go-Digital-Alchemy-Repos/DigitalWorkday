@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -383,6 +383,17 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     },
   });
 
+  useEffect(() => {
+    const team = teamData?.team ?? [];
+    if (team.length === 0) {
+      if (selectedUserId) setSelectedUserId("");
+      return;
+    }
+    if (!selectedUserId || !team.some((member) => member.userId === selectedUserId)) {
+      setSelectedUserId(team[0].userId);
+    }
+  }, [selectedUserId, teamData?.team]);
+
   const { data, isLoading, isError } = useQuery<{
     user: { id: string; firstName: string | null; lastName: string | null; email: string; avatarUrl: string | null };
     summary: { activeTasksNow: number; overdueCount: number; completedCount: number; totalHours: number; dueSoonCount: number };
@@ -443,7 +454,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
             <User className="h-4 w-4 text-muted-foreground shrink-0" />
             <Select value={selectedUserId} onValueChange={setSelectedUserId}>
               <SelectTrigger className="w-full sm:w-64" data-testid="select-employee">
-                <SelectValue placeholder="Select an employee…" />
+                <SelectValue placeholder="Select an employee..." />
               </SelectTrigger>
               <SelectContent>
                 {teamData.team.map((m) => (
@@ -460,7 +471,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
       {!selectedUserId && (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <User className="h-10 w-10 opacity-30" />
-          <p className="text-sm">Select an employee to view their workload details</p>
+          <p className="text-sm">Loading employee workload details...</p>
         </div>
       )}
 
