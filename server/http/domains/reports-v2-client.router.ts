@@ -14,6 +14,14 @@ const router = Router();
 
 router.use(reportingGuard);
 
+const BILLABLE_TIME_CONDITION = sql`te.scope = 'out_of_scope'`;
+
+function clientFilterClause(clientIds: string[]) {
+  return clientIds.length > 0
+    ? sql`AND c.id = ANY(ARRAY[${sql.join(clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+    : sql``;
+}
+
 function projectStatusFilterClause(statuses: string[]) {
   return statuses.length > 0
     ? sql`AND p.status = ANY(ARRAY[${sql.join(statuses.map((status) => sql`${status}`), sql`, `)}]::text[])`
@@ -69,6 +77,7 @@ type ClientOverviewRow = {
   overdue_tasks: string;
   completed_in_range: string;
   total_hours: string;
+  billable_hours: string;
   last_activity_date: string | null;
 };
 
@@ -90,7 +99,7 @@ async function loadClientOverviewRows({
   offset?: number;
 }) {
   const clientFilter = clientIds.length > 0
-    ? sql`AND c.id = ANY(ARRAY[${sql.join(clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+    ? clientFilterClause(clientIds)
     : sql``;
   const projectStatusFilter = projectStatusFilterClause(statuses);
   const paginationClause = limit != null
@@ -151,6 +160,16 @@ async function loadClientOverviewRows({
           AND te.start_time BETWEEN ${startDate} AND ${endDate}
           ${projectStatusFilter}
       ) AS total_hours,
+      (
+        SELECT COALESCE(SUM(CASE WHEN ${BILLABLE_TIME_CONDITION} THEN te.duration_seconds ELSE 0 END), 0)::float / 3600.0
+        FROM projects p
+        JOIN time_entries te ON te.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time BETWEEN ${startDate} AND ${endDate}
+          ${projectStatusFilter}
+      ) AS billable_hours,
       GREATEST(
         (
           SELECT MAX(t.updated_at)
@@ -187,6 +206,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
     const prior = previousRange(startDate, endDate);
+    const clientFilter = clientFilterClause(filters.clientIds);
     const [rows, currentSummaryRows, priorSummaryRows] = await Promise.all([
       loadClientOverviewRows({
         tenantId,
@@ -213,7 +233,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
       }),
     ]);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
       ${clientCountFilterClause(tenantId, filters.statuses)}
@@ -240,7 +260,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
         overdueTasks: Number(r.overdue_tasks),
         completedInRange,
         totalHours,
-        billableHours: 0,
+        billableHours: Math.round(Number(r.billable_hours) * 10) / 10,
         lastActivityDate: r.last_activity_date ?? null,
         engagementScore,
       };
@@ -296,9 +316,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
 
-    const clientFilter = filters.clientIds.length > 0
-      ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
-      : sql``;
+    const clientFilter = clientFilterClause(filters.clientIds);
     const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
@@ -381,7 +399,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
       ${clientCountFilterClause(tenantId, filters.statuses)}
@@ -424,15 +442,14 @@ router.get("/client/time", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
 
-    const clientFilter = filters.clientIds.length > 0
-      ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
-      : sql``;
+    const clientFilter = clientFilterClause(filters.clientIds);
     const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
       client_id: string;
       company_name: string;
       total_seconds: string;
+      billable_seconds: string;
       estimated_minutes: string;
     }>(sql`
       SELECT
@@ -448,6 +465,16 @@ router.get("/client/time", async (req: Request, res: Response) => {
             AND te.start_time BETWEEN ${startDate} AND ${endDate}
             ${projectStatusFilter}
         ) AS total_seconds,
+        (
+          SELECT COALESCE(SUM(CASE WHEN ${BILLABLE_TIME_CONDITION} THEN te.duration_seconds ELSE 0 END), 0)
+          FROM projects p
+          JOIN time_entries te ON te.project_id = p.id
+          WHERE p.client_id = c.id
+            AND p.tenant_id = ${tenantId}
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time BETWEEN ${startDate} AND ${endDate}
+            ${projectStatusFilter}
+        ) AS billable_seconds,
         (
           SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
           FROM projects p
@@ -503,7 +530,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
       }
     }
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
       ${clientCountFilterClause(tenantId, filters.statuses)}
@@ -511,7 +538,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
 
     const clients = rows.map((r) => {
       const totalHours = Math.round(Number(r.total_seconds) / 3600 * 10) / 10;
-      const billableHours = 0;
+      const billableHours = Math.round(Number(r.billable_seconds) / 3600 * 10) / 10;
       const nonBillableHours = Math.round((totalHours - billableHours) * 10) / 10;
       const estimatedHours = Math.round(Number(r.estimated_minutes) / 60 * 10) / 10;
       const varianceHours = Math.round((totalHours - estimatedHours) * 10) / 10;
@@ -520,7 +547,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
         clientId: r.client_id,
         companyName: r.company_name,
         totalSeconds: Number(r.total_seconds),
-        billableSeconds: 0,
+        billableSeconds: Number(r.billable_seconds),
         estimatedMinutes: Number(r.estimated_minutes),
         totalHours,
         billableHours,
@@ -552,9 +579,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
 
-    const clientFilter = filters.clientIds.length > 0
-      ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
-      : sql``;
+    const clientFilter = clientFilterClause(filters.clientIds);
     const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
@@ -601,7 +626,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
       ${clientCountFilterClause(tenantId, filters.statuses)}
@@ -640,9 +665,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
 
-    const clientFilter = filters.clientIds.length > 0
-      ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
-      : sql``;
+    const clientFilter = clientFilterClause(filters.clientIds);
     const projectStatusFilter = projectStatusFilterClause(filters.statuses);
 
     const rows = await dbRows<{
@@ -675,7 +698,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(*) AS total FROM clients c WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
       ${clientCountFilterClause(tenantId, filters.statuses)}

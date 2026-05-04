@@ -184,7 +184,15 @@ export async function getClientProfileReport({
           AND te.tenant_id = ${tenantId}
           AND te.start_time BETWEEN ${startDate} AND ${endDate}
       ) AS total_seconds,
-      0 AS billable_seconds,
+      (
+        SELECT COALESCE(SUM(CASE WHEN te.scope = 'out_of_scope' THEN te.duration_seconds ELSE 0 END), 0)
+        FROM projects p
+        JOIN time_entries te ON te.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time BETWEEN ${startDate} AND ${endDate}
+      ) AS billable_seconds,
       (
         SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
         FROM projects p

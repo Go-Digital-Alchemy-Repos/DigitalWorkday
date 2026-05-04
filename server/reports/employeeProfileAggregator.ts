@@ -106,7 +106,7 @@ export async function getEmployeeProfileReport({
   }>(sql`
     SELECT
       COALESCE(SUM(CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS total_seconds,
-      0 AS billable_seconds, -- placeholder if billable not in schema
+      COALESCE(SUM(CASE WHEN te.scope = 'out_of_scope' AND te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS billable_seconds,
       COUNT(DISTINCT CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN DATE(te.start_time) END) AS logged_days,
       COALESCE((
         SELECT SUM(COALESCE(t2.estimate_minutes, 0))

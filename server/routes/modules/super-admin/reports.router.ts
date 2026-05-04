@@ -297,7 +297,7 @@ reportsRouter.get("/reports/time-summary", requireSuperUser, async (req, res) =>
       totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
     })
       .from(timeEntries)
-      .where(isNotNull(timeEntries.tenantId))
+      .where(and(isNotNull(timeEntries.tenantId), gte(timeEntries.startTime, startOfWeek)))
       .groupBy(timeEntries.tenantId)
       .orderBy(desc(sql`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`))
       .limit(5);
@@ -319,6 +319,7 @@ reportsRouter.get("/reports/time-summary", requireSuperUser, async (req, res) =>
       totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
     })
       .from(timeEntries)
+      .where(gte(timeEntries.startTime, startOfWeek))
       .groupBy(timeEntries.userId)
       .orderBy(desc(sql`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`))
       .limit(5);

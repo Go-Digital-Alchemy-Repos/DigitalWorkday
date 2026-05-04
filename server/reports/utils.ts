@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { UserRole } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import { AppError } from "../lib/errors";
 
 export const reportRangeSchema = z.object({
@@ -73,7 +73,7 @@ export function reportingGuard(req: Request, res: Response, next: NextFunction) 
     return next(AppError.unauthorized("Authentication required"));
   }
   const user = req.user as any;
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+  if (!hasTenantAdminAccess(user.role)) {
     return next(AppError.forbidden("Admin access required for reports"));
   }
   next();
