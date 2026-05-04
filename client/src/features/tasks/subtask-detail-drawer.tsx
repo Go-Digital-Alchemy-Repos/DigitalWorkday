@@ -4,6 +4,7 @@ import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pa
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
