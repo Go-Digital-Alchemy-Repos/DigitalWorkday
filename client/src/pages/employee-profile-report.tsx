@@ -33,6 +33,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -63,6 +64,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { buildReportRangeSearchParams, defaultCustomRange, reportRangeSearchParamsFromQuery, reportRangeValueFromQuery, type ReportRangeValue } from "@/components/reports/report-command-center-layout";
 import { getEmployeeReportPath, getReportBasePath } from "@/components/reports/report-paths";
 
 interface ProfileData {
@@ -500,21 +502,34 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
   );
 }
 
+function getDaysForReportRange(range: ReportRangeValue): number {
+  if (typeof range === "number") return range;
+  const start = new Date(`${range.startDate}T00:00:00`);
+  const end = new Date(`${range.endDate}T23:59:59.999`);
+  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
 export default function EmployeeProfileReportPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const { openTask } = useTaskDrawer();
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  const range = searchParams.get("range") || "30d";
+  const reportRange = reportRangeValueFromQuery(searchParams);
+  const range = typeof reportRange === "number" ? `${reportRange}d` : "custom";
   const section = searchParams.get("section");
-  const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+  const days = getDaysForReportRange(reportRange);
   const reportBasePath = getReportBasePath(location);
+  const initialCustom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+  const [customStart, setCustomStart] = useState(initialCustom.startDate);
+  const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
+  const customInvalid = !customStart || !customEnd || customStart > customEnd;
+  const profileQuery = reportRangeSearchParamsFromQuery(searchParams).toString();
 
   const { data, isLoading, error, refetch } = useQuery<ProfileData>({
-    queryKey: ["/api/reports/v2/employee", employeeId, "profile", range],
+    queryKey: ["/api/reports/v2/employee", employeeId, "profile", profileQuery],
     queryFn: async () => {
       const res = await fetch(
-        `/api/reports/v2/employee/${employeeId}/profile?range=${range}`,
+        `/api/reports/v2/employee/${employeeId}/profile?${profileQuery}`,
         { credentials: "include" }
       );
       if (!res.ok) {
@@ -527,9 +542,25 @@ export default function EmployeeProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    const params = new URLSearchParams({ range: value });
+    if (value === "custom") {
+      const custom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+      setCustomStart(custom.startDate);
+      setCustomEnd(custom.endDate);
+      updateRange(custom);
+      return;
+    }
+    updateRange(value === "7d" ? 7 : value === "90d" ? 90 : 30);
+  };
+
+  const updateRange = (value: ReportRangeValue) => {
+    const params = buildReportRangeSearchParams(value);
     if (section) params.set("section", section);
     setLocation(`${getEmployeeReportPath(location, employeeId)}?${params.toString()}`);
+  };
+
+  const applyCustomRange = () => {
+    if (customInvalid) return;
+    updateRange({ mode: "custom", startDate: customStart, endDate: customEnd });
   };
 
   useEffect(() => {
@@ -598,7 +629,7 @@ export default function EmployeeProfileReportPage() {
             <h1 className="text-xl font-bold hidden sm:block">Employee Intelligence Profile</h1>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Report Range:</span>
             <Select value={range} onValueChange={handleRangeChange}>
               <SelectTrigger className="w-[140px]" data-testid="select-range">
@@ -608,8 +639,40 @@ export default function EmployeeProfileReportPage() {
                 <SelectItem value="7d">Last 7 days</SelectItem>
                 <SelectItem value="30d">Last 30 days</SelectItem>
                 <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
               </SelectContent>
             </Select>
+            {range === "custom" && (
+              <div className="flex items-center gap-2 flex-wrap" data-testid="profile-custom-date-range-controls">
+                <Input
+                  type="date"
+                  value={customStart}
+                  onChange={(event) => setCustomStart(event.target.value)}
+                  className="w-36 h-9"
+                  data-testid="input-profile-custom-start-date"
+                  aria-label="Custom start date"
+                />
+                <span className="text-xs text-muted-foreground hidden sm:inline">to</span>
+                <Input
+                  type="date"
+                  value={customEnd}
+                  onChange={(event) => setCustomEnd(event.target.value)}
+                  className="w-36 h-9"
+                  data-testid="input-profile-custom-end-date"
+                  aria-label="Custom end date"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={customInvalid}
+                  onClick={applyCustomRange}
+                  data-testid="button-profile-apply-custom-range"
+                >
+                  Apply
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

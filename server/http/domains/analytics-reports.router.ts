@@ -6,6 +6,7 @@ import { hasTenantAdminAccess } from "@shared/roles";
 import { AppError, handleRouteError } from "../../lib/errors";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
+import { parseReportRange } from "../../reports/utils";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -183,12 +184,19 @@ router.get("/reports/tasks/analytics", async (req, res) => {
       throw AppError.forbidden("Admin access required");
     }
     const tenantId = getEffectiveTenantId(req);
-    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const hasExplicitRange = Boolean(req.query.startDate && req.query.endDate);
+    const fallbackDays = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const fallbackEndDate = new Date();
+    const fallbackStartDate = new Date(fallbackEndDate.getTime() - fallbackDays * 24 * 60 * 60 * 1000);
+    const { startDate, endDate } = hasExplicitRange
+      ? parseReportRange(req.query as Record<string, unknown>)
+      : { startDate: fallbackStartDate, endDate: fallbackEndDate };
 
     const statusDist = await db.execute(sql`
       SELECT status, COUNT(*)::int AS count
       FROM tasks
       WHERE tenant_id = ${tenantId} AND is_personal = false
+        AND (created_at BETWEEN ${startDate} AND ${endDate} OR updated_at BETWEEN ${startDate} AND ${endDate})
       GROUP BY status
       ORDER BY count DESC
     `);
@@ -197,6 +205,7 @@ router.get("/reports/tasks/analytics", async (req, res) => {
       SELECT priority, COUNT(*)::int AS count
       FROM tasks
       WHERE tenant_id = ${tenantId} AND is_personal = false
+        AND (created_at BETWEEN ${startDate} AND ${endDate} OR updated_at BETWEEN ${startDate} AND ${endDate})
       GROUP BY priority
       ORDER BY
         CASE priority
@@ -220,6 +229,7 @@ router.get("/reports/tasks/analytics", async (req, res) => {
         COUNT(*)::int AS count
       FROM tasks
       WHERE tenant_id = ${tenantId} AND is_personal = false AND status != 'done' AND due_date IS NOT NULL
+        AND due_date BETWEEN ${startDate} AND ${endDate}
       GROUP BY bucket
     `);
 
@@ -229,22 +239,22 @@ router.get("/reports/tasks/analytics", async (req, res) => {
         COALESCE(c.created, 0)::int AS created,
         COALESCE(comp.completed, 0)::int AS completed
       FROM generate_series(
-        CURRENT_DATE - make_interval(days => ${days}),
-        CURRENT_DATE,
+        ${startDate}::date,
+        ${endDate}::date,
         '1 day'
       ) AS d(day)
       LEFT JOIN (
         SELECT DATE(created_at) AS day, COUNT(*)::int AS created
         FROM tasks
         WHERE tenant_id = ${tenantId} AND is_personal = false
-          AND created_at >= CURRENT_DATE - make_interval(days => ${days})
+          AND created_at BETWEEN ${startDate} AND ${endDate}
         GROUP BY DATE(created_at)
       ) c ON c.day = d.day
       LEFT JOIN (
         SELECT DATE(updated_at) AS day, COUNT(*)::int AS completed
         FROM tasks
         WHERE tenant_id = ${tenantId} AND is_personal = false AND status = 'done'
-          AND updated_at >= CURRENT_DATE - make_interval(days => ${days})
+          AND updated_at BETWEEN ${startDate} AND ${endDate}
         GROUP BY DATE(updated_at)
       ) comp ON comp.day = d.day
       ORDER BY d.day
@@ -263,6 +273,7 @@ router.get("/reports/tasks/analytics", async (req, res) => {
         END AS completion_rate
       FROM projects p
       LEFT JOIN tasks t ON t.project_id = p.id AND t.is_personal = false
+        AND (t.created_at BETWEEN ${startDate} AND ${endDate} OR t.updated_at BETWEEN ${startDate} AND ${endDate})
       WHERE p.tenant_id = ${tenantId} AND p.status = 'active'
       GROUP BY p.id, p.name, p.color
       HAVING COUNT(t.id) > 0
@@ -282,6 +293,7 @@ router.get("/reports/tasks/analytics", async (req, res) => {
       FROM task_assignees ta
       JOIN users u ON u.id = ta.user_id
       JOIN tasks t ON t.id = ta.task_id AND t.is_personal = false AND t.tenant_id = ${tenantId}
+        AND (t.created_at BETWEEN ${startDate} AND ${endDate} OR t.updated_at BETWEEN ${startDate} AND ${endDate})
       WHERE ta.tenant_id = ${tenantId}
       GROUP BY u.id, u.first_name, u.last_name, u.email, u.avatar_url
       ORDER BY total_tasks DESC
@@ -298,6 +310,7 @@ router.get("/reports/tasks/analytics", async (req, res) => {
         completion_rate: parseFloat(r.completion_rate) || 0,
       })),
       assigneeDistribution: rows(assigneeDistribution),
+      range: { startDate, endDate },
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/v1/reports/tasks/analytics", req);

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
+import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
@@ -20,6 +20,7 @@ import { getReportViewState } from "./report-view-state";
 import {
   formatComparisonSub,
   MetricCard,
+  ReportDataNote,
   relativeDate,
 } from "./report-shared";
 
@@ -34,7 +35,7 @@ const PROJECT_STATUS_OPTIONS: Array<{ value: ProjectStatusFilter; label: string 
 ];
 
 function buildProjectStatusParams(
-  rangeDays: number,
+  rangeDays: ReportRangeValue,
   projectStatus: ProjectStatusFilter,
   extra?: Record<string, string>,
 ): string {
@@ -58,7 +59,7 @@ interface ClientOverviewItem {
   completedInRange: number;
 }
 
-function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
+function OverviewTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading, isError } = useQuery<{
     clients: ClientOverviewItem[];
     summary?: {
@@ -165,7 +166,7 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     );
   }
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   function engagementBadgeVariant(score: number): "default" | "secondary" | "destructive" {
     if (score >= 70) return "default";
@@ -183,6 +184,8 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
             sub={totals.prior ? formatComparisonSub(totals.totalClients, totals.prior.totalClients) : undefined}
             icon={<Users className="h-4 w-4 text-white" />}
             color="bg-blue-500"
+            definition="Clients matching the selected project status filter and tenant scope."
+            source="clients + projects"
           />
           <MetricCard
             label="Open Tasks"
@@ -190,6 +193,8 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
             sub={totals.prior ? formatComparisonSub(totals.totalOpenTasks, totals.prior.totalOpenTasks) : undefined}
             icon={<CheckSquare className="h-4 w-4 text-white" />}
             color="bg-violet-500"
+            definition="Open, non-cancelled client project tasks across matching clients."
+            source="client projects + tasks"
           />
           <MetricCard
             label="Hours Tracked"
@@ -197,6 +202,8 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
             sub={totals.prior ? formatComparisonSub(totals.totalHours, totals.prior.totalHours, "h") : undefined}
             icon={<Clock className="h-4 w-4 text-white" />}
             color="bg-green-500"
+            definition="Time entries on client projects started inside the selected date range."
+            source="time entries"
           />
           <MetricCard
             label="Avg Engagement"
@@ -204,6 +211,8 @@ function OverviewTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
             sub={totals.prior ? formatComparisonSub(totals.avgEngagement, totals.prior.avgEngagement, "%") : undefined}
             icon={<TrendingUp className="h-4 w-4 text-white" />}
             color="bg-orange-500"
+            definition="Weighted engagement signal from recent tracked hours, open work, and completed work in range."
+            source="tasks + time entries"
           />
         </div>
       )}
@@ -366,7 +375,7 @@ interface ClientActivityItem {
   inactivityDays: number;
 }
 
-function ActivityTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
+function ActivityTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/activity", rangeDays, projectStatus],
     queryFn: async () => {
@@ -383,7 +392,7 @@ function ActivityTab({ rangeDays, projectStatus }: { rangeDays: number; projectS
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   return (
     <Card>
@@ -448,7 +457,7 @@ interface ClientTimeItem {
   varianceHours: number;
 }
 
-function TimeTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
+function TimeTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/time", rangeDays, projectStatus],
     queryFn: async () => {
@@ -465,7 +474,7 @@ function TimeTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   function formatVariance(v: number) {
     if (v === 0) return "0h";
@@ -473,45 +482,54 @@ function TimeTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
   }
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Total Hrs</TableHead>
-                <TableHead>Billable</TableHead>
-                <TableHead>Non-Bill</TableHead>
-                <TableHead>Estimated</TableHead>
-                <TableHead>Variance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.clients.map((c) => (
-                <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.totalHours}h</Link></TableCell>
-                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.billableHours}h</Link></TableCell>
-                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.nonBillableHours}h</Link></TableCell>
-                  <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.estimatedHours}h</Link></TableCell>
-                  <TableCell>
-                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className={cn("text-sm font-medium hover:underline", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
-                      {formatVariance(c.varianceHours)}
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {data?.clients.length === 0 && (
+    <div className="space-y-3">
+      <ReportDataNote
+        items={[
+          "Billable means out-of-scope client work.",
+          "Variance compares tracked hours to open task estimates.",
+          "Totals honor the selected date range and project-status filter.",
+        ]}
+      />
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No time data</TableCell>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Total Hrs</TableHead>
+                  <TableHead>Billable</TableHead>
+                  <TableHead>Non-Bill</TableHead>
+                  <TableHead>Estimated</TableHead>
+                  <TableHead>Variance</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {data?.clients.map((c) => (
+                  <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
+                    <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.totalHours}h</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.billableHours}h</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.nonBillableHours}h</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{c.estimatedHours}h</Link></TableCell>
+                    <TableCell>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className={cn("text-sm font-medium hover:underline", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                        {formatVariance(c.varianceHours)}
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {data?.clients.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No time data</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -527,7 +545,7 @@ interface ClientTaskItem {
   agingOver30: number;
 }
 
-function TasksTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
+function TasksTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/tasks", rangeDays, projectStatus],
     queryFn: async () => {
@@ -544,7 +562,7 @@ function TasksTab({ rangeDays, projectStatus }: { rangeDays: number; projectStat
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   function AgingBar({ item }: { item: ClientTaskItem }) {
     const total = item.agingUnder7 + item.aging7To14 + item.aging14To30 + item.agingOver30;
@@ -628,7 +646,7 @@ interface ClientSlaItem {
   completedWithinDuePct: number;
 }
 
-function SlaTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
+function SlaTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/sla", rangeDays, projectStatus],
     queryFn: async () => {
@@ -645,7 +663,7 @@ function SlaTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   function progressColor(pct: number, invert = false) {
     const high = invert ? pct < 20 : pct > 80;
@@ -722,7 +740,7 @@ interface ClientRiskItem {
   };
 }
 
-function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatus: ProjectStatusFilter }) {
+function RiskTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/risk", rangeDays, projectStatus],
     queryFn: async () => {
@@ -733,7 +751,7 @@ function RiskTab({ rangeDays, projectStatus }: { rangeDays: number; projectStatu
     staleTime: 2 * 60 * 1000,
   });
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
   const topReasons = useMemo(() => {
     const counts = new Map<string, number>();
     (data?.flagged ?? []).flatMap((c) => c.reasons).forEach((reason) => {
@@ -889,7 +907,7 @@ function ChiScoreBar({ value, colorClass }: { value: number; colorClass: string 
   );
 }
 
-function HealthTab({ rangeDays }: { rangeDays: number }) {
+function HealthTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [sortBy, setSortBy] = useState<ChiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -956,7 +974,7 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
     };
   }, [data?.clients]);
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
   const topFlags = useMemo(() => {
     const counts = new Map<string, number>();
     (data?.clients ?? []).flatMap((c) => c.riskFlags).forEach((flag) => {
@@ -1360,7 +1378,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
 
 export function ClientCommandCenter() {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const [activeTab, setActiveTab] = useState("overview");
   const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
   const [projectStatus, setProjectStatus] = useState<ProjectStatusFilter>("all");

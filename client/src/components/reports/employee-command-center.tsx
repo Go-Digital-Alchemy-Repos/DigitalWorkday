@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
-import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
+import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
@@ -29,6 +29,7 @@ import { ReportEmptyState } from "./report-empty-state";
 import {
   formatComparisonSub,
   MetricCard,
+  ReportDataNote,
   reportUserInitials as userInitials,
   reportUserName as userName,
 } from "./report-shared";
@@ -61,7 +62,7 @@ interface OverviewEmployee {
   completionRate: number | null;
 }
 
-function OverviewTab({ rangeDays }: { rangeDays: number }) {
+function OverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [sortBy, setSortBy] = useState<OverviewSortField>("overdueCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -177,7 +178,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   return (
     <div className="space-y-4">
@@ -189,6 +190,8 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             sub={totals.prior ? formatComparisonSub(totals.activeTasks, totals.prior.activeTasks) : undefined}
             icon={<CheckSquare className="h-4 w-4 text-white" />}
             color="bg-blue-500"
+            definition="Open, non-cancelled tenant work currently assigned to reportable users. Personal tasks are excluded."
+            source="tasks + task assignees"
           />
           <MetricCard
             label="Total Overdue"
@@ -196,6 +199,8 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             sub={totals.prior ? formatComparisonSub(totals.overdueTasks, totals.prior.overdueTasks) : undefined}
             icon={<AlertTriangle className="h-4 w-4 text-white" />}
             color="bg-red-500"
+            definition="Assigned open work with a due date earlier than now. Personal tasks are excluded."
+            source="tasks + task assignees"
           />
           <MetricCard
             label="Hours Tracked"
@@ -203,6 +208,8 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             sub={totals.prior ? formatComparisonSub(totals.totalHours, totals.prior.totalHours, "h") : undefined}
             icon={<Clock className="h-4 w-4 text-white" />}
             color="bg-violet-500"
+            definition="Sum of tracked time entries started inside the selected range."
+            source="time entries"
           />
           <MetricCard
             label="Avg Utilization"
@@ -210,6 +217,8 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             sub={totals.prior ? formatComparisonSub(totals.avgUtilization, totals.prior.avgUtilization, "%") : undefined}
             icon={<TrendingUp className="h-4 w-4 text-white" />}
             color="bg-green-500"
+            definition="Average tracked hours divided by an 8-hour workday baseline for the selected date range."
+            source="time entries"
           />
         </div>
       )}
@@ -433,7 +442,7 @@ interface WorkloadEmployee {
   backlogCount: number;
 }
 
-function WorkloadTab({ rangeDays }: { rangeDays: number }) {
+function WorkloadTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const { data, isLoading } = useQuery<{
     employees: WorkloadEmployee[];
     pagination: { total: number };
@@ -454,10 +463,14 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   return (
     <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">Time By Employee</CardTitle>
+        <CardDescription className="text-xs">Billable means out-of-scope client work; all other tracked scopes are treated as non-billable here.</CardDescription>
+      </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <Table>
@@ -553,7 +566,7 @@ interface TimeEmployee {
   varianceHours: number;
 }
 
-function TimeTab({ rangeDays }: { rangeDays: number }) {
+function TimeTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const { data, isLoading } = useQuery<{
     employees: TimeEmployee[];
     pagination: { total: number };
@@ -574,7 +587,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   return (
     <Card>
@@ -656,7 +669,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function CapacityTab({ rangeDays }: { rangeDays: number }) {
+function CapacityTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const { data, isLoading } = useQuery<{
     users: Array<{
       userId: string;
@@ -695,7 +708,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   const weeks = data.users[0]?.weeks.map(w => w.weekStart) ?? [];
 
@@ -768,7 +781,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function RiskTab({ rangeDays }: { rangeDays: number }) {
+function RiskTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const { data, isLoading } = useQuery<{
     flagged: Array<{
       userId: string;
@@ -798,7 +811,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
     staleTime: 2 * 60 * 1000,
   });
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
   const topReasons = useMemo(() => {
     const counts = new Map<string, number>();
     (data?.flagged ?? []).flatMap((u) => u.reasons).forEach((reason) => {
@@ -827,6 +840,13 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
 
   return (
     <div className="space-y-4">
+      <ReportDataNote
+        items={[
+          "Risk checks active task load, overdue rate, time compliance, and stale backlog.",
+          "Personal tasks are excluded.",
+          "Thresholds are directional signals, not payroll or performance decisions.",
+        ]}
+      />
       {data && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Activity className="h-4 w-4" />
@@ -905,7 +925,7 @@ interface TrendWeek {
   hoursTracked: number;
 }
 
-function TrendsTab({ rangeDays }: { rangeDays: number }) {
+function TrendsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("__all__");
 
   const { data: teamData } = useQuery<{ employees: Array<{ userId: string; firstName: string | null; lastName: string | null; email: string }> }>({
@@ -1050,7 +1070,7 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
   );
 }
 
-function PerformanceTab({ rangeDays }: { rangeDays: number }) {
+function PerformanceTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [sortBy, setSortBy] = useState<EpiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -1117,7 +1137,7 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
     };
   }, [data?.employees]);
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   if (isLoading) return (
     <div className="space-y-3">
@@ -1145,6 +1165,8 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
             sub="out of 100"
             icon={<Award className="h-4 w-4 text-white" />}
             color="bg-violet-500"
+            definition="Composite score from completion, overdue rate, utilization, estimate efficiency, and time compliance."
+            source="tasks + time entries"
           />
           <MetricCard
             label="High Performers"
@@ -1152,6 +1174,8 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
             sub="score ≥ 85"
             icon={<TrendingUp className="h-4 w-4 text-white" />}
             color="bg-green-500"
+            definition="Employees whose EPI score is at or above 85 for the selected range."
+            source="employee performance index"
           />
           <MetricCard
             label="Critical"
@@ -1159,6 +1183,8 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
             sub="score < 50"
             icon={<AlertTriangle className="h-4 w-4 text-white" />}
             color="bg-red-500"
+            definition="Employees whose EPI score is below 50 for the selected range."
+            source="employee performance index"
           />
           <MetricCard
             label="With Risk Flags"
@@ -1166,9 +1192,19 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
             sub="one or more flags"
             icon={<ShieldAlert className="h-4 w-4 text-white" />}
             color="bg-orange-500"
+            definition="Employees with one or more generated risk flags from the EPI engine."
+            source="employee performance index"
           />
         </div>
       )}
+      <ReportDataNote
+        title="EPI Methodology"
+        items={[
+          "Score blends completion, overdue rate, utilization, estimate efficiency, and time compliance.",
+          "PMs, admins, and employees are included.",
+          "Scores depend on estimates and tracked time quality.",
+        ]}
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -1614,7 +1650,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
 
 export function EmployeeCommandCenter() {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const [activeTab, setActiveTab] = useState("overview");
   const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
   const flags = useFeatureFlags();

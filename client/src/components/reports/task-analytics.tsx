@@ -3,10 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { ReportCommandCenterLayout, buildDateParams, type ReportRangeValue } from "./report-command-center-layout";
 import {
   ResponsiveContainer,
   BarChart,
@@ -104,9 +104,14 @@ function LoadingSkeleton() {
 }
 
 export default function TaskAnalytics() {
-  const [days, setDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const { data, isLoading } = useQuery<TaskAnalyticsData>({
-    queryKey: ["/api/v1/reports/tasks/analytics", { days }],
+    queryKey: ["/api/v1/reports/tasks/analytics", rangeDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/reports/tasks/analytics?${buildDateParams(rangeDays)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load task analytics");
+      return res.json();
+    },
   });
 
   if (isLoading || !data) return <LoadingSkeleton />;
@@ -138,22 +143,14 @@ export default function TaskAnalytics() {
     }));
 
   return (
+    <ReportCommandCenterLayout
+      title="Task Analysis"
+      description="Task creation, completion, priority, and assignee analytics"
+      icon={null}
+      rangeDays={rangeDays}
+      onRangeChange={setRangeDays}
+    >
     <div className="space-y-6" data-testid="task-analytics">
-      <div className="flex items-center justify-end">
-        <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
-          <SelectTrigger className="w-[150px]" data-testid="select-task-period">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="14">Last 14 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="60">Last 60 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Tasks Created vs Completed</CardTitle>
@@ -329,5 +326,6 @@ export default function TaskAnalytics() {
         </Card>
       </div>
     </div>
+    </ReportCommandCenterLayout>
   );
 }

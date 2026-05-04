@@ -15,43 +15,18 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
+  Users, Clock, CheckSquare, AlertTriangle, TrendingUp, CalendarRange,
   ChevronUp, ChevronDown, ArrowUpDown, User, FolderKanban,
-  ShieldAlert, CalendarRange, Activity,
+  ShieldAlert, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
 import { getReportViewState } from "./report-view-state";
+import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 
-interface DateRange {
-  label: string;
-  days: number;
-}
-
-const DATE_RANGES: DateRange[] = [
-  { label: "Last 7 days", days: 7 },
-  { label: "Last 14 days", days: 14 },
-  { label: "Last 30 days", days: 30 },
-  { label: "Last 60 days", days: 60 },
-  { label: "Last 90 days", days: 90 },
-];
-
-function buildDateRange(days: number) {
-  const end = new Date();
-  const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  return {
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-  };
-}
-
-function buildQueryParams(rangeDays: number, extra?: Record<string, string>) {
-  const { startDate, endDate } = buildDateRange(rangeDays);
-  const params = new URLSearchParams({ startDate, endDate, ...(extra ?? {}) });
-  return params.toString();
-}
+const buildQueryParams = buildDateParams;
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -115,7 +90,7 @@ function SortIcon({ field, sortBy, sortDir }: { field: SortField; sortBy: SortFi
     : <ChevronDown className="h-3.5 w-3.5 ml-1 shrink-0 text-primary" />;
 }
 
-function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
+function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [sortBy, setSortBy] = useState<SortField>("overdueCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -229,7 +204,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     );
   }
 
-  const range = `${rangeDays}d`;
+  const range = getReportRangeLabel(rangeDays);
 
   return (
     <div className="space-y-4">
@@ -396,7 +371,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
+function EmployeeDetailTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   const { data: teamData, isLoading: isTeamLoading, isError: isTeamError } = useQuery<{ team: TeamMember[] }>({
@@ -595,7 +570,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
+function CapacityPlanningTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const { data, isLoading, isError } = useQuery<{
     users: Array<{
       userId: string;
@@ -650,6 +625,8 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
       />
     );
   }
+
+  if (!data) return null;
 
   const weeks = data.users[0]?.weeks.map(w => w.weekStart) ?? [];
 
@@ -717,7 +694,7 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
+function RiskFlagsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const { data, isLoading, isError } = useQuery<{
     flagged: Array<{
       userId: string;
@@ -847,27 +824,17 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
 }
 
 export function WorkloadReportsV2() {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const [tab, setTab] = useState("team");
 
   return (
-    <div className="space-y-4" data-testid="workload-reports-v2">
-      <div className="flex items-center justify-end gap-3 flex-wrap">
-        <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v))}>
-          <SelectTrigger className="w-44" data-testid="select-date-range">
-            <CalendarRange className="h-3.5 w-3.5 mr-1.5" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {DATE_RANGES.map((r) => (
-              <SelectItem key={r.days} value={String(r.days)} data-testid={`range-option-${r.days}`}>
-                {r.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+    <ReportCommandCenterLayout
+      title="Workload Reports"
+      description="Workload, capacity, and risk reporting"
+      icon={<Users className="h-4 w-4" />}
+      rangeDays={rangeDays}
+      onRangeChange={setRangeDays}
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <MobileTabSelect
           tabs={[
@@ -914,6 +881,6 @@ export function WorkloadReportsV2() {
           <RiskFlagsTab rangeDays={rangeDays} />
         </TabsContent>
       </Tabs>
-    </div>
+    </ReportCommandCenterLayout>
   );
 }

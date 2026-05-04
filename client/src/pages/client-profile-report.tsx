@@ -27,6 +27,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { buildReportRangeSearchParams, defaultCustomRange, reportRangeSearchParamsFromQuery, reportRangeValueFromQuery, type ReportRangeValue } from "@/components/reports/report-command-center-layout";
 import { getClientReportPath, getReportBasePath } from "@/components/reports/report-paths";
 
 interface ClientProfileData {
@@ -198,15 +200,21 @@ export default function ClientProfileReportPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  const range = searchParams.get("range") || "30d";
+  const reportRange = reportRangeValueFromQuery(searchParams);
+  const range = typeof reportRange === "number" ? `${reportRange}d` : "custom";
   const section = searchParams.get("section");
   const reportBasePath = getReportBasePath(location);
+  const initialCustom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+  const [customStart, setCustomStart] = useState(initialCustom.startDate);
+  const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
+  const customInvalid = !customStart || !customEnd || customStart > customEnd;
+  const profileQuery = reportRangeSearchParamsFromQuery(searchParams).toString();
 
   const { data, isLoading, error, refetch } = useQuery<ClientProfileData>({
-    queryKey: ["/api/reports/v2/client", clientId, "profile", range],
+    queryKey: ["/api/reports/v2/client", clientId, "profile", profileQuery],
     queryFn: async () => {
       const res = await fetch(
-        `/api/reports/v2/client/${clientId}/profile?range=${range}`,
+        `/api/reports/v2/client/${clientId}/profile?${profileQuery}`,
         { credentials: "include" }
       );
       if (!res.ok) {
@@ -219,9 +227,25 @@ export default function ClientProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    const params = new URLSearchParams({ range: value });
+    if (value === "custom") {
+      const custom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+      setCustomStart(custom.startDate);
+      setCustomEnd(custom.endDate);
+      updateRange(custom);
+      return;
+    }
+    updateRange(value === "7d" ? 7 : value === "90d" ? 90 : 30);
+  };
+
+  const updateRange = (value: ReportRangeValue) => {
+    const params = buildReportRangeSearchParams(value);
     if (section) params.set("section", section);
     setLocation(`${getClientReportPath(location, clientId)}?${params.toString()}`);
+  };
+
+  const applyCustomRange = () => {
+    if (customInvalid) return;
+    updateRange({ mode: "custom", startDate: customStart, endDate: customEnd });
   };
 
   useEffect(() => {
@@ -290,7 +314,7 @@ export default function ClientProfileReportPage() {
             <h1 className="text-xl font-bold hidden sm:block">Client Intelligence Profile</h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Report Range:</span>
             <Select value={range} onValueChange={handleRangeChange}>
               <SelectTrigger className="w-[140px]" data-testid="select-range">
@@ -300,8 +324,40 @@ export default function ClientProfileReportPage() {
                 <SelectItem value="7d">Last 7 days</SelectItem>
                 <SelectItem value="30d">Last 30 days</SelectItem>
                 <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
               </SelectContent>
             </Select>
+            {range === "custom" && (
+              <div className="flex items-center gap-2 flex-wrap" data-testid="profile-custom-date-range-controls">
+                <Input
+                  type="date"
+                  value={customStart}
+                  onChange={(event) => setCustomStart(event.target.value)}
+                  className="w-36 h-9"
+                  data-testid="input-profile-custom-start-date"
+                  aria-label="Custom start date"
+                />
+                <span className="text-xs text-muted-foreground hidden sm:inline">to</span>
+                <Input
+                  type="date"
+                  value={customEnd}
+                  onChange={(event) => setCustomEnd(event.target.value)}
+                  className="w-36 h-9"
+                  data-testid="input-profile-custom-end-date"
+                  aria-label="Custom end date"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={customInvalid}
+                  onClick={applyCustomRange}
+                  data-testid="button-profile-apply-custom-range"
+                >
+                  Apply
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

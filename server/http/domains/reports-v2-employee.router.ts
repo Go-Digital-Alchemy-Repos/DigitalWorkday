@@ -468,8 +468,40 @@ router.get("/employee/time", async (req: Request, res: Response) => {
       };
     });
 
+    const summary = employees.reduce((acc, e) => {
+      acc.totalHours += e.totalHours;
+      acc.billableHours += e.billableHours;
+      acc.nonBillableHours += e.nonBillableHours;
+      acc.estimatedHours += e.estimatedHours;
+      acc.varianceHours += e.varianceHours;
+      acc.loggedDays += e.loggedDays;
+      return acc;
+    }, {
+      totalHours: 0,
+      billableHours: 0,
+      nonBillableHours: 0,
+      estimatedHours: 0,
+      varianceHours: 0,
+      loggedDays: 0,
+    });
+
+    const billablePct = summary.totalHours > 0
+      ? Math.round((summary.billableHours / summary.totalHours) * 100)
+      : 0;
+
     res.json({
       employees,
+      summary: {
+        totalHours: Math.round(summary.totalHours * 10) / 10,
+        billableHours: Math.round(summary.billableHours * 10) / 10,
+        nonBillableHours: Math.round(summary.nonBillableHours * 10) / 10,
+        estimatedHours: Math.round(summary.estimatedHours * 10) / 10,
+        varianceHours: Math.round(summary.varianceHours * 10) / 10,
+        avgHoursPerLoggedDay: summary.loggedDays > 0
+          ? Math.round((summary.totalHours / summary.loggedDays) * 10) / 10
+          : 0,
+        billablePct,
+      },
       pagination: {
         total: Number(countRow?.total ?? 0),
         limit,
