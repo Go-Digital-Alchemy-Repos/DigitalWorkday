@@ -79,7 +79,7 @@ function withReportRangeQuery(path: string, range?: string | ReportRangeValue, s
 
   const presetDays = range === "7d" ? 7 : range === "14d" ? 14 : range === "60d" ? 60 : range === "90d" ? 90 : range === "30d" ? 30 : null;
   if (presetDays) {
-    const params = buildReportRangeSearchParams(presetDays);
+    const params = new URLSearchParams({ range: `${presetDays}d` });
     if (section) params.set("section", section);
     return `${path}?${params.toString()}`;
   }

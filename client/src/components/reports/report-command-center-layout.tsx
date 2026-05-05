@@ -103,11 +103,16 @@ export function reportRangeValueFromQuery(searchParams: URLSearchParams): Report
 }
 
 export function reportRangeSearchParamsFromQuery(searchParams: URLSearchParams): URLSearchParams {
+  const selectedRange = searchParams.get("range");
+  if (selectedRange && selectedRange !== "custom") {
+    return buildReportRangeSearchParams(reportRangeValueFromQuery(searchParams));
+  }
+
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
   if (startDate && endDate) {
     const params = new URLSearchParams({ startDate, endDate });
-    params.set("range", searchParams.get("range") ?? "custom");
+    params.set("range", "custom");
     return params;
   }
   return buildReportRangeSearchParams(reportRangeValueFromQuery(searchParams));
