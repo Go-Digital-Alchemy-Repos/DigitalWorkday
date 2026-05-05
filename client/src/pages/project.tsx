@@ -982,23 +982,35 @@ export default function ProjectPage() {
                 <div className="mt-2 hidden md:block">
                   <RichTextRenderer
                     value={project.description}
-                    className="text-[13px] leading-relaxed text-muted-foreground [&>*]:m-0"
+                    className="max-h-14 overflow-hidden text-[13px] leading-relaxed text-muted-foreground [&>*]:m-0 [&_*]:break-words [&_a]:break-all"
                     data-testid="text-project-description"
                   />
                 </div>
               )}
             </div>
           </div>
-          <div className="hidden shrink-0 items-center gap-2 lg:flex">
-            {project.status === "archived" ? (
-              <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
-                Read-only
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                Active workspace
-              </Badge>
-            )}
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="hidden items-center gap-2 lg:flex">
+              {project.status === "archived" ? (
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
+                  Read-only
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                  Active workspace
+                </Badge>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => setSettingsOpen(true)}
+              data-testid="button-manage-project-header"
+            >
+              <Settings className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Manage</span>
+            </Button>
           </div>
           </div>
         </div>

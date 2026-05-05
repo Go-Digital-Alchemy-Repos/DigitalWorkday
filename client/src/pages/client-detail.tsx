@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { formatErrorForToast } from "@/lib/parseApiError";
 import { getPreviewText } from "@/components/richtext";
@@ -31,6 +32,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -104,6 +111,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "@/features/clients";
+import { ProjectSettingsSheet } from "@/features/projects";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -383,6 +391,7 @@ export default function ClientDetailPage() {
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const [selectedProjectForSettings, setSelectedProjectForSettings] = useState<Project | null>(null);
   const [projectView, setProjectView] = useState<"options" | "create" | "assign">("options");
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [divisionDrawerOpen, setDivisionDrawerOpen] = useState(false);
@@ -841,6 +850,79 @@ export default function ClientDetailPage() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const renderClientProjectCard = (project: Project, isArchived = false) => (
+    <Card
+      key={project.id}
+      role="button"
+      tabIndex={0}
+      className={cn(
+        "cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        isArchived && "opacity-60",
+      )}
+      data-testid={`card-project-${project.id}`}
+      onClick={() => navigate(`/projects/${project.id}`)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigate(`/projects/${project.id}`);
+        }
+      }}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2">
+            <div
+              className="mt-1 h-3 w-3 shrink-0 rounded-sm"
+              style={{ backgroundColor: isArchived ? "#9ca3af" : project.color || "#3B82F6" }}
+            />
+            <CardTitle className="line-clamp-2 break-words text-base leading-snug">
+              {project.name}
+            </CardTitle>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge variant="outline" className="text-xs capitalize">
+              {isArchived ? "archived" : project.status || "active"}
+            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label={`Manage ${project.name}`}
+                  data-testid={`button-project-actions-${project.id}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <DropdownMenuItem onClick={() => navigate(`/projects/${project.id}`)}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Open Project
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedProjectForSettings(project)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Manage Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardHeader>
+      {project.description && (
+        <CardContent>
+          <p className="line-clamp-3 break-words text-sm text-muted-foreground">
+            {getPreviewText(project.description)}
+          </p>
+        </CardContent>
+      )}
+    </Card>
+  );
 
   if (isLoading) {
     return (
@@ -2248,31 +2330,7 @@ export default function ClientDetailPage() {
                       </div>
                       {activeProjects.length > 0 ? (
                         <div className="space-y-3">
-                          {activeProjects.map((project: any) => (
-                            <Link key={project.id} href={`/projects/${project.id}`}>
-                              <Card className="cursor-pointer hover-elevate" data-testid={`card-project-${project.id}`}>
-                                <CardHeader className="pb-2">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <div className="flex items-center gap-2">
-                                      <div
-                                        className="h-3 w-3 rounded-sm shrink-0"
-                                        style={{ backgroundColor: project.color || "#3B82F6" }}
-                                      />
-                                      <CardTitle className="text-base">{project.name}</CardTitle>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs capitalize shrink-0">{project.status || "active"}</Badge>
-                                  </div>
-                                </CardHeader>
-                                <CardContent>
-                                  {project.description && (
-                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                      {getPreviewText(project.description)}
-                                    </p>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            </Link>
-                          ))}
+                          {activeProjects.map((project: Project) => renderClientProjectCard(project))}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed rounded-md">
@@ -2289,31 +2347,7 @@ export default function ClientDetailPage() {
                       </div>
                       {archivedProjects.length > 0 ? (
                         <div className="space-y-3">
-                          {archivedProjects.map((project: any) => (
-                            <Link key={project.id} href={`/projects/${project.id}`}>
-                              <Card className="cursor-pointer hover-elevate opacity-60" data-testid={`card-project-${project.id}`}>
-                                <CardHeader className="pb-2">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <div className="flex items-center gap-2">
-                                      <div
-                                        className="h-3 w-3 rounded-sm shrink-0"
-                                        style={{ backgroundColor: "#9ca3af" }}
-                                      />
-                                      <CardTitle className="text-base">{project.name}</CardTitle>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs capitalize shrink-0">archived</Badge>
-                                  </div>
-                                </CardHeader>
-                                <CardContent>
-                                  {project.description && (
-                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                      {getPreviewText(project.description)}
-                                    </p>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            </Link>
-                          ))}
+                          {archivedProjects.map((project: Project) => renderClientProjectCard(project, true))}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed rounded-md">
@@ -2726,6 +2760,22 @@ export default function ClientDetailPage() {
           initialClientId={clientId}
         />
       </Suspense>
+
+      {selectedProjectForSettings && (
+        <ProjectSettingsSheet
+          project={selectedProjectForSettings}
+          open={!!selectedProjectForSettings}
+          onOpenChange={(open) => {
+            if (!open) setSelectedProjectForSettings(null);
+          }}
+          onProjectChange={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+            queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+          }}
+          deleteRedirect={null}
+        />
+      )}
 
       <AlertDialog open={convertToPortalOpen} onOpenChange={setConvertToPortalOpen}>
         <AlertDialogContent>

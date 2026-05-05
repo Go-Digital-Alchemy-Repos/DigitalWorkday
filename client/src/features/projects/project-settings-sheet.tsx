@@ -75,12 +75,16 @@ interface ProjectSettingsSheetProps {
   project: Project;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onProjectChange?: () => void;
+  deleteRedirect?: string | null;
 }
 
 export function ProjectSettingsSheet({
   project,
   open,
   onOpenChange,
+  onProjectChange,
+  deleteRedirect,
 }: ProjectSettingsSheetProps) {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
@@ -156,6 +160,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      onProjectChange?.();
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -178,6 +183,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      onProjectChange?.();
       toast({
         title: "Client updated",
         description: "Project client assignment has been updated.",
@@ -213,6 +219,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      onProjectChange?.();
       toast({
         title: status === "archived" ? "Project archived" : "Project restored",
         description: status === "archived" 
@@ -304,8 +311,11 @@ export function ProjectSettingsSheet({
         title: "Project deleted",
         description: `"${project.name}" has been permanently deleted.`,
       });
+      onProjectChange?.();
       onOpenChange(false);
-      setLocation("/projects");
+      if (deleteRedirect !== null) {
+        setLocation(deleteRedirect ?? "/projects");
+      }
     },
     onError: () => {
       toast({
