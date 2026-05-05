@@ -64,7 +64,16 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { cn, formatNumber } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { buildReportRangeSearchParams, defaultCustomRange, reportRangeSearchParamsFromQuery, reportRangeValueFromQuery, toDateInputValue, type ReportRangeValue } from "@/components/reports/report-command-center-layout";
+import {
+  REPORT_DATE_RANGES,
+  buildReportRangeSearchParams,
+  dateInputsForReportRange,
+  defaultCustomRange,
+  reportRangeDaysFromValue,
+  reportRangeSearchParamsFromQuery,
+  reportRangeValueFromQuery,
+  type ReportRangeValue,
+} from "@/components/reports/report-command-center-layout";
 import { getEmployeeReportPath, getReportBasePath } from "@/components/reports/report-paths";
 import { formatMetricValue } from "@/components/reports/report-shared";
 
@@ -526,11 +535,7 @@ export default function EmployeeProfileReportPage() {
   const section = searchParams.get("section");
   const days = getDaysForReportRange(reportRange);
   const reportBasePath = getReportBasePath(location);
-  const explicitStartDate = searchParams.get("startDate");
-  const explicitEndDate = searchParams.get("endDate");
-  const initialCustom = explicitStartDate && explicitEndDate
-    ? { mode: "custom" as const, startDate: toDateInputValue(new Date(explicitStartDate)), endDate: toDateInputValue(new Date(explicitEndDate)) }
-    : typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+  const initialCustom = dateInputsForReportRange(reportRange);
   const [customStart, setCustomStart] = useState(initialCustom.startDate);
   const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
   const customInvalid = !customStart || !customEnd || customStart > customEnd;
@@ -560,7 +565,7 @@ export default function EmployeeProfileReportPage() {
       updateRange(custom);
       return;
     }
-    updateRange(value === "7d" ? 7 : value === "90d" ? 90 : 30);
+    updateRange(reportRangeDaysFromValue(value) ?? 30);
   };
 
   const updateRange = (value: ReportRangeValue) => {
@@ -659,9 +664,11 @@ export default function EmployeeProfileReportPage() {
                 <SelectValue placeholder="Select range" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
+                {REPORT_DATE_RANGES.map((option) => (
+                  <SelectItem key={option.days} value={`${option.days}d`}>
+                    {option.label}
+                  </SelectItem>
+                ))}
                 <SelectItem value="custom">Custom range</SelectItem>
               </SelectContent>
             </Select>

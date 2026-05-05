@@ -20,7 +20,6 @@ import {
   CheckCheck,
   Inbox,
   MessagesSquare,
-  Star,
   AtSign,
   ChevronDown,
   ChevronRight,
@@ -91,10 +90,6 @@ interface ConversationListPanelProps {
 
 type ConversationSortMode = "recent" | "unread" | "alpha";
 
-type RecentConversation =
-  | { type: "channel"; id: string; item: ChatChannel; unreadCount: number; activityAt: number }
-  | { type: "dm"; id: string; item: ChatDmThread; unreadCount: number; activityAt: number };
-
 export function ConversationListPanel({
   channels,
   dmThreads,
@@ -118,21 +113,10 @@ export function ConversationListPanel({
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [channelsExpanded, setChannelsExpanded] = useState(true);
   const [dmsExpanded, setDmsExpanded] = useState(true);
-  const [starredExpanded, setStarredExpanded] = useState(true);
-  const [recentExpanded, setRecentExpanded] = useState(true);
 
   const tenantId = channels[0]?.tenantId || dmThreads[0]?.tenantId || "workspace";
-  const starredStorageKey = `chat:starred:${tenantId}:${currentUserId || "anonymous"}`;
-  const [starredConversationKeys, setStarredConversationKeys] = useLocalStorage<string[]>(
-    starredStorageKey,
-    []
-  );
   const sortStorageKey = `chat:sort:${tenantId}:${currentUserId || "anonymous"}`;
   const [sortMode, setSortMode] = useLocalStorage<ConversationSortMode>(sortStorageKey, "recent");
-  const starredSet = useMemo(
-    () => new Set(starredConversationKeys),
-    [starredConversationKeys]
-  );
 
   const totalUnreadChannels = useMemo(
     () => channels.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
@@ -169,61 +153,6 @@ export function ConversationListPanel({
 
     return sortDmThreads(matchedDmThreads, currentUserId, sortMode);
   }, [dmThreads, searchQuery, currentUserId, hasUnreadFilter, sortMode]);
-
-  const starredChannels = useMemo(
-    () => channels.filter((channel) => starredSet.has(getConversationKey("channel", channel.id))),
-    [channels, starredSet]
-  );
-
-  const starredDmThreads = useMemo(
-    () => dmThreads.filter((dm) => starredSet.has(getConversationKey("dm", dm.id))),
-    [dmThreads, starredSet]
-  );
-
-  const starredUnreadCount = useMemo(
-    () =>
-      [...starredChannels, ...starredDmThreads].reduce(
-        (sum, item) => sum + (item.unreadCount || 0),
-        0
-      ),
-    [starredChannels, starredDmThreads]
-  );
-
-  const recentConversations = useMemo<RecentConversation[]>(() => {
-    if (searchQuery.trim() || showUnreadOnly) return [];
-
-    return [
-      ...channels.map((channel) => ({
-        type: "channel" as const,
-        id: channel.id,
-        item: channel,
-        unreadCount: channel.unreadCount || 0,
-        activityAt: getActivityTime(channel),
-      })),
-      ...dmThreads.map((dm) => ({
-        type: "dm" as const,
-        id: dm.id,
-        item: dm,
-        unreadCount: dm.unreadCount || 0,
-        activityAt: getActivityTime(dm),
-      })),
-    ]
-      .filter((conversation) => conversation.activityAt > 0)
-      .sort((a, b) => b.activityAt - a.activityAt)
-      .slice(0, 5);
-  }, [channels, dmThreads, searchQuery, showUnreadOnly]);
-
-  const recentUnreadCount = useMemo(
-    () => recentConversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0),
-    [recentConversations]
-  );
-
-  const toggleStarredConversation = (type: ConversationType, id: string) => {
-    const key = getConversationKey(type, id);
-    setStarredConversationKeys((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
-  };
 
   if (isLoading) {
     return (
@@ -321,7 +250,7 @@ export function ConversationListPanel({
               <SelectItem value="recent">
                 <span className="flex items-center gap-2">
                   <Clock3 className="h-3.5 w-3.5" />
-                  Recent activity
+                  Newest activity
                 </span>
               </SelectItem>
               <SelectItem value="unread">
@@ -401,132 +330,6 @@ export function ConversationListPanel({
 
       <ScrollArea className="flex-1">
         <div className="py-2">
-          {(starredChannels.length > 0 || starredDmThreads.length > 0) && !showUnreadOnly && (
-            <>
-              <SectionHeader
-                title="Starred"
-                count={starredChannels.length + starredDmThreads.length}
-                unreadCount={starredUnreadCount}
-                expanded={starredExpanded}
-                onToggle={() => setStarredExpanded(!starredExpanded)}
-              />
-              {starredExpanded && (
-                <div className="px-2 space-y-0.5">
-                  {starredChannels.map((channel) => (
-                    <ChannelRow
-                      key={`starred-channel-${channel.id}`}
-                      channel={channel}
-                      isSelected={
-                        selectedConversation?.type === "channel" &&
-                        selectedConversation?.id === channel.id
-                      }
-                      isStarred
-                      onToggleStar={() => toggleStarredConversation("channel", channel.id)}
-                      onClick={() => onSelectConversation("channel", channel.id)}
-                    />
-                  ))}
-                  {starredDmThreads.map((dm) => (
-                    <DmRow
-                      key={`starred-dm-${dm.id}`}
-                      dm={dm}
-                      currentUserId={currentUserId}
-                      isSelected={
-                        selectedConversation?.type === "dm" &&
-                        selectedConversation?.id === dm.id
-                      }
-                      isStarred
-                      onToggleStar={() => toggleStarredConversation("dm", dm.id)}
-                      onClick={() => onSelectConversation("dm", dm.id)}
-                    />
-                  ))}
-                </div>
-              )}
-              <div className="my-2" />
-            </>
-          )}
-
-          {recentConversations.length > 0 && (
-            <>
-              <SectionHeader
-                title="Recent"
-                count={recentConversations.length}
-                unreadCount={recentUnreadCount}
-                expanded={recentExpanded}
-                onToggle={() => setRecentExpanded(!recentExpanded)}
-              />
-              {recentExpanded && (
-                <div className="px-2 space-y-0.5">
-                  {recentConversations.map((conversation) =>
-                    conversation.type === "channel" ? (
-                      <ChannelRow
-                        key={`recent-channel-${conversation.id}`}
-                        channel={conversation.item}
-                        isSelected={
-                          selectedConversation?.type === "channel" &&
-                          selectedConversation?.id === conversation.id
-                        }
-                        isStarred={starredSet.has(getConversationKey("channel", conversation.id))}
-                        onToggleStar={() => toggleStarredConversation("channel", conversation.id)}
-                        onClick={() => onSelectConversation("channel", conversation.id)}
-                      />
-                    ) : (
-                      <DmRow
-                        key={`recent-dm-${conversation.id}`}
-                        dm={conversation.item}
-                        currentUserId={currentUserId}
-                        isSelected={
-                          selectedConversation?.type === "dm" &&
-                          selectedConversation?.id === conversation.id
-                        }
-                        isStarred={starredSet.has(getConversationKey("dm", conversation.id))}
-                        onToggleStar={() => toggleStarredConversation("dm", conversation.id)}
-                        onClick={() => onSelectConversation("dm", conversation.id)}
-                      />
-                    )
-                  )}
-                </div>
-              )}
-              <div className="my-2" />
-            </>
-          )}
-
-          <SectionHeader
-            title="Channels"
-            count={filteredChannels.length}
-            unreadCount={totalUnreadChannels}
-            expanded={channelsExpanded}
-            onToggle={() => setChannelsExpanded(!channelsExpanded)}
-          />
-          {channelsExpanded && (
-            <div className="px-2 space-y-0.5">
-              {filteredChannels.length === 0 ? (
-                <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-                  {searchQuery
-                    ? "No channels match your search"
-                    : showUnreadOnly
-                    ? "No unread channels"
-                    : "No channels yet"}
-                </div>
-              ) : (
-                filteredChannels.map((channel) => (
-                  <ChannelRow
-                    key={channel.id}
-                    channel={channel}
-                    isSelected={
-                      selectedConversation?.type === "channel" &&
-                      selectedConversation?.id === channel.id
-                    }
-                    isStarred={starredSet.has(getConversationKey("channel", channel.id))}
-                    onToggleStar={() => toggleStarredConversation("channel", channel.id)}
-                    onClick={() => onSelectConversation("channel", channel.id)}
-                  />
-                ))
-              )}
-            </div>
-          )}
-
-          <div className="my-2" />
-
           <SectionHeader
             title="Direct Messages"
             count={filteredDmThreads.length}
@@ -574,9 +377,42 @@ export function ConversationListPanel({
                       selectedConversation?.type === "dm" &&
                       selectedConversation?.id === dm.id
                     }
-                    isStarred={starredSet.has(getConversationKey("dm", dm.id))}
-                    onToggleStar={() => toggleStarredConversation("dm", dm.id)}
                     onClick={() => onSelectConversation("dm", dm.id)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          <div className="my-2" />
+
+          <SectionHeader
+            title="Channels"
+            count={filteredChannels.length}
+            unreadCount={totalUnreadChannels}
+            expanded={channelsExpanded}
+            onToggle={() => setChannelsExpanded(!channelsExpanded)}
+          />
+          {channelsExpanded && (
+            <div className="px-2 space-y-0.5">
+              {filteredChannels.length === 0 ? (
+                <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                  {searchQuery
+                    ? "No channels match your search"
+                    : showUnreadOnly
+                    ? "No unread channels"
+                    : "No channels yet"}
+                </div>
+              ) : (
+                filteredChannels.map((channel) => (
+                  <ChannelRow
+                    key={channel.id}
+                    channel={channel}
+                    isSelected={
+                      selectedConversation?.type === "channel" &&
+                      selectedConversation?.id === channel.id
+                    }
+                    onClick={() => onSelectConversation("channel", channel.id)}
                   />
                 ))
               )}
@@ -629,12 +465,10 @@ function SectionHeader({
 interface ChannelRowProps {
   channel: ChatChannel;
   isSelected: boolean;
-  isStarred?: boolean;
   onClick: () => void;
-  onToggleStar?: () => void;
 }
 
-function ChannelRow({ channel, isSelected, isStarred = false, onClick, onToggleStar }: ChannelRowProps) {
+function ChannelRow({ channel, isSelected, onClick }: ChannelRowProps) {
   const hasUnread = (channel.unreadCount || 0) > 0;
   const lastActivityTime = channel.lastMessage?.createdAt
     ? formatRelativeTime(new Date(channel.lastMessage.createdAt))
@@ -709,11 +543,6 @@ function ChannelRow({ channel, isSelected, isStarred = false, onClick, onToggleS
           </div>
         </div>
       </button>
-      <StarButton
-        isStarred={isStarred}
-        onClick={onToggleStar}
-        testId={`button-star-channel-${channel.id}`}
-      />
     </div>
   );
 }
@@ -722,12 +551,10 @@ interface DmRowProps {
   dm: ChatDmThread;
   currentUserId?: string;
   isSelected: boolean;
-  isStarred?: boolean;
   onClick: () => void;
-  onToggleStar?: () => void;
 }
 
-function DmRow({ dm, currentUserId, isSelected, isStarred = false, onClick, onToggleStar }: DmRowProps) {
+function DmRow({ dm, currentUserId, isSelected, onClick }: DmRowProps) {
   const displayName = getDmDisplayName(dm, currentUserId);
   const hasUnread = (dm.unreadCount || 0) > 0;
   const lastActivityTime = dm.lastMessage?.createdAt
@@ -803,39 +630,7 @@ function DmRow({ dm, currentUserId, isSelected, isStarred = false, onClick, onTo
           )}
         </div>
       </button>
-      <StarButton
-        isStarred={isStarred}
-        onClick={onToggleStar}
-        testId={`button-star-dm-${dm.id}`}
-      />
     </div>
-  );
-}
-
-function StarButton({
-  isStarred,
-  onClick,
-  testId,
-}: {
-  isStarred: boolean;
-  onClick?: () => void;
-  testId: string;
-}) {
-  if (!onClick) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "mr-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
-        isStarred ? "opacity-100 text-amber-500" : "opacity-0 group-hover/conversation:opacity-100 focus:opacity-100"
-      )}
-      aria-label={isStarred ? "Remove from starred" : "Add to starred"}
-      data-testid={testId}
-    >
-      <Star className={cn("h-3.5 w-3.5", isStarred && "fill-current")} />
-    </button>
   );
 }
 
@@ -862,10 +657,6 @@ function getDmDisplayName(dm: ChatDmThread, currentUserId?: string): string {
   const otherMembers = dm.members.filter((m) => m.userId !== currentUserId);
   if (otherMembers.length === 0) return "Just you";
   return otherMembers.map((m) => m.user.name || m.user.email).join(", ");
-}
-
-function getConversationKey(type: ConversationType, id: string): string {
-  return `${type}:${id}`;
 }
 
 function getActivityTime(conversation: ChatChannel | ChatDmThread): number {

@@ -1633,6 +1633,7 @@ export default function ChatPage() {
         return old.map(dm => dm.id === targetId ? { ...dm, unreadCount: 0 } : dm);
       });
     }
+    queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/unread-count"] });
   }, [queryClient]);
 
   const clearAllUnreadCounts = useCallback(() => {
@@ -1644,6 +1645,7 @@ export default function ChatPage() {
       if (!old) return old;
       return old.map(dm => ({ ...dm, unreadCount: 0 }));
     });
+    queryClient.setQueryData(["/api/v1/chat/unread-count"], 0);
   }, [queryClient]);
 
   useEffect(() => {
@@ -1713,6 +1715,7 @@ export default function ChatPage() {
       // Invalidate conversation list to update last message preview
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/unread-count"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/mentions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
     };
@@ -2098,6 +2101,7 @@ export default function ChatPage() {
       clearUnreadCountForConversation(variables.targetType, variables.targetId);
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/unread-count"] });
     },
   });
 
@@ -2111,6 +2115,7 @@ export default function ChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/unread-count"] });
     },
     onError: (error: Error) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });

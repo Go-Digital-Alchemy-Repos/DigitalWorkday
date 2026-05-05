@@ -22,7 +22,7 @@ export interface ReportCommandCenterLayoutProps {
   extraControls?: React.ReactNode;
 }
 
-const DATE_RANGES = [
+export const REPORT_DATE_RANGES = [
   { label: "Last 7 days", days: 7 },
   { label: "Last 14 days", days: 14 },
   { label: "Last 30 days", days: 30 },
@@ -52,7 +52,7 @@ export function defaultCustomRange(): CustomReportRange {
   };
 }
 
-function dateInputsForRange(rangeDays: ReportRangeValue): CustomReportRange {
+export function dateInputsForReportRange(rangeDays: ReportRangeValue): CustomReportRange {
   if (typeof rangeDays !== "number") return rangeDays;
   const end = new Date();
   const start = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
@@ -76,18 +76,25 @@ export function buildDateParams(rangeDays: ReportRangeValue, extra?: Record<stri
 }
 
 export function buildReportRangeSearchParams(rangeDays: ReportRangeValue, extra?: Record<string, string>): URLSearchParams {
-  const params = new URLSearchParams(buildDateParams(rangeDays, extra));
+  const params = typeof rangeDays === "number"
+    ? new URLSearchParams(extra ?? {})
+    : new URLSearchParams(buildDateParams(rangeDays, extra));
   params.set("range", typeof rangeDays === "number" ? `${rangeDays}d` : "custom");
   return params;
 }
 
+export function reportRangeDaysFromValue(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const match = value.match(/^(\d+)d?$/);
+  if (!match) return null;
+  const days = Number(match[1]);
+  return REPORT_DATE_RANGES.some((range) => range.days === days) ? days : null;
+}
+
 export function reportRangeValueFromQuery(searchParams: URLSearchParams): ReportRangeValue {
-  const range = searchParams.get("range") ?? "30d";
-  if (range === "7d") return 7;
-  if (range === "14d") return 14;
-  if (range === "60d") return 60;
-  if (range === "90d") return 90;
-  if (range === "30d") return 30;
+  const selectedRange = searchParams.get("range");
+  const presetDays = reportRangeDaysFromValue(selectedRange);
+  if (presetDays) return presetDays;
 
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
@@ -124,7 +131,7 @@ export function getReportRangeLabel(range: ReportRangeValue): string {
 }
 
 export function getReportRangeDisplay(range: ReportRangeValue): string {
-  if (typeof range === "number") return DATE_RANGES.find(r => r.days === range)?.label ?? `Last ${range} days`;
+  if (typeof range === "number") return REPORT_DATE_RANGES.find(r => r.days === range)?.label ?? `Last ${range} days`;
   return `${range.startDate} to ${range.endDate}`;
 }
 
@@ -138,13 +145,13 @@ export function ReportCommandCenterLayout({
   extraControls,
 }: ReportCommandCenterLayoutProps) {
   const isCustom = typeof rangeDays !== "number";
-  const initialCustom = useMemo(() => dateInputsForRange(rangeDays), [rangeDays]);
+  const initialCustom = useMemo(() => dateInputsForReportRange(rangeDays), [rangeDays]);
   const [customStart, setCustomStart] = useState(initialCustom.startDate);
   const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
   const customInvalid = !customStart || !customEnd || customStart > customEnd;
 
   useEffect(() => {
-    const inputs = dateInputsForRange(rangeDays);
+    const inputs = dateInputsForReportRange(rangeDays);
     setCustomStart(inputs.startDate);
     setCustomEnd(inputs.endDate);
   }, [rangeDays]);
@@ -157,8 +164,8 @@ export function ReportCommandCenterLayout({
       onRangeChange(custom);
       return;
     }
-    const preset = Number(value);
-    const inputs = dateInputsForRange(preset);
+    const preset = reportRangeDaysFromValue(value) ?? 30;
+    const inputs = dateInputsForReportRange(preset);
     setCustomStart(inputs.startDate);
     setCustomEnd(inputs.endDate);
     onRangeChange(preset);
@@ -186,7 +193,7 @@ export function ReportCommandCenterLayout({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {DATE_RANGES.map((r) => (
+            {REPORT_DATE_RANGES.map((r) => (
               <SelectItem key={r.days} value={String(r.days)} data-testid={`range-option-${r.days}`}>
                 {r.label}
               </SelectItem>

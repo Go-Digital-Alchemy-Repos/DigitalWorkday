@@ -318,7 +318,7 @@ export class ChatRepository {
       ? await this.getChatReadForChannel(userId, targetId)
       : await this.getChatReadForDm(userId, targetId);
     
-    if (!readRecord?.lastReadMessageId) {
+    if (!readRecord?.lastReadAt) {
       const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
       const [firstMsg] = await db.select({ id: chatMessages.id })
         .from(chatMessages)
@@ -334,18 +334,12 @@ export class ChatRepository {
       return firstMsg?.id || null;
     }
 
-    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
-
-    if (!lastReadMsg) return null;
-
     const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
     const [firstUnread] = await db.select({ id: chatMessages.id })
       .from(chatMessages)
       .where(and(
         eq(targetColumn, targetId),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt),
+        gt(chatMessages.createdAt, readRecord.lastReadAt),
         isNull(chatMessages.deletedAt),
         isNull(chatMessages.archivedAt),
         isNull(chatMessages.parentMessageId),
@@ -1249,15 +1243,21 @@ export class ChatRepository {
     return marked;
   }
 
-  async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined> {
-    const [read] = await db.select({ lastReadMessageId: chatReads.lastReadMessageId })
+  async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null; lastReadAt: Date | null } | undefined> {
+    const [read] = await db.select({
+      lastReadMessageId: chatReads.lastReadMessageId,
+      lastReadAt: chatReads.lastReadAt,
+    })
       .from(chatReads)
       .where(and(eq(chatReads.userId, userId), eq(chatReads.channelId, channelId)));
     return read;
   }
 
-  async getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined> {
-    const [read] = await db.select({ lastReadMessageId: chatReads.lastReadMessageId })
+  async getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null; lastReadAt: Date | null } | undefined> {
+    const [read] = await db.select({
+      lastReadMessageId: chatReads.lastReadMessageId,
+      lastReadAt: chatReads.lastReadAt,
+    })
       .from(chatReads)
       .where(and(eq(chatReads.userId, userId), eq(chatReads.dmThreadId, dmThreadId)));
     return read;
@@ -1266,7 +1266,7 @@ export class ChatRepository {
   async getUnreadCountForChannel(userId: string, channelId: string): Promise<number> {
     const readRecord = await this.getChatReadForChannel(userId, channelId);
     
-    if (!readRecord?.lastReadMessageId) {
+    if (!readRecord?.lastReadAt) {
       const [result] = await db.select({ count: sql<number>`count(*)::int` })
         .from(chatMessages)
         .where(and(
@@ -1279,12 +1279,6 @@ export class ChatRepository {
       return result?.count ?? 0;
     }
 
-    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
-
-    if (!lastReadMsg) return 0;
-
     const [result] = await db.select({ count: sql<number>`count(*)::int` })
       .from(chatMessages)
       .where(and(
@@ -1293,7 +1287,7 @@ export class ChatRepository {
         isNull(chatMessages.archivedAt),
         isNull(chatMessages.parentMessageId),
         ne(chatMessages.authorUserId, userId),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt)
+        gt(chatMessages.createdAt, readRecord.lastReadAt)
       ));
     return result?.count ?? 0;
   }
@@ -1301,7 +1295,7 @@ export class ChatRepository {
   async getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number> {
     const readRecord = await this.getChatReadForDm(userId, dmThreadId);
     
-    if (!readRecord?.lastReadMessageId) {
+    if (!readRecord?.lastReadAt) {
       const [result] = await db.select({ count: sql<number>`count(*)::int` })
         .from(chatMessages)
         .where(and(
@@ -1314,12 +1308,6 @@ export class ChatRepository {
       return result?.count ?? 0;
     }
 
-    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
-
-    if (!lastReadMsg) return 0;
-
     const [result] = await db.select({ count: sql<number>`count(*)::int` })
       .from(chatMessages)
       .where(and(
@@ -1328,7 +1316,7 @@ export class ChatRepository {
         isNull(chatMessages.archivedAt),
         isNull(chatMessages.parentMessageId),
         ne(chatMessages.authorUserId, userId),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt)
+        gt(chatMessages.createdAt, readRecord.lastReadAt)
       ));
     return result?.count ?? 0;
   }
@@ -1339,18 +1327,18 @@ export class ChatRepository {
 
     const readRecords = await db.select({
       channelId: chatReads.channelId,
-      lastReadMessageId: chatReads.lastReadMessageId,
+      lastReadAt: chatReads.lastReadAt,
     })
       .from(chatReads)
       .where(and(eq(chatReads.userId, userId), inArray(chatReads.channelId, channelIds)));
 
-    const readMap = new Map<string, string | null>();
+    const readMap = new Map<string, Date | null>();
     for (const r of readRecords) {
-      if (r.channelId) readMap.set(r.channelId, r.lastReadMessageId);
+      if (r.channelId) readMap.set(r.channelId, r.lastReadAt);
     }
 
     const channelsWithNoRead = channelIds.filter(id => !readMap.get(id));
-    const channelsWithRead = channelIds.filter(id => readMap.has(id) && readMap.get(id));
+    const channelsWithRead = channelIds.filter(id => Boolean(readMap.get(id)));
 
     if (channelsWithNoRead.length > 0) {
       const counts = await db.select({
@@ -1373,26 +1361,8 @@ export class ChatRepository {
     }
 
     if (channelsWithRead.length > 0) {
-      const lastReadMsgIds = channelsWithRead.map(id => readMap.get(id)!);
-      const lastReadMsgs = await db.select({
-        id: chatMessages.id,
-        createdAt: chatMessages.createdAt,
-      })
-        .from(chatMessages)
-        .where(inArray(chatMessages.id, lastReadMsgIds));
-
-      const msgTimestamps = new Map<string, Date>();
-      for (const m of lastReadMsgs) {
-        msgTimestamps.set(m.id, m.createdAt);
-      }
-
       for (const channelId of channelsWithRead) {
-        const lastReadMsgId = readMap.get(channelId)!;
-        const lastReadAt = msgTimestamps.get(lastReadMsgId);
-        if (!lastReadAt) {
-          result.set(channelId, 0);
-          continue;
-        }
+        const lastReadAt = readMap.get(channelId)!;
         const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
           .from(chatMessages)
           .where(and(
@@ -1420,18 +1390,18 @@ export class ChatRepository {
 
     const readRecords = await db.select({
       dmThreadId: chatReads.dmThreadId,
-      lastReadMessageId: chatReads.lastReadMessageId,
+      lastReadAt: chatReads.lastReadAt,
     })
       .from(chatReads)
       .where(and(eq(chatReads.userId, userId), inArray(chatReads.dmThreadId, threadIds)));
 
-    const readMap = new Map<string, string | null>();
+    const readMap = new Map<string, Date | null>();
     for (const r of readRecords) {
-      if (r.dmThreadId) readMap.set(r.dmThreadId, r.lastReadMessageId);
+      if (r.dmThreadId) readMap.set(r.dmThreadId, r.lastReadAt);
     }
 
     const threadsWithNoRead = threadIds.filter(id => !readMap.get(id));
-    const threadsWithRead = threadIds.filter(id => readMap.has(id) && readMap.get(id));
+    const threadsWithRead = threadIds.filter(id => Boolean(readMap.get(id)));
 
     if (threadsWithNoRead.length > 0) {
       const counts = await db.select({
@@ -1454,26 +1424,8 @@ export class ChatRepository {
     }
 
     if (threadsWithRead.length > 0) {
-      const lastReadMsgIds = threadsWithRead.map(id => readMap.get(id)!);
-      const lastReadMsgs = await db.select({
-        id: chatMessages.id,
-        createdAt: chatMessages.createdAt,
-      })
-        .from(chatMessages)
-        .where(inArray(chatMessages.id, lastReadMsgIds));
-
-      const msgTimestamps = new Map<string, Date>();
-      for (const m of lastReadMsgs) {
-        msgTimestamps.set(m.id, m.createdAt);
-      }
-
       for (const threadId of threadsWithRead) {
-        const lastReadMsgId = readMap.get(threadId)!;
-        const lastReadAt = msgTimestamps.get(lastReadMsgId);
-        if (!lastReadAt) {
-          result.set(threadId, 0);
-          continue;
-        }
+        const lastReadAt = readMap.get(threadId)!;
         const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
           .from(chatMessages)
           .where(and(
