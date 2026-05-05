@@ -132,6 +132,8 @@ interface ProfileData {
     dueDate: string | null;
     projectId: string | null;
     projectName: string | null;
+    clientId: string | null;
+    clientName: string | null;
     estimateMinutes: number | null;
     createdAt: string;
     updatedAt: string;
@@ -923,6 +925,7 @@ export default function EmployeeProfileReportPage() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Task</TableHead>
+                            <TableHead>Client</TableHead>
                             <TableHead>Project</TableHead>
                             <TableHead className="text-center">Status</TableHead>
                             <TableHead className="text-center">Priority</TableHead>
@@ -943,6 +946,9 @@ export default function EmployeeProfileReportPage() {
                                   >
                                     {task.title}
                                   </button>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm max-w-[180px] truncate">
+                                  {task.clientName || "—"}
                                 </TableCell>
                                 <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
                                   {task.projectName || "—"}

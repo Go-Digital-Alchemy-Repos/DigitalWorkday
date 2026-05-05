@@ -196,6 +196,8 @@ export async function getEmployeeProfileReport({
     due_date: string | null;
     project_id: string | null;
     project_name: string | null;
+    client_id: string | null;
+    client_name: string | null;
     estimate_minutes: string | null;
     created_at: string;
     updated_at: string;
@@ -208,12 +210,15 @@ export async function getEmployeeProfileReport({
       t.due_date,
       t.project_id,
       p.name as project_name,
+      c.id as client_id,
+      COALESCE(c.display_name, c.company_name) as client_name,
       t.estimate_minutes,
       t.created_at,
       t.updated_at
     FROM task_assignees ta
     JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
     LEFT JOIN projects p ON p.id = t.project_id AND p.tenant_id = ${tenantId}
+    LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
     WHERE ta.user_id = ${employeeId} AND ta.tenant_id = ${tenantId}
       AND t.archived_at IS NULL
     ORDER BY
@@ -360,6 +365,8 @@ export async function getEmployeeProfileReport({
       dueDate: r.due_date,
       projectId: r.project_id,
       projectName: r.project_name,
+      clientId: r.client_id,
+      clientName: r.client_name,
       estimateMinutes: r.estimate_minutes ? Number(r.estimate_minutes) : null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
