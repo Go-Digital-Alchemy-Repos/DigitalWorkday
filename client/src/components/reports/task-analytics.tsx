@@ -64,6 +64,8 @@ interface TaskAnalyticsData {
     project_id: string;
     project_name: string;
     project_color: string;
+    client_id: string | null;
+    client_name: string | null;
     total: number;
     completed: number;
     completion_rate: number;
@@ -268,15 +270,25 @@ export default function TaskAnalytics() {
               )}
               {data.completionByProject.map((project) => (
                 <div key={project.project_id} className="space-y-1.5" data-testid={`project-completion-${project.project_id}`}>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span
                         className="h-2.5 w-2.5 rounded-sm shrink-0"
                         style={{ backgroundColor: project.project_color || "#3B82F6" }}
                       />
-                      <span className="font-medium truncate max-w-[180px]">{project.project_name}</span>
+                      <span className="min-w-0 truncate font-medium">{project.project_name}</span>
+                      {project.client_name ? (
+                        <Badge
+                          variant="secondary"
+                          className="h-5 max-w-[140px] shrink-0 truncate px-1.5 text-[10px] font-medium"
+                          title={project.client_name}
+                          data-testid={`badge-project-client-${project.project_id}`}
+                        >
+                          {project.client_name}
+                        </Badge>
+                      ) : null}
                     </div>
-                    <span className="text-muted-foreground">
+                    <span className="shrink-0 text-muted-foreground">
                       {formatNumber(project.completed)}/{formatNumber(project.total)} ({formatNumber(project.completion_rate)}%)
                     </span>
                   </div>

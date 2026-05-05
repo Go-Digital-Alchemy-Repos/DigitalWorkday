@@ -265,6 +265,8 @@ router.get("/reports/tasks/analytics", async (req, res) => {
         p.id AS project_id,
         p.name AS project_name,
         p.color AS project_color,
+        c.id AS client_id,
+        COALESCE(c.display_name, c.company_name) AS client_name,
         COUNT(t.id)::int AS total,
         COUNT(t.id) FILTER (WHERE t.status = 'done')::int AS completed,
         CASE WHEN COUNT(t.id) > 0
@@ -272,10 +274,11 @@ router.get("/reports/tasks/analytics", async (req, res) => {
           ELSE 0
         END AS completion_rate
       FROM projects p
+      LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
       LEFT JOIN tasks t ON t.project_id = p.id AND t.is_personal = false
         AND (t.created_at BETWEEN ${startDate} AND ${endDate} OR t.updated_at BETWEEN ${startDate} AND ${endDate})
       WHERE p.tenant_id = ${tenantId} AND p.status = 'active'
-      GROUP BY p.id, p.name, p.color
+      GROUP BY p.id, p.name, p.color, c.id, c.display_name, c.company_name
       HAVING COUNT(t.id) > 0
       ORDER BY total DESC
       LIMIT 10
