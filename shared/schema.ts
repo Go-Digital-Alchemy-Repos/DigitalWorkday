@@ -2048,6 +2048,23 @@ export const chatReads = pgTable("chat_reads", {
 ]);
 
 /**
+ * Tracks last read reply per user per message thread
+ */
+export const chatThreadReads = pgTable("chat_thread_reads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  parentMessageId: varchar("parent_message_id").references(() => chatMessages.id).notNull(),
+  lastReadReplyId: varchar("last_read_reply_id").references(() => chatMessages.id),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+}, (table) => [
+  index("chat_thread_reads_tenant_idx").on(table.tenantId),
+  index("chat_thread_reads_user_idx").on(table.userId),
+  index("chat_thread_reads_parent_idx").on(table.parentMessageId),
+  uniqueIndex("chat_thread_reads_user_parent_unique").on(table.userId, table.parentMessageId),
+]);
+
+/**
  * Chat Mentions table - tracks @mentions in chat messages
  * Used for highlighting mentions and optional notification
  */
@@ -3037,6 +3054,11 @@ export const insertChatMentionSchema = createInsertSchema(chatMentions).omit({
   createdAt: true,
 });
 
+export const insertChatThreadReadSchema = createInsertSchema(chatThreadReads).omit({
+  id: true,
+  lastReadAt: true,
+});
+
 export const insertChatPinSchema = createInsertSchema(chatPins).omit({
   id: true,
   createdAt: true,
@@ -3406,6 +3428,9 @@ export type ChatMessageWithAuthor = ChatMessage & {
 
 export type ChatMention = typeof chatMentions.$inferSelect;
 export type InsertChatMention = z.infer<typeof insertChatMentionSchema>;
+
+export type ChatThreadRead = typeof chatThreadReads.$inferSelect;
+export type InsertChatThreadRead = z.infer<typeof insertChatThreadReadSchema>;
 
 export type ChatExportJob = typeof chatExportJobs.$inferSelect;
 export type InsertChatExportJob = z.infer<typeof insertChatExportJobSchema>;

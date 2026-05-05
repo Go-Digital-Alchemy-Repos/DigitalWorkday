@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
 import { useConversationTyping } from "@/hooks/use-typing";
@@ -64,6 +65,7 @@ import {
   CheckCheck,
   Search,
   AtSign,
+  MessagesSquare,
   UserPlus,
   UserMinus,
   Settings,
@@ -147,21 +149,21 @@ type MessageStatus = 'pending' | 'sent' | 'failed';
 
 interface ChatMessage {
   id: string;
-  tenantId: string;
-  channelId: string | null;
-  dmThreadId: string | null;
+  tenantId?: string;
+  channelId?: string | null;
+  dmThreadId?: string | null;
   authorUserId: string;
   body: string;
-  createdAt: Date;
-  editedAt: Date | null;
-  deletedAt?: Date | null;
+  createdAt: Date | string;
+  editedAt?: Date | string | null;
+  deletedAt?: Date | string | null;
   attachments?: ChatAttachment[];
   author?: {
     id: string;
-    name: string;
+    name?: string | null;
     email: string;
-    avatarUrl: string | null;
-  };
+    avatarUrl?: string | null;
+  } | null;
   // Optimistic update status (client-side only)
   _status?: MessageStatus;
   _tempId?: string; // Temporary ID for pending messages
@@ -287,6 +289,12 @@ export default function ChatPage() {
   
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mentionsInboxOpen, setMentionsInboxOpen] = useState(false);
+  const [threadsInboxOpen, setThreadsInboxOpen] = useState(false);
+  const [threadsInboxFilter, setThreadsInboxFilter] = useState<"unread" | "all">("unread");
+  const [threadsInboxSearch, setThreadsInboxSearch] = useState("");
+  const mentionSeenStorageKey = `chat:mentions:lastSeen:${user?.tenantId || "workspace"}:${user?.id || "anonymous"}`;
+  const [lastSeenMentionAt, setLastSeenMentionAt] = useLocalStorage<string | null>(mentionSeenStorageKey, null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
@@ -426,6 +434,50 @@ export default function ChatPage() {
     author: { id: string; email: string; displayName: string };
   }
 
+  interface ChatMentionInboxItem {
+    id: string;
+    createdAt: Date | string;
+    message: ChatMessage & {
+      author?: {
+        id: string;
+        name?: string | null;
+        email: string;
+        avatarUrl?: string | null;
+      } | null;
+    };
+    channel: { id: string; name: string; isPrivate: boolean } | null;
+    dmThread: { id: string; members: ChatDmThread["members"] } | null;
+  }
+
+  interface ChatThreadInboxItem {
+    parentMessage: ChatMessage & {
+      author?: {
+        id: string;
+        name?: string | null;
+        email: string;
+        avatarUrl?: string | null;
+      } | null;
+    };
+    channel: { id: string; name: string; isPrivate: boolean } | null;
+    dmThread: { id: string; members: ChatDmThread["members"] } | null;
+    replyCount: number;
+    unreadReplyCount: number;
+    lastReplyAt: Date | string | null;
+    lastReplyAuthor: {
+      id: string;
+      name?: string | null;
+      email: string;
+      avatarUrl?: string | null;
+    } | null;
+    lastReplyBody?: string | null;
+    participants?: Array<{
+      id: string;
+      name?: string | null;
+      email: string;
+      avatarUrl?: string | null;
+    }>;
+  }
+
   const { data: channels = [], isLoading: isLoadingChannels, isError: isChannelsError, refetch: refetchChannels } = useQuery<ChatChannel[]>({
     queryKey: ["/api/v1/chat/channels"],
   });
@@ -453,6 +505,18 @@ export default function ChatPage() {
     () => new Set(pinnedMessages.map((p: any) => p.messageId)),
     [pinnedMessages]
   );
+  const sharedFiles = useMemo(() => {
+    return messages
+      .flatMap((message) =>
+        (message.attachments || []).map((attachment) => ({
+          ...attachment,
+          messageId: message.id,
+          createdAt: message.createdAt,
+          authorName: message.author?.name || message.author?.email || null,
+        }))
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [messages]);
   const canPin = useMemo(() => {
     if (!selectedChannel || !user) return false;
     const isAdmin = hasTenantAdminAccess(user.role) || user.role === "super_admin";
@@ -473,6 +537,69 @@ export default function ChatPage() {
     },
     enabled: searchOpen && debouncedSearchQuery.length >= 2,
   });
+
+  const mentionsInboxQuery = useQuery<{ mentions: ChatMentionInboxItem[]; total: number }>({
+    queryKey: ["/api/v1/chat/mentions"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/chat/mentions", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load mentions");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const unreadMentionCount = useMemo(() => {
+    const mentions = mentionsInboxQuery.data?.mentions || [];
+    if (!lastSeenMentionAt) return mentions.length;
+    const lastSeenTime = new Date(lastSeenMentionAt).getTime();
+    return mentions.filter((mention) => new Date(mention.createdAt).getTime() > lastSeenTime).length;
+  }, [mentionsInboxQuery.data, lastSeenMentionAt]);
+
+  useEffect(() => {
+    if (!mentionsInboxOpen) return;
+    setLastSeenMentionAt(new Date().toISOString());
+  }, [mentionsInboxOpen, setLastSeenMentionAt]);
+
+  const threadsInboxQuery = useQuery<{ threads: ChatThreadInboxItem[]; total: number }>({
+    queryKey: ["/api/v1/chat/threads/inbox"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/chat/threads/inbox", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load threads");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const unreadThreadReplyCount = useMemo(
+    () => (threadsInboxQuery.data?.threads || []).reduce((sum, thread) => sum + (thread.unreadReplyCount || 0), 0),
+    [threadsInboxQuery.data]
+  );
+
+  const filteredThreadInboxItems = useMemo(() => {
+    const query = threadsInboxSearch.trim().toLowerCase();
+    return (threadsInboxQuery.data?.threads || [])
+      .filter((thread) => threadsInboxFilter === "all" || thread.unreadReplyCount > 0)
+      .filter((thread) => {
+        if (!query) return true;
+        const parentAuthor = thread.parentMessage.author?.name || thread.parentMessage.author?.email || "";
+        const lastAuthor = thread.lastReplyAuthor?.name || thread.lastReplyAuthor?.email || "";
+        const location = thread.channel?.name || thread.dmThread?.members
+          ?.map(member => member.user.name || member.user.email)
+          .join(" ") || "";
+        return [
+          thread.parentMessage.body,
+          thread.lastReplyBody || "",
+          parentAuthor,
+          lastAuthor,
+          location,
+        ].some((value) => value.toLowerCase().includes(query));
+      })
+      .sort((a, b) => {
+        const unreadDelta = (b.unreadReplyCount > 0 ? 1 : 0) - (a.unreadReplyCount > 0 ? 1 : 0);
+        if (unreadDelta !== 0 && threadsInboxFilter === "all") return unreadDelta;
+        return new Date(b.lastReplyAt || 0).getTime() - new Date(a.lastReplyAt || 0).getTime();
+      });
+  }, [threadsInboxFilter, threadsInboxQuery.data, threadsInboxSearch]);
 
   const mentionableUsersQuery = useQuery<MentionableUser[]>({
     queryKey: ["/api/v1/chat/users/mentionable", selectedChannel?.id, selectedDm?.id, mentionQuery],
@@ -520,7 +647,25 @@ export default function ChatPage() {
   // Thread summaries query (reply counts per parent message)
   const conversationType = selectedChannel ? "channel" : selectedDm ? "dm" : null;
   const conversationId = selectedChannel?.id ?? selectedDm?.id ?? null;
-  const threadSummariesQuery = useQuery<Record<string, { replyCount: number; lastReplyAt: string | null; lastReplyAuthorId: string | null }>>({
+  const threadSummariesQuery = useQuery<Record<string, {
+    replyCount: number;
+    unreadReplyCount?: number;
+    lastReplyAt: string | null;
+    lastReplyAuthorId: string | null;
+    lastReplyAuthor?: {
+      id: string;
+      name?: string | null;
+      email: string;
+      avatarUrl?: string | null;
+    } | null;
+    lastReplyBody?: string | null;
+    participants?: Array<{
+      id: string;
+      name?: string | null;
+      email: string;
+      avatarUrl?: string | null;
+    }>;
+  }>>({
     queryKey: [
       conversationType === "channel" ? "/api/v1/chat/channels" : "/api/v1/chat/dm",
       conversationId,
@@ -531,7 +676,25 @@ export default function ChatPage() {
 
   const threadSummaries = useMemo(() => {
     if (!threadSummariesQuery.data) return undefined;
-    const map = new Map<string, { replyCount: number; lastReplyAt: Date | string | null; lastReplyAuthorId: string | null }>();
+    const map = new Map<string, {
+      replyCount: number;
+      unreadReplyCount?: number;
+      lastReplyAt: Date | string | null;
+      lastReplyAuthorId: string | null;
+      lastReplyAuthor?: {
+        id: string;
+        name?: string | null;
+        email: string;
+        avatarUrl?: string | null;
+      } | null;
+      lastReplyBody?: string | null;
+      participants?: Array<{
+        id: string;
+        name?: string | null;
+        email: string;
+        avatarUrl?: string | null;
+      }>;
+    }>();
     for (const [key, val] of Object.entries(threadSummariesQuery.data)) {
       map.set(key, val);
     }
@@ -1379,6 +1542,31 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const clearUnreadCountForConversation = useCallback((targetType: "channel" | "dm", targetId: string) => {
+    if (targetType === "channel") {
+      queryClient.setQueryData(["/api/v1/chat/channels"], (old: ChatChannel[] | undefined) => {
+        if (!old) return old;
+        return old.map(ch => ch.id === targetId ? { ...ch, unreadCount: 0 } : ch);
+      });
+    } else {
+      queryClient.setQueryData(["/api/v1/chat/dm"], (old: ChatDmThread[] | undefined) => {
+        if (!old) return old;
+        return old.map(dm => dm.id === targetId ? { ...dm, unreadCount: 0 } : dm);
+      });
+    }
+  }, [queryClient]);
+
+  const clearAllUnreadCounts = useCallback(() => {
+    queryClient.setQueryData(["/api/v1/chat/channels"], (old: ChatChannel[] | undefined) => {
+      if (!old) return old;
+      return old.map(ch => ({ ...ch, unreadCount: 0 }));
+    });
+    queryClient.setQueryData(["/api/v1/chat/dm"], (old: ChatDmThread[] | undefined) => {
+      if (!old) return old;
+      return old.map(dm => ({ ...dm, unreadCount: 0 }));
+    });
+  }, [queryClient]);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -1446,6 +1634,8 @@ export default function ChatPage() {
       // Invalidate conversation list to update last message preview
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/mentions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
     };
 
     const handleMessageUpdated = (payload: ChatMessageUpdatedPayload) => {
@@ -1458,6 +1648,8 @@ export default function ChatPage() {
             ? { ...msg, ...payload.updates }
             : msg
         ));
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/messages"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
       }
     };
 
@@ -1471,6 +1663,8 @@ export default function ChatPage() {
             ? { ...msg, body: "Message deleted", deletedAt: new Date() }
             : msg
         ));
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/messages"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
       }
     };
 
@@ -1556,26 +1750,13 @@ export default function ChatPage() {
           }
         })
       );
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/messages"] });
     };
 
     const handleConversationRead = (payload: ChatConversationReadPayload) => {
       if (payload.userId === user?.id) {
         // Current user read - update unread counts
-        if (payload.targetType === 'channel') {
-          queryClient.setQueryData(["/api/v1/chat/channels"], (old: ChatChannel[] | undefined) => {
-            if (!old) return old;
-            return old.map(ch => 
-              ch.id === payload.targetId ? { ...ch, unreadCount: 0 } : ch
-            );
-          });
-        } else {
-          queryClient.setQueryData(["/api/v1/chat/dm-threads"], (old: ChatDmThread[] | undefined) => {
-            if (!old) return old;
-            return old.map(dm => 
-              dm.id === payload.targetId ? { ...dm, unreadCount: 0 } : dm
-            );
-          });
-        }
+        clearUnreadCountForConversation(payload.targetType, payload.targetId);
       } else {
         const currentTargetId = selectedChannel?.id ?? selectedDm?.id;
         if (payload.targetId === currentTargetId) {
@@ -1593,6 +1774,8 @@ export default function ChatPage() {
     };
 
     const handleThreadReply = (payload: ChatNewMessagePayload) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/mentions"] });
       const isCurrentChannel = selectedChannel && payload.targetType === "channel" && payload.targetId === selectedChannel.id;
       const isCurrentDm = selectedDm && payload.targetType === "dm" && payload.targetId === selectedDm.id;
       if (isCurrentChannel || isCurrentDm) {
@@ -1605,6 +1788,29 @@ export default function ChatPage() {
         });
         const parentId = (payload.message as any).parentMessageId;
         if (parentId) {
+          queryClient.setQueryData(
+            ["/api/v1/chat/messages", parentId, "thread"],
+            (old: { parentMessage: ChatMessage; replies: ChatMessage[]; readState?: { unreadReplyCount: number; firstUnreadReplyId: string | null; lastReadAt: Date | string | null } } | undefined) => {
+              if (!old) return old;
+              const incoming = payload.message as ChatMessage;
+              if (old.replies.some((reply) => reply.id === incoming.id)) return old;
+              const replies = [...old.replies, incoming].sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              const isOwnReply = incoming.authorUserId === user?.id;
+              return {
+                ...old,
+                replies,
+                readState: old.readState && !isOwnReply
+                  ? {
+                    ...old.readState,
+                    unreadReplyCount: old.readState.unreadReplyCount + 1,
+                    firstUnreadReplyId: old.readState.firstUnreadReplyId || incoming.id,
+                  }
+                  : old.readState,
+              };
+            }
+          );
           queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/messages", parentId, "thread"] });
         }
       }
@@ -1643,7 +1849,7 @@ export default function ChatPage() {
       socket.off(CHAT_EVENTS.MESSAGE_PINNED as any, handlePinChange);
       socket.off(CHAT_EVENTS.MESSAGE_UNPINNED as any, handlePinChange);
     };
-  }, [selectedChannel, selectedDm, user?.id]);
+  }, [selectedChannel, selectedDm, user?.id, clearUnreadCountForConversation]);
 
   const createChannelMutation = useMutation({
     mutationFn: async (data: { name: string; isPrivate: boolean }) => {
@@ -1800,11 +2006,104 @@ export default function ChatPage() {
     mutationFn: async ({ targetType, targetId, lastReadMessageId }: { targetType: "channel" | "dm"; targetId: string; lastReadMessageId: string }) => {
       return apiRequest("POST", "/api/v1/chat/reads", { targetType, targetId, lastReadMessageId });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      clearUnreadCountForConversation(variables.targetType, variables.targetId);
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
     },
   });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/v1/chat/reads/mark-all");
+    },
+    onMutate: () => {
+      clearAllUnreadCounts();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+    },
+    onError: (error: Error) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      toast({
+        title: "Failed to mark chats read",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markAllThreadsReadMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/v1/chat/threads/mark-all-read");
+    },
+    onMutate: () => {
+      queryClient.setQueryData<{ threads: ChatThreadInboxItem[]; total: number }>(
+        ["/api/v1/chat/threads/inbox"],
+        (current) => current
+          ? {
+            ...current,
+            threads: current.threads.map((thread) => ({
+              ...thread,
+              unreadReplyCount: 0,
+            })),
+          }
+          : current
+      );
+      if (selectedChannel?.id) {
+        queryClient.setQueryData<Record<string, {
+          replyCount: number;
+          unreadReplyCount?: number;
+          lastReplyAt: string | null;
+          lastReplyAuthorId: string | null;
+        }>>(["/api/v1/chat/channels", selectedChannel.id, "thread-summaries"], (current) => current
+          ? Object.fromEntries(
+            Object.entries(current).map(([messageId, summary]) => [
+              messageId,
+              { ...summary, unreadReplyCount: 0 },
+            ])
+          )
+          : current);
+      }
+      if (selectedDm?.id) {
+        queryClient.setQueryData<Record<string, {
+          replyCount: number;
+          unreadReplyCount?: number;
+          lastReplyAt: string | null;
+          lastReplyAuthorId: string | null;
+        }>>(["/api/v1/chat/dm", selectedDm.id, "thread-summaries"], (current) => current
+          ? Object.fromEntries(
+            Object.entries(current).map(([messageId, summary]) => [
+              messageId,
+              { ...summary, unreadReplyCount: 0 },
+            ])
+          )
+          : current);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
+      if (selectedChannel?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "thread-summaries"] });
+      }
+      if (selectedDm?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm", selectedDm.id, "thread-summaries"] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+    },
+    onError: (error: Error) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/threads/inbox"] });
+      toast({
+        title: "Failed to mark thread replies read",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
 
   const editMessageMutation = useMutation({
     mutationFn: async ({ messageId, body }: { messageId: string; body: string }): Promise<ChatMessage> => {
@@ -1984,6 +2283,28 @@ export default function ChatPage() {
       if (dm) handleSelectDm(dm);
     }
     if (isMobile) setMobileDrawerOpen(false);
+  };
+
+  const handleOpenThreadInboxItem = (item: ChatThreadInboxItem) => {
+    if (item.channel) {
+      const channel = channels.find(c => c.id === item.channel?.id);
+      if (!channel) return;
+      setSelectedChannel(channel);
+      setSelectedDm(null);
+      updateUrlForConversation("channel", channel.id);
+    } else if (item.dmThread) {
+      const dm = dmThreads.find(d => d.id === item.dmThread?.id);
+      if (!dm) return;
+      setSelectedDm(dm);
+      setSelectedChannel(null);
+      updateUrlForConversation("dm", dm.id);
+    } else {
+      return;
+    }
+
+    setThreadsInboxOpen(false);
+    if (isMobile) setMobileDrawerOpen(false);
+    window.setTimeout(() => setThreadParentMessage(item.parentMessage), 0);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2375,6 +2696,11 @@ export default function ChatPage() {
           onSelectConversation={handleConversationSelect}
           onNewDm={() => { setStartChatDrawerOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
           onNewChannel={() => { setCreateChannelOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
+          onMarkAllRead={() => markAllReadMutation.mutate()}
+          onOpenMentions={() => { setMentionsInboxOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
+          onOpenThreads={() => { setThreadsInboxOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
+          mentionUnreadCount={unreadMentionCount}
+          threadInboxCount={unreadThreadReplyCount}
           isLoading={isLoadingChannels || isLoadingDmThreads}
           showNewChannelButton={true}
           className="flex-1"
@@ -2584,8 +2910,40 @@ export default function ChatPage() {
                   channelId={selectedChannel?.id}
                   dmThreadId={selectedDm?.id}
                   threadParentMessageId={threadParentMessage?.id}
-                  onInsertDraft={(text) => setNewMessage(text)}
+                  onInsertDraft={(text) => setMessageInput(text)}
                 />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMentionsInboxOpen(true)}
+                  aria-label="Open mentions"
+                  title="Mentions"
+                  className="relative"
+                  data-testid="button-chat-mentions"
+                >
+                  <AtSign className="h-4 w-4" />
+                  {unreadMentionCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] leading-4 text-destructive-foreground">
+                      {unreadMentionCount > 99 ? "99+" : unreadMentionCount}
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setThreadsInboxOpen(true)}
+                  aria-label="Open threads"
+                  title="Threads"
+                  className="relative"
+                  data-testid="button-chat-threads"
+                >
+                  <MessagesSquare className="h-4 w-4" />
+                  {unreadThreadReplyCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 rounded-full bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground">
+                      {unreadThreadReplyCount > 99 ? "99+" : unreadThreadReplyCount}
+                    </span>
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -2685,7 +3043,7 @@ export default function ChatPage() {
             />
             {messages.length > 0 && (() => {
               const lastMsg = messages[messages.length - 1];
-              if (selectedDm && lastMsg.authorId === user?.id) {
+              if (selectedDm && lastMsg.authorUserId === user?.id) {
                 const otherReceipts = Array.from(readReceipts.values());
                 const seenByOther = otherReceipts.find(r => r.lastReadMessageId === lastMsg.id);
                 if (seenByOther) {
@@ -3040,6 +3398,8 @@ export default function ChatPage() {
             selectedDm={selectedDm}
             currentUserId={user?.id}
             channelMembers={channelMembers}
+            pinnedMessages={pinnedMessages}
+            sharedFiles={sharedFiles}
             isOpen={contextPanelOpen}
             onToggle={() => setContextPanelOpen(false)}
           />
@@ -3169,6 +3529,273 @@ export default function ChatPage() {
                 )}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mentionsInboxOpen} onOpenChange={setMentionsInboxOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AtSign className="h-5 w-5" />
+              Mentions
+            </DialogTitle>
+            <DialogDescription>
+              Messages where teammates mentioned you.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-96">
+            {mentionsInboxQuery.isLoading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            )}
+            {mentionsInboxQuery.data && (
+              <div className="space-y-2">
+                {mentionsInboxQuery.data.mentions.map((mention) => {
+                  const message = mention.message;
+                  const dm = mention.dmThread
+                    ? dmThreads.find((thread) => thread.id === mention.dmThread?.id)
+                    : null;
+                  const authorName = message.author?.name || message.author?.email || "Unknown";
+
+                  return (
+                    <Card
+                      key={mention.id}
+                      className="p-3 cursor-pointer hover-elevate"
+                      onClick={() => {
+                        if (mention.channel) {
+                          const channel = channels.find(c => c.id === mention.channel?.id);
+                          if (channel) {
+                            setSelectedChannel(channel);
+                            setSelectedDm(null);
+                            updateUrlForConversation("channel", channel.id);
+                          }
+                        } else if (mention.dmThread) {
+                          if (dm) {
+                            setSelectedDm(dm);
+                            setSelectedChannel(null);
+                            updateUrlForConversation("dm", dm.id);
+                          }
+                        }
+                        setMentionsInboxOpen(false);
+                      }}
+                      data-testid={`mention-result-${mention.id}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className="text-xs">
+                            {authorName.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium">{authorName}</span>
+                        {mention.channel && (
+                          <Badge variant="outline" className="text-xs">
+                            <Hash className="h-3 w-3 mr-0.5" />
+                            {mention.channel.name}
+                          </Badge>
+                        )}
+                        {mention.dmThread && (
+                          <Badge variant="outline" className="text-xs">
+                            <MessageCircle className="h-3 w-3 mr-0.5" />
+                            {dm ? getDmDisplayName(dm) : "DM"}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {new Date(message.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {renderMessageBody(message.body)}
+                      </p>
+                    </Card>
+                  );
+                })}
+                {mentionsInboxQuery.data.mentions.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No mentions yet
+                  </p>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMentionsInboxOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={threadsInboxOpen} onOpenChange={setThreadsInboxOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessagesSquare className="h-5 w-5" />
+              Threads
+            </DialogTitle>
+            <DialogDescription>
+              Replies from threads you started, joined, or were mentioned in.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 sm:w-56">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={threadsInboxFilter === "unread" ? "secondary" : "ghost"}
+                  className="h-8 text-xs"
+                  onClick={() => setThreadsInboxFilter("unread")}
+                  data-testid="button-threads-filter-unread"
+                >
+                  Unread
+                  {unreadThreadReplyCount > 0 && (
+                    <Badge variant="destructive" className="ml-1 h-4 min-w-4 rounded-full px-1 text-[10px] leading-none">
+                      {unreadThreadReplyCount > 99 ? "99+" : unreadThreadReplyCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={threadsInboxFilter === "all" ? "secondary" : "ghost"}
+                  className="h-8 text-xs"
+                  onClick={() => setThreadsInboxFilter("all")}
+                  data-testid="button-threads-filter-all"
+                >
+                  All
+                  <span className="ml-1 text-muted-foreground">
+                    {threadsInboxQuery.data?.total || 0}
+                  </span>
+                </Button>
+              </div>
+              <div className="relative sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={threadsInboxSearch}
+                  onChange={(event) => setThreadsInboxSearch(event.target.value)}
+                  placeholder="Search threads..."
+                  className="h-9 pl-8"
+                  data-testid="input-threads-search"
+                />
+              </div>
+              {unreadThreadReplyCount > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0"
+                  onClick={() => markAllThreadsReadMutation.mutate()}
+                  disabled={markAllThreadsReadMutation.isPending}
+                  data-testid="button-threads-mark-all-read"
+                >
+                  {markAllThreadsReadMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCheck className="mr-2 h-4 w-4" />
+                  )}
+                  Mark all read
+                </Button>
+              )}
+            </div>
+          </div>
+          <ScrollArea className="h-96">
+            {threadsInboxQuery.isLoading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            )}
+            {threadsInboxQuery.data && (
+              <div className="space-y-2">
+                {filteredThreadInboxItems.map((thread) => {
+                  const message = thread.parentMessage;
+                  const dm = thread.dmThread
+                    ? dmThreads.find((dmThread) => dmThread.id === thread.dmThread?.id)
+                    : null;
+                  const authorName = message.author?.name || message.author?.email || "Unknown";
+                  const lastReplyAuthorName = thread.lastReplyAuthor?.name || thread.lastReplyAuthor?.email || "Someone";
+
+                  return (
+                    <Card
+                      key={message.id}
+                      className="p-3 cursor-pointer hover-elevate"
+                      onClick={() => handleOpenThreadInboxItem(thread)}
+                      data-testid={`thread-result-${message.id}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className="text-xs">
+                            {authorName.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium">{authorName}</span>
+                        {thread.channel && (
+                          <Badge variant="outline" className="text-xs">
+                            <Hash className="h-3 w-3 mr-0.5" />
+                            {thread.channel.name}
+                          </Badge>
+                        )}
+                        {thread.dmThread && (
+                          <Badge variant="outline" className="text-xs">
+                            <MessageCircle className="h-3 w-3 mr-0.5" />
+                            {dm ? getDmDisplayName(dm) : "DM"}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
+                        </span>
+                        {thread.unreadReplyCount > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {thread.unreadReplyCount} new
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {renderMessageBody(message.body)}
+                      </p>
+                      {thread.lastReplyBody && (
+                        <p className="mt-2 rounded-md bg-muted/50 px-2 py-1.5 text-sm text-muted-foreground line-clamp-2">
+                          {lastReplyAuthorName}: {thread.lastReplyBody}
+                        </p>
+                      )}
+                      {thread.lastReplyAt && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                          {thread.participants && thread.participants.length > 0 && (
+                            <span className="flex -space-x-1">
+                              {thread.participants.slice(0, 3).map((participant) => (
+                                <Avatar key={participant.id} className="h-5 w-5 border border-background">
+                                  <AvatarFallback className="text-[9px]">
+                                    {(participant.name || participant.email || "?").charAt(0).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                            </span>
+                          )}
+                          <span>
+                            Latest reply {new Date(thread.lastReplyAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+                {filteredThreadInboxItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    {threadsInboxSearch
+                      ? "No threads match your search"
+                      : threadsInboxFilter === "unread"
+                      ? "No unread thread replies"
+                      : "No active threads yet"}
+                  </p>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setThreadsInboxOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

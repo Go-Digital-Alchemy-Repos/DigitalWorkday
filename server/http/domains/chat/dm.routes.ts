@@ -9,7 +9,7 @@ import { chatSendRateLimiter } from "../../../middleware/rateLimit";
 import { emitToChatDm } from "../../../realtime/socket";
 import { CHAT_EVENTS } from "@shared/events";
 import { chatDebugStore } from "../../../realtime/chatDebug";
-import { getCurrentTenantId, createDmSchema, sendMessageSchema } from "./shared";
+import { getCurrentTenantId, createDmSchema, sendMessageSchema, extractMentionedUserIds } from "./shared";
 import { extractChatContext, requireDmMember } from "../../../features/chat/security";
 
 const router = Router();
@@ -171,6 +171,16 @@ router.post(
       attachments = await storage.getChatAttachmentsByMessageId(message.id);
     }
 
+    const participants = await storage.getChatDmParticipants(thread.id);
+    const participantIds = new Set(participants.map(p => p.userId));
+    const mentionedUserIds = extractMentionedUserIds(req.body.body)
+      .filter(id => id !== userId && participantIds.has(id));
+    await storage.createChatMentions(mentionedUserIds.map(mentionedUserId => ({
+      tenantId,
+      messageId: message.id,
+      mentionedUserId,
+    })));
+
     const author = await storage.getUser(userId);
 
     const payload = {
@@ -222,10 +232,10 @@ router.post(
         const { notifyDirectMessage } = await import("../../../features/notifications/notification.service");
         const senderName = author?.name || "Someone";
         const preview = req.body.body || "";
-        const recipientId = thread.user1Id === userId ? thread.user2Id : thread.user1Id;
-        if (recipientId) {
+        for (const recipient of participants) {
+          if (recipient.userId === userId) continue;
           notifyDirectMessage(
-            recipientId,
+            recipient.userId,
             userId,
             senderName,
             preview,
@@ -248,9 +258,9 @@ router.get(
 
     await requireDmMember(tenantId, userId, req.params.dmThreadId);
 
-    const summaries = await storage.getThreadSummariesForConversation("dm", req.params.dmThreadId);
+    const summaries = await storage.getThreadSummariesForConversation("dm", req.params.dmThreadId, tenantId, userId);
     
-    const result: Record<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }> = {};
+    const result: Record<string, { replyCount: number; unreadReplyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null; lastReplyAuthor: { id: string; name: string | null; email: string; avatarUrl: string | null } | null; lastReplyBody: string | null; participants: Array<{ id: string; name: string | null; email: string; avatarUrl: string | null }> }> = {};
     summaries.forEach((value, key) => {
       result[key] = value;
     });

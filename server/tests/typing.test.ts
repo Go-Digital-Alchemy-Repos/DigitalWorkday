@@ -108,9 +108,11 @@ describe("Typing state tracker", () => {
     expect(getTypingUsers("dm:dm1")).toHaveLength(0);
   });
 
-  it("parseConversationId handles channel and dm prefixes", () => {
+  it("parseConversationId handles channel, dm, and thread prefixes", () => {
     expect(parseConversationId("channel:abc")).toEqual({ type: "channel", id: "abc" });
     expect(parseConversationId("dm:xyz")).toEqual({ type: "dm", id: "xyz" });
+    expect(parseConversationId("thread:channel:abc:parent1")).toEqual({ type: "channel", id: "abc", threadParentMessageId: "parent1" });
+    expect(parseConversationId("thread:dm:xyz:parent2")).toEqual({ type: "dm", id: "xyz", threadParentMessageId: "parent2" });
     expect(parseConversationId("invalid")).toBeNull();
   });
 });

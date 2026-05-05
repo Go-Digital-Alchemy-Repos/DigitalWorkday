@@ -83,12 +83,46 @@ router.get(
 
     const limit = parseInt(req.query.limit as string) || 100;
     const replies = await storage.getThreadReplies(req.params.messageId, limit);
+    const readState = await storage.getChatThreadReadStateForUser(tenantId, userId, req.params.messageId);
     
     const parentAuthor = await storage.getUser(parentMessage.authorUserId);
+    const parentAttachments = await storage.getChatAttachmentsByMessageId(parentMessage.id);
+    const parentReactions = await storage.getReactionsForMessage(parentMessage.id);
     
     res.json({
-      parentMessage: { ...parentMessage, author: parentAuthor },
+      parentMessage: { ...parentMessage, author: parentAuthor, attachments: parentAttachments, reactions: parentReactions },
       replies,
+      readState,
+    });
+  })
+);
+
+router.post(
+  "/messages/:messageId/thread/read",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tenantId, userId } = extractChatContext(req);
+    const parentMessageId = req.params.messageId;
+
+    await requireMessageAccess(tenantId, userId, parentMessageId);
+
+    const parentMessage = await storage.getChatMessage(parentMessageId);
+    if (!parentMessage || parentMessage.tenantId !== tenantId) {
+      throw AppError.notFound("Message not found");
+    }
+
+    const replies = await storage.getThreadReplies(parentMessageId, 500);
+    const lastReply = replies[replies.length - 1];
+    const readResult = await storage.upsertChatThreadRead(
+      tenantId,
+      userId,
+      parentMessageId,
+      lastReply?.id || null
+    );
+
+    res.json({
+      parentMessageId,
+      lastReadReplyId: lastReply?.id || null,
+      lastReadAt: readResult.lastReadAt,
     });
   })
 );
@@ -404,6 +438,23 @@ router.post(
     }
 
     res.json({ success: true });
+  })
+);
+
+router.post(
+  "/reads/mark-all",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const marked = await storage.markAllChatReadForUser(tenantId, userId);
+
+    res.json({
+      success: true,
+      marked,
+      count: marked.channels.length + marked.dmThreads.length,
+    });
   })
 );
 

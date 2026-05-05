@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { hasTenantAdminAccess } from "@shared/roles";
-import { getSocket } from "@/lib/realtime/socket";
+import { getSocket, joinChatRoom, leaveChatRoom } from "@/lib/realtime/socket";
 import { useChatDrawer } from "@/contexts/chat-drawer-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DraggableChatModal } from "@/components/draggable-chat-modal";
+import { ConversationListPanel } from "@/features/chat/ConversationListPanel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +39,7 @@ import {
 } from "lucide-react";
 import { LazyEmojiPicker } from "@/components/lazy-emoji-picker";
 import { chatSounds } from "@/lib/sounds";
-import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
+import { CHAT_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
 
 interface ChatChannel {
   id: string;
@@ -115,6 +116,7 @@ export function GlobalChatDrawer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
+  const seenMessageIds = useRef<Set<string>>(new Set());
   const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data: channels = [] } = useQuery<ChatChannel[]>({
@@ -140,10 +142,13 @@ export function GlobalChatDrawer() {
   useEffect(() => {
     if (selectedChannel && channelMessagesQuery.data) {
       setMessages(channelMessagesQuery.data);
+      seenMessageIds.current = new Set(channelMessagesQuery.data.map((m) => m.id));
     } else if (selectedDm && dmMessagesQuery.data) {
       setMessages(dmMessagesQuery.data);
+      seenMessageIds.current = new Set(dmMessagesQuery.data.map((m) => m.id));
     } else {
       setMessages([]);
+      seenMessageIds.current.clear();
     }
   }, [selectedChannel, selectedDm, channelMessagesQuery.data, dmMessagesQuery.data]);
 
@@ -177,32 +182,19 @@ export function GlobalChatDrawer() {
   }, [isOpen, lastActiveThread, channels, dmThreads, selectedChannel, selectedDm]);
 
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket || !user || !isOpen) return;
+    if (!user || !isOpen) return;
 
     if (selectedChannel) {
-      socket.emit(CHAT_ROOM_EVENTS.JOIN as any, {
-        targetType: 'channel',
-        targetId: selectedChannel.id,
-      });
+      joinChatRoom("channel", selectedChannel.id);
     } else if (selectedDm) {
-      socket.emit(CHAT_ROOM_EVENTS.JOIN as any, {
-        targetType: 'dm',
-        targetId: selectedDm.id,
-      });
+      joinChatRoom("dm", selectedDm.id);
     }
 
     return () => {
       if (selectedChannel) {
-        socket.emit(CHAT_ROOM_EVENTS.LEAVE as any, {
-          targetType: 'channel',
-          targetId: selectedChannel.id,
-        });
+        leaveChatRoom("channel", selectedChannel.id);
       } else if (selectedDm) {
-        socket.emit(CHAT_ROOM_EVENTS.LEAVE as any, {
-          targetType: 'dm',
-          targetId: selectedDm.id,
-        });
+        leaveChatRoom("dm", selectedDm.id);
       }
     };
   }, [selectedChannel, selectedDm, user, isOpen]);
@@ -216,13 +208,19 @@ export function GlobalChatDrawer() {
       const isCurrentDm = selectedDm && payload.targetType === "dm" && payload.targetId === selectedDm.id;
       
       if (isCurrentChannel || isCurrentDm) {
-        setMessages(prev => [...prev, payload.message as ChatMessage]);
-        // Play sound for messages from others
         const msg = payload.message as ChatMessage;
+        if (seenMessageIds.current.has(msg.id)) {
+          return;
+        }
+        seenMessageIds.current.add(msg.id);
+        setMessages(prev => [...prev, msg]);
+        // Play sound for messages from others
         if (msg.authorUserId !== user?.id) {
           chatSounds.play("messageReceived");
         }
       }
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
     };
 
     const handleMessageUpdated = (payload: ChatMessageUpdatedPayload) => {
@@ -300,6 +298,23 @@ export function GlobalChatDrawer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/v1/chat/reads/mark-all");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to mark chats read",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -394,6 +409,22 @@ export function GlobalChatDrawer() {
     setSelectedChannel(null);
     setSelectedDm(null);
     setLastActiveThread(null);
+  };
+
+  const selectedConversation = useMemo(() => {
+    if (selectedChannel) return { type: "channel" as const, id: selectedChannel.id };
+    if (selectedDm) return { type: "dm" as const, id: selectedDm.id };
+    return null;
+  }, [selectedChannel, selectedDm]);
+
+  const handleConversationSelect = (type: "channel" | "dm", id: string) => {
+    if (type === "channel") {
+      const channel = channels.find((c) => c.id === id);
+      if (channel) handleSelectChannel(channel);
+      return;
+    }
+    const dm = dmThreads.find((thread) => thread.id === id);
+    if (dm) handleSelectDm(dm);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -557,71 +588,18 @@ export function GlobalChatDrawer() {
     >
 
         {showThreadList ? (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="p-4 border-b">
-              <h3 className="font-semibold text-sm mb-3">Channels</h3>
-              <ScrollArea className="h-40">
-                {channels.map((channel) => (
-                  <button
-                    key={channel.id}
-                    onClick={() => handleSelectChannel(channel)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm hover-elevate"
-                    data-testid={`drawer-channel-${channel.id}`}
-                  >
-                    {channel.isPrivate ? (
-                      <Lock className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    ) : (
-                      <Hash className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="truncate flex-1">{channel.name}</span>
-                    {channel.unreadCount && channel.unreadCount > 0 && (
-                      <span 
-                        className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded-full"
-                        data-testid={`drawer-channel-unread-${channel.id}`}
-                      >
-                        {channel.unreadCount > 99 ? "99+" : channel.unreadCount}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                {channels.length === 0 && (
-                  <p className="text-sm text-muted-foreground px-2">No channels available</p>
-                )}
-              </ScrollArea>
-            </div>
-
-            <div className="p-4 flex-1">
-              <h3 className="font-semibold text-sm mb-3">Direct Messages</h3>
-              <ScrollArea className="h-40">
-                {dmThreads.map((dm) => (
-                  <button
-                    key={dm.id}
-                    onClick={() => handleSelectDm(dm)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm hover-elevate"
-                    data-testid={`drawer-dm-${dm.id}`}
-                  >
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-xs">
-                        {getInitials(getDmDisplayName(dm))}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="truncate flex-1">{getDmDisplayName(dm)}</span>
-                    {dm.unreadCount && dm.unreadCount > 0 && (
-                      <span 
-                        className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded-full"
-                        data-testid={`drawer-dm-unread-${dm.id}`}
-                      >
-                        {dm.unreadCount > 99 ? "99+" : dm.unreadCount}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                {dmThreads.length === 0 && (
-                  <p className="text-sm text-muted-foreground px-2">No conversations yet</p>
-                )}
-              </ScrollArea>
-            </div>
-          </div>
+          <ConversationListPanel
+            channels={channels}
+            dmThreads={dmThreads}
+            currentUserId={user?.id}
+            selectedConversation={selectedConversation}
+            onSelectConversation={handleConversationSelect}
+            onNewDm={() => {}}
+            onNewChannel={() => {}}
+            onMarkAllRead={() => markAllReadMutation.mutate()}
+            showCreateActions={false}
+            className="flex-1 min-h-0"
+          />
         ) : (
           <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
             <ScrollArea className="flex-1 min-h-0 overflow-auto" ref={scrollRef}>

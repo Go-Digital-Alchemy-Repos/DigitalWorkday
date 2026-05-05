@@ -22,6 +22,7 @@ credentials*.json
 
 # Local database dumps
 *.sql
+!migrations/0046_chat_thread_reads.sql
 *.dump
 *.pgdump
 

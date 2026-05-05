@@ -9,14 +9,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { formatUnreadCount } from '@/features/chat/ConversationListPanel';
 
 describe('Unread Badge Behavior', () => {
-  const formatUnreadCount = (count: number): string => {
-    if (count <= 0) return '';
-    if (count > 99) return '99+';
-    return String(count);
-  };
-
   it('should display nothing when count is 0', () => {
     expect(formatUnreadCount(0)).toBe('');
   });

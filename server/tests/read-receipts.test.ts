@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { withSocketPolicy } from "../realtime/socketPolicy";
+import { isUnreadCountableMessage } from "../features/chat/unread";
 
 vi.mock("../storage", () => ({
   storage: {
@@ -12,6 +13,7 @@ vi.mock("../storage", () => ({
     getChatDmThread: vi.fn(),
     getUserChatChannels: vi.fn(),
     getChatMessage: vi.fn(),
+    markAllChatReadForUser: vi.fn(),
   },
 }));
 
@@ -122,5 +124,42 @@ describe("Read receipt storage operations", () => {
 
     const result = await storage.getConversationReadReceipts("dm", "dm1", "t1");
     expect(result).toHaveLength(0);
+  });
+
+  it("markAllChatReadForUser delegates tenant and user scope", async () => {
+    const mockResult = {
+      channels: [{ targetId: "ch1", lastReadMessageId: "msg1", lastReadAt: new Date() }],
+      dmThreads: [{ targetId: "dm1", lastReadMessageId: "msg2", lastReadAt: new Date() }],
+    };
+    vi.mocked(storage.markAllChatReadForUser).mockResolvedValue(mockResult);
+
+    const result = await storage.markAllChatReadForUser("t1", "u1");
+
+    expect(storage.markAllChatReadForUser).toHaveBeenCalledWith("t1", "u1");
+    expect(result.channels).toHaveLength(1);
+    expect(result.dmThreads).toHaveLength(1);
+  });
+});
+
+describe("Unread count semantics", () => {
+  const baseMessage = {
+    authorUserId: "sender",
+    deletedAt: null,
+    archivedAt: null,
+    parentMessageId: null,
+  };
+
+  it("counts top-level active messages from other users", () => {
+    expect(isUnreadCountableMessage(baseMessage as any, "viewer")).toBe(true);
+  });
+
+  it("excludes messages authored by the current user", () => {
+    expect(isUnreadCountableMessage({ ...baseMessage, authorUserId: "viewer" } as any, "viewer")).toBe(false);
+  });
+
+  it("excludes deleted, archived, and thread reply messages", () => {
+    expect(isUnreadCountableMessage({ ...baseMessage, deletedAt: new Date() } as any, "viewer")).toBe(false);
+    expect(isUnreadCountableMessage({ ...baseMessage, archivedAt: new Date() } as any, "viewer")).toBe(false);
+    expect(isUnreadCountableMessage({ ...baseMessage, parentMessageId: "parent1" } as any, "viewer")).toBe(false);
   });
 });

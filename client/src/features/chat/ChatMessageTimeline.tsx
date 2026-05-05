@@ -91,8 +91,22 @@ export interface ChatMessage {
 
 export interface ThreadSummary {
   replyCount: number;
+  unreadReplyCount?: number;
   lastReplyAt: Date | string | null;
   lastReplyAuthorId: string | null;
+  lastReplyAuthor?: {
+    id: string;
+    name?: string | null;
+    email: string;
+    avatarUrl?: string | null;
+  } | null;
+  lastReplyBody?: string | null;
+  participants?: Array<{
+    id: string;
+    name?: string | null;
+    email: string;
+    avatarUrl?: string | null;
+  }>;
 }
 
 export interface ReadByUser {
@@ -158,6 +172,31 @@ function formatFullDateTime(date: Date | string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatThreadActivity(date: Date | string): string {
+  const d = new Date(date);
+  const diffMs = Date.now() - d.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function getThreadAuthorName(threadSummary: ThreadSummary): string {
+  return threadSummary.lastReplyAuthor?.name || threadSummary.lastReplyAuthor?.email || "someone";
+}
+
+function cleanThreadPreview(body?: string | null): string {
+  if (!body) return "";
+  return body
+    .replace(/@\[[^\]]+\]\([^)]+\)/g, (match) => match.match(/@\[([^\]]+)\]/)?.[1] || match)
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function formatDateSeparator(date: Date | string): string {
@@ -697,14 +736,47 @@ const MessageBubble = memo(function MessageBubble({
                 <button
                   type="button"
                   onClick={() => onOpenThread?.(message.id)}
-                  className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
+                  className={`mt-1 flex max-w-xl flex-wrap items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition-colors cursor-pointer ${
+                    (threadSummary.unreadReplyCount || 0) > 0
+                      ? "bg-primary/10 text-primary hover:bg-primary/15"
+                      : "text-primary hover:bg-primary/5"
+                  }`}
                   data-testid={`thread-replies-${message.id}`}
                 >
                   <MessagesSquare className="h-3.5 w-3.5" />
+                  {threadSummary.participants && threadSummary.participants.length > 0 && (
+                    <span className="flex -space-x-1">
+                      {threadSummary.participants.map((participant) => (
+                        <Avatar key={participant.id} className="h-4 w-4 border border-background">
+                          {participant.avatarUrl && (
+                            <AvatarImage src={getStorageUrl(participant.avatarUrl)} />
+                          )}
+                          <AvatarFallback className="text-[8px]">
+                            {getInitials(participant.name || participant.email || "?")}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </span>
+                  )}
                   <span>
                     {threadSummary.replyCount}{" "}
                     {threadSummary.replyCount === 1 ? "reply" : "replies"}
                   </span>
+                  {(threadSummary.unreadReplyCount || 0) > 0 && (
+                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary-foreground">
+                      {threadSummary.unreadReplyCount} new
+                    </span>
+                  )}
+                  {threadSummary.lastReplyAt && (
+                    <span className="text-muted-foreground">
+                      Latest by {getThreadAuthorName(threadSummary)} {formatThreadActivity(threadSummary.lastReplyAt)}
+                    </span>
+                  )}
+                  {threadSummary.lastReplyBody && (
+                    <span className="min-w-0 max-w-full truncate text-muted-foreground">
+                      "{cleanThreadPreview(threadSummary.lastReplyBody)}"
+                    </span>
+                  )}
                 </button>
               )}
             </div>

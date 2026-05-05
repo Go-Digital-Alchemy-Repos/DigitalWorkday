@@ -9,7 +9,7 @@ import { chatSendRateLimiter } from "../../../middleware/rateLimit";
 import { emitToTenant, emitToChatChannel } from "../../../realtime/socket";
 import { CHAT_EVENTS } from "@shared/events";
 import { chatDebugStore } from "../../../realtime/chatDebug";
-import { getCurrentTenantId, createChannelSchema, sendMessageSchema, addMembersSchema } from "./shared";
+import { getCurrentTenantId, createChannelSchema, sendMessageSchema, addMembersSchema, extractMentionedUserIds } from "./shared";
 import { extractChatContext, requireChannelMember, requireChannelMemberStrict, logSecurityEvent } from "../../../features/chat/security";
 
 const router = Router();
@@ -222,10 +222,7 @@ router.get(
       throw AppError.notFound("Channel not found");
     }
 
-    const member = await storage.getChatChannelMember(req.params.channelId, userId);
-    if (!member && channel.isPrivate) {
-      throw AppError.forbidden("Not a member of this private channel");
-    }
+    await requireChannelMember(tenantId, userId, req.params.channelId);
 
     const limit = parseInt(req.query.limit as string) || 50;
     const before = req.query.before ? new Date(req.query.before as string) : undefined;
@@ -248,10 +245,7 @@ router.get(
       throw AppError.notFound("Channel not found");
     }
 
-    const member = await storage.getChatChannelMember(req.params.channelId, userId);
-    if (!member && channel.isPrivate) {
-      throw AppError.forbidden("Not a member of this private channel");
-    }
+    await requireChannelMember(tenantId, userId, req.params.channelId);
 
     const firstUnreadId = await storage.getFirstUnreadMessageId("channel", req.params.channelId, userId);
     res.json({ firstUnreadMessageId: firstUnreadId });
@@ -281,10 +275,7 @@ router.post(
       throw AppError.notFound("Channel not found");
     }
 
-    const member = await storage.getChatChannelMember(req.params.channelId, userId);
-    if (!member && channel.isPrivate) {
-      throw AppError.forbidden("Not a member of this private channel");
-    }
+    await requireChannelMemberStrict(tenantId, userId, req.params.channelId);
 
     const attachmentIds: string[] = req.body.attachmentIds || [];
     let attachments: any[] = [];
@@ -334,6 +325,15 @@ router.post(
       await storage.linkChatAttachmentsToMessage(message.id, attachmentIds);
       attachments = await storage.getChatAttachmentsByMessageId(message.id);
     }
+
+    const memberIds = new Set((await storage.getChatChannelMembers(channel.id)).map(m => m.userId));
+    const mentionedUserIds = extractMentionedUserIds(req.body.body)
+      .filter(id => id !== userId && memberIds.has(id));
+    await storage.createChatMentions(mentionedUserIds.map(mentionedUserId => ({
+      tenantId,
+      messageId: message.id,
+      mentionedUserId,
+    })));
 
     const author = await storage.getUser(userId);
 
@@ -424,9 +424,9 @@ router.get(
       throw AppError.forbidden("Not a member of this private channel");
     }
 
-    const summaries = await storage.getThreadSummariesForConversation("channel", req.params.channelId);
+    const summaries = await storage.getThreadSummariesForConversation("channel", req.params.channelId, tenantId, userId);
     
-    const result: Record<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }> = {};
+    const result: Record<string, { replyCount: number; unreadReplyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null; lastReplyAuthor: { id: string; name: string | null; email: string; avatarUrl: string | null } | null; lastReplyBody: string | null; participants: Array<{ id: string; name: string | null; email: string; avatarUrl: string | null }> }> = {};
     summaries.forEach((value, key) => {
       result[key] = value;
     });

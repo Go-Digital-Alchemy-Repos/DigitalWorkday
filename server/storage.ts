@@ -59,6 +59,8 @@ import {
   type ChatDmMember, type InsertChatDmMember,
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
+  type ChatMessageReaction,
+  type InsertChatMention,
   type ChatPin, type InsertChatPin,
   type ChatExportJob, type InsertChatExportJob,
   type ErrorLog, type InsertErrorLog,
@@ -487,9 +489,15 @@ export interface IStorage {
   }): Promise<{ messages: any[]; total: number }>;
 
   // Chat - Threads
-  getThreadReplies(parentMessageId: string, limit?: number): Promise<(ChatMessage & { author: User })[]>;
+  getThreadReplies(parentMessageId: string, limit?: number): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[]; reactions?: (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[] })[]>;
   getThreadReplyCount(parentMessageId: string): Promise<number>;
-  getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>>;
+  getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string, tenantId?: string, userId?: string): Promise<Map<string, { replyCount: number; unreadReplyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null; lastReplyAuthor: Pick<User, "id" | "name" | "email" | "avatarUrl"> | null; lastReplyBody: string | null; participants: Array<Pick<User, "id" | "name" | "email" | "avatarUrl">> }>>;
+  getChatThreadInboxForUser(tenantId: string, userId: string, limit?: number): Promise<any[]>;
+  upsertChatThreadRead(tenantId: string, userId: string, parentMessageId: string, lastReadReplyId: string | null): Promise<{ lastReadAt: Date }>;
+  markAllChatThreadsReadForUser(tenantId: string, userId: string): Promise<{
+    threads: Array<{ parentMessageId: string; lastReadReplyId: string; lastReadAt: Date }>;
+  }>;
+  getChatThreadReadStateForUser(tenantId: string, userId: string, parentMessageId: string): Promise<{ unreadReplyCount: number; firstUnreadReplyId: string | null; lastReadAt: Date | null }>;
 
   // Chat - Attachments
   createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment>;
@@ -497,6 +505,8 @@ export interface IStorage {
   getChatAttachment(id: string): Promise<ChatAttachment | undefined>;
   getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]>;
   linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void>;
+  createChatMentions(mentions: InsertChatMention[]): Promise<void>;
+  getChatMentionsForUser(tenantId: string, userId: string, limit?: number): Promise<any[]>;
 
   // Chat - Pins
   getPinnedMessages(channelId: string, tenantId: string): Promise<any[]>;
@@ -507,6 +517,10 @@ export interface IStorage {
 
   // Chat - Read Tracking
   upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }>;
+  markAllChatReadForUser(tenantId: string, userId: string): Promise<{
+    channels: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+    dmThreads: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+  }>;
   getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
@@ -4088,7 +4102,7 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.getReactionsForMessages(messageIds);
   }
 
-  async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User })[]> {
+  async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[]; reactions?: (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[] })[]> {
     return chatRepo.getThreadReplies(parentMessageId, limit);
   }
 
@@ -4096,8 +4110,26 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.getThreadReplyCount(parentMessageId);
   }
 
-  async getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>> {
-    return chatRepo.getThreadSummariesForConversation(targetType, targetId);
+  async getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string, tenantId?: string, userId?: string): Promise<Map<string, { replyCount: number; unreadReplyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null; lastReplyAuthor: Pick<User, "id" | "name" | "email" | "avatarUrl"> | null; lastReplyBody: string | null; participants: Array<Pick<User, "id" | "name" | "email" | "avatarUrl">> }>> {
+    return chatRepo.getThreadSummariesForConversation(targetType, targetId, tenantId, userId);
+  }
+
+  async getChatThreadInboxForUser(tenantId: string, userId: string, limit = 50): Promise<any[]> {
+    return chatRepo.getChatThreadInboxForUser(tenantId, userId, limit);
+  }
+
+  async upsertChatThreadRead(tenantId: string, userId: string, parentMessageId: string, lastReadReplyId: string | null): Promise<{ lastReadAt: Date }> {
+    return chatRepo.upsertChatThreadRead(tenantId, userId, parentMessageId, lastReadReplyId);
+  }
+
+  async markAllChatThreadsReadForUser(tenantId: string, userId: string): Promise<{
+    threads: Array<{ parentMessageId: string; lastReadReplyId: string; lastReadAt: Date }>;
+  }> {
+    return chatRepo.markAllChatThreadsReadForUser(tenantId, userId);
+  }
+
+  async getChatThreadReadStateForUser(tenantId: string, userId: string, parentMessageId: string): Promise<{ unreadReplyCount: number; firstUnreadReplyId: string | null; lastReadAt: Date | null }> {
+    return chatRepo.getChatThreadReadStateForUser(tenantId, userId, parentMessageId);
   }
 
   async searchChatMessages(tenantId: string, userId: string, options: {
@@ -4131,6 +4163,14 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.linkChatAttachmentsToMessage(messageId, attachmentIds);
   }
 
+  async createChatMentions(mentions: InsertChatMention[]): Promise<void> {
+    return chatRepo.createChatMentions(mentions);
+  }
+
+  async getChatMentionsForUser(tenantId: string, userId: string, limit = 50): Promise<any[]> {
+    return chatRepo.getChatMentionsForUser(tenantId, userId, limit);
+  }
+
   async getPinnedMessages(channelId: string, tenantId: string): Promise<any[]> {
     return chatRepo.getPinnedMessages(channelId, tenantId);
   }
@@ -4153,6 +4193,13 @@ export class DatabaseStorage implements IStorage {
 
   async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }> {
     return chatRepo.upsertChatRead(tenantId, userId, targetType, targetId, lastReadMessageId);
+  }
+
+  async markAllChatReadForUser(tenantId: string, userId: string): Promise<{
+    channels: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+    dmThreads: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+  }> {
+    return chatRepo.markAllChatReadForUser(tenantId, userId);
   }
 
   async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined> {

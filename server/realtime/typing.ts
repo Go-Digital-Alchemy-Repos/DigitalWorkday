@@ -227,12 +227,18 @@ export function stopTypingCleanup(): void {
 /**
  * Parse conversation ID to get type and id
  */
-export function parseConversationId(conversationId: string): { type: 'channel' | 'dm'; id: string } | null {
+export function parseConversationId(conversationId: string): { type: 'channel' | 'dm'; id: string; threadParentMessageId?: string } | null {
   if (conversationId.startsWith('channel:')) {
     return { type: 'channel', id: conversationId.slice(8) };
   }
   if (conversationId.startsWith('dm:')) {
     return { type: 'dm', id: conversationId.slice(3) };
+  }
+  if (conversationId.startsWith('thread:')) {
+    const [, type, id, threadParentMessageId] = conversationId.split(':');
+    if ((type === 'channel' || type === 'dm') && id && threadParentMessageId) {
+      return { type, id, threadParentMessageId };
+    }
   }
   return null;
 }
