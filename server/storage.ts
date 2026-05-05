@@ -447,6 +447,12 @@ export interface IStorage {
   // Chat - Channels
   getChatChannel(id: string): Promise<ChatChannel | undefined>;
   getChatChannelsByTenant(tenantId: string): Promise<ChatChannel[]>;
+  getPublicChatChannelDirectory(tenantId: string, userId: string): Promise<Array<{
+    channel: ChatChannel;
+    isMember: boolean;
+    memberCount: number;
+    lastMessage: { body: string; createdAt: Date; authorName: string | null } | null;
+  }>>;
   createChatChannel(channel: InsertChatChannel): Promise<ChatChannel>;
   updateChatChannel(id: string, channel: Partial<InsertChatChannel>): Promise<ChatChannel | undefined>;
   deleteChatChannel(id: string): Promise<void>;
@@ -4004,6 +4010,15 @@ export class DatabaseStorage implements IStorage {
 
   async getChatChannelsByTenant(tenantId: string): Promise<ChatChannel[]> {
     return chatRepo.getChatChannelsByTenant(tenantId);
+  }
+
+  async getPublicChatChannelDirectory(tenantId: string, userId: string): Promise<Array<{
+    channel: ChatChannel;
+    isMember: boolean;
+    memberCount: number;
+    lastMessage: { body: string; createdAt: Date; authorName: string | null } | null;
+  }>> {
+    return chatRepo.getPublicChatChannelDirectory(tenantId, userId);
   }
 
   async createChatChannel(channel: InsertChatChannel): Promise<ChatChannel> {

@@ -33,6 +33,81 @@ export class ChatRepository {
     return db.select().from(chatChannels).where(eq(chatChannels.tenantId, tenantId)).orderBy(asc(chatChannels.name));
   }
 
+  async getPublicChatChannelDirectory(tenantId: string, userId: string): Promise<Array<{
+    channel: ChatChannel;
+    isMember: boolean;
+    memberCount: number;
+    lastMessage: { body: string; createdAt: Date; authorName: string | null } | null;
+  }>> {
+    const channels = await db.select()
+      .from(chatChannels)
+      .where(and(
+        eq(chatChannels.tenantId, tenantId),
+        eq(chatChannels.isPrivate, false)
+      ))
+      .orderBy(asc(chatChannels.name));
+
+    if (channels.length === 0) return [];
+
+    const channelIds = channels.map((channel) => channel.id);
+
+    const memberships = await db.select({
+      channelId: chatChannelMembers.channelId,
+      userId: chatChannelMembers.userId,
+    })
+      .from(chatChannelMembers)
+      .where(and(
+        eq(chatChannelMembers.tenantId, tenantId),
+        inArray(chatChannelMembers.channelId, channelIds)
+      ));
+
+    const memberCountByChannelId = new Map<string, number>();
+    const userChannelIds = new Set<string>();
+    for (const membership of memberships) {
+      memberCountByChannelId.set(
+        membership.channelId,
+        (memberCountByChannelId.get(membership.channelId) || 0) + 1
+      );
+      if (membership.userId === userId) {
+        userChannelIds.add(membership.channelId);
+      }
+    }
+
+    const latestMessageRows = await db.select({
+      channelId: chatMessages.channelId,
+      body: chatMessages.body,
+      createdAt: chatMessages.createdAt,
+      author: users,
+    })
+      .from(chatMessages)
+      .innerJoin(users, eq(chatMessages.authorUserId, users.id))
+      .where(and(
+        eq(chatMessages.tenantId, tenantId),
+        inArray(chatMessages.channelId, channelIds),
+        isNull(chatMessages.parentMessageId),
+        isNull(chatMessages.deletedAt),
+        isNull(chatMessages.archivedAt)
+      ))
+      .orderBy(desc(chatMessages.createdAt));
+
+    const latestMessageByChannelId = new Map<string, { body: string; createdAt: Date; authorName: string | null }>();
+    for (const row of latestMessageRows) {
+      if (!row.channelId || latestMessageByChannelId.has(row.channelId)) continue;
+      latestMessageByChannelId.set(row.channelId, {
+        body: row.body,
+        createdAt: row.createdAt,
+        authorName: row.author.name || row.author.email || null,
+      });
+    }
+
+    return channels.map((channel) => ({
+      channel,
+      isMember: userChannelIds.has(channel.id),
+      memberCount: memberCountByChannelId.get(channel.id) || 0,
+      lastMessage: latestMessageByChannelId.get(channel.id) || null,
+    }));
+  }
+
   async createChatChannel(channel: InsertChatChannel): Promise<ChatChannel> {
     const [newChannel] = await db.insert(chatChannels).values(channel).returning();
     return newChannel;

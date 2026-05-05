@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Clock3,
   ArrowDownAZ,
+  Compass,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SelectedConversation, ConversationType } from "./ChatLayout";
@@ -77,6 +78,7 @@ interface ConversationListPanelProps {
   onNewDm: () => void;
   onNewChannel: () => void;
   onMarkAllRead?: () => void;
+  onBrowseChannels?: () => void;
   onOpenMentions?: () => void;
   onOpenThreads?: () => void;
   mentionUnreadCount?: number;
@@ -102,6 +104,7 @@ export function ConversationListPanel({
   onNewDm,
   onNewChannel,
   onMarkAllRead,
+  onBrowseChannels,
   onOpenMentions,
   onOpenThreads,
   mentionUnreadCount = 0,
@@ -346,6 +349,18 @@ export function ConversationListPanel({
           >
             <CheckCheck className="h-3.5 w-3.5" />
             Mark {formatUnreadCount(totalUnread)} read
+          </Button>
+        )}
+        {onBrowseChannels && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-full justify-start gap-1.5 text-xs text-muted-foreground"
+            onClick={onBrowseChannels}
+            data-testid="button-chat-browse-channels"
+          >
+            <Compass className="h-3.5 w-3.5" />
+            Browse channels
           </Button>
         )}
         {onOpenMentions && (

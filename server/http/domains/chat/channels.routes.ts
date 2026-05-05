@@ -82,6 +82,18 @@ router.get(
   })
 );
 
+router.get(
+  "/channels/browse",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const channels = await storage.getPublicChatChannelDirectory(tenantId, userId);
+    res.json({ channels });
+  })
+);
+
 router.post(
   "/channels",
   validateBody(createChannelSchema),

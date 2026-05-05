@@ -76,6 +76,7 @@ import {
   ArrowLeft,
   Pin,
   Menu,
+  Compass,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -120,6 +121,17 @@ interface ChatChannel {
     authorName?: string;
   };
   memberCount?: number;
+}
+
+interface ChatChannelDirectoryItem {
+  channel: ChatChannel;
+  isMember: boolean;
+  memberCount: number;
+  lastMessage: {
+    body: string;
+    createdAt: Date | string;
+    authorName?: string | null;
+  } | null;
 }
 
 interface ChatAttachment {
@@ -267,6 +279,8 @@ export default function ChatPage() {
     status: string;
   } | null>(null);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
+  const [browseChannelsOpen, setBrowseChannelsOpen] = useState(false);
+  const [browseChannelsSearch, setBrowseChannelsSearch] = useState("");
   const [startDmOpen, setStartDmOpen] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [newChannelPrivate, setNewChannelPrivate] = useState(false);
@@ -481,6 +495,37 @@ export default function ChatPage() {
   const { data: channels = [], isLoading: isLoadingChannels, isError: isChannelsError, refetch: refetchChannels } = useQuery<ChatChannel[]>({
     queryKey: ["/api/v1/chat/channels"],
   });
+
+  const browseChannelsQuery = useQuery<{ channels: ChatChannelDirectoryItem[] }>({
+    queryKey: ["/api/v1/chat/channels/browse"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/chat/channels/browse", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to browse channels");
+      return res.json();
+    },
+    enabled: browseChannelsOpen,
+  });
+
+  const filteredBrowseChannels = useMemo(() => {
+    const query = browseChannelsSearch.trim().toLowerCase();
+    return (browseChannelsQuery.data?.channels || [])
+      .filter((item) => {
+        if (!query) return true;
+        return [
+          item.channel.name,
+          item.lastMessage?.body || "",
+          item.lastMessage?.authorName || "",
+        ].some((value) => value.toLowerCase().includes(query));
+      })
+      .sort((a, b) => {
+        if (a.isMember !== b.isMember) return Number(a.isMember) - Number(b.isMember);
+        const activityDelta =
+          new Date(b.lastMessage?.createdAt || b.channel.createdAt).getTime() -
+          new Date(a.lastMessage?.createdAt || a.channel.createdAt).getTime();
+        if (activityDelta !== 0) return activityDelta;
+        return a.channel.name.localeCompare(b.channel.name, undefined, { sensitivity: "base" });
+      });
+  }, [browseChannelsQuery.data, browseChannelsSearch]);
 
   const { data: dmThreads = [], isLoading: isLoadingDmThreads, isError: isDmThreadsError, refetch: refetchDmThreads } = useQuery<ChatDmThread[]>({
     queryKey: ["/api/v1/chat/dm"],
@@ -1999,6 +2044,15 @@ export default function ChatPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels/my"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels/browse"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to join channel",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -2696,6 +2750,7 @@ export default function ChatPage() {
           onSelectConversation={handleConversationSelect}
           onNewDm={() => { setStartChatDrawerOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
           onNewChannel={() => { setCreateChannelOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
+          onBrowseChannels={() => { setBrowseChannelsOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
           onMarkAllRead={() => markAllReadMutation.mutate()}
           onOpenMentions={() => { setMentionsInboxOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
           onOpenThreads={() => { setThreadsInboxOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
@@ -3405,6 +3460,130 @@ export default function ChatPage() {
           />
         </Suspense>
       )}
+
+      <Dialog open={browseChannelsOpen} onOpenChange={setBrowseChannelsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Compass className="h-5 w-5" />
+              Browse Channels
+            </DialogTitle>
+            <DialogDescription>
+              Find public team spaces and join the ones relevant to your work.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={browseChannelsSearch}
+                onChange={(event) => setBrowseChannelsSearch(event.target.value)}
+                placeholder="Search channels..."
+                className="pl-8"
+                data-testid="input-browse-channels-search"
+              />
+            </div>
+            <ScrollArea className="h-96 rounded-md border">
+              {browseChannelsQuery.isLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : filteredBrowseChannels.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  {browseChannelsSearch ? "No public channels match your search" : "No public channels available"}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredBrowseChannels.map((item) => {
+                    const channel = item.channel;
+                    const selectedChannelForOpen = channels.find((existing) => existing.id === channel.id) || {
+                      ...channel,
+                      memberCount: item.memberCount,
+                      lastMessage: item.lastMessage
+                        ? {
+                          ...item.lastMessage,
+                          createdAt: new Date(item.lastMessage.createdAt),
+                          authorName: item.lastMessage.authorName || undefined,
+                        }
+                        : undefined,
+                    };
+
+                    return (
+                      <div
+                        key={channel.id}
+                        className="flex items-start gap-3 p-3"
+                        data-testid={`browse-channel-${channel.id}`}
+                      >
+                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <Hash className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-semibold">#{channel.name}</p>
+                            {item.isMember && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                Joined
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <Users className="h-3.5 w-3.5" />
+                              {item.memberCount} member{item.memberCount === 1 ? "" : "s"}
+                            </span>
+                            {item.lastMessage?.createdAt && (
+                              <span>
+                                Active {new Date(item.lastMessage.createdAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          {item.lastMessage && (
+                            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                              {item.lastMessage.authorName ? `${item.lastMessage.authorName}: ` : ""}
+                              {item.lastMessage.body}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={item.isMember ? "outline" : "default"}
+                          disabled={joinChannelMutation.isPending}
+                          onClick={() => {
+                            if (item.isMember) {
+                              setBrowseChannelsOpen(false);
+                              handleSelectChannel(selectedChannelForOpen);
+                              return;
+                            }
+
+                            joinChannelMutation.mutate(channel.id, {
+                              onSuccess: () => {
+                                setBrowseChannelsOpen(false);
+                                setSelectedChannel(selectedChannelForOpen);
+                                setSelectedDm(null);
+                                updateUrlForConversation("channel", channel.id);
+                                toast({ title: `Joined #${channel.name}` });
+                              },
+                            });
+                          }}
+                          data-testid={`button-browse-channel-${item.isMember ? "open" : "join"}-${channel.id}`}
+                        >
+                          {item.isMember ? "Open" : "Join"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBrowseChannelsOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createChannelOpen} onOpenChange={setCreateChannelOpen}>
         <DialogContent>
