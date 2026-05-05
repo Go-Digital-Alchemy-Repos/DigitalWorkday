@@ -939,8 +939,19 @@ export default function ChatPage() {
 
   // Start Chat drawer: filter users by search and exclude self (uses dedicated query)
   const startChatFilteredUsers = useMemo(
-    () => startChatUsers.filter(u => u.id !== user?.id),
-    [startChatUsers, user?.id]
+    () => {
+      const query = startChatSearchQuery.trim().toLowerCase();
+      return startChatUsers
+        .filter(u => u.id !== user?.id)
+        .filter(u => {
+          if (!query) return true;
+          return (
+            u.displayName.toLowerCase().includes(query) ||
+            u.email.toLowerCase().includes(query)
+          );
+        });
+    },
+    [startChatUsers, startChatSearchQuery, user?.id]
   );
 
   // Get selected users for display in chips (uses dedicated query)
@@ -1103,19 +1114,42 @@ export default function ChatPage() {
 
   const renderFormattedText = useCallback((text: string, keyPrefix: string = "ft"): React.ReactNode[] => {
     const parts: React.ReactNode[] = [];
-    const regex = /(\*\*(.+?)\*\*)|(_(.+?)_)/g;
+    const regex = /(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))|(\*\*(.+?)\*\*)|(_(.+?)_)|(https?:\/\/[^\s<]+)/g;
     let lastIndex = 0;
     let match;
     let idx = 0;
+
+    const renderLink = (href: string, label: string, key: string) => (
+      <a
+        key={key}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 break-all"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {label}
+      </a>
+    );
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
         parts.push(text.slice(lastIndex, match.index));
       }
       if (match[1]) {
-        parts.push(<strong key={`${keyPrefix}-b-${idx}`}>{match[2]}</strong>);
-      } else if (match[3]) {
-        parts.push(<em key={`${keyPrefix}-i-${idx}`}>{match[4]}</em>);
+        parts.push(renderLink(match[3], match[2], `${keyPrefix}-md-link-${idx}`));
+      } else if (match[4]) {
+        parts.push(<strong key={`${keyPrefix}-b-${idx}`}>{match[5]}</strong>);
+      } else if (match[6]) {
+        parts.push(<em key={`${keyPrefix}-i-${idx}`}>{match[7]}</em>);
+      } else if (match[8]) {
+        const url = match[8];
+        const trailingPunctuation = url.match(/[),.!?;:]+$/)?.[0] || "";
+        const cleanUrl = trailingPunctuation ? url.slice(0, -trailingPunctuation.length) : url;
+        parts.push(renderLink(cleanUrl, cleanUrl, `${keyPrefix}-auto-link-${idx}`));
+        if (trailingPunctuation) {
+          parts.push(trailingPunctuation);
+        }
       }
       lastIndex = regex.lastIndex;
       idx++;
@@ -2811,7 +2845,18 @@ export default function ChatPage() {
                 >
                   <Checkbox
                     checked={selectedTeamUsers.has(teamUser.id)}
-                    onCheckedChange={() => toggleUserSelection(teamUser.id)}
+                    onClick={(event) => event.stopPropagation()}
+                    onCheckedChange={(checked) => {
+                      setSelectedTeamUsers((prev) => {
+                        const newSet = new Set(prev);
+                        if (checked === true) {
+                          newSet.add(teamUser.id);
+                        } else {
+                          newSet.delete(teamUser.id);
+                        }
+                        return newSet;
+                      });
+                    }}
                     data-testid={`checkbox-user-${teamUser.id}`}
                   />
                   <div className="relative">
@@ -4376,7 +4421,18 @@ export default function ChatPage() {
                     >
                       <Checkbox
                         checked={startChatSelectedUsers.has(teamUser.id)}
-                        onCheckedChange={() => toggleStartChatUserSelection(teamUser.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onCheckedChange={(checked) => {
+                          setStartChatSelectedUsers((prev) => {
+                            const newSet = new Set(prev);
+                            if (checked === true) {
+                              newSet.add(teamUser.id);
+                            } else {
+                              newSet.delete(teamUser.id);
+                            }
+                            return newSet;
+                          });
+                        }}
                         data-testid={`start-chat-checkbox-${teamUser.id}`}
                       />
                       <div className="relative">

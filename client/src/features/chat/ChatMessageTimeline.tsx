@@ -3,7 +3,7 @@ import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ChatMessageInput } from "@/components/chat-message-input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -314,27 +314,47 @@ function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | 
 }
 
 function renderLinkedText(text: string): React.ReactNode {
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  const parts = text.split(urlRegex);
-  if (parts.length <= 1) return text;
-  return parts.map((part, i) => {
-    if (urlRegex.test(part)) {
-      urlRegex.lastIndex = 0;
-      return (
-        <a
-          key={i}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline underline-offset-2 break-all"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {part}
-        </a>
-      );
+  const regex = /(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))|(https?:\/\/[^\s<]+)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  let idx = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
     }
-    return part;
-  });
+
+    const href = match[3] || match[4];
+    const label = match[2] || href;
+    const trailingPunctuation = match[4]?.match(/[),.!?;:]+$/)?.[0] || "";
+    const cleanHref = trailingPunctuation ? href.slice(0, -trailingPunctuation.length) : href;
+    const cleanLabel = trailingPunctuation && label === href ? cleanHref : label;
+
+    parts.push(
+      <a
+        key={`link-${idx}`}
+        href={cleanHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {cleanLabel}
+      </a>
+    );
+    if (trailingPunctuation) {
+      parts.push(trailingPunctuation);
+    }
+    lastIndex = regex.lastIndex;
+    idx++;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
 }
 
 interface MessageBubbleProps {
@@ -499,6 +519,8 @@ const MessageBubble = memo(function MessageBubble({
       >
         <div
           className={`relative inline-block px-3 py-1.5 ${bubbleRounding} ${
+            isEditing ? "w-full sm:w-[min(640px,calc(100vw-10rem))]" : ""
+          } ${
             isPending ? "opacity-60" : ""
           } ${
             isFailed ? "bg-destructive/10 border border-destructive/30" : ""
@@ -514,14 +536,15 @@ const MessageBubble = memo(function MessageBubble({
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
               {isEditing ? (
-                <div className="flex items-center gap-2">
-                  <Input
+                <div className="space-y-2">
+                  <ChatMessageInput
                     value={editingBody}
-                    onChange={(e) => onSetEditingBody(e.target.value)}
-                    className="flex-1 text-sm"
+                    onChange={onSetEditingBody}
+                    className="min-h-[150px] max-h-[360px]"
                     autoFocus
+                    placeholder="Edit your message..."
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                         e.preventDefault();
                         onEditSave(message.id, editingBody);
                       }
@@ -531,25 +554,31 @@ const MessageBubble = memo(function MessageBubble({
                     }}
                     data-testid={`message-edit-input-${message.id}`}
                   />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => onEditSave(message.id, editingBody)}
-                    disabled={!editingBody.trim()}
-                    aria-label="Save edit"
-                    data-testid={`message-edit-save-${message.id}`}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={onEditCancel}
-                    aria-label="Cancel edit"
-                    data-testid={`message-edit-cancel-${message.id}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Esc to cancel - Cmd/Ctrl+Enter to save
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={onEditCancel}
+                        data-testid={`message-edit-cancel-${message.id}`}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => onEditSave(message.id, editingBody)}
+                        disabled={!editingBody.trim()}
+                        data-testid={`message-edit-save-${message.id}`}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Save
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>

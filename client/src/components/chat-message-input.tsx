@@ -2,7 +2,7 @@ import { useRef, useCallback, forwardRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { LazyEmojiPicker } from "@/components/lazy-emoji-picker";
 import { Button } from "@/components/ui/button";
-import { Bold, Italic, List, ListOrdered, Paperclip, Loader2 } from "lucide-react";
+import { Bold, Italic, Link, List, ListOrdered, Paperclip, Loader2 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -19,13 +19,14 @@ interface ChatMessageInputProps {
   disabled?: boolean;
   className?: string;
   "data-testid"?: string;
+  autoFocus?: boolean;
   onAttachClick?: () => void;
   isUploading?: boolean;
   attachDisabled?: boolean;
 }
 
 export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInputProps>(
-  ({ value, onChange, onKeyDown, onCompositionStart, onCompositionEnd, placeholder, disabled, className, "data-testid": dataTestId, onAttachClick, isUploading, attachDisabled }, ref) => {
+  ({ value, onChange, onKeyDown, onCompositionStart, onCompositionEnd, placeholder, disabled, className, "data-testid": dataTestId, autoFocus, onAttachClick, isUploading, attachDisabled }, ref) => {
     const internalRef = useRef<HTMLTextAreaElement>(null);
     const textareaRef = (ref as React.RefObject<HTMLTextAreaElement>) || internalRef;
 
@@ -128,6 +129,37 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
       }
     }, [value, onChange, textareaRef]);
 
+    const insertLink = useCallback(() => {
+      const textarea = textareaRef.current;
+      const url = window.prompt("Paste a link that starts with http:// or https://");
+      if (!url) return;
+
+      const trimmedUrl = url.trim();
+      if (!/^https?:\/\//i.test(trimmedUrl)) {
+        window.alert("Links must start with http:// or https://");
+        return;
+      }
+
+      if (!textarea) {
+        onChange(`${value}[${trimmedUrl}](${trimmedUrl})`);
+        return;
+      }
+
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const selected = value.slice(start, end).trim();
+      const label = selected || trimmedUrl;
+      const markdownLink = `[${label}](${trimmedUrl})`;
+      const newValue = value.slice(0, start) + markdownLink + value.slice(end);
+      onChange(newValue);
+
+      setTimeout(() => {
+        textarea.focus();
+        const labelStart = start + 1;
+        textarea.setSelectionRange(labelStart, labelStart + label.length);
+      }, 0);
+    }, [value, onChange, textareaRef]);
+
     return (
       <div className="flex flex-col border rounded-md bg-background focus-within:ring-1 focus-within:ring-ring transition-shadow">
         <Textarea
@@ -139,6 +171,7 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
           onCompositionEnd={onCompositionEnd}
           placeholder={placeholder}
           disabled={disabled}
+          autoFocus={autoFocus}
           className={`resize-none min-h-[68px] max-h-[180px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-b-none text-sm ${className || ""}`}
           data-testid={dataTestId}
         />
@@ -206,6 +239,22 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top"><p>Numbered list</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={insertLink}
+                disabled={disabled}
+                data-testid="button-format-link"
+              >
+                <Link className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>Add link</p></TooltipContent>
           </Tooltip>
 
           <div className="w-px h-4 bg-border/60 mx-0.5" />
