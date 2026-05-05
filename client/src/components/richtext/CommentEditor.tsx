@@ -22,9 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
-import type { User } from "@shared/schema";
 import { PromptDialog } from "@/components/prompt-dialog";
-import { getMentionUserLabel, matchesMentionUser } from "./mentionUtils";
+import { getMentionUserLabel, matchesMentionUser, type MentionableUser } from "./mentionUtils";
 
 interface CommentEditorProps {
   value?: string;
@@ -34,7 +33,7 @@ interface CommentEditorProps {
   className?: string;
   disabled?: boolean;
   autoFocus?: boolean;
-  users?: User[];
+  users?: MentionableUser[];
   isSubmitting?: boolean;
   attachButton?: React.ReactNode;
   "data-testid"?: string;
@@ -51,7 +50,7 @@ export interface MentionListHandle {
 
 interface MentionSuggestionProps {
   query: string;
-  users: User[];
+  users: MentionableUser[];
   command: (props: { id: string; label: string }) => void;
 }
 
@@ -307,7 +306,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
     const [linkDefaultValue, setLinkDefaultValue] = useState("");
     const editorHostRef = useRef<HTMLDivElement | null>(null);
 
-    const usersRef = useRef<User[]>(users);
+    const usersRef = useRef<MentionableUser[]>(users);
     useEffect(() => { usersRef.current = users; }, [users]);
 
     const updateMentionRect = useCallback((clientRect?: (() => DOMRect | null) | null) => {

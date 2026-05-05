@@ -6,6 +6,7 @@ import {
   computeClientRiskTrend,
 } from "../reports/forecasting/snapshotService";
 import { emailOutboxService } from "../services/emailOutbox";
+import { buildAppUrl } from "../lib/appLinks";
 
 
 async function dbRows<T extends Record<string, unknown>>(
@@ -255,6 +256,7 @@ export async function sendDigestToRecipients(
 ): Promise<void> {
   const sections = await generateDigest(tenantId);
   const html = generateDigestHtml(sections);
+  const actionUrl = buildAppUrl("/reports");
   const subject = `Weekly Ops Digest — ${new Date(sections.generatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
   const roleFilter = schedule.recipientsScope === "project_managers"
@@ -283,7 +285,9 @@ export async function sendDigestToRecipients(
         subject,
         textBody: `Weekly Ops Digest\n\nTeam avg utilization: ${sections.teamAvgUtilization}%\nProjects at risk: ${sections.projectsAtRisk.length}\nClients at risk: ${sections.clientsAtRisk.length}`,
         htmlBody: html,
-        metadata: { digestScheduleId: schedule.id },
+        actionUrl,
+        actionLabel: "Open Reports",
+        metadata: { digestScheduleId: schedule.id, actionUrl },
       });
     } catch (err) {
       console.warn({ err, email: row.email }, "Failed to send ops digest email");

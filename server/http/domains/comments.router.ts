@@ -9,6 +9,7 @@ import {
   notifyCommentAdded,
   notifyCommentMention,
 } from "../../features/notifications/notification.service";
+import { buildTaskUrl } from "../../lib/appLinks";
 import {
   embedAttachmentIdsInBody,
   enrichCommentsWithAttachments as enrichComments,
@@ -110,12 +111,19 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
         try {
           const { emailOutboxService } = await import("../../services/emailOutbox");
           const { emailTemplateService } = await import("../../services/emailTemplates");
+          const actionUrl = buildTaskUrl({
+            taskId: req.params.taskId,
+            projectId: task?.projectId || project?.id || null,
+            commentId: comment.id,
+          }, req);
           
           const templateVars: Record<string, string> = {
             userName: mentionedUser.name || mentionedUser.email,
             mentionedByName: commenter?.name || commenter?.email || "Someone",
             itemTitle: task?.title || "a task",
             commentText: plainTextBody,
+            actionUrl,
+            actionLabel: "View Task",
             appName: "MyWorkDay",
           };
           
@@ -128,10 +136,13 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
             subject: rendered?.subject || `${commenter?.name || 'Someone'} mentioned you in a comment`,
             textBody: rendered?.textBody || `${commenter?.name || 'Someone'} mentioned you in a comment on task "${task?.title || 'a task'}":\n\n"${plainTextBody}"`,
             htmlBody: rendered?.htmlBody,
+            actionUrl,
+            actionLabel: "View Task",
             metadata: {
               taskId: task?.id,
               taskTitle: task?.title,
               commentId: comment.id,
+              actionUrl,
               mentionedByUserId: currentUserId,
               mentionedByName: commenter?.name,
             },

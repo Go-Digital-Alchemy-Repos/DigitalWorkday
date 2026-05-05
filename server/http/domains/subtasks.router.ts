@@ -25,6 +25,7 @@ import {
   notifyCommentAdded,
   notifyCommentMention,
 } from "../../features/notifications/notification.service";
+import { buildTaskUrl } from "../../lib/appLinks";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -396,12 +397,20 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
         try {
           const { emailOutboxService } = await import("../../services/emailOutbox");
           const { emailTemplateService } = await import("../../services/emailTemplates");
+          const actionUrl = buildTaskUrl({
+            taskId: subtask.taskId,
+            projectId: parentTask.projectId,
+            subtaskId: subtask.id,
+            commentId: comment.id,
+          }, req);
           
           const templateVars: Record<string, string> = {
             userName: mentionedUser.name || mentionedUser.email,
             mentionedByName: commenter?.name || commenter?.email || "Someone",
             itemTitle: subtask.title || "a subtask",
             commentText: plainTextBody,
+            actionUrl,
+            actionLabel: "View Subtask",
             appName: "MyWorkDay",
           };
           
@@ -414,10 +423,13 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
             subject: rendered?.subject || `${commenter?.name || 'Someone'} mentioned you in a comment`,
             textBody: rendered?.textBody || `${commenter?.name || 'Someone'} mentioned you in a comment on subtask "${subtask.title || 'a subtask'}":\n\n"${plainTextBody}"`,
             htmlBody: rendered?.htmlBody,
+            actionUrl,
+            actionLabel: "View Subtask",
             metadata: {
               subtaskId: subtask.id,
               subtaskTitle: subtask.title,
               commentId: comment.id,
+              actionUrl,
               mentionedByUserId: currentUserId,
               mentionedByName: commenter?.name,
             },

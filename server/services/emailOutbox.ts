@@ -5,6 +5,7 @@ import { tenantIntegrationService } from "./tenantIntegrations";
 import { decryptValue, isEncryptionAvailable } from "../lib/encryption";
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
+import { ensureEmailActionLink } from "./emailActionLinks";
 
 interface ResolvedMailgunConfig {
   domain: string;
@@ -60,6 +61,15 @@ export type EmailMessageType =
   | "invitation"
   | "mention_notification"
   | "forgot_password"
+  | "admin_password_reset"
+  | "platform_admin_invite"
+  | "user_provision"
+  | "welcome_email"
+  | "task_assignment"
+  | "task_due_reminder"
+  | "support_ticket_created"
+  | "support_ticket_assigned"
+  | "system_notification"
   | "test_email"
   | "other";
 
@@ -72,6 +82,8 @@ interface SendEmailOptions {
   subject: string;
   textBody: string;
   htmlBody?: string;
+  actionUrl?: string;
+  actionLabel?: string;
   requestId?: string;
   metadata?: Record<string, unknown>;
 }
@@ -105,7 +117,13 @@ function debugLog(message: string, data?: Record<string, unknown>) {
 
 export class EmailOutboxService {
   async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; emailId: string; error?: string }> {
-    const { tenantId, messageType, toEmail, subject, textBody, htmlBody, requestId, metadata } = options;
+    const { tenantId, messageType, toEmail, subject, requestId, metadata } = options;
+    const { textBody, htmlBody } = ensureEmailActionLink({
+      textBody: options.textBody,
+      htmlBody: options.htmlBody,
+      actionUrl: options.actionUrl,
+      actionLabel: options.actionLabel,
+    });
 
     const emailId = crypto.randomUUID();
 

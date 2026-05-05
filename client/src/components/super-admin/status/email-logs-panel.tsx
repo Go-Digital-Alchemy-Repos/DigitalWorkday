@@ -84,6 +84,15 @@ export function SuperEmailLogsPanel() {
     invitation: "Invitation",
     mention_notification: "Mention",
     forgot_password: "Password Reset",
+    admin_password_reset: "Admin Password Reset",
+    platform_admin_invite: "Platform Admin Invite",
+    user_provision: "Account Provisioned",
+    welcome_email: "Welcome",
+    task_assignment: "Task Assignment",
+    task_due_reminder: "Task Due Reminder",
+    support_ticket_created: "Ticket Created",
+    support_ticket_assigned: "Ticket Assigned",
+    system_notification: "System Notification",
     test_email: "Test Email",
     other: "Other",
   };
@@ -164,7 +173,16 @@ export function SuperEmailLogsPanel() {
                 <SelectItem value="invitation">Invitation</SelectItem>
                 <SelectItem value="mention_notification">Mention</SelectItem>
                 <SelectItem value="forgot_password">Password Reset</SelectItem>
+                <SelectItem value="admin_password_reset">Admin Password Reset</SelectItem>
+                <SelectItem value="platform_admin_invite">Platform Admin Invite</SelectItem>
+                <SelectItem value="user_provision">Account Provisioned</SelectItem>
+                <SelectItem value="task_assignment">Task Assignment</SelectItem>
+                <SelectItem value="task_due_reminder">Task Due Reminder</SelectItem>
+                <SelectItem value="support_ticket_created">Ticket Created</SelectItem>
+                <SelectItem value="support_ticket_assigned">Ticket Assigned</SelectItem>
+                <SelectItem value="system_notification">System Notification</SelectItem>
                 <SelectItem value="test_email">Test Email</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
             <Input
