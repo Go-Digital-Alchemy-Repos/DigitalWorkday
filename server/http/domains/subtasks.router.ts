@@ -234,7 +234,8 @@ router.get("/subtasks/:id/assignees", async (req, res) => {
 
 router.post("/subtasks/:id/assignees", async (req, res) => {
   try {
-    const { userId, tenantId } = req.body;
+    const tenantId = getEffectiveTenantId(req);
+    const { userId } = req.body;
     if (!userId) {
       return sendError(res, AppError.badRequest("userId is required"), req);
     }

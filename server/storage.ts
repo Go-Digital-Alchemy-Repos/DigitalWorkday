@@ -1455,6 +1455,17 @@ export class DatabaseStorage implements IStorage {
 
   async updateSubtask(id: string, subtask: Partial<InsertSubtask>): Promise<Subtask | undefined> {
     const [updated] = await db.update(subtasks).set({ ...subtask, updatedAt: new Date() }).where(eq(subtasks.id, id)).returning();
+    if (updated && Object.prototype.hasOwnProperty.call(subtask, "assigneeId")) {
+      const nextAssigneeId = subtask.assigneeId ?? null;
+      if (nextAssigneeId) {
+        await db
+          .insert(subtaskAssignees)
+          .values({ subtaskId: id, userId: nextAssigneeId, tenantId: null })
+          .onConflictDoNothing();
+      } else {
+        await db.delete(subtaskAssignees).where(eq(subtaskAssignees.subtaskId, id));
+      }
+    }
     return updated || undefined;
   }
 
@@ -1534,6 +1545,10 @@ export class DatabaseStorage implements IStorage {
 
   async addSubtaskAssignee(assignee: InsertSubtaskAssignee): Promise<SubtaskAssignee> {
     const [result] = await db.insert(subtaskAssignees).values(assignee).returning();
+    await db
+      .update(subtasks)
+      .set({ assigneeId: assignee.userId, updatedAt: new Date() })
+      .where(and(eq(subtasks.id, assignee.subtaskId), isNull(subtasks.assigneeId)));
     return result;
   }
 
@@ -1541,6 +1556,21 @@ export class DatabaseStorage implements IStorage {
     await db.delete(subtaskAssignees).where(
       and(eq(subtaskAssignees.subtaskId, subtaskId), eq(subtaskAssignees.userId, userId))
     );
+    const [subtask] = await db
+      .select({ assigneeId: subtasks.assigneeId })
+      .from(subtasks)
+      .where(eq(subtasks.id, subtaskId));
+    if (subtask?.assigneeId === userId) {
+      const [replacement] = await db
+        .select({ userId: subtaskAssignees.userId })
+        .from(subtaskAssignees)
+        .where(eq(subtaskAssignees.subtaskId, subtaskId))
+        .limit(1);
+      await db
+        .update(subtasks)
+        .set({ assigneeId: replacement?.userId ?? null, updatedAt: new Date() })
+        .where(eq(subtasks.id, subtaskId));
+    }
   }
 
   async getSubtaskTags(subtaskId: string): Promise<(SubtaskTag & { tag?: Tag })[]> {

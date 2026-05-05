@@ -116,12 +116,13 @@ export function MultiSelectAssignees({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-64 p-0"
+        className="flex w-80 flex-col overflow-hidden p-0"
         align="start"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
+        style={{ maxHeight: "min(520px, calc(var(--radix-popover-content-available-height) - 8px))" }}
       >
-        <div className="p-2 border-b">
+        <div className="shrink-0 p-2 border-b">
           <Input
             placeholder="Search members..."
             value={search}
@@ -130,7 +131,7 @@ export function MultiSelectAssignees({
             data-testid="input-search-assignees"
           />
         </div>
-        <ScrollArea className="max-h-64">
+        <ScrollArea className="h-72 min-h-0">
           <div className="p-1">
             {filteredUsers.length === 0 ? (
               <div className="px-2 py-4 text-center text-sm text-muted-foreground">
@@ -172,11 +173,11 @@ export function MultiSelectAssignees({
           </div>
         </ScrollArea>
         {assignees.length > 0 && (
-          <div className="p-2 border-t">
+          <div className="shrink-0 p-2 border-t">
             <div className="text-xs text-muted-foreground mb-2">
               {assignees.length} assigned
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto pr-1">
               {assignees.map((user) => (
                 <div
                   key={user.id}

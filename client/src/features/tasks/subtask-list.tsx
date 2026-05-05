@@ -395,8 +395,8 @@ function SubtaskListInner({
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-48 p-1" align="end">
-                    <ScrollArea className="max-h-48">
+                  <PopoverContent className="w-56 p-1" align="end">
+                    <ScrollArea className="h-60">
                       <div className="space-y-0.5">
                         {assignee && (
                           <button

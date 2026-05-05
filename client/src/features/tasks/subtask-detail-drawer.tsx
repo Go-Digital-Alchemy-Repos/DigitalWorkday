@@ -194,7 +194,7 @@ export function SubtaskDetailDrawer({
 
   const isActualSubtask = isSubtask(subtask);
 
-  const { data: subtaskAssignees = [], isLoading: loadingAssignees } = useQuery<SubtaskAssignee[]>({
+  const { data: subtaskAssignees = [], isLoading: loadingAssignees } = useQuery<(SubtaskAssignee & { user?: User })[]>({
     queryKey: ["/api/subtasks", subtask?.id, "assignees"],
     queryFn: async () => {
       if (!subtask?.id) return [];
@@ -915,6 +915,7 @@ export function SubtaskDetailDrawer({
                         invalidateKeys={[
                           ["/api/subtasks", subtask.id, "assignees"],
                           ["/api/subtasks", subtask.id],
+                          ["/api/tasks", subtask.taskId],
                           ["/api/tasks/my"],
                         ]}
                       />
