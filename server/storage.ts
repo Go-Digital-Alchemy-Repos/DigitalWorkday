@@ -1041,7 +1041,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteSection(id: string): Promise<void> {
-    await db.delete(tasks).where(eq(tasks.sectionId, id));
+    await db
+      .update(tasks)
+      .set({ sectionId: null, updatedAt: new Date() })
+      .where(eq(tasks.sectionId, id));
     await db.delete(sections).where(eq(sections.id, id));
   }
 
