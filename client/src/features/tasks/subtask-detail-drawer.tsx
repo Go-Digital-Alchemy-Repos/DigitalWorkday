@@ -38,6 +38,7 @@ import {
   buildStopTimerPayload,
   buildSubtaskQuickStartTimerPayload,
 } from "./timer-payloads";
+import { normalizeTaskStatus } from "@shared/taskStatus";
 
 import {
   AlertDialog,
@@ -120,6 +121,15 @@ interface TimeEntryListItem {
     lastName?: string | null;
     email?: string | null;
   };
+}
+
+function formatDurationShort(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
 }
 
 interface SubtaskDetailDrawerProps {
@@ -393,6 +403,42 @@ export function SubtaskDetailDrawer({
     toggleCompleteMutation.mutate(!isCompleted);
   };
 
+  const sendToReviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!subtask) return;
+      const updateData: Record<string, unknown> = {
+        status: "in_review",
+        completed: false,
+      };
+
+      if (title.trim() && title !== subtask.title) {
+        updateData.title = title.trim();
+      }
+      const originalDescription = typeof subtask.description === "string"
+        ? subtask.description
+        : subtask.description ? JSON.stringify(subtask.description) : "";
+      if (description !== originalDescription) {
+        updateData.description = description || null;
+      }
+      const originalDueDate = subtask.dueDate ? new Date(subtask.dueDate).toISOString() : null;
+      const currentDueDate = localDueDate ? localDueDate.toISOString() : null;
+      if (currentDueDate !== originalDueDate) {
+        updateData.dueDate = localDueDate || null;
+      }
+
+      return apiRequest("PATCH", `/api/subtasks/${subtask.id}`, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Subtask sent for review" });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to send subtask for review", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleCreateTag = () => {
     if (!newTagName.trim() || !workspaceId) return;
     createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
@@ -552,8 +598,9 @@ export function SubtaskDetailDrawer({
     (!activeTimer && !!projectId && !projectContext?.clientId) || projectContextError ? "hidden" :
     "idle";
 
-  const creatorUser = subtask?.createdBy
-    ? mentionUsers.find((user) => user.id === subtask.createdBy)
+  const creatorId = subtask && "createdBy" in subtask ? subtask.createdBy : undefined;
+  const creatorUser = creatorId
+    ? mentionUsers.find((user) => user.id === creatorId)
     : undefined;
   const creatorLabel = creatorUser
     ? `${creatorUser.firstName || ""} ${creatorUser.lastName || ""}`.trim() || creatorUser.email || "Unknown"
@@ -777,6 +824,7 @@ export function SubtaskDetailDrawer({
                       <SelectContent>
                         <SelectItem value="todo">To Do</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="in_review">In Review</SelectItem>
                         <SelectItem value="blocked">Blocked</SelectItem>
                         <SelectItem value="done">Done</SelectItem>
                       </SelectContent>
@@ -1192,6 +1240,15 @@ export function SubtaskDetailDrawer({
           showSave={true}
           onSave={handleSaveAll}
           saveLabel="Save Subtask"
+          showReview={
+            isActualSubtask &&
+            Boolean(projectId) &&
+            normalizeTaskStatus(subtask.status) !== "done" &&
+            normalizeTaskStatus(subtask.status) !== "in_review"
+          }
+          onSendToReview={() => sendToReviewMutation.mutate()}
+          reviewDisabled={sendToReviewMutation.isPending}
+          isSendingToReview={sendToReviewMutation.isPending}
           showComplete={isActualSubtask}
           onMarkComplete={handleMarkComplete}
           isCompleting={toggleCompleteMutation.isPending}

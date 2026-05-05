@@ -65,6 +65,7 @@ import { hasTenantAdminAccess } from "@shared/roles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShareModal } from "@/features/sharing/share-modal";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
+import { normalizeTaskStatus } from "@shared/taskStatus";
 
 const LazyStartTimerDrawer = lazy(() =>
   import("@/features/timer/start-timer-drawer").then((module) => ({
@@ -724,6 +725,7 @@ function TaskDetailDrawerContent({
   };
 
   const [isReopeningTask, setIsReopeningTask] = useState(false);
+  const [isSendingToReviewTask, setIsSendingToReviewTask] = useState(false);
 
   const handleMarkAsIncomplete = async () => {
     if (task?.status !== "done") return;
@@ -735,6 +737,32 @@ function TaskDetailDrawerContent({
       toast({ title: "Failed to reopen task", variant: "destructive" });
     } finally {
       setIsReopeningTask(false);
+    }
+  };
+
+  const handleSendToReview = async () => {
+    const normalizedStatus = normalizeTaskStatus(task?.status);
+    if (!task?.projectId || normalizedStatus === "done" || normalizedStatus === "in_review") return;
+
+    setIsSendingToReviewTask(true);
+    try {
+      if (title.trim() && title !== task.title) {
+        onUpdate?.(task.id, { title: title.trim() });
+      }
+      const currentPlain = toPlainText(description);
+      const taskPlain = toPlainText(task.description);
+      if (currentPlain !== taskPlain) {
+        onUpdate?.(task.id, { description: description || null });
+      }
+      markClean();
+
+      await updateTaskStatusMutation.mutateAsync("in_review");
+      toast({ title: "Task sent for review", description: `"${task.title}" is now waiting for review` });
+      onOpenChange(false);
+    } catch (error) {
+      toast({ title: "Failed to send task for review", variant: "destructive" });
+    } finally {
+      setIsSendingToReviewTask(false);
     }
   };
 
@@ -952,6 +980,11 @@ function TaskDetailDrawerContent({
     }
     setEditingTitle(false);
   };
+
+  const normalizedTaskStatus = normalizeTaskStatus(task.status);
+  const canSendTaskToReview = Boolean(
+    task.projectId && normalizedTaskStatus !== "done" && normalizedTaskStatus !== "in_review"
+  );
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
@@ -1602,6 +1635,10 @@ function TaskDetailDrawerContent({
           showSave={true}
           onSave={saveAndClose}
           saveLabel="Save Task"
+          showReview={canSendTaskToReview}
+          onSendToReview={handleSendToReview}
+          reviewDisabled={isSendingToReviewTask || updateTaskStatusMutation.isPending}
+          isSendingToReview={isSendingToReviewTask}
           showComplete={task.status !== "done"}
           onMarkComplete={handleMarkAsComplete}
           completeDisabled={timeEntriesLoading || isCompletingTask}
