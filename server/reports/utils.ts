@@ -21,6 +21,16 @@ export const reportRangeSchema = z.object({
 export type ReportRangeParams = z.infer<typeof reportRangeSchema>;
 
 const DEFAULT_RANGE_DAYS = 30;
+const MAX_PRESET_RANGE_DAYS = 366;
+
+export function parsePresetReportRangeDays(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^(\d+)d$/);
+  if (!match) return null;
+  const days = Number(match[1]);
+  if (!Number.isInteger(days) || days < 1 || days > MAX_PRESET_RANGE_DAYS) return null;
+  return days;
+}
 
 export function parseReportRange(query: Record<string, unknown>): {
   startDate: Date;
@@ -28,13 +38,15 @@ export function parseReportRange(query: Record<string, unknown>): {
   params: ReportRangeParams;
 } {
   const now = new Date();
+  const presetDays = parsePresetReportRangeDays(query.range);
+  const rangeDays = presetDays ?? DEFAULT_RANGE_DAYS;
   const defaultEnd = now.toISOString();
-  const defaultStart = new Date(now.getTime() - DEFAULT_RANGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const defaultStart = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000).toISOString();
 
   const raw = {
-    startDate: query.startDate ?? defaultStart,
-    endDate: query.endDate ?? defaultEnd,
     ...query,
+    startDate: presetDays ? defaultStart : query.startDate ?? defaultStart,
+    endDate: presetDays ? defaultEnd : query.endDate ?? defaultEnd,
   };
 
   const parsed = reportRangeSchema.parse(raw);

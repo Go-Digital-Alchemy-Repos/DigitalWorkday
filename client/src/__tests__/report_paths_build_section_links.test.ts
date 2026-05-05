@@ -30,6 +30,15 @@ describe("report-path helpers", () => {
     ).toBe("/reports/employees/emp_1?range=30d&section=section-time");
   });
 
+  it("preserves 60-day range on employee drilldowns", () => {
+    expect(
+      getEmployeeReportDrilldownPath("/reports", "emp_1", {
+        range: "60d",
+        section: "workload",
+      }),
+    ).toBe("/reports/employees/emp_1?range=60d&section=section-workload");
+  });
+
   it("preserves range and section on client drilldowns", () => {
     expect(
       getClientReportDrilldownPath("/super-admin/reports", "client_1", {
