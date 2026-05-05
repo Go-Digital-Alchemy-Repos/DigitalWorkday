@@ -658,12 +658,20 @@ export default function ProjectPage() {
     [displaySections, reorderMutation]
   );
 
-  const refetchSelectedTask = async () => {
+  const refetchSelectedTask = useCallback(async () => {
+    setLocalSections(null);
+    if (projectId) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] }),
+      ]);
+    }
     if (selectedTask) {
       const updatedTask = await fetchTaskDetail(selectedTask.id);
       setSelectedTask(updatedTask);
+      queryClient.setQueryData(["/api/tasks", selectedTask.id], updatedTask);
     }
-  };
+  }, [projectId, selectedTask?.id]);
 
   const handleAddTask = (sectionId?: string) => {
     setSelectedSectionId(sectionId);
@@ -1344,6 +1352,7 @@ export default function ProjectPage() {
         onAddComment={(taskId: string, body: string) => {
           addCommentMutation.mutate({ taskId, body });
         }}
+        onRefresh={refetchSelectedTask}
         workspaceId={project?.workspaceId}
       />
       <TaskCreateDrawer

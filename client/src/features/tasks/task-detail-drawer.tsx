@@ -854,6 +854,19 @@ function TaskDetailDrawerContent({
     () => task?.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [],
     [task?.assignees]
   );
+  const assigneeInvalidateKeys = useMemo(
+    () => {
+      const keys: string[][] = [["/api/tasks", task?.id || ""], ["/api/tasks/my"]];
+      if (task?.projectId) {
+        keys.push(
+          ["/api/projects", task.projectId, "sections"],
+          ["/api/projects", task.projectId, "tasks"],
+        );
+      }
+      return keys.filter((key) => key.every(Boolean));
+    },
+    [task?.id, task?.projectId],
+  );
   const taskTags = useMemo<TagType[]>(
     () => task?.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [],
     [task?.tags]
@@ -1239,6 +1252,7 @@ function TaskDetailDrawerContent({
                   taskId={task.id}
                   assignees={assigneeUsers}
                   workspaceId={workspaceId}
+                  invalidateKeys={assigneeInvalidateKeys}
                   onAssigneeChange={onRefresh}
                 />
               </FormFieldWrapper>
