@@ -490,7 +490,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       const currentDoc = serializeDocToString(editor.getJSON());
       const nextDoc = serializeDocToString(getDocForEditor(nextValue));
       if (currentDoc !== nextDoc) {
-        editor.commands.setContent(getDocForEditor(nextValue), false);
+        editor.commands.setContent(getDocForEditor(nextValue), { emitUpdate: false });
       }
     }, [editor, value]);
 

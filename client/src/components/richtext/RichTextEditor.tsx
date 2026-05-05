@@ -28,8 +28,7 @@ import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
 import { PromptDialog } from "@/components/prompt-dialog";
-import type { User } from "@shared/schema";
-import { getMentionUserLabel, matchesMentionUser } from "./mentionUtils";
+import { getMentionUserLabel, matchesMentionUser, type MentionableUser } from "./mentionUtils";
 
 interface RichTextEditorProps {
   value: string | null | undefined;
@@ -45,7 +44,7 @@ interface RichTextEditorProps {
   showToolbar?: boolean;
   showAlignment?: boolean;
   showAttachment?: boolean;
-  users?: User[];
+  users?: MentionableUser[];
   "data-testid"?: string;
 }
 
@@ -64,7 +63,7 @@ interface MentionListHandle {
 
 interface MentionSuggestionProps {
   query: string;
-  users: User[];
+  users: MentionableUser[];
   command: (props: { id: string; label: string }) => void;
 }
 
@@ -359,7 +358,7 @@ export function RichTextEditor({
   const [mentionRect, setMentionRect] = useState<{ top: number; left: number } | null>(null);
   const editorHostRef = useRef<HTMLDivElement | null>(null);
 
-  const usersRef = useRef<User[]>(users);
+  const usersRef = useRef<MentionableUser[]>(users);
   useEffect(() => { usersRef.current = users; }, [users]);
 
   const updateMentionRect = useCallback((clientRect?: (() => DOMRect | null) | null) => {
@@ -513,7 +512,7 @@ export function RichTextEditor({
       
       if (currentDoc !== newDoc) {
         suppressOnChangeRef.current = true;
-        editor.commands.setContent(getDocForEditor(value), false);
+        editor.commands.setContent(getDocForEditor(value), { emitUpdate: false });
         suppressOnChangeRef.current = false;
       }
       prevValueRef.current = value;

@@ -55,6 +55,14 @@ interface CreateTaskDialogProps {
   onSubmit: (data: CreateTaskFormData) => Promise<void>;
   sections?: Section[];
   defaultSectionId?: string;
+  tenantUsers?: Array<{
+    id: string;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    name?: string | null;
+    displayName?: string | null;
+  }>;
   isLoading?: boolean;
 }
 
@@ -64,6 +72,7 @@ export function CreateTaskDialog({
   onSubmit,
   sections = [],
   defaultSectionId,
+  tenantUsers = [],
   isLoading = false,
 }: CreateTaskDialogProps) {
   const form = useForm<CreateTaskFormData>({
@@ -136,8 +145,9 @@ export function CreateTaskDialog({
                     <RichTextEditor
                       value={field.value || ""}
                       onChange={field.onChange}
-                      placeholder="Add a description..."
+                      placeholder="Add a description... Type @ to mention someone"
                       className="min-h-[100px]"
+                      users={tenantUsers}
                       data-testid="textarea-task-description"
                     />
                   </FormControl>
