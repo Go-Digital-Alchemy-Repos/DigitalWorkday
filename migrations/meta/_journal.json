@@ -64,6 +64,13 @@
       "when": 1777993200000,
       "tag": "0046_chat_thread_reads",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778007600000,
+      "tag": "0047_archive_project_sections",
+      "breakpoints": true
     }
   ]
 }

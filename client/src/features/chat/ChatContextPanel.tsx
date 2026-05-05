@@ -6,6 +6,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Link } from "wouter";
 import {
   X,
   Users,
@@ -121,6 +122,14 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+function getChatMemberProfilePath(userId: string): string {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/super-admin")) {
+    return `/super-admin/reports/employees/${userId}`;
+  }
+
+  return `/reports/employees/${userId}`;
+}
+
 export function ChatContextPanel({
   selectedChannel,
   selectedDm,
@@ -138,6 +147,7 @@ export function ChatContextPanel({
   };
 
   const otherMember = getOtherDmMember();
+  const otherMemberProfilePath = otherMember ? getChatMemberProfilePath(otherMember.id) : null;
 
   if (!selectedChannel && !selectedDm) {
     return null;
@@ -365,13 +375,13 @@ export function ChatContextPanel({
                       className="w-full justify-start h-8 text-xs px-2"
                       asChild
                     >
-                      <a
-                        href={`/team?user=${otherMember.id}`}
+                      <Link
+                        href={otherMemberProfilePath ?? "/reports"}
                         data-testid="button-view-profile"
                       >
                         <User className="h-3 w-3 mr-2" />
                         View Profile
-                      </a>
+                      </Link>
                     </Button>
                     <Button
                       variant="ghost"

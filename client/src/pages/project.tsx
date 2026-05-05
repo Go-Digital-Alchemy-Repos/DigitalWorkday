@@ -442,6 +442,7 @@ export default function ProjectPage() {
       return apiRequest("DELETE", `/api/sections/${sectionId}`);
     },
     onSuccess: () => {
+      setLocalSections(null);
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
       toast({ title: "Section deleted successfully" });
     },
@@ -450,16 +451,35 @@ export default function ProjectPage() {
     },
   });
 
+  const archiveSectionMutation = useMutation({
+    mutationFn: async (sectionId: string) => {
+      return apiRequest("POST", `/api/sections/${sectionId}/archive`);
+    },
+    onSuccess: () => {
+      setLocalSections(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      toast({
+        title: "Section archived",
+        description: "The section was removed from active project views and kept for history.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to archive section", variant: "destructive" });
+    },
+  });
+
   const clearSectionTasksMutation = useMutation({
     mutationFn: async (sectionId: string) => {
       return apiRequest("DELETE", `/api/sections/${sectionId}/tasks`);
     },
     onSuccess: () => {
+      setLocalSections(null);
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      toast({ title: "All tasks in section cleared" });
+      toast({ title: "All tasks in section deleted" });
     },
     onError: () => {
-      toast({ title: "Failed to clear section tasks", variant: "destructive" });
+      toast({ title: "Failed to delete section tasks", variant: "destructive" });
     },
   });
 
@@ -1233,6 +1253,7 @@ export default function ProjectPage() {
                     onTaskSelect={handleTaskSelect}
                     onTaskStatusChange={handleStatusChange}
                     onEditSection={handleEditSection}
+                    onArchiveSection={(sectionId) => archiveSectionMutation.mutate(sectionId)}
                     onDeleteSection={openDeleteSectionDialog}
                     onClearSectionTasks={(sectionId) => clearSectionTasksMutation.mutate(sectionId)}
                   />
@@ -1304,7 +1325,7 @@ export default function ProjectPage() {
         {view === "calendar" && projectId && sections && (
           <ProjectCalendar
             projectId={projectId}
-            sections={sections.map(s => ({ id: s.id, projectId: s.projectId, name: s.name, orderIndex: s.orderIndex, createdAt: s.createdAt }))}
+            sections={sections}
             onTaskSelect={handleTaskSelect}
             onDateClick={(date) => {
               setSelectedSectionId(sections[0]?.id);
@@ -1329,7 +1350,7 @@ export default function ProjectPage() {
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
         onSubmit={handleCreateTask}
-        sections={sections?.map((s) => ({ id: s.id, projectId: s.projectId, name: s.name, orderIndex: s.orderIndex, createdAt: s.createdAt })) || []}
+        sections={sections || []}
         defaultSectionId={selectedSectionId}
         tenantUsers={tenantUsers}
         isLoading={createTaskMutation.isPending}

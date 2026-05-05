@@ -26,6 +26,7 @@ import { ReportEmptyState } from "./report-empty-state";
 import { getReportViewState } from "./report-view-state";
 import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 import { formatMetricValue } from "./report-shared";
+import { fetchReport as fetch } from "./report-fetch";
 
 const buildQueryParams = buildDateParams;
 

@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { formatNumber } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams, type ReportRangeValue } from "./report-command-center-layout";
+import { fetchReport as fetch } from "./report-fetch";
 import {
   ResponsiveContainer,
   BarChart,

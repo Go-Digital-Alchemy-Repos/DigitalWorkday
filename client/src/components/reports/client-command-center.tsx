@@ -17,6 +17,7 @@ import { MobileTabSelect } from "./mobile-tab-select";
 import { getClientReportDrilldownPath, getClientReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
 import { getReportViewState } from "./report-view-state";
+import { fetchReport as fetch } from "./report-fetch";
 import {
   formatComparisonSub,
   MetricCard,

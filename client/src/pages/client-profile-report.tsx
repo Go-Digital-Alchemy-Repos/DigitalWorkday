@@ -59,6 +59,7 @@ import {
 } from "@/components/reports/report-command-center-layout";
 import { getClientReportPath, getReportBasePath } from "@/components/reports/report-paths";
 import { formatMetricValue } from "@/components/reports/report-shared";
+import { fetchReport as fetch } from "@/components/reports/report-fetch";
 
 interface ClientProfileData {
   client: {

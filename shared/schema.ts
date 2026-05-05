@@ -1387,8 +1387,11 @@ export const sections = pgTable("sections", {
   name: text("name").notNull(),
   orderIndex: integer("order_index").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
 }, (table) => [
   index("sections_project_order_idx").on(table.projectId, table.orderIndex),
+  index("sections_project_active_order_idx").on(table.projectId, table.archivedAt, table.orderIndex),
 ]);
 
 // Tasks table
@@ -2745,6 +2748,8 @@ export const insertProjectTemplateSchema = createInsertSchema(projectTemplates).
 export const insertSectionSchema = createInsertSchema(sections).omit({
   id: true,
   createdAt: true,
+  archivedAt: true,
+  archivedBy: true,
 });
 
 // Helper to coerce date strings to Date objects (for JSON API compatibility)

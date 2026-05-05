@@ -26,6 +26,7 @@ import { ReportsTab } from "@/components/settings/reports-tab";
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn, formatNumber } from "@/lib/utils";
+import { fetchReport as fetch } from "@/components/reports/report-fetch";
 
 interface ClientListItem {
   id: string;
@@ -383,7 +384,7 @@ function PipelineReport() {
   );
 }
 
-export default function ReportsPage() {
+export default function ReportsPage({ embedded: _embedded }: { embedded?: boolean } = {}) {
   const { user, isLoading } = useAuth();
   const [currentView, setCurrentView] = useState<ReportView>("overview");
   const flags = useFeatureFlags();

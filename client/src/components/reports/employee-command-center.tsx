@@ -31,6 +31,7 @@ import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
+import { fetchReport as fetch } from "./report-fetch";
 import {
   formatComparisonSub,
   MetricCard,

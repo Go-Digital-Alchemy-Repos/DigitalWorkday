@@ -182,6 +182,7 @@ export interface IStorage {
   getSectionsWithTasks(projectId: string): Promise<SectionWithTasks[]>;
   createSection(section: InsertSection): Promise<Section>;
   updateSection(id: string, section: Partial<InsertSection>): Promise<Section | undefined>;
+  archiveSection(id: string, archivedBy?: string | null): Promise<Section | undefined>;
   deleteSection(id: string): Promise<void>;
   
   getTask(id: string): Promise<Task | undefined>;
@@ -998,7 +999,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSectionsByProject(projectId: string): Promise<Section[]> {
-    return db.select().from(sections).where(eq(sections.projectId, projectId)).orderBy(asc(sections.orderIndex));
+    return db.select().from(sections)
+      .where(and(eq(sections.projectId, projectId), isNull(sections.archivedAt)))
+      .orderBy(asc(sections.orderIndex));
   }
 
   async getSectionsWithTasks(projectId: string): Promise<SectionWithTasks[]> {
@@ -1037,6 +1040,15 @@ export class DatabaseStorage implements IStorage {
 
   async updateSection(id: string, section: Partial<InsertSection>): Promise<Section | undefined> {
     const [updated] = await db.update(sections).set(section).where(eq(sections.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async archiveSection(id: string, archivedBy?: string | null): Promise<Section | undefined> {
+    const [updated] = await db
+      .update(sections)
+      .set({ archivedAt: new Date(), archivedBy: archivedBy || null })
+      .where(eq(sections.id, id))
+      .returning();
     return updated || undefined;
   }
 

@@ -93,7 +93,7 @@ export function reportingGuard(req: Request, res: Response, next: NextFunction) 
 
 export function getTenantId(req: Request): string {
   const user = req.user as any;
-  const tenantId = user?.tenantId;
+  const tenantId = (req as any).tenant?.effectiveTenantId || user?.tenantId;
   if (!tenantId) throw AppError.forbidden("No tenant context");
   return tenantId;
 }

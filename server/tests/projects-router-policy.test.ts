@@ -127,6 +127,12 @@ describe("Projects Router – authTenant policy drift tests", () => {
     expect(res.status).toBe(401);
   });
 
+  it("POST /api/sections/:id/archive rejects unauthenticated with 401", async () => {
+    const res = await request(buildApp())
+      .post("/api/sections/some-id/archive");
+    expect(res.status).toBe(401);
+  });
+
   it("DELETE /api/sections/:id rejects unauthenticated with 401", async () => {
     const res = await request(buildApp())
       .delete("/api/sections/some-id");

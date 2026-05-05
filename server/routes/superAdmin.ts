@@ -40,6 +40,8 @@ import {
   aiConfigRouter,
   diagnosticsRouter,
   asanaImportRouter,
+  tenantIntelligenceRouter,
+  employeeLocationsRouter,
 } from "./modules/super-admin";
 
 const router = createApiRouter({ policy: "superUser", allowlist: ["/bootstrap"] });
@@ -73,6 +75,8 @@ router.use(exportImportRouter);
 router.use(aiConfigRouter);
 router.use(diagnosticsRouter);
 router.use(asanaImportRouter);
+router.use(tenantIntelligenceRouter);
+router.use(employeeLocationsRouter);
 
 // =============================================================================
 // SHARED HELPERS — Exported for use by sub-routers

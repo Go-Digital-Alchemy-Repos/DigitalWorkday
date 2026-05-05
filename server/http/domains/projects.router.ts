@@ -28,6 +28,7 @@
  *     GET    /projects/:projectId/sections     — list sections with tasks
  *     POST   /sections                         — create section
  *     PATCH  /sections/:id                     — update section
+ *     POST   /sections/:id/archive             — archive section
  *     DELETE /sections/:id                     — delete section
  *
  *   Task Reorder (project-scoped):
@@ -833,6 +834,30 @@ router.patch("/sections/:id", async (req: Request, res: Response) => {
     res.json(section);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/sections/:id", req);
+  }
+});
+
+router.post("/sections/:id/archive", async (req: Request, res: Response) => {
+  try {
+    const section = await storage.getSection(req.params.id);
+    if (!section) {
+      return sendError(res, AppError.notFound("Section"), req);
+    }
+
+    if (section.archivedAt) {
+      return res.json(section);
+    }
+
+    const archived = await storage.archiveSection(req.params.id, req.user?.id || null);
+    if (!archived) {
+      return sendError(res, AppError.notFound("Section"), req);
+    }
+
+    emitSectionDeleted(archived.id, archived.projectId);
+
+    res.json(archived);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/sections/:id/archive", req);
   }
 });
 
