@@ -61,11 +61,12 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getStorageUrl } from "@/lib/storageUrl";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { buildReportRangeSearchParams, defaultCustomRange, reportRangeSearchParamsFromQuery, reportRangeValueFromQuery, toDateInputValue, type ReportRangeValue } from "@/components/reports/report-command-center-layout";
 import { getEmployeeReportPath, getReportBasePath } from "@/components/reports/report-paths";
+import { formatMetricValue } from "@/components/reports/report-shared";
 
 interface ProfileData {
   employee: {
@@ -182,7 +183,7 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className="text-2xl font-bold">{formatMetricValue(value)}</div>
         {subValue && (
           <p className="text-xs text-muted-foreground mt-1">
             {subValue}
@@ -196,6 +197,10 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
       </CardContent>
     </Card>
   );
+}
+
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number }) {
@@ -457,7 +462,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
                         {data.supportingMetrics.map((m, i) => (
                           <div key={i} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">{m.metric}</span>
-                            <span className="font-medium">{m.value}</span>
+                            <span className="font-medium">{formatMetricValue(m.value)}</span>
                           </div>
                         ))}
                       </div>
@@ -492,7 +497,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
             {data.supportingMetrics.map((m, i) => (
               <div key={i} className="flex justify-between text-xs">
                 <span className="text-muted-foreground">{m.metric}</span>
-                <span className="font-medium">{m.value}</span>
+                <span className="font-medium">{formatMetricValue(m.value)}</span>
               </div>
             ))}
           </div>
@@ -821,19 +826,19 @@ export default function EmployeeProfileReportPage() {
                   <CardContent className="space-y-6">
                     <div className="grid grid-cols-4 gap-4">
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-active-tasks">{data.workload.activeTasks}</p>
+                        <p className="text-2xl font-bold" data-testid="text-active-tasks">{formatNumber(data.workload.activeTasks)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Active</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-tasks">{data.workload.overdueTasks}</p>
+                        <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-tasks">{formatNumber(data.workload.overdueTasks)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Overdue</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold text-amber-600" data-testid="text-due-soon">{data.workload.dueSoon}</p>
+                        <p className="text-2xl font-bold text-amber-600" data-testid="text-due-soon">{formatNumber(data.workload.dueSoon)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Due Soon</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-backlog">{data.workload.backlog}</p>
+                        <p className="text-2xl font-bold" data-testid="text-backlog">{formatNumber(data.workload.backlog)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Backlog</p>
                       </div>
                     </div>
@@ -848,7 +853,7 @@ export default function EmployeeProfileReportPage() {
                               value={(item.value / Math.max(data.workload.activeTasks + data.summary.overdueRate, 1)) * 100} 
                               className="h-2 flex-1" 
                             />
-                            <span className="text-xs font-medium w-8 text-right">{item.value}</span>
+                            <span className="text-xs font-medium w-8 text-right">{formatNumber(item.value)}</span>
                           </div>
                         ))}
                       </div>
@@ -870,32 +875,32 @@ export default function EmployeeProfileReportPage() {
                       <div className="p-4 border rounded-lg space-y-1">
                         <p className="text-xs text-muted-foreground">Billable Ratio</p>
                         <div className="flex items-end justify-between">
-                          <p className="text-2xl font-bold" data-testid="text-billable-hours">{data.timeTracking.billableHours}h</p>
-                          <p className="text-sm text-muted-foreground pb-1">/ {data.timeTracking.totalHours}h</p>
+                          <p className="text-2xl font-bold" data-testid="text-billable-hours">{formatHours(data.timeTracking.billableHours)}</p>
+                          <p className="text-sm text-muted-foreground pb-1">/ {formatHours(data.timeTracking.totalHours)}</p>
                         </div>
                         <Progress value={(data.timeTracking.billableHours / Math.max(data.timeTracking.totalHours, 1)) * 100} className="h-1.5" />
                       </div>
                       <div className="p-4 border rounded-lg space-y-1">
                         <p className="text-xs text-muted-foreground">Estimation Variance</p>
                         <p className={cn("text-2xl font-bold", data.timeTracking.variance > 0 ? "text-destructive" : "text-green-600")} data-testid="text-time-variance">
-                          {data.timeTracking.variance > 0 ? "+" : ""}{data.timeTracking.variance}h
+                          {data.timeTracking.variance > 0 ? "+" : ""}{formatHours(data.timeTracking.variance)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">vs {data.timeTracking.estimatedHours}h estimated</p>
+                        <p className="text-[10px] text-muted-foreground">vs {formatHours(data.timeTracking.estimatedHours)} estimated</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Avg. Hours per Work Day</span>
-                        <span className="font-medium" data-testid="text-avg-hours-day">{data.timeTracking.avgHoursPerDay}h</span>
+                        <span className="font-medium" data-testid="text-avg-hours-day">{formatHours(data.timeTracking.avgHoursPerDay)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <span className="text-muted-foreground">Non-Billable Internal Time</span>
-                        <span className="font-medium" data-testid="text-non-billable-hours">{data.timeTracking.nonBillableHours}h</span>
+                        <span className="font-medium" data-testid="text-non-billable-hours">{formatHours(data.timeTracking.nonBillableHours)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <span className="text-muted-foreground">Estimated Remaining Work</span>
-                        <span className="font-medium">{data.timeTracking.estimatedHours}h</span>
+                        <span className="font-medium">{formatHours(data.timeTracking.estimatedHours)}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -909,7 +914,7 @@ export default function EmployeeProfileReportPage() {
                     <ListChecks className="h-5 w-5 text-primary" />
                     Assigned Tasks
                   </CardTitle>
-                  <CardDescription>All non-archived tasks currently assigned to this employee ({data.assignedTasks?.length ?? 0} tasks)</CardDescription>
+                  <CardDescription>All non-archived tasks currently assigned to this employee ({formatNumber(data.assignedTasks?.length ?? 0)} tasks)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {data.assignedTasks && data.assignedTasks.length > 0 ? (
@@ -982,7 +987,7 @@ export default function EmployeeProfileReportPage() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">
-                                  {task.estimateMinutes != null ? `${Math.round(task.estimateMinutes / 60 * 10) / 10}h` : "—"}
+                                  {task.estimateMinutes != null ? formatHours(Math.round(task.estimateMinutes / 60 * 10) / 10) : "—"}
                                 </TableCell>
                               </TableRow>
                             );
@@ -1025,8 +1030,8 @@ export default function EmployeeProfileReportPage() {
                         {data.capacity.weeklyData.map((week) => (
                           <TableRow key={week.week}>
                             <TableCell className="font-medium">{week.week}</TableCell>
-                            <TableCell className="text-center">{week.plannedHours}h</TableCell>
-                            <TableCell className="text-center">{week.actualHours}h</TableCell>
+                            <TableCell className="text-center">{formatHours(week.plannedHours)}</TableCell>
+                            <TableCell className="text-center">{formatHours(week.actualHours)}</TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-2">
                                 <span className={cn(
@@ -1034,7 +1039,7 @@ export default function EmployeeProfileReportPage() {
                                   week.utilization > 100 ? "bg-red-500" : 
                                   week.utilization > 80 ? "bg-amber-500" : "bg-green-500"
                                 )} />
-                                {week.utilization}%
+                                {formatNumber(week.utilization)}%
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
@@ -1116,7 +1121,7 @@ export default function EmployeeProfileReportPage() {
                           <div key={item.label} className="space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="font-medium truncate pr-4">{item.label}</span>
-                              <span className="text-muted-foreground">{item.value} tasks</span>
+                              <span className="text-muted-foreground">{formatNumber(item.value)} tasks</span>
                             </div>
                             <Progress 
                               value={(item.value / Math.max(data.taskBreakdown.byProject[0]?.value, 1)) * 100} 

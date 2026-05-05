@@ -23,7 +23,7 @@ import {
   ChevronUp, ChevronDown, ArrowUpDown, CalendarRange, Activity,
   ShieldAlert, User, Award, Sparkles, FolderKanban, Info, Camera, X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
@@ -83,6 +83,10 @@ function buildEmployeeReportParams(rangeDays: ReportRangeValue, selectedUserIds:
     ...(selectedUserIds.length > 0 ? { userIds: selectedUserIds.join(",") } : {}),
     ...(extra ?? {}),
   });
+}
+
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 function EmployeeGroupFilter({
@@ -198,7 +202,7 @@ function EmployeeGroupFilter({
           </button>
         </Badge>
       ))}
-      {selectedUsers.length > 3 && <Badge variant="outline">+{selectedUsers.length - 3}</Badge>}
+      {selectedUsers.length > 3 && <Badge variant="outline">+{formatNumber(selectedUsers.length - 3)}</Badge>}
     </div>
   );
 }
@@ -384,10 +388,10 @@ function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{userName(e)}</p>
-                    <p className="text-xs text-muted-foreground">{e.overdueCount} overdue, {e.activeTasksNow} active</p>
+                    <p className="text-xs text-muted-foreground">{formatNumber(e.overdueCount)} overdue, {formatNumber(e.activeTasksNow)} active</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{e.overdueCount}</p>
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formatNumber(e.overdueCount)}</p>
                     <p className="text-xs text-muted-foreground">{e.utilizationPct ?? 0}% util</p>
                   </div>
                 </Link>
@@ -413,7 +417,7 @@ function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{userName(e)}</p>
-                    <p className="text-xs text-muted-foreground">{e.activeTasksNow} active tasks</p>
+                    <p className="text-xs text-muted-foreground">{formatNumber(e.activeTasksNow)} active tasks</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">0h</p>
@@ -442,7 +446,7 @@ function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                 <div>
                   <span className="text-muted-foreground">Active</span>
                   <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="font-medium text-primary hover:underline">
-                    {e.activeTasksNow}
+                    {formatNumber(e.activeTasksNow)}
                   </Link>
                 </div>
                 <div>
@@ -451,19 +455,19 @@ function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                     href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
                     className={cn("font-medium hover:underline", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
                   >
-                    {e.overdueCount}
+                    {formatNumber(e.overdueCount)}
                   </Link>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Completed</span>
                   <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "assigned-tasks" })} className="font-medium text-green-600 hover:underline dark:text-green-400">
-                    {e.completedInRange}
+                    {formatNumber(e.completedInRange)}
                   </Link>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Hours</span>
                   <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="font-medium text-primary hover:underline">
-                    {e.totalHours}h
+                    {formatHours(e.totalHours)}
                   </Link>
                 </div>
               </div>
@@ -514,7 +518,7 @@ function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                       </TableCell>
                       <TableCell className="text-sm font-medium">
                         <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="text-primary hover:underline">
-                          {e.activeTasksNow}
+                          {formatNumber(e.activeTasksNow)}
                         </Link>
                       </TableCell>
                       <TableCell>
@@ -522,17 +526,17 @@ function OverviewTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                           href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
                           className={cn("text-sm font-medium hover:underline", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
                         >
-                          {e.overdueCount}
+                          {formatNumber(e.overdueCount)}
                         </Link>
                       </TableCell>
                       <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
                         <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "assigned-tasks" })} className="hover:underline">
-                          {e.completedInRange}
+                          {formatNumber(e.completedInRange)}
                         </Link>
                       </TableCell>
                       <TableCell className="text-sm">
                         <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
-                          {e.totalHours}h
+                          {formatHours(e.totalHours)}
                         </Link>
                       </TableCell>
                       <TableCell>
@@ -635,18 +639,18 @@ function WorkloadTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                   </TableCell>
                   <TableCell className="text-sm">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="text-primary hover:underline">
-                      {e.assignedCount}
+                      {formatNumber(e.assignedCount)}
                     </Link>
                   </TableCell>
                   <TableCell>
                     {e.dueSoonCount > 0 ? (
                       <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })}>
                         <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 cursor-pointer hover:opacity-90">
-                          {e.dueSoonCount}
+                          {formatNumber(e.dueSoonCount)}
                         </Badge>
                       </Link>
                     ) : (
-                      <span className="text-sm text-muted-foreground">{e.dueSoonCount}</span>
+                      <span className="text-sm text-muted-foreground">{formatNumber(e.dueSoonCount)}</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -654,7 +658,7 @@ function WorkloadTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                       href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "risk" })}
                       className={cn("text-sm font-medium hover:underline", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
                     >
-                      {e.overdueCount}
+                      {formatNumber(e.overdueCount)}
                     </Link>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -667,15 +671,15 @@ function WorkloadTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                   <TableCell>
                     {e.backlogCount >= 5 ? (
                       <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })}>
-                        <Badge variant="destructive" className="cursor-pointer hover:opacity-90">{e.backlogCount}</Badge>
+                        <Badge variant="destructive" className="cursor-pointer hover:opacity-90">{formatNumber(e.backlogCount)}</Badge>
                       </Link>
                     ) : e.backlogCount >= 3 ? (
                       <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })}>
-                        <Badge variant="default" className="bg-orange-500 cursor-pointer hover:opacity-90">{e.backlogCount}</Badge>
+                        <Badge variant="default" className="bg-orange-500 cursor-pointer hover:opacity-90">{formatNumber(e.backlogCount)}</Badge>
                       </Link>
                     ) : (
                       <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "workload" })} className="text-sm text-primary hover:underline">
-                        {e.backlogCount}
+                        {formatNumber(e.backlogCount)}
                       </Link>
                     )}
                   </TableCell>
@@ -756,13 +760,13 @@ function TimeTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; 
                   </TableCell>
                   <TableCell className="text-sm font-medium">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
-                      {e.totalHours}h
+                      {formatHours(e.totalHours)}
                     </Link>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1 min-w-[80px]">
                       <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-sm text-primary hover:underline">
-                        {e.billableHours}h
+                        {formatHours(e.billableHours)}
                       </Link>
                       {e.totalHours > 0 && (
                         <Progress value={Math.round(e.billableHours / e.totalHours * 100)} className="h-1" />
@@ -771,17 +775,17 @@ function TimeTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; 
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
-                      {e.nonBillableHours}h
+                      {formatHours(e.nonBillableHours)}
                     </Link>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
-                      {e.avgHoursPerDay}h
+                      {formatHours(e.avgHoursPerDay)}
                     </Link>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, e.userId, { range, section: "time" })} className="text-primary hover:underline">
-                      {e.estimatedHours}h
+                      {formatHours(e.estimatedHours)}
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -792,7 +796,7 @@ function TimeTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; 
                         e.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
                       )}
                     >
-                      {e.varianceHours > 0 ? "+" : ""}{e.varianceHours}h
+                      {e.varianceHours > 0 ? "+" : ""}{formatHours(e.varianceHours)}
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -899,13 +903,13 @@ function CapacityTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeVal
                             "inline-flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium min-w-[60px]",
                             utilizationColor(w.utilizationPct)
                           )}
-                          title={`${w.actualHours}h tracked, ${w.plannedHours}h planned`}
+                          title={`${formatHours(w.actualHours)} tracked, ${formatHours(w.plannedHours)} planned`}
                           data-testid={`capacity-cell-${u.userId}-${w.weekStart}`}
                         >
-                          <span>{w.actualHours}h</span>
+                          <span>{formatHours(w.actualHours)}</span>
                           {w.utilizationPct !== null && (
                             <Link href={getEmployeeReportDrilldownPath(window.location.pathname, u.userId, { range, section: "capacity" })} className="opacity-80 hover:underline">
-                              {w.utilizationPct}%
+                              {formatNumber(w.utilizationPct)}%
                             </Link>
                           )}
                         </div>
@@ -991,7 +995,7 @@ function RiskTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; 
       {data && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Activity className="h-4 w-4" />
-          <span>Checked {data.totalChecked} employees — {data.flagged.length} flagged for attention</span>
+          <span>Checked {formatNumber(data.totalChecked)} employees — {formatNumber(data.flagged.length)} flagged for attention</span>
         </div>
       )}
       {topReasons.length > 0 && (
@@ -1004,7 +1008,7 @@ function RiskTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; 
             {topReasons.map(([reason, count]) => (
               <div key={reason} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm flex items-center justify-between gap-3">
                 <span className="truncate">{reason}</span>
-                <Badge variant="secondary">{count}</Badge>
+                <Badge variant="secondary">{formatNumber(count)}</Badge>
               </div>
             ))}
           </CardContent>
@@ -1037,10 +1041,10 @@ function RiskTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRangeValue; 
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
-                    <span>{u.metrics.activeTasks} active</span>
-                    <span className="text-red-600 dark:text-red-400">{u.metrics.overdueCount} overdue ({u.metrics.overdueRate}%)</span>
-                    <span>{u.metrics.totalHours}h tracked</span>
-                    <span>{u.metrics.avgHoursPerWeek}h/week avg</span>
+                    <span>{formatNumber(u.metrics.activeTasks)} active</span>
+                    <span className="text-red-600 dark:text-red-400">{formatNumber(u.metrics.overdueCount)} overdue ({formatNumber(u.metrics.overdueRate)}%)</span>
+                    <span>{formatHours(u.metrics.totalHours)} tracked</span>
+                    <span>{formatHours(u.metrics.avgHoursPerWeek)}/week avg</span>
                   </div>
                   <div className="space-y-1">
                     {u.reasons.map((reason, i) => (
@@ -1212,7 +1216,7 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <Progress value={value} className={cn("h-1.5 flex-1", color)} />
-      <span className="text-xs text-muted-foreground w-7 text-right tabular-nums">{value}</span>
+      <span className="text-xs text-muted-foreground w-7 text-right tabular-nums">{formatNumber(value)}</span>
     </div>
   );
 }
@@ -1395,7 +1399,7 @@ function PerformanceTab({ rangeDays, selectedUserIds }: { rangeDays: ReportRange
                           e.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
                           "text-red-600 dark:text-red-400"
                         )}>
-                          {e.overallScore}
+                          {formatNumber(e.overallScore)}
                         </span>
                       </Link>
                     </TableCell>
@@ -1602,25 +1606,25 @@ function ForecastsTab({ horizonWeeks, selectedUserIds }: { horizonWeeks: number;
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-red-600">{highRiskUsers}</div>
+            <div className="text-2xl font-bold text-red-600">{formatNumber(highRiskUsers)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">High overload risk</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-amber-600">{mediumRiskUsers}</div>
+            <div className="text-2xl font-bold text-amber-600">{formatNumber(mediumRiskUsers)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Medium overload risk</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-red-600">{highRiskProjects}</div>
+            <div className="text-2xl font-bold text-red-600">{formatNumber(highRiskProjects)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Projects at deadline risk</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold">{horizonWeeks}</div>
+            <div className="text-2xl font-bold">{formatNumber(horizonWeeks)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Forecast horizon (weeks)</div>
           </CardContent>
         </Card>
@@ -1677,7 +1681,7 @@ function ForecastsTab({ horizonWeeks, selectedUserIds }: { horizonWeeks: number;
                               "rounded px-2 py-1 text-xs font-medium mx-auto w-fit",
                               CAPACITY_CELL_COLORS[w.predictedHours > 0 ? w.overloadRisk : "none"]
                             )}>
-                              {w.predictedHours > 0 ? `${w.predictedHours}h` : "—"}
+                              {w.predictedHours > 0 ? formatHours(w.predictedHours) : "—"}
                             </div>
                           </td>
                         ))}
@@ -1759,18 +1763,18 @@ function ForecastsTab({ horizonWeeks, selectedUserIds }: { horizonWeeks: number;
                               {new Date(p.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                               {p.weeksUntilDue !== null && (
                                 <span className="text-muted-foreground ml-1">
-                                  ({p.weeksUntilDue < 0 ? "past" : `${Math.round(p.weeksUntilDue)}w`})
+                                  ({p.weeksUntilDue < 0 ? "past" : `${formatNumber(Math.round(p.weeksUntilDue))}w`})
                                 </span>
                               )}
                             </span>
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell className="text-center">{p.openTaskCount}</TableCell>
+                        <TableCell className="text-center">{formatNumber(p.openTaskCount)}</TableCell>
                         <TableCell className="text-center">
-                          <span className={p.overdueCount > 0 ? "text-red-600 font-medium" : ""}>{p.overdueCount}</span>
+                          <span className={p.overdueCount > 0 ? "text-red-600 font-medium" : ""}>{formatNumber(p.overdueCount)}</span>
                         </TableCell>
-                        <TableCell className="text-center">{p.throughputPerWeek}</TableCell>
-                        <TableCell className="text-center">{p.predictedWeeksToClear}</TableCell>
+                        <TableCell className="text-center">{formatNumber(p.throughputPerWeek, { maximumFractionDigits: 1 })}</TableCell>
+                        <TableCell className="text-center">{formatNumber(p.predictedWeeksToClear, { maximumFractionDigits: 1 })}</TableCell>
                         <TableCell className="text-center">
                           <Badge className={cn("text-xs", RISK_COLORS[p.deadlineRisk])}>
                             {p.deadlineRisk}

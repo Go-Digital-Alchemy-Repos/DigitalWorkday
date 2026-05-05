@@ -46,9 +46,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { buildReportRangeSearchParams, defaultCustomRange, reportRangeSearchParamsFromQuery, reportRangeValueFromQuery, toDateInputValue, type ReportRangeValue } from "@/components/reports/report-command-center-layout";
 import { getClientReportPath, getReportBasePath } from "@/components/reports/report-paths";
+import { formatMetricValue } from "@/components/reports/report-shared";
 
 interface ClientProfileData {
   client: {
@@ -150,7 +151,7 @@ function MetricCard({ title, value, subValue, icon: Icon, testId }: {
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className="text-2xl font-bold">{formatMetricValue(value)}</div>
         {subValue && (
           <p className="text-xs text-muted-foreground mt-1">{subValue}</p>
         )}
@@ -165,7 +166,7 @@ function ChiComponentBar({ label, value }: { label: string; value: number }) {
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground capitalize">{label}</span>
-        <span className="font-medium">{value}</span>
+        <span className="font-medium">{formatNumber(value)}</span>
       </div>
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", colorClass)} style={{ width: `${value}%` }} />
@@ -174,17 +175,21 @@ function ChiComponentBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
+}
+
 function AgingBar({ aging }: { aging: ClientProfileData["taskAging"] }) {
   const total = aging.agingUnder7 + aging.aging7to14 + aging.aging14to30 + aging.agingOver30;
   if (total === 0) return <span className="text-xs text-muted-foreground">No open tasks</span>;
   const pct = (n: number) => Math.round((n / total) * 100);
   return (
     <div className="space-y-2">
-      <div className="flex h-4 rounded-md overflow-hidden w-full" title={`<7d: ${aging.agingUnder7}, 7-14d: ${aging.aging7to14}, 14-30d: ${aging.aging14to30}, >30d: ${aging.agingOver30}`}>
-        {aging.agingUnder7 > 0 && <div className="bg-green-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.agingUnder7)}%` }}>{aging.agingUnder7}</div>}
-        {aging.aging7to14 > 0 && <div className="bg-yellow-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.aging7to14)}%` }}>{aging.aging7to14}</div>}
-        {aging.aging14to30 > 0 && <div className="bg-orange-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.aging14to30)}%` }}>{aging.aging14to30}</div>}
-        {aging.agingOver30 > 0 && <div className="bg-red-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.agingOver30)}%` }}>{aging.agingOver30}</div>}
+      <div className="flex h-4 rounded-md overflow-hidden w-full" title={`<7d: ${formatNumber(aging.agingUnder7)}, 7-14d: ${formatNumber(aging.aging7to14)}, 14-30d: ${formatNumber(aging.aging14to30)}, >30d: ${formatNumber(aging.agingOver30)}`}>
+        {aging.agingUnder7 > 0 && <div className="bg-green-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.agingUnder7)}%` }}>{formatNumber(aging.agingUnder7)}</div>}
+        {aging.aging7to14 > 0 && <div className="bg-yellow-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.aging7to14)}%` }}>{formatNumber(aging.aging7to14)}</div>}
+        {aging.aging14to30 > 0 && <div className="bg-orange-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.aging14to30)}%` }}>{formatNumber(aging.aging14to30)}</div>}
+        {aging.agingOver30 > 0 && <div className="bg-red-500 flex items-center justify-center text-[9px] text-white font-medium" style={{ width: `${pct(aging.agingOver30)}%` }}>{formatNumber(aging.agingOver30)}</div>}
       </div>
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" /> &lt;7d</span>
@@ -511,19 +516,19 @@ export default function ClientProfileReportPage() {
                   <CardContent className="space-y-6">
                     <div className="grid grid-cols-4 gap-4">
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-active-projects">{data.overview.activeProjects}</p>
+                        <p className="text-2xl font-bold" data-testid="text-active-projects">{formatNumber(data.overview.activeProjects)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Projects</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-open-tasks">{data.overview.openTasks}</p>
+                        <p className="text-2xl font-bold" data-testid="text-open-tasks">{formatNumber(data.overview.openTasks)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Open</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-tasks">{data.overview.overdueTasks}</p>
+                        <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-tasks">{formatNumber(data.overview.overdueTasks)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Overdue</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold text-green-600" data-testid="text-completed">{data.overview.completedInRange}</p>
+                        <p className="text-2xl font-bold text-green-600" data-testid="text-completed">{formatNumber(data.overview.completedInRange)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Completed</p>
                       </div>
                     </div>
@@ -543,7 +548,7 @@ export default function ClientProfileReportPage() {
                               value={(item.value / Math.max(data.overview.openTasks + data.overview.completedInRange, 1)) * 100}
                               className="h-2 flex-1"
                             />
-                            <span className="text-xs font-medium w-8 text-right">{item.value}</span>
+                            <span className="text-xs font-medium w-8 text-right">{formatNumber(item.value)}</span>
                           </div>
                         ))}
                       </div>
@@ -564,38 +569,38 @@ export default function ClientProfileReportPage() {
                       <div className="p-4 border rounded-lg space-y-1">
                         <p className="text-xs text-muted-foreground">Billable Ratio</p>
                         <div className="flex items-end justify-between">
-                          <p className="text-2xl font-bold" data-testid="text-billable-hours">{data.timeTracking.billableHours}h</p>
-                          <p className="text-sm text-muted-foreground pb-1">/ {data.timeTracking.totalHours}h</p>
+                          <p className="text-2xl font-bold" data-testid="text-billable-hours">{formatHours(data.timeTracking.billableHours)}</p>
+                          <p className="text-sm text-muted-foreground pb-1">/ {formatHours(data.timeTracking.totalHours)}</p>
                         </div>
                         <Progress value={(data.timeTracking.billableHours / Math.max(data.timeTracking.totalHours, 1)) * 100} className="h-1.5" />
                       </div>
                       <div className="p-4 border rounded-lg space-y-1">
                         <p className="text-xs text-muted-foreground">Estimation Variance</p>
                         <p className={cn("text-2xl font-bold", data.timeTracking.variance > 0 ? "text-destructive" : "text-green-600")} data-testid="text-time-variance">
-                          {data.timeTracking.variance > 0 ? "+" : ""}{data.timeTracking.variance}h
+                          {data.timeTracking.variance > 0 ? "+" : ""}{formatHours(data.timeTracking.variance)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">vs {data.timeTracking.estimatedHours}h estimated</p>
+                        <p className="text-[10px] text-muted-foreground">vs {formatHours(data.timeTracking.estimatedHours)} estimated</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Non-Billable Time</span>
-                        <span className="font-medium" data-testid="text-non-billable-hours">{data.timeTracking.nonBillableHours}h</span>
+                        <span className="font-medium" data-testid="text-non-billable-hours">{formatHours(data.timeTracking.nonBillableHours)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <span className="text-muted-foreground">Tasks Created (in range)</span>
-                        <span className="font-medium">{data.activity.tasksCreatedInRange}</span>
+                        <span className="font-medium">{formatNumber(data.activity.tasksCreatedInRange)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <span className="text-muted-foreground">Comments (in range)</span>
-                        <span className="font-medium">{data.activity.commentsInRange}</span>
+                        <span className="font-medium">{formatNumber(data.activity.commentsInRange)}</span>
                       </div>
                       {data.overview.inactivityDays !== null && (
                         <div className="flex justify-between items-center text-sm border-t pt-3">
                           <span className="text-muted-foreground">Days Since Last Activity</span>
                           <span className={cn("font-medium", data.overview.inactivityDays > 14 ? "text-destructive" : "")}>
-                            {data.overview.inactivityDays}d
+                            {formatNumber(data.overview.inactivityDays)}d
                           </span>
                         </div>
                       )}
@@ -618,26 +623,26 @@ export default function ClientProfileReportPage() {
                       <div className="p-4 border rounded-lg space-y-2">
                         <p className="text-xs text-muted-foreground">On-Time Completion</p>
                         <p className={cn("text-3xl font-bold", data.sla.slaComplianceRate >= 80 ? "text-green-600" : data.sla.slaComplianceRate >= 60 ? "text-amber-600" : "text-destructive")} data-testid="text-sla-rate">
-                          {data.sla.slaComplianceRate}%
+                          {formatNumber(data.sla.slaComplianceRate)}%
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {data.sla.completedOnTime} of {data.sla.totalDoneWithDue} tasks with due date
+                          {formatNumber(data.sla.completedOnTime)} of {formatNumber(data.sla.totalDoneWithDue)} tasks with due date
                         </p>
                       </div>
                       <div className="p-4 border rounded-lg space-y-2">
                         <p className="text-xs text-muted-foreground">Overdue Task Rate</p>
                         <p className={cn("text-3xl font-bold", data.sla.overdueTaskPct > 30 ? "text-destructive" : data.sla.overdueTaskPct > 15 ? "text-amber-600" : "text-green-600")} data-testid="text-overdue-pct">
-                          {data.sla.overdueTaskPct}%
+                          {formatNumber(data.sla.overdueTaskPct)}%
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {data.sla.overdueCount} overdue of {data.sla.totalTasks} total
+                          {formatNumber(data.sla.overdueCount)} overdue of {formatNumber(data.sla.totalTasks)} total
                         </p>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">On-Time Delivery</span>
-                        <span className="font-medium">{data.sla.slaComplianceRate}%</span>
+                        <span className="font-medium">{formatNumber(data.sla.slaComplianceRate)}%</span>
                       </div>
                       <Progress value={data.sla.slaComplianceRate} className="h-2" />
                     </div>
@@ -750,8 +755,8 @@ export default function ClientProfileReportPage() {
                                     {p.projectStatus}
                                   </Badge>
                                 </TableCell>
-                                <TableCell className="text-center text-sm">{p.taskCount}</TableCell>
-                                <TableCell className="text-right text-sm">{p.hours}h</TableCell>
+                                <TableCell className="text-center text-sm">{formatNumber(p.taskCount)}</TableCell>
+                                <TableCell className="text-right text-sm">{formatHours(p.hours)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -784,7 +789,7 @@ export default function ClientProfileReportPage() {
                             value={(item.value / Math.max(data.taskBreakdown.byPriority[0]?.value, 1)) * 100}
                             className="h-2 flex-1"
                           />
-                          <span className="text-xs font-medium w-8 text-right">{item.value}</span>
+                          <span className="text-xs font-medium w-8 text-right">{formatNumber(item.value)}</span>
                         </div>
                       ))}
                     </div>

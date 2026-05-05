@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
+import { formatNumber } from "@/lib/utils";
 import {
   ResponsiveContainer,
   BarChart,
@@ -79,14 +80,14 @@ function LoadingSkeleton() {
 
 function formatHours(hours: number) {
   if (hours === 0) return "0h";
-  if (hours < 1) return `${Math.round(hours * 60)}m`;
-  return `${hours}h`;
+  if (hours < 1) return `${formatNumber(Math.round(hours * 60))}m`;
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 function formatMinutesToHours(minutes: number) {
   if (minutes === 0) return "0h";
   const hours = Math.round((minutes / 60) * 10) / 10;
-  return `${hours}h`;
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 export default function ClientAnalytics() {
@@ -118,14 +119,14 @@ export default function ClientAnalytics() {
         <Card data-testid="metric-total-clients">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Total Clients</p>
-            <p className="text-2xl font-bold">{totalClients}</p>
-            <p className="text-xs text-muted-foreground">{activeClients} active</p>
+            <p className="text-2xl font-bold">{formatNumber(totalClients)}</p>
+            <p className="text-xs text-muted-foreground">{formatNumber(activeClients)} active</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-projects">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Client Projects</p>
-            <p className="text-2xl font-bold">{totalProjects}</p>
+            <p className="text-2xl font-bold">{formatNumber(totalProjects)}</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-hours">
@@ -137,7 +138,7 @@ export default function ClientAnalytics() {
         <Card data-testid="metric-budget-clients">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Budgeted Clients</p>
-            <p className="text-2xl font-bold">{data.budgetUtilization.length}</p>
+            <p className="text-2xl font-bold">{formatNumber(data.budgetUtilization.length)}</p>
           </CardContent>
         </Card>
       </div>
@@ -186,7 +187,7 @@ export default function ClientAnalytics() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis type="number" className="text-xs" />
                     <YAxis dataKey="name" type="category" className="text-xs" width={120} />
-                    <Tooltip formatter={(value: number) => [`${value}h`, "Hours"]} />
+                    <Tooltip formatter={(value: number) => [formatHours(value), "Hours"]} />
                     <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -220,7 +221,7 @@ export default function ClientAnalytics() {
                         variant={client.utilizationPercent > 100 ? "destructive" : client.utilizationPercent > 80 ? "outline" : "secondary"}
                         className="text-xs"
                       >
-                        {client.utilizationPercent}%
+                        {formatNumber(client.utilizationPercent)}%
                       </Badge>
                     </div>
                   </div>
@@ -269,15 +270,15 @@ export default function ClientAnalytics() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm">{client.project_count}</span>
+                      <span className="text-sm">{formatNumber(client.project_count)}</span>
                       {client.active_projects > 0 && (
-                        <span className="text-xs text-muted-foreground ml-1">({client.active_projects} active)</span>
+                        <span className="text-xs text-muted-foreground ml-1">({formatNumber(client.active_projects)} active)</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{client.task_count}</div>
+                      <div className="text-sm">{formatNumber(client.task_count)}</div>
                       {client.task_count > 0 && (
-                        <div className="text-xs text-muted-foreground">{completionRate}% done</div>
+                        <div className="text-xs text-muted-foreground">{formatNumber(completionRate)}% done</div>
                       )}
                     </TableCell>
                     <TableCell>

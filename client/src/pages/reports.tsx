@@ -25,7 +25,7 @@ import {
 import { ReportsTab } from "@/components/settings/reports-tab";
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 
 interface ClientListItem {
   id: string;
@@ -178,29 +178,29 @@ function PipelineReport() {
         <Card data-testid="metric-total-clients">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Active Pipeline Clients</p>
-            <p className="text-2xl font-semibold">{activeClientCount}</p>
+            <p className="text-2xl font-semibold">{formatNumber(activeClientCount)}</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-inactive-clients">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Inactive Clients</p>
             <Link href="/clients" className="text-2xl font-semibold hover:underline text-primary">
-              {inactiveLikeClientCount}
+              {formatNumber(inactiveLikeClientCount)}
             </Link>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-projects">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Total Projects</p>
-            <p className="text-2xl font-semibold">{totalProjects}</p>
+            <p className="text-2xl font-semibold">{formatNumber(totalProjects)}</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-stages-used">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Active Stages</p>
             <p className="text-2xl font-semibold">
-              {stageSummary?.filter(s => s.clientCount > 0).length || 0}
-              <span className="text-sm text-muted-foreground font-normal"> / {CLIENT_STAGES_ORDERED.length}</span>
+              {formatNumber(stageSummary?.filter(s => s.clientCount > 0).length || 0)}
+              <span className="text-sm text-muted-foreground font-normal"> / {formatNumber(CLIENT_STAGES_ORDERED.length)}</span>
             </p>
           </CardContent>
         </Card>
@@ -208,7 +208,7 @@ function PipelineReport() {
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Avg Clients/Stage</p>
             <p className="text-2xl font-semibold">
-              {totalClients > 0 ? (totalClients / CLIENT_STAGES_ORDERED.length).toFixed(1) : 0}
+              {totalClients > 0 ? formatNumber(totalClients / CLIENT_STAGES_ORDERED.length, { maximumFractionDigits: 1 }) : "0"}
             </p>
           </CardContent>
         </Card>
@@ -232,7 +232,7 @@ function PipelineReport() {
                       key={stage}
                       className={cn(STAGE_COLORS[stage], "transition-all duration-300")}
                       style={{ width: `${pct}%`, minWidth: activeStages.length > 1 ? "4px" : undefined }}
-                      title={`${CLIENT_STAGE_LABELS[stage]}: ${count} (${pct.toFixed(1)}%)`}
+                      title={`${CLIENT_STAGE_LABELS[stage]}: ${formatNumber(count)} (${formatNumber(pct, { maximumFractionDigits: 1 })}%)`}
                       data-testid={`report-pipeline-segment-${stage}`}
                     />
                   );
@@ -261,13 +261,13 @@ function PipelineReport() {
                       />
                     )}
                     <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-foreground">
-                      {count} client{count !== 1 ? "s" : ""} ({pct.toFixed(0)}%)
+                      {formatNumber(count)} client{count !== 1 ? "s" : ""} ({formatNumber(pct, { maximumFractionDigits: 0 })}%)
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1 text-xs text-muted-foreground w-24 shrink-0 justify-end">
                     <FolderKanban className="h-3 w-3" />
-                    <span>{projects} project{projects !== 1 ? "s" : ""}</span>
+                    <span>{formatNumber(projects)} project{projects !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
               );
@@ -305,15 +305,15 @@ function PipelineReport() {
                               STAGE_TEXT_COLORS[stage]
                             )}
                           >
-                            {count} client{count !== 1 ? "s" : ""}
+                            {formatNumber(count)} client{count !== 1 ? "s" : ""}
                           </Badge>
                         </Link>
                       ) : (
                         <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[stage])}>
-                          {count} client{count !== 1 ? "s" : ""}
+                          {formatNumber(count)} client{count !== 1 ? "s" : ""}
                         </Badge>
                       )}
-                      <span className="text-xs text-muted-foreground">{projects} proj.</span>
+                      <span className="text-xs text-muted-foreground">{formatNumber(projects)} proj.</span>
                     </div>
                   </div>
                 );
@@ -351,9 +351,9 @@ function PipelineReport() {
                       <p className="text-xs text-muted-foreground">{group.description}</p>
                     </div>
                     <div className="text-right">
-                      <p className={cn("text-lg font-semibold", group.color)}>{group.count}</p>
+                      <p className={cn("text-lg font-semibold", group.color)}>{formatNumber(group.count)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {totalClients > 0 ? `${((group.count / totalClients) * 100).toFixed(0)}%` : "0%"}
+                        {totalClients > 0 ? `${formatNumber((group.count / totalClients) * 100, { maximumFractionDigits: 0 })}%` : "0%"}
                       </p>
                     </div>
                   </div>
@@ -367,10 +367,10 @@ function PipelineReport() {
                   </div>
                   <div className="text-right">
                     <Link href="/clients" className="text-lg font-semibold text-slate-500 hover:underline">
-                      {inactiveLikeClientCount}
+                      {formatNumber(inactiveLikeClientCount)}
                     </Link>
                     <p className="text-xs text-muted-foreground">
-                      {clients.length > 0 ? `${((inactiveLikeClientCount / clients.length) * 100).toFixed(0)}% of total` : "0%"}
+                      {clients.length > 0 ? `${formatNumber((inactiveLikeClientCount / clients.length) * 100, { maximumFractionDigits: 0 })}% of total` : "0%"}
                     </p>
                   </div>
                 </div>
@@ -616,7 +616,7 @@ export default function ReportsPage() {
                   >
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <span className="text-sm font-medium">Sent For Review</span>
-                      <Badge variant="secondary">{reviewQueue?.items.length ?? 0}</Badge>
+                      <Badge variant="secondary">{formatNumber(reviewQueue?.items.length ?? 0)}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">Open the command center and PM views to inspect review backlog.</p>
                   </button>
@@ -627,7 +627,7 @@ export default function ReportsPage() {
                   >
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <span className="text-sm font-medium">Overdue Across Projects</span>
-                      <Badge variant="destructive">{overdueItems.length}</Badge>
+                      <Badge variant="destructive">{formatNumber(overdueItems.length)}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">Open task analytics for overdue and completion detail.</p>
                   </button>
@@ -638,7 +638,7 @@ export default function ReportsPage() {
                   >
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <span className="text-sm font-medium">Clients At Risk</span>
-                      <Badge variant="secondary">{clientRisk?.flagged.length ?? 0}</Badge>
+                      <Badge variant="secondary">{formatNumber(clientRisk?.flagged.length ?? 0)}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">Jump into Client Command Center risk and health views for evidence.</p>
                   </button>
@@ -649,7 +649,7 @@ export default function ReportsPage() {
                   >
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <span className="text-sm font-medium">Employees At Risk</span>
-                      <Badge variant="secondary">{employeeRisk?.flagged.length ?? 0}</Badge>
+                      <Badge variant="secondary">{formatNumber(employeeRisk?.flagged.length ?? 0)}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">Open Employee Command Center for workload, risk, and compliance detail.</p>
                   </button>

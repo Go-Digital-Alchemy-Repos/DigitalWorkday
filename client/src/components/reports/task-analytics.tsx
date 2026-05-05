@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { formatNumber } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams, type ReportRangeValue } from "./report-command-center-layout";
 import {
   ResponsiveContainer,
@@ -276,7 +277,7 @@ export default function TaskAnalytics() {
                       <span className="font-medium truncate max-w-[180px]">{project.project_name}</span>
                     </div>
                     <span className="text-muted-foreground">
-                      {project.completed}/{project.total} ({project.completion_rate}%)
+                      {formatNumber(project.completed)}/{formatNumber(project.total)} ({formatNumber(project.completion_rate)}%)
                     </span>
                   </div>
                   <Progress value={project.completion_rate} className="h-2" />
@@ -305,19 +306,19 @@ export default function TaskAnalytics() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{assignee.name}</div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{assignee.total_tasks} tasks</span>
+                      <span>{formatNumber(assignee.total_tasks)} tasks</span>
                       <span>·</span>
-                      <span className="text-green-600 dark:text-green-400">{assignee.completed} done</span>
+                      <span className="text-green-600 dark:text-green-400">{formatNumber(assignee.completed)} done</span>
                       {assignee.overdue > 0 && (
                         <>
                           <span>·</span>
-                          <span className="text-destructive">{assignee.overdue} overdue</span>
+                          <span className="text-destructive">{formatNumber(assignee.overdue)} overdue</span>
                         </>
                       )}
                     </div>
                   </div>
                   <Badge variant={assignee.overdue > 0 ? "destructive" : "secondary"} className="text-xs">
-                    {assignee.open} open
+                    {formatNumber(assignee.open)} open
                   </Badge>
                 </div>
               ))}

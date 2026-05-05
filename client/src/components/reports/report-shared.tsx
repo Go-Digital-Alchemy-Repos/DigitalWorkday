@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { Info, ShieldCheck } from "lucide-react";
 
 export function formatComparisonSub(current: number, prior: number, suffix = "") {
@@ -8,7 +8,10 @@ export function formatComparisonSub(current: number, prior: number, suffix = "")
   if (delta === 0) return "Flat vs previous period";
   const direction = delta > 0 ? "Up" : "Down";
   const value = Math.abs(delta);
-  const display = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+  const display = formatNumber(value, {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 1,
+  });
   return `${direction} ${display}${suffix} vs previous period`;
 }
 
@@ -22,7 +25,22 @@ interface MetricCardProps {
   source?: string;
 }
 
+export function formatMetricValue(value: string | number): string {
+  if (typeof value === "number") return formatNumber(value);
+  const match = value.match(/^(-?\d+(?:\.\d+)?)(.*)$/);
+  if (!match) return value;
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) return value;
+  const decimalPart = match[1].split(".")[1];
+  return `${formatNumber(numeric, {
+    minimumFractionDigits: decimalPart?.length ?? 0,
+    maximumFractionDigits: decimalPart?.length ?? 0,
+  })}${match[2]}`;
+}
+
 export function MetricCard({ label, value, sub, icon, color, definition, source }: MetricCardProps) {
+  const displayValue = formatMetricValue(value);
+
   return (
     <Card>
       <CardContent className="p-4">
@@ -53,7 +71,7 @@ export function MetricCard({ label, value, sub, icon, color, definition, source 
                 </TooltipProvider>
               )}
             </div>
-            <p className="text-xl font-bold leading-none mt-0.5">{value}</p>
+            <p className="text-xl font-bold leading-none mt-0.5">{displayValue}</p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>
         </div>

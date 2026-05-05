@@ -19,12 +19,13 @@ import {
   ChevronUp, ChevronDown, ArrowUpDown, User, FolderKanban,
   ShieldAlert, Activity,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
 import { ReportEmptyState } from "./report-empty-state";
 import { getReportViewState } from "./report-view-state";
 import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
+import { formatMetricValue } from "./report-shared";
 
 const buildQueryParams = buildDateParams;
 
@@ -37,6 +38,10 @@ function userInitials(u: { firstName?: string | null; lastName?: string | null; 
   if (u.firstName && u.lastName) return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
   if (u.firstName) return u.firstName[0].toUpperCase();
   return u.email[0].toUpperCase();
+}
+
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 type SortDir = "asc" | "desc";
@@ -65,6 +70,7 @@ function MetricCard({ label, value, sub, icon, color }: {
   icon: React.ReactNode;
   color: string;
 }) {
+  const displayValue = formatMetricValue(value);
   return (
     <Card>
       <CardContent className="p-4">
@@ -74,7 +80,7 @@ function MetricCard({ label, value, sub, icon, color }: {
           </div>
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground truncate">{label}</p>
-            <p className="text-xl font-bold leading-none mt-0.5">{value}</p>
+            <p className="text-xl font-bold leading-none mt-0.5">{displayValue}</p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>
         </div>
@@ -237,10 +243,10 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{userName(member)}</p>
-                    <p className="text-xs text-muted-foreground">{member.activeTasksNow} active tasks</p>
+                    <p className="text-xs text-muted-foreground">{formatNumber(member.activeTasksNow)} active tasks</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{member.overdueCount}</p>
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formatNumber(member.overdueCount)}</p>
                     <p className="text-xs text-muted-foreground">overdue</p>
                   </div>
                 </Link>
@@ -266,7 +272,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{userName(member)}</p>
-                    <p className="text-xs text-muted-foreground">{member.totalHours}h tracked vs {member.estimatedHours}h est.</p>
+                    <p className="text-xs text-muted-foreground">{formatHours(member.totalHours)} tracked vs {formatHours(member.estimatedHours)} est.</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
@@ -315,7 +321,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                   </TableCell>
                   <TableCell className="text-sm font-medium">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "workload" })} className="text-primary hover:underline">
-                      {m.activeTasksNow}
+                      {formatNumber(m.activeTasksNow)}
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -323,17 +329,17 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                       href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "risk" })}
                       className={cn("text-sm font-medium hover:underline", m.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
                     >
-                      {m.overdueCount}
+                      {formatNumber(m.overdueCount)}
                     </Link>
                   </TableCell>
                   <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "assigned-tasks" })} className="hover:underline">
-                      {m.completedCount}
+                      {formatNumber(m.completedCount)}
                     </Link>
                   </TableCell>
                   <TableCell className="text-sm">
                     <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "time" })} className="text-primary hover:underline">
-                      {m.totalHours}h
+                      {formatHours(m.totalHours)}
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -351,7 +357,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                     <div className="flex items-center gap-2 min-w-[80px]">
                       <Progress value={m.overdueRate} className="h-1.5 flex-1" />
                       <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "risk" })} className="text-xs text-primary w-8 text-right hover:underline">
-                        {m.overdueRate}%
+                        {formatNumber(m.overdueRate)}%
                       </Link>
                     </div>
                   </TableCell>
@@ -684,12 +690,12 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                             "inline-flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium min-w-[60px]",
                             utilizationColor(w.utilizationPct)
                           )}
-                          title={`${w.actualHours}h tracked, ${w.estimatedHours}h estimated`}
+                          title={`${formatHours(w.actualHours)} tracked, ${formatHours(w.estimatedHours)} estimated`}
                           data-testid={`capacity-cell-${u.userId}-${w.weekStart}`}
                         >
-                          <span>{w.actualHours}h</span>
+                          <span>{formatHours(w.actualHours)}</span>
                           {w.utilizationPct !== null && (
-                            <span className="opacity-80">{w.utilizationPct}%</span>
+                            <span className="opacity-80">{formatNumber(w.utilizationPct)}%</span>
                           )}
                         </div>
                       </td>
@@ -783,7 +789,7 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
       {data && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Activity className="h-4 w-4" />
-          <span>Checked {data.totalChecked} team members — {data.flagged.length} flagged for attention</span>
+          <span>Checked {formatNumber(data.totalChecked)} team members — {formatNumber(data.flagged.length)} flagged for attention</span>
         </div>
       )}
 
@@ -811,10 +817,10 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
-                    <span>{u.metrics.activeTasks} active</span>
-                    <span className="text-red-600 dark:text-red-400">{u.metrics.overdueCount} overdue ({u.metrics.overdueRate}%)</span>
-                    <span>{u.metrics.totalHours}h tracked</span>
-                    <span>{u.metrics.avgHoursPerWeek}h/week avg</span>
+                    <span>{formatNumber(u.metrics.activeTasks)} active</span>
+                    <span className="text-red-600 dark:text-red-400">{formatNumber(u.metrics.overdueCount)} overdue ({formatNumber(u.metrics.overdueRate)}%)</span>
+                    <span>{formatHours(u.metrics.totalHours)} tracked</span>
+                    <span>{formatHours(u.metrics.avgHoursPerWeek)}/week avg</span>
                   </div>
                   <div className="space-y-1">
                     {u.reasons.map((reason, i) => (
