@@ -71,9 +71,9 @@ export function getSocket(): TypedSocket {
     // Development-only guard against duplicate event handlers
     if (import.meta.env.DEV) {
       const registeredHandlers = new Map<string, Set<Function>>();
-      const originalOn = socket.on.bind(socket);
+      const originalOn = socket.on.bind(socket) as (event: string, handler: (...args: any[]) => void) => TypedSocket;
       
-      socket.on = ((event: string, handler: Function) => {
+      socket.on = ((event: string, handler: (...args: any[]) => void) => {
         if (!registeredHandlers.has(event)) {
           registeredHandlers.set(event, new Set());
         }

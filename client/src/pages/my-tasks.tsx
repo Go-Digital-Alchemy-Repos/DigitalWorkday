@@ -761,7 +761,7 @@ export default function MyTasks() {
   const handleDueDateChange = useCallback((taskId: string, dueDate: Date | null) => {
     updateTaskMutation.mutate({ 
       taskId, 
-      data: { dueDate: dueDate ? dueDate.toISOString() : null } 
+      data: { dueDate } 
     });
   }, [updateTaskMutation]);
 

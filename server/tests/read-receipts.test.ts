@@ -4,7 +4,6 @@ import { isUnreadCountableMessage } from "../features/chat/unread";
 
 vi.mock("../storage", () => ({
   storage: {
-    isUserInChatChannel: vi.fn(),
     getUserChatDmThreads: vi.fn(),
     validateChatRoomAccess: vi.fn(),
     upsertChatRead: vi.fn(),
@@ -50,7 +49,7 @@ describe("Read receipt socket policy enforcement", () => {
   });
 
   it("denies mark-read from non-member of channel", async () => {
-    vi.mocked(storage.isUserInChatChannel).mockResolvedValue(false);
+    vi.mocked(storage.getUserChatChannels).mockResolvedValue([]);
     const socket = createFakeSocket({ userId: "u1", tenantId: "t1" });
     const guarded = withSocketPolicy(socket as any, { requireAuth: true, requireTenant: true, requireChatMembership: true }, handler);
     await guarded({ conversationId: "channel:ch1" });
@@ -66,7 +65,7 @@ describe("Read receipt socket policy enforcement", () => {
   });
 
   it("allows mark-read from authenticated channel member", async () => {
-    vi.mocked(storage.isUserInChatChannel).mockResolvedValue(true);
+    vi.mocked(storage.getUserChatChannels).mockResolvedValue([{ channelId: "ch1" }] as any);
     const socket = createFakeSocket({ userId: "u1", tenantId: "t1" });
     const guarded = withSocketPolicy(socket as any, { requireAuth: true, requireTenant: true, requireChatMembership: true }, handler);
     await guarded({ conversationId: "channel:ch1" });

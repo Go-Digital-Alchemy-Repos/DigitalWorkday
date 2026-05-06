@@ -60,6 +60,7 @@ import {
   addAssigneeSchema,
   taskAccess,
 } from "@shared/schema";
+import type { MyTaskUpdatedPayload, TaskUpdatedPayload } from "@shared/events";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { db } from "../../db";
 import { eq, and, sql } from "drizzle-orm";
@@ -128,6 +129,41 @@ type ReviewQueueDashboardItem = {
   approvedAt?: Date | string | null;
   approverName?: string | null;
 };
+
+function normalizeReviewQueueType(type: unknown): ReviewQueueDashboardItem["type"] {
+  return type === "subtask" ? "subtask" : "task";
+}
+
+function buildTaskRealtimeUpdates(data: Record<string, unknown>): TaskUpdatedPayload["updates"] {
+  const updates: TaskUpdatedPayload["updates"] = {};
+
+  if (typeof data.title === "string") updates.title = data.title;
+  if (data.description === null || typeof data.description === "string") updates.description = data.description;
+  if (typeof data.status === "string") updates.status = data.status;
+  if (typeof data.priority === "string") updates.priority = data.priority;
+  if (data.dueDate === null || data.dueDate instanceof Date) updates.dueDate = data.dueDate;
+  if (data.startDate === null || data.startDate instanceof Date) updates.startDate = data.startDate;
+  if (typeof data.projectId === "string") updates.projectId = data.projectId;
+  if (data.sectionId === null || typeof data.sectionId === "string") updates.sectionId = data.sectionId;
+  if (data.parentTaskId === null || typeof data.parentTaskId === "string") updates.parentTaskId = data.parentTaskId;
+  if (typeof data.orderIndex === "number") updates.position = data.orderIndex;
+
+  return updates;
+}
+
+function buildMyTaskRealtimeUpdates(data: Record<string, unknown>): MyTaskUpdatedPayload["updates"] {
+  const updates: MyTaskUpdatedPayload["updates"] = {};
+
+  if (typeof data.title === "string") updates.title = data.title;
+  if (data.description === null || typeof data.description === "string") updates.description = data.description;
+  if (typeof data.status === "string") updates.status = data.status;
+  if (typeof data.priority === "string") updates.priority = data.priority;
+  if (data.dueDate === null || data.dueDate instanceof Date) updates.dueDate = data.dueDate;
+  if (typeof data.isPersonal === "boolean") updates.isPersonal = data.isPersonal;
+  if (typeof data.createdBy === "string") updates.createdBy = data.createdBy;
+
+  return updates;
+}
 
 function parseAssignees(value: unknown): ReviewQueueAssignee[] {
   if (!value) return [];
@@ -229,7 +265,7 @@ async function getPendingReviewQueueItems(tenantId: string): Promise<ReviewQueue
   return [...(taskResult.rows || []), ...(subtaskResult.rows || [])]
     .map((row: any) => ({
       id: String(row.id),
-      type: row.type === "subtask" ? "subtask" : "task",
+      type: normalizeReviewQueueType(row.type),
       title: String(row.title || ""),
       status: normalizeTaskStatus(String(row.status || "")) || String(row.status || ""),
       projectId: row.project_id ? String(row.project_id) : null,
@@ -343,7 +379,7 @@ async function getClearedReviewQueueItems(tenantId: string): Promise<ReviewQueue
   const clearedItems = [...(taskResult.rows || []), ...(subtaskResult.rows || [])]
     .map((row: any) => ({
       id: String(row.id),
-      type: row.type === "subtask" ? "subtask" : "task",
+      type: normalizeReviewQueueType(row.type),
       title: String(row.title || ""),
       status: String(row.status || ""),
       projectId: row.project_id ? String(row.project_id) : null,
@@ -463,7 +499,7 @@ async function getOverdueDashboardItems(tenantId: string): Promise<ReviewQueueDa
   return [...(taskResult.rows || []), ...(subtaskResult.rows || [])]
     .map((row: any) => ({
       id: String(row.id),
-      type: row.type === "subtask" ? "subtask" : "task",
+      type: normalizeReviewQueueType(row.type),
       title: String(row.title || ""),
       status: normalizeTaskStatus(String(row.status || "")) || String(row.status || ""),
       projectId: row.project_id ? String(row.project_id) : null,
@@ -1177,10 +1213,11 @@ router.patch("/tasks/:id", async (req, res) => {
 
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
+    const realtimeUpdateData = buildTaskRealtimeUpdates(updateData);
     if (task.isPersonal && task.createdBy) {
-      emitMyTaskUpdated(task.createdBy, task.id, data, getCurrentWorkspaceId(req));
+      emitMyTaskUpdated(task.createdBy, task.id, buildMyTaskRealtimeUpdates(updateData), getCurrentWorkspaceId(req));
     } else if (task.projectId) {
-      emitTaskUpdated(task.id, task.projectId, task.parentTaskId, data);
+      emitTaskUpdated(task.id, task.projectId, task.parentTaskId, realtimeUpdateData);
     }
 
     if (taskBefore && task.projectId && updateData.status && updateData.status !== taskBefore.status) {

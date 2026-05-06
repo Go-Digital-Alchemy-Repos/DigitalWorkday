@@ -12,10 +12,10 @@ import { emailOutboxService } from "../services/emailOutbox";
 import { buildAppUrl } from "../lib/appLinks";
 
 
-async function dbRows<T extends Record<string, unknown>>(
+async function dbRows<T>(
   q: Parameters<typeof db.execute>[0]
 ): Promise<T[]> {
-  const result = await db.execute<T>(q);
+  const result = await db.execute(q);
   if (Array.isArray(result)) return result as T[];
   if (result && typeof result === "object" && "rows" in result) {
     return (result as { rows: T[] }).rows;

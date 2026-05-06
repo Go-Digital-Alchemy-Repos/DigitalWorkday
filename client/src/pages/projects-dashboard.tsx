@@ -939,8 +939,8 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         open={createProjectOpen}
         onOpenChange={setCreateProjectOpen}
         onSubmit={handleCreateProject}
-        clients={clients || []}
-        teams={teams || []}
+        isLoading={createProjectMutation.isPending}
+        mode="create"
       />
 
       <ProjectDrawer
@@ -948,8 +948,8 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         onOpenChange={setEditProjectOpen}
         onSubmit={handleUpdateProject}
         project={editingProject}
-        clients={clients || []}
-        teams={teams || []}
+        isLoading={updateProjectMutation.isPending}
+        mode="edit"
       />
     </PageShell>
   );

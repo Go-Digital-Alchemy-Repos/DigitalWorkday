@@ -200,13 +200,13 @@ export function useProjectSocket(projectId: string | null | undefined) {
     };
 
     const handleAttachmentAdded: ServerToClientEvents["attachment:added"] = (payload) => {
-      if (payload.projectId === projectId) {
+      if (payload.projectId === projectId && payload.taskId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks.attachments(projectId!, payload.taskId) });
       }
     };
 
     const handleAttachmentDeleted: ServerToClientEvents["attachment:deleted"] = (payload) => {
-      if (payload.projectId === projectId) {
+      if (payload.projectId === projectId && payload.taskId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks.attachments(projectId!, payload.taskId) });
       }
     };

@@ -21,6 +21,7 @@ import {
   DEFAULT_MESSAGE_PERMISSIONS,
   messagePermissionsSchema,
   type MessagePermissions,
+  type Notification,
 } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { getCurrentUserId } from "../../helpers";
@@ -32,6 +33,25 @@ import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 import type { NotificationPayload } from "@shared/events";
 
 const router = Router();
+
+function toNotificationPayload(notification: Notification): NotificationPayload {
+  return {
+    id: notification.id,
+    tenantId: notification.tenantId,
+    userId: notification.userId,
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    payloadJson: notification.payloadJson,
+    severity: notification.severity,
+    entityType: notification.entityType,
+    entityId: notification.entityId,
+    href: notification.href,
+    isDismissed: notification.isDismissed,
+    readAt: notification.readAt,
+    createdAt: notification.createdAt,
+  };
+}
 
 async function getMessagePermissions(tenantId: string): Promise<MessagePermissions> {
   const [settings] = await db.select({ messagePermissions: tenantSettings.messagePermissions })
@@ -506,17 +526,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
           message: `You have been assigned to conversation: "${conversation.subject}"`,
           payloadJson: { conversationId: conversation.id, clientId } as any,
         });
-        emitNotificationNew(assigneeId, {
-          id: notification.id,
-          tenantId: notification.tenantId,
-          userId: notification.userId,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          payloadJson: notification.payloadJson,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        });
+        emitNotificationNew(assigneeId, toNotificationPayload(notification));
       } catch {}
 
       emitToUser(assigneeId, CLIENT_CONVERSATION_EVENTS.ASSIGNED, {
@@ -605,17 +615,7 @@ router.patch("/crm/conversations/:conversationId/assign", requireAuth, async (re
           message: `You have been assigned to conversation: "${conversation.subject}"`,
           payloadJson: { conversationId, clientId: conversation.clientId } as any,
         });
-        emitNotificationNew(data.assignedToUserId, {
-          id: notification.id,
-          tenantId: notification.tenantId,
-          userId: notification.userId,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          payloadJson: notification.payloadJson,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        });
+        emitNotificationNew(data.assignedToUserId, toNotificationPayload(notification));
       } catch {}
     }
 
@@ -846,17 +846,7 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
               message: `New reply on "${conversation.subject}": ${data.bodyText.substring(0, 100)}${data.bodyText.length > 100 ? "..." : ""}`,
               payloadJson: { conversationId, clientId: conversation.clientId, messageId: message.id } as any,
             });
-            emitNotificationNew(conversation.assignedToUserId, {
-              id: notification.id,
-              tenantId: notification.tenantId,
-              userId: notification.userId,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              payloadJson: notification.payloadJson,
-              readAt: notification.readAt,
-              createdAt: notification.createdAt,
-            });
+            emitNotificationNew(conversation.assignedToUserId, toNotificationPayload(notification));
           } catch {}
         }
       }
@@ -1049,7 +1039,7 @@ router.get("/crm/clients/:clientId/conversations/merge-candidates", requireAuth,
     const results = await db.select({
       id: clientConversations.id,
       subject: clientConversations.subject,
-      status: clientConversations.status,
+      status: dsql<string>`'open'`,
       createdAt: clientConversations.createdAt,
       updatedAt: clientConversations.updatedAt,
       assignedToUserId: clientConversations.assignedToUserId,
@@ -1313,17 +1303,7 @@ export async function evaluateConversationSla(tenantId?: string) {
               message: `Conversation "${convo.subject}" has breached the first response SLA (${policy.firstResponseMinutes} min)`,
               payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "first_response" } as any,
             });
-            emitNotificationNew(convo.assignedToUserId, {
-              id: notification.id,
-              tenantId: notification.tenantId,
-              userId: notification.userId,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              payloadJson: notification.payloadJson,
-              readAt: notification.readAt,
-              createdAt: notification.createdAt,
-            });
+            emitNotificationNew(convo.assignedToUserId, toNotificationPayload(notification));
           } catch {}
         }
       }
@@ -1347,17 +1327,7 @@ export async function evaluateConversationSla(tenantId?: string) {
               message: `Conversation "${convo.subject}" has breached the resolution SLA (${policy.resolutionMinutes} min)`,
               payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "resolution" } as any,
             });
-            emitNotificationNew(convo.assignedToUserId, {
-              id: notification.id,
-              tenantId: notification.tenantId,
-              userId: notification.userId,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              payloadJson: notification.payloadJson,
-              readAt: notification.readAt,
-              createdAt: notification.createdAt,
-            });
+            emitNotificationNew(convo.assignedToUserId, toNotificationPayload(notification));
           } catch {}
         }
       }

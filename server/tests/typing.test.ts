@@ -11,7 +11,7 @@ import {
 
 vi.mock("../storage", () => ({
   storage: {
-    isUserInChatChannel: vi.fn(),
+    getUserChatChannels: vi.fn(),
     getUserChatDmThreads: vi.fn(),
     validateChatRoomAccess: vi.fn(),
   },
@@ -139,7 +139,7 @@ describe("Typing socket policy enforcement", () => {
   });
 
   it("denies typing start from non-member", async () => {
-    vi.mocked(storage.isUserInChatChannel).mockResolvedValue(false);
+    vi.mocked(storage.getUserChatChannels).mockResolvedValue([]);
     const socket = createFakeSocket({ userId: "u1", tenantId: "t1" });
     const guarded = withSocketPolicy(socket as any, { requireAuth: true, requireTenant: true, requireChatMembership: true }, handler);
     await guarded({ conversationId: "channel:ch1" });
@@ -147,7 +147,7 @@ describe("Typing socket policy enforcement", () => {
   });
 
   it("allows typing start from authenticated member", async () => {
-    vi.mocked(storage.isUserInChatChannel).mockResolvedValue(true);
+    vi.mocked(storage.getUserChatChannels).mockResolvedValue([{ channelId: "ch1" }] as any);
     const socket = createFakeSocket({ userId: "u1", tenantId: "t1" });
     const guarded = withSocketPolicy(socket as any, { requireAuth: true, requireTenant: true, requireChatMembership: true }, handler);
     await guarded({ conversationId: "channel:ch1" });

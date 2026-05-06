@@ -131,7 +131,7 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
       if (search && typeof search === "string" && search.trim()) {
         const searchTerm = `%${search.trim().toLowerCase()}%`;
         inviteConditions.push(
-          sql`(LOWER(${invitations.email}) LIKE ${searchTerm} OR LOWER(${invitations.firstName}) LIKE ${searchTerm} OR LOWER(${invitations.lastName}) LIKE ${searchTerm})`
+          sql`LOWER(${invitations.email}) LIKE ${searchTerm}`
         );
       }
 
@@ -155,8 +155,8 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
       const inviteList = await db.select({
         id: invitations.id,
         email: invitations.email,
-        firstName: invitations.firstName,
-        lastName: invitations.lastName,
+        firstName: sql<string | null>`NULL`,
+        lastName: sql<string | null>`NULL`,
         role: invitations.role,
         tenantId: invitations.tenantId,
         tenantName: tenants.name,

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { IncomingMessage, ServerResponse } from "http";
 import { Duplex } from "stream";
 
-type HeaderValue = string | string[] | undefined;
+type HeaderValue = string | string[] | number | undefined;
 
 interface DispatchOptions {
   method: string;
@@ -49,7 +49,7 @@ function normalizeHeaders(headers: Record<string, HeaderValue>): Record<string, 
 
 async function dispatch(app: Express, options: DispatchOptions): Promise<TestResponse> {
   const socket = new MockSocket();
-  const req = new IncomingMessage(socket);
+  const req = new IncomingMessage(socket as any);
   const res = new ServerResponse(req);
 
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
@@ -97,7 +97,7 @@ async function dispatch(app: Express, options: DispatchOptions): Promise<TestRes
     : responseHeaders["content-type"];
 
   let body: any = text;
-  if (contentType?.includes("application/json") && text) {
+  if (typeof contentType === "string" && contentType.includes("application/json") && text) {
     body = JSON.parse(text);
   }
 

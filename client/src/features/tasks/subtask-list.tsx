@@ -25,7 +25,7 @@ interface SubtaskListProps {
   clientId?: string | null;
   taskTitle?: string;
   taskDescription?: string;
-  onAdd?: (title: string) => void;
+  onAdd?: (title: string) => void | Promise<void>;
   onToggle?: (subtaskId: string, completed: boolean) => void;
   onDelete?: (subtaskId: string) => void;
   onUpdate?: (subtaskId: string, title: string) => void;
@@ -144,7 +144,7 @@ function SubtaskListInner({
         if (onAdd) {
           // Wrap in a promise to ensure it's awaited if it's a mutation
           const result = onAdd(titleToAdd);
-          if (result instanceof Promise) {
+          if (result && typeof result === "object" && "then" in result) {
             await result;
           }
         }
@@ -361,7 +361,7 @@ function SubtaskListInner({
                     >
                       {subtask.title}
                     </span>
-                    {subtask.description && (() => {
+                    {Boolean(subtask.description) && (() => {
                       const plain = toPlainText(subtask.description);
                       return plain ? (
                         <span className="text-xs text-muted-foreground truncate block" data-testid={`subtask-description-preview-${subtask.id}`}>

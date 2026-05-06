@@ -83,13 +83,18 @@ router.use(employeeLocationsRouter);
 // =============================================================================
 
 export async function recordTenantAuditEvent(
-  tenantId: string,
+  tenantId: string | null,
   eventType: string,
   message: string,
   actorUserId?: string | null,
   metadata?: Record<string, unknown>
 ): Promise<void> {
   try {
+    if (!tenantId) {
+      console.info(`[Audit] ${eventType}: ${message}`);
+      return;
+    }
+
     await db.insert(tenantAuditEvents).values({
       tenantId,
       actorUserId: actorUserId || null,

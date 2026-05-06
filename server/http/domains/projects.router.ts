@@ -139,12 +139,13 @@ router.get("/projects", async (req: Request, res: Response) => {
         if (teamId) conditions.push(eq(projects.teamId, teamId));
         if (search) conditions.push(ilike(projects.name, `%${search}%`));
         
-        const sortCol = ({
-          'name': projects.name,
-          'status': projects.status,
-          'createdAt': projects.createdAt,
-          'updatedAt': projects.updatedAt,
-        } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
+        const sortColumns = {
+          name: projects.name,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        } as const;
+        const sortCol = sortColumns[sortBy as keyof typeof sortColumns] ?? projects.createdAt;
         const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
         
         const projectList = await db

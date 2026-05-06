@@ -120,10 +120,10 @@ impersonationRouter.post("/impersonate/start", requireSuperUser, async (req, res
     
     await db.insert(tenantAuditEvents).values({
       tenantId,
-      userId: user.id,
+      actorUserId: user.id,
       eventType: "super_user_action",
       message: `Super Admin ${user.email} started impersonating tenant`,
-      eventDetails: {
+      metadata: {
         action: "impersonation_started",
         superUserId: user.id,
         superUserEmail: user.email,
@@ -162,10 +162,10 @@ impersonationRouter.post("/impersonate/stop", requireSuperUser, async (req, res)
       if (tenant) {
         await db.insert(tenantAuditEvents).values({
           tenantId,
-          userId: user.id,
+          actorUserId: user.id,
           eventType: "super_user_action",
           message: `Super Admin ${user.email} stopped impersonating tenant`,
-          eventDetails: {
+          metadata: {
             action: "impersonation_stopped",
             superUserId: user.id,
             superUserEmail: user.email,

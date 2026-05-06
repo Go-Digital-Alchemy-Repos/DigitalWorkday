@@ -110,7 +110,7 @@ export type CalendarTask = {
 // Project Activity Feed Types
 export type ProjectActivityItem = {
   id: string;
-  type: "task_created" | "task_updated" | "comment_added" | "time_logged";
+  type: string;
   timestamp: Date;
   actorId: string;
   actorName: string;
@@ -944,6 +944,7 @@ export class DatabaseStorage implements IStorage {
         status: projects.status,
         color: projects.color,
         budgetMinutes: projects.budgetMinutes,
+        stickyAt: projects.stickyAt,
         createdBy: projects.createdBy,
         createdAt: projects.createdAt,
         updatedAt: projects.updatedAt,
@@ -1813,6 +1814,7 @@ export class DatabaseStorage implements IStorage {
         .limit(limit);
 
       for (const comment of recentComments) {
+        if (!comment.taskId) continue;
         userIds.add(comment.userId);
         const task = taskCache.get(comment.taskId);
         activityItems.push({
@@ -2915,7 +2917,7 @@ export class DatabaseStorage implements IStorage {
 
     if (!existing) return undefined;
 
-    const fromStage = existing.stage;
+    const fromStage = existing.stage || "lead";
     if (fromStage === toStage) return existing;
 
     const [updated] = await db.update(clients)
@@ -4048,7 +4050,7 @@ export class DatabaseStorage implements IStorage {
       const settings = settingsMap.get(tenant.id);
       return {
         ...tenant,
-        settings, // undefined when missing, preserving prior JSON serialization behavior
+        settings: settings || null,
         userCount: userCountMap.get(tenant.id) || 0,
       };
     });

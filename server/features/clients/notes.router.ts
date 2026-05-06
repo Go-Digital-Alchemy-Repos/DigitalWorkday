@@ -575,7 +575,7 @@ router.post("/:clientId/notes/:noteId/attachments/upload", requireAuth, requireT
     const fileId = crypto.randomUUID();
     const storageKey = `tenants/${tenantId}/clients/${clientId}/notes/${noteId}/${fileId}/${fileName}`;
 
-    await uploadToS3(storageKey, file.buffer, mimeType);
+    await uploadToS3(file.buffer, storageKey, mimeType, tenantId);
 
     const [attachment] = await db.insert(clientNoteAttachments).values({
       tenantId,

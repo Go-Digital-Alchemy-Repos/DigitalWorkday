@@ -240,11 +240,7 @@ function MobileHeaderMenu() {
           </DropdownMenuItem>
           <DropdownMenuItem 
             onClick={() => {
-              if (mode === "system") {
-                setMode(resolvedTheme === "dark" ? "light" : "dark");
-              } else {
-                setMode(mode === "dark" ? "light" : "dark");
-              }
+              setMode(mode === "dark" ? "light" : "dark");
             }}
             data-testid="menu-item-theme"
           >
