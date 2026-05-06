@@ -14,7 +14,7 @@ export function getQueryPerfStats() {
 export function instrumentPool(pool: import("pg").Pool): void {
   if (!PERF_TELEMETRY) return;
 
-  const origQuery = pool.query.bind(pool);
+  const origQuery = pool.query.bind(pool) as (...args: any[]) => any;
 
   (pool as any).query = function (...args: any[]) {
     totalQueryCount++;

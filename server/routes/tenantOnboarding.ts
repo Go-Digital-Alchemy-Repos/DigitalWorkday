@@ -40,7 +40,23 @@ const upload = multer({
 
 const router = createApiRouter({ policy: "authOnly" });
 
-function requireTenantAdmin(req: any, res: any, next: any) {
+type EffectiveTenantRequest = Request & {
+  effectiveTenantId?: string | null;
+};
+
+function setEffectiveTenantId(req: Request, tenantId: string) {
+  (req as EffectiveTenantRequest).effectiveTenantId = tenantId;
+}
+
+function getRequiredTenantId(req: Request): string {
+  const tenantId = getEffectiveTenantId(req) || (req as EffectiveTenantRequest).effectiveTenantId;
+  if (!tenantId) {
+    throw AppError.forbidden("No tenant context");
+  }
+  return tenantId;
+}
+
+function requireTenantAdmin(req: Request, _res: Response, next: NextFunction) {
   const user = req.user as any;
   const effectiveTenantId = getEffectiveTenantId(req);
   
@@ -51,11 +67,11 @@ function requireTenantAdmin(req: any, res: any, next: any) {
     throw AppError.forbidden("Admin access required");
   }
   
-  req.effectiveTenantId = effectiveTenantId;
+  setEffectiveTenantId(req, effectiveTenantId);
   next();
 }
 
-function requireTenantContext(req: any, res: any, next: any) {
+function requireTenantContext(req: Request, _res: Response, next: NextFunction) {
   const user = req.user as any;
   const effectiveTenantId = getEffectiveTenantId(req);
   
@@ -72,7 +88,7 @@ function requireTenantContext(req: any, res: any, next: any) {
     throw AppError.forbidden("No tenant context");
   }
   
-  req.effectiveTenantId = effectiveTenantId;
+  setEffectiveTenantId(req, effectiveTenantId);
   next();
 }
 
@@ -135,7 +151,7 @@ router.get("/context", requireAuth, async (req, res) => {
 router.get("/me", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
     const user = req.user as any;
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -194,7 +210,7 @@ const updateSettingsSchema = z.object({
 
 router.patch("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const data = updateSettingsSchema.parse(req.body);
 
@@ -230,7 +246,7 @@ router.patch("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
 
 router.get("/onboarding/status", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -270,7 +286,7 @@ router.get("/onboarding/status", requireAuth, requireTenantAdmin, async (req, re
 router.post("/onboarding/complete", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
     const user = req.user as any;
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -367,7 +383,7 @@ router.get("/branding", requireAuth, async (req, res) => {
 
 router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const settings = await storage.getTenantSettings(tenantId);
     
@@ -414,7 +430,7 @@ function isValidProvider(provider: string): provider is IntegrationProvider {
 
 router.get("/integrations", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const integrations = await tenantIntegrationService.listIntegrations(tenantId);
     res.json({ integrations });
@@ -425,7 +441,7 @@ router.get("/integrations", requireAuth, requireTenantAdmin, async (req, res) =>
 
 router.get("/integrations/:provider", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
     const { provider } = req.params;
 
     if (!isValidProvider(provider)) {
@@ -483,7 +499,7 @@ const openaiUpdateSchema = z.object({
 
 router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
     const { provider } = req.params;
 
     if (!isValidProvider(provider)) {
@@ -566,7 +582,7 @@ router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (re
 
 router.post("/integrations/:provider/test", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
     const { provider } = req.params;
 
     if (!isValidProvider(provider)) {
@@ -587,7 +603,7 @@ router.post("/integrations/mailgun/send-test-email", requireAuth, requireTenantA
   res.setHeader("X-Request-Id", requestId);
   
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
     const { toEmail } = req.body;
 
     if (!toEmail || typeof toEmail !== "string" || !toEmail.includes("@")) {
@@ -615,7 +631,7 @@ router.post("/integrations/mailgun/send-test-email", requireAuth, requireTenantA
 
 router.get("/storage/status", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
     const status = await getStorageStatus(tenantId);
     res.json(status);
   } catch (error) {
@@ -636,7 +652,7 @@ function isValidAssetType(type: string): type is AssetType {
 
 router.post("/settings/brand-assets", requireAuth, requireTenantAdmin, upload.single("file"), async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
     const assetType = req.body.type as string;
 
     if (!isS3Configured()) {
@@ -654,7 +670,7 @@ router.post("/settings/brand-assets", requireAuth, requireTenantAdmin, upload.si
     const mimeType = req.file.mimetype;
     const validation = validateBrandAsset(mimeType, req.file.size);
     if (!validation.valid) {
-      throw AppError.badRequest(validation.error);
+      throw AppError.badRequest(validation.error || "Invalid brand asset");
     }
 
     const storageKey = generateBrandAssetKey(tenantId, assetType, req.file.originalname);
@@ -703,14 +719,18 @@ const agreementPatchSchema = z.object({
   body: z.string().min(1).optional(),
 });
 
-function isSuperUser(req: any): boolean {
+function getValidationMessage(error: z.ZodError): string {
+  return error.errors[0]?.message || "Validation error";
+}
+
+function isSuperUser(req: Request): boolean {
   const user = req.user as any;
   return user?.role === UserRole.SUPER_USER;
 }
 
 router.get("/agreement", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const activeAgreements = await db.select()
       .from(tenantAgreements)
@@ -764,11 +784,11 @@ router.post("/agreement/draft", requireAuth, requireTenantAdmin, async (req, res
     }
 
     const user = req.user as any;
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const validation = agreementDraftSchema.safeParse(req.body);
     if (!validation.success) {
-      throw AppError.badRequest(validation.error.errors[0].message);
+      throw AppError.badRequest(getValidationMessage(validation.error));
     }
 
     const { title, body } = validation.data;
@@ -823,11 +843,11 @@ router.patch("/agreement/draft", requireAuth, requireTenantAdmin, async (req, re
       throw AppError.forbidden("Agreement management is now handled by platform administrators. Please contact your platform admin to request changes.");
     }
 
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const validation = agreementPatchSchema.safeParse(req.body);
     if (!validation.success) {
-      throw AppError.badRequest(validation.error.errors[0].message);
+      throw AppError.badRequest(getValidationMessage(validation.error));
     }
 
     const updates = validation.data;
@@ -864,7 +884,7 @@ router.post("/agreement/publish", requireAuth, requireTenantAdmin, async (req, r
       throw AppError.forbidden("Agreement management is now handled by platform administrators. Please contact your platform admin to request changes.");
     }
 
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const drafts = await db.select()
       .from(tenantAgreements)
@@ -911,7 +931,7 @@ router.post("/agreement/unpublish", requireAuth, requireTenantAdmin, async (req,
       throw AppError.forbidden("Agreement management is now handled by platform administrators. Please contact your platform admin to request changes.");
     }
 
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const result = await db.update(tenantAgreements)
       .set({ status: AgreementStatus.ARCHIVED, updatedAt: new Date() })
@@ -936,7 +956,7 @@ router.post("/agreement/unpublish", requireAuth, requireTenantAdmin, async (req,
 
 router.get("/agreement/stats", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    const tenantId = getRequiredTenantId(req);
 
     const activeAgreements = await db.select()
       .from(tenantAgreements)

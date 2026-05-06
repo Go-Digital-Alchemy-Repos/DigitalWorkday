@@ -244,6 +244,7 @@ export interface IStorage {
   getTaskAttachment(id: string): Promise<TaskAttachment | undefined>;
   getTaskAttachmentsByIds(ids: string[]): Promise<TaskAttachment[]>;
   getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]>;
+  getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]>;
   createTaskAttachment(attachment: InsertTaskAttachment): Promise<TaskAttachment>;
   updateTaskAttachment(id: string, attachment: Partial<InsertTaskAttachment>): Promise<TaskAttachment | undefined>;
   deleteTaskAttachment(id: string): Promise<void>;
@@ -1976,6 +1977,23 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]> {
+    const attachmentsList = await db.select().from(taskAttachments)
+      .where(eq(taskAttachments.subtaskId, subtaskId))
+      .orderBy(desc(taskAttachments.createdAt));
+
+    if (attachmentsList.length === 0) return [];
+    const uploaderIds = [...new Set(attachmentsList.map(a => a.uploadedByUserId).filter(Boolean))];
+    const uploaderList = uploaderIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, uploaderIds))
+      : [];
+    const uploaderMap = new Map(uploaderList.map(u => [u.id, u]));
+    return attachmentsList.map(attachment => ({
+      ...attachment,
+      uploadedByUser: uploaderMap.get(attachment.uploadedByUserId),
+    }));
+  }
+
   async createTaskAttachment(insertAttachment: InsertTaskAttachment): Promise<TaskAttachment> {
     const [attachment] = await db.insert(taskAttachments).values(insertAttachment).returning();
     return attachment;
@@ -3482,27 +3500,18 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getTaskAttachmentByIdAndTenant(id: string, tenantId: string): Promise<TaskAttachment | undefined> {
-    const [attachment] = await db.select().from(taskAttachments)
-      .where(and(eq(taskAttachments.id, id), eq(taskAttachments.tenantId, tenantId)));
-    return attachment || undefined;
+    const attachment = await this.getTaskAttachment(id);
+    if (!attachment) return undefined;
+
+    const task = await this.getTaskByIdAndTenant(attachment.taskId, tenantId);
+    return task ? attachment : undefined;
   }
 
   async getTaskAttachmentsByTaskAndTenant(taskId: string, tenantId: string): Promise<TaskAttachmentWithUser[]> {
-    const attachments = await db.select()
-      .from(taskAttachments)
-      .where(and(eq(taskAttachments.taskId, taskId), eq(taskAttachments.tenantId, tenantId)))
-      .orderBy(desc(taskAttachments.uploadedAt));
-    
-    const result: TaskAttachmentWithUser[] = [];
-    for (const att of attachments) {
-      const enriched: TaskAttachmentWithUser = { ...att };
-      if (att.uploadedBy) {
-        const [user] = await db.select().from(users).where(eq(users.id, att.uploadedBy));
-        if (user) enriched.uploadedByUser = user;
-      }
-      result.push(enriched);
-    }
-    return result;
+    const task = await this.getTaskByIdAndTenant(taskId, tenantId);
+    if (!task) return [];
+
+    return this.getTaskAttachmentsByTask(taskId);
   }
 
   // =============================================================================

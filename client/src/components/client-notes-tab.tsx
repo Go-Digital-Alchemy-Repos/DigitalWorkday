@@ -1130,8 +1130,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
             <div className="flex items-center justify-between">
               <Label>Category</Label>
               <Button 
-                variant="link" 
-                className="h-auto p-0 text-xs" 
+                variant="ghost" 
+                className="h-auto p-0 text-xs text-primary hover:bg-transparent hover:text-primary/80" 
                 onClick={(e) => {
                   e.preventDefault();
                   openCreateCategoryDialog();

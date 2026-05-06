@@ -13,7 +13,7 @@ import {
   type User, type Section, type Project,
   type TaskWithRelations, type TaskAttachmentWithUser,
   tasks, taskAssignees, subtasks, subtaskAssignees, subtaskTags,
-  tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
+  tags, taskTags, taskWatchers, comments, commentMentions, activityLog, taskAttachments,
   projects, users, timeEntries, activeTimers, sections,
 } from "@shared/schema";
 import { db } from "../db";
