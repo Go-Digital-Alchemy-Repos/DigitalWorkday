@@ -1,7 +1,7 @@
 import type {
   DashboardReviewQueueItem,
   DashboardReviewQueueResponse,
-} from "./review-queue-card";
+} from "../review-queue-card";
 
 export function buildApprovedReviewItem(
   item: DashboardReviewQueueItem,
