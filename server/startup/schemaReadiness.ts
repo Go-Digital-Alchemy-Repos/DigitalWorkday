@@ -533,6 +533,7 @@ export async function ensureSchemaReady(): Promise<void> {
           throw new Error(`Migration failed: ${migResult.error}`);
         }
         console.log("[schema] Migrations completed successfully");
+        lastSchemaCheck = await checkSchemaReadiness();
       } else {
         console.log("[schema] Schema already ready - skipping migrations");
       }
