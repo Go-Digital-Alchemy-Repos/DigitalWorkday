@@ -1,10 +1,13 @@
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { CheckCircle2, CheckSquare, ChevronRight, ClipboardCheck, Eye, Loader2 } from "lucide-react";
+import { ContextBadge } from "@/components/context-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState } from "@/components/layout";
 
 export interface DashboardReviewQueueItem {
@@ -51,16 +54,34 @@ interface ReviewQueueCardProps {
   approvingItemKey?: string | null;
 }
 
-function formatTimestamp(value: string | null | undefined): string | null {
+export function formatReviewQueueTimestamp(
+  value: string | null | undefined,
+  mode: "pending" | "cleared",
+): { label: string; tooltip: string } | null {
   if (!value) return null;
   try {
-    return formatDistanceToNow(new Date(value), { addSuffix: true });
+    const date = new Date(value);
+    const timestamp = date.getTime();
+
+    if (Number.isNaN(timestamp)) {
+      return null;
+    }
+
+    const action = mode === "pending" ? "Sent for review" : "Approved";
+    const relative = formatDistanceToNow(date, { addSuffix: false });
+    const isFuture = timestamp > Date.now();
+    const suffix = isFuture ? `time in ${relative}` : `${relative} ago`;
+
+    return {
+      label: `${action} ${suffix}`,
+      tooltip: `${action} at ${format(date, "MMM d, yyyy 'at' h:mm a")}`,
+    };
   } catch {
     return null;
   }
 }
 
-function QueueRow({
+export function ReviewQueueRow({
   item,
   mode,
   onOpen,
@@ -74,7 +95,8 @@ function QueueRow({
   isApproving?: boolean;
 }) {
   const timestamp = mode === "pending" ? item.submittedAt : item.approvedAt ?? item.updatedAt;
-  const relativeTime = formatTimestamp(timestamp);
+  const timestampMeta = formatReviewQueueTimestamp(timestamp, mode);
+  const assigneeNames = item.assignees.map((assignee) => assignee.name).join(", ");
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -111,13 +133,53 @@ function QueueRow({
             </p>
           )}
           <div className="mt-2 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-            {item.projectName && <span>{item.projectName}</span>}
-            {item.clientName && <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{item.clientName}</Badge>}
-            {relativeTime && <span>{relativeTime}</span>}
+            <ContextBadge
+              kind="project"
+              value={item.projectName}
+              label="Project"
+              tooltip="Project"
+              testId={`review-queue-project-${mode}-${item.type}-${item.id}`}
+            />
+            <ContextBadge
+              kind="client"
+              value={item.clientName}
+              label="Client"
+              tooltip="Client"
+              testId={`review-queue-client-${mode}-${item.type}-${item.id}`}
+            />
+            {timestampMeta && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    className="cursor-default rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={timestampMeta.tooltip}
+                    data-tooltip-label={timestampMeta.tooltip}
+                  >
+                    {timestampMeta.label}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{timestampMeta.tooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             {mode === "pending" && item.assignees.length > 0 && (
-              <span>
-                Assigned to {item.assignees.map((assignee) => assignee.name).join(", ")}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    className="cursor-default rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Current assignee(s): ${assigneeNames}`}
+                    data-tooltip-label="Current assignee(s)"
+                  >
+                    Assigned to {assigneeNames}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Current assignee(s)</p>
+                </TooltipContent>
+              </Tooltip>
             )}
             {mode === "cleared" && item.approverName && (
               <span>Approved by {item.approverName}</span>
@@ -254,7 +316,7 @@ export function ReviewQueueCard({
               {items.map((item) => {
                 const itemKey = `${item.type}-${item.id}`;
                 return (
-                  <QueueRow
+                  <ReviewQueueRow
                     key={itemKey}
                     item={item}
                     mode="pending"
@@ -282,7 +344,7 @@ export function ReviewQueueCard({
           ) : (
             <div className="space-y-3">
               {clearedItems.map((item) => (
-                <QueueRow
+                <ReviewQueueRow
                   key={`cleared-${item.type}-${item.id}`}
                   item={item}
                   mode="cleared"
