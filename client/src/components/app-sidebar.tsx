@@ -53,7 +53,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { ProjectDrawer } from "@/features/projects";
-import type { Client, Project, Team, Workspace } from "@shared/schema";
+import { TeamDrawer } from "@/features/teams";
+import { addUsersToTeam } from "@/features/teams/team-member-batch";
+import { useToast } from "@/hooks/use-toast";
+import type { Client, Project, Team, Workspace, User } from "@shared/schema";
 import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/roles";
 
 const mainNavItems = [
@@ -69,7 +72,9 @@ const mainNavItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const { user } = useAuth();
+  const { toast } = useToast();
   const { appName, iconUrl, logoUrl } = useTenantTheme();
   const isAdmin = hasTenantAdminAccess(user?.role);
   const isSuperUser = user?.role === "super_user";
@@ -86,6 +91,11 @@ export function AppSidebar() {
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
+  });
+
+  const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: createTeamOpen,
   });
 
   const { data: clients } = useQuery<Client[]>({
@@ -110,6 +120,46 @@ export function AppSidebar() {
 
   const handleCreateProject = async (data: any) => {
     await createProjectMutation.mutateAsync(data);
+  };
+
+  const createTeamMutation = useMutation({
+    mutationFn: async (data: { name: string }) => {
+      const response = await apiRequest("POST", "/api/teams", data);
+      return response.json() as Promise<Team>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      setCreateTeamOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to create team", variant: "destructive" });
+    },
+  });
+
+  const handleCreateTeam = async (data: { name: string; memberIds?: string[] }) => {
+    const { memberIds = [], name } = data;
+    const team = await createTeamMutation.mutateAsync({ name });
+
+    if (memberIds.length === 0) {
+      toast({ title: "Team created successfully" });
+      return;
+    }
+
+    const result = await addUsersToTeam(team.id, memberIds);
+    queryClient.invalidateQueries({ queryKey: [`/api/teams/${team.id}/members`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+
+    if (result.failed > 0) {
+      toast({
+        title: "Team created, but some members could not be added",
+        description: `${result.succeeded} of ${result.total} member${result.total === 1 ? "" : "s"} added.`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: `Team created with ${result.succeeded} member${result.succeeded === 1 ? "" : "s"}`,
+      });
+    }
   };
 
   return (
@@ -233,6 +283,7 @@ export function AppSidebar() {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 rounded-xl"
+                onClick={() => setCreateTeamOpen(true)}
                 data-testid="button-add-team"
               >
                 <Plus className="h-3 w-3" />
@@ -464,6 +515,16 @@ export function AppSidebar() {
         onSubmit={handleCreateProject}
         isLoading={createProjectMutation.isPending}
         mode="create"
+      />
+
+      <TeamDrawer
+        open={createTeamOpen}
+        onOpenChange={setCreateTeamOpen}
+        onSubmit={handleCreateTeam}
+        mode="create"
+        isLoading={createTeamMutation.isPending}
+        users={users}
+        usersLoading={usersLoading}
       />
     </Sidebar>
   );

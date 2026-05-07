@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { useToast } from "@/hooks/use-toast";
 import { UserDrawer } from "@/components/user-drawer";
 import { TeamDrawer } from "@/features/teams";
+import { addUsersToTeam } from "@/features/teams/team-member-batch";
 import { UserProfilePanel } from "@/components/settings/user-profile-panel";
 import {
   Table,
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { 
   Plus, UserPlus, Users, Mail, MoreHorizontal, Copy, Trash2, 
-  Edit, RefreshCw, X, ChevronDown, ChevronRight, UserMinus, Key, Eye, EyeOff
+  Edit, RefreshCw, X, ChevronDown, ChevronRight, UserMinus, Key, Eye, EyeOff, Search
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,13 +52,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -86,7 +80,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
   
   const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
   const [selectedTeamForMember, setSelectedTeamForMember] = useState<Team | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   
   // Password reset state
@@ -152,11 +146,11 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
 
   const createTeamMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
-      return apiRequest("POST", "/api/teams", data);
+      const response = await apiRequest("POST", "/api/teams", data);
+      return response.json() as Promise<Team>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
-      toast({ title: "Team created successfully" });
     },
     onError: () => {
       toast({ title: "Failed to create team", variant: "destructive" });
@@ -189,19 +183,31 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
     },
   });
 
-  const addTeamMemberMutation = useMutation({
-    mutationFn: async ({ teamId, userId }: { teamId: string; userId: string }) => {
-      return apiRequest("POST", `/api/teams/${teamId}/members`, { userId });
+  const addTeamMembersMutation = useMutation({
+    mutationFn: async ({ teamId, userIds }: { teamId: string; userIds: string[] }) => {
+      return addUsersToTeam(teamId, userIds);
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/teams/${variables.teamId}/members`] });
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
-      toast({ title: "Member added to team" });
-      setAddMemberDialogOpen(false);
-      setSelectedUserId("");
+      if (result.failed > 0) {
+        toast({
+          title: result.succeeded > 0 ? "Some members could not be added" : "Failed to add members",
+          description: `${result.succeeded} of ${result.total} member${result.total === 1 ? "" : "s"} added.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: `${result.succeeded} member${result.succeeded === 1 ? "" : "s"} added to team`,
+        });
+      }
+      if (result.succeeded > 0 || result.failed === 0) {
+        setAddMemberDialogOpen(false);
+        setSelectedUserIds([]);
+      }
     },
     onError: () => {
-      toast({ title: "Failed to add member", variant: "destructive" });
+      toast({ title: "Failed to add members", variant: "destructive" });
     },
   });
 
@@ -351,8 +357,30 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
     });
   };
 
-  const handleCreateTeam = async (data: { name: string }) => {
-    await createTeamMutation.mutateAsync(data);
+  const handleCreateTeam = async (data: { name: string; memberIds?: string[] }) => {
+    const { memberIds = [], name } = data;
+    const team = await createTeamMutation.mutateAsync({ name });
+
+    if (memberIds.length === 0) {
+      toast({ title: "Team created successfully" });
+      return;
+    }
+
+    const result = await addUsersToTeam(team.id, memberIds);
+    queryClient.invalidateQueries({ queryKey: [`/api/teams/${team.id}/members`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+
+    if (result.failed > 0) {
+      toast({
+        title: "Team created, but some members could not be added",
+        description: `${result.succeeded} of ${result.total} member${result.total === 1 ? "" : "s"} added.`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: `Team created with ${result.succeeded} member${result.succeeded === 1 ? "" : "s"}`,
+      });
+    }
   };
 
   const handleUpdateTeam = async (data: { name: string }) => {
@@ -395,16 +423,16 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
 
   const openAddMemberDialog = (team: Team) => {
     setSelectedTeamForMember(team);
-    setSelectedUserId("");
+    setSelectedUserIds([]);
     setAddMemberDialogOpen(true);
     queryClient.invalidateQueries({ queryKey: [`/api/teams/${team.id}/members`] });
   };
 
   const handleAddMember = () => {
-    if (selectedTeamForMember && selectedUserId) {
-      addTeamMemberMutation.mutate({
+    if (selectedTeamForMember && selectedUserIds.length > 0) {
+      addTeamMembersMutation.mutate({
         teamId: selectedTeamForMember.id,
-        userId: selectedUserId,
+        userIds: selectedUserIds,
       });
     }
   };
@@ -707,6 +735,8 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
         onSubmit={handleCreateTeam}
         isLoading={createTeamMutation.isPending}
         mode="create"
+        users={users}
+        usersLoading={usersLoading}
       />
 
       <TeamDrawer
@@ -723,10 +753,10 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
         onOpenChange={setAddMemberDialogOpen}
         team={selectedTeamForMember}
         users={users}
-        selectedUserId={selectedUserId}
-        onSelectUser={setSelectedUserId}
+        selectedUserIds={selectedUserIds}
+        onSelectionChange={setSelectedUserIds}
         onConfirm={handleAddMember}
-        isPending={addTeamMemberMutation.isPending}
+        isPending={addTeamMembersMutation.isPending}
       />
 
       {/* Password Reset Dialog */}
@@ -978,8 +1008,8 @@ function AddMemberDialog({
   onOpenChange,
   team,
   users,
-  selectedUserId,
-  onSelectUser,
+  selectedUserIds,
+  onSelectionChange,
   onConfirm,
   isPending,
 }: {
@@ -987,56 +1017,140 @@ function AddMemberDialog({
   onOpenChange: (open: boolean) => void;
   team: Team | null;
   users?: User[];
-  selectedUserId: string;
-  onSelectUser: (userId: string) => void;
+  selectedUserIds: string[];
+  onSelectionChange: (userIds: string[]) => void;
   onConfirm: () => void;
   isPending: boolean;
 }) {
-  const { data: existingMembers } = useQuery<TeamMemberWithUser[]>({
+  const [search, setSearch] = useState("");
+
+  const { data: existingMembers, isLoading: existingMembersLoading } = useQuery<TeamMemberWithUser[]>({
     queryKey: [`/api/teams/${team?.id}/members`],
     enabled: open && !!team,
   });
 
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
   const existingMemberIds = new Set(existingMembers?.map(m => m.userId) || []);
   
-  const availableUsers = users?.filter(u => 
-    u.role !== "client" && !existingMemberIds.has(u.id)
-  ) || [];
+  const availableUsers = existingMembersLoading
+    ? []
+    : users?.filter(u => u.role !== "client" && !existingMemberIds.has(u.id)) || [];
 
-  const getFullName = (user: User) => {
+  const filteredUsers = availableUsers.filter((user) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    const fullName = getFullName(user).toLowerCase();
+    return fullName.includes(query) || (user.email || "").toLowerCase().includes(query);
+  });
+
+  const selectedUsers = availableUsers.filter((user) => selectedUserIds.includes(user.id));
+
+  function getFullName(user: User) {
     if (user.firstName || user.lastName) {
       return `${user.firstName || ""} ${user.lastName || ""}`.trim();
     }
     return user.name || user.email || "Unknown";
+  }
+
+  function getInitials(user: User) {
+    const name = getFullName(user);
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  const toggleUser = (userId: string) => {
+    onSelectionChange(
+      selectedUserIds.includes(userId)
+        ? selectedUserIds.filter((id) => id !== userId)
+        : [...selectedUserIds, userId],
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Team Member</DialogTitle>
+          <DialogTitle>Add Team Members</DialogTitle>
           <DialogDescription>
-            Add a user to {team?.name}
+            Add one or more users to {team?.name}
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4">
-          {availableUsers.length === 0 ? (
+        <div className="space-y-3 py-4">
+          {existingMembersLoading ? (
+            <div className="text-center text-muted-foreground py-4">
+              Loading available users...
+            </div>
+          ) : availableUsers.length === 0 ? (
             <div className="text-center text-muted-foreground py-4">
               All users are already members of this team
             </div>
           ) : (
-            <Select value={selectedUserId} onValueChange={onSelectUser}>
-              <SelectTrigger data-testid="select-team-member">
-                <SelectValue placeholder="Select a user" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableUsers.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {getFullName(user)} ({user.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search users..."
+                  className="pl-9"
+                  data-testid="input-search-team-members"
+                />
+              </div>
+              <div className="max-h-80 overflow-y-auto rounded-md border p-1">
+                {filteredUsers.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    No users match your search.
+                  </div>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const checkboxId = `add-team-member-${user.id}`;
+                    const checked = selectedUserIds.includes(user.id);
+
+                    return (
+                      <label
+                        key={user.id}
+                        htmlFor={checkboxId}
+                        className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted"
+                      >
+                        <Checkbox
+                          id={checkboxId}
+                          checked={checked}
+                          onCheckedChange={() => toggleUser(user.id)}
+                          data-testid={`checkbox-team-member-${user.id}`}
+                        />
+                        <Avatar className="h-8 w-8">
+                          {user.avatarUrl && (
+                            <AvatarImage src={getStorageUrl(user.avatarUrl)} alt={getFullName(user)} />
+                          )}
+                          <AvatarFallback className="text-xs">
+                            {getInitials(user)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{getFullName(user)}</span>
+                          {user.email && (
+                            <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              {selectedUsers.length > 0 && (
+                <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  {selectedUsers.length} selected
+                </div>
+              )}
+            </>
           )}
         </div>
         <DialogFooter>
@@ -1049,10 +1163,12 @@ function AddMemberDialog({
           </Button>
           <Button 
             onClick={onConfirm} 
-            disabled={!selectedUserId || isPending || availableUsers.length === 0}
+            disabled={selectedUserIds.length === 0 || isPending || availableUsers.length === 0}
             data-testid="button-confirm-add-member"
           >
-            {isPending ? "Adding..." : "Add Member"}
+            {isPending
+              ? "Adding..."
+              : `Add ${selectedUserIds.length || ""} Member${selectedUserIds.length === 1 ? "" : "s"}`.replace("  ", " ")}
           </Button>
         </DialogFooter>
       </DialogContent>

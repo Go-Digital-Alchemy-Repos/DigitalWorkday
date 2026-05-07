@@ -68,9 +68,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { CreateProjectDialog } from "@/features/projects";
 import { TeamDrawer } from "@/features/teams";
+import { addUsersToTeam } from "@/features/teams/team-member-batch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/schema";
+import type { Project, Team, Workspace, Client, ClientDivision, User } from "@shared/schema";
 import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/roles";
 
 interface UiPreferences {
@@ -195,6 +196,11 @@ export function TenantSidebar() {
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
+  });
+
+  const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: createTeamOpen,
   });
 
   const { data: clients } = useQuery<Client[]>({
@@ -359,20 +365,42 @@ export function TenantSidebar() {
 
   const createTeamMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
-      return apiRequest("POST", "/api/teams", data);
+      const response = await apiRequest("POST", "/api/teams", data);
+      return response.json() as Promise<Team>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
       setCreateTeamOpen(false);
-      toast({ title: "Team created successfully" });
     },
     onError: () => {
       toast({ title: "Failed to create team", variant: "destructive" });
     },
   });
 
-  const handleCreateTeam = async (data: { name: string }) => {
-    await createTeamMutation.mutateAsync(data);
+  const handleCreateTeam = async (data: { name: string; memberIds?: string[] }) => {
+    const { memberIds = [], name } = data;
+    const team = await createTeamMutation.mutateAsync({ name });
+
+    if (memberIds.length === 0) {
+      toast({ title: "Team created successfully" });
+      return;
+    }
+
+    const result = await addUsersToTeam(team.id, memberIds);
+    queryClient.invalidateQueries({ queryKey: [`/api/teams/${team.id}/members`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+
+    if (result.failed > 0) {
+      toast({
+        title: "Team created, but some members could not be added",
+        description: `${result.succeeded} of ${result.total} member${result.total === 1 ? "" : "s"} added.`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: `Team created with ${result.succeeded} member${result.succeeded === 1 ? "" : "s"}`,
+      });
+    }
   };
 
   const handleAddWorkspace = () => {
@@ -748,6 +776,8 @@ export function TenantSidebar() {
         onSubmit={handleCreateTeam}
         mode="create"
         isLoading={createTeamMutation.isPending}
+        users={users}
+        usersLoading={usersLoading}
       />
     </Sidebar>
   );
