@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, QueryFunction, type QueryKey } from "@tanstack/react-query";
 import { parseApiError, isAgreementError } from "./parseApiError";
 
 /**
@@ -206,7 +206,47 @@ export async function apiRequest(
   });
 
   await throwIfResNotOk(res);
+  invalidateCachesForMutation(method, url);
   return res;
+}
+
+function invalidateCachesForMutation(method: string, url: string): void {
+  if (method.toUpperCase() === "GET") return;
+
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  const pathname = new URL(url, origin).pathname;
+  const taskRelatedMutation =
+    pathname === "/api/tasks" ||
+    pathname.startsWith("/api/tasks/") ||
+    pathname === "/api/subtasks" ||
+    pathname.startsWith("/api/subtasks/") ||
+    /^\/api\/projects\/[^/]+\/tasks(?:\/|$)/.test(pathname) ||
+    /^\/api\/projects\/[^/]+\/sections(?:\/|$)/.test(pathname) ||
+    pathname === "/api/time-entries" ||
+    pathname.startsWith("/api/time-entries/") ||
+    pathname.startsWith("/api/timer/");
+
+  const projectOrClientMutation =
+    pathname === "/api/projects" ||
+    pathname.startsWith("/api/projects/") ||
+    pathname === "/api/v1/projects" ||
+    pathname.startsWith("/api/v1/projects/") ||
+    pathname === "/api/clients" ||
+    pathname.startsWith("/api/clients/") ||
+    pathname === "/api/v1/clients" ||
+    pathname.startsWith("/api/v1/clients/") ||
+    pathname === "/api/crm/clients" ||
+    pathname.startsWith("/api/crm/clients/");
+
+  if (!taskRelatedMutation && !projectOrClientMutation) return;
+  globalThis.setTimeout(() => {
+    if (taskRelatedMutation) {
+      invalidateTaskRelatedQueries();
+    } else {
+      invalidateProjectClientRelatedQueries();
+    }
+  }, 0);
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -335,6 +375,80 @@ export const STALE_TIMES = {
   static: Infinity,
 } as const;
 
+const TASK_RELATED_QUERY_PREFIXES = [
+  "/api/reports",
+  "/api/v1/reports",
+  "/api/v1/super/reports",
+  "/api/time-entries/report",
+] as const;
+
+const PROJECT_CLIENT_RELATED_QUERY_PREFIXES = [
+  "/api/projects",
+  "/api/v1/projects",
+  "/api/clients",
+  "/api/v1/clients",
+  "/api/crm/clients",
+  "/api/reports",
+  "/api/v1/reports",
+  "/api/v1/super/reports",
+] as const;
+
+type TaskRelatedInvalidationOptions = {
+  taskId?: string | null;
+  projectId?: string | null;
+  clientId?: string | null;
+};
+
+function invalidateExactQueries(queryKeys: QueryKey[]): void {
+  for (const queryKey of queryKeys) {
+    queryClient.invalidateQueries({ queryKey, refetchType: "active" });
+  }
+}
+
+function invalidateQueriesByFirstSegmentPrefix(prefixes: readonly string[]): void {
+  queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey[0];
+      return typeof key === "string" && prefixes.some((prefix) => key.startsWith(prefix));
+    },
+    refetchType: "active",
+  });
+}
+
+export function invalidateTaskRelatedQueries({
+  taskId,
+  projectId,
+  clientId,
+}: TaskRelatedInvalidationOptions = {}): void {
+  invalidateExactQueries([
+    ["/api/tasks"],
+    ["/api/tasks/my"],
+    ["/api/projects"],
+    ["/api/v1/projects"],
+    ...(taskId ? [["/api/tasks", taskId]] : []),
+    ...(projectId
+      ? [
+          ["/api/projects", projectId],
+          ["/api/projects", projectId, "tasks"],
+          ["/api/projects", projectId, "sections"],
+          [`/api/projects/${projectId}/sections`],
+          ["/api/v1/projects", projectId, "forecast"],
+        ]
+      : []),
+    ...(clientId
+      ? [
+          ["/api/clients", clientId],
+          [`/api/crm/clients/${clientId}/summary`],
+        ]
+      : []),
+  ]);
+  invalidateQueriesByFirstSegmentPrefix(TASK_RELATED_QUERY_PREFIXES);
+}
+
+export function invalidateProjectClientRelatedQueries(): void {
+  invalidateQueriesByFirstSegmentPrefix(PROJECT_CLIENT_RELATED_QUERY_PREFIXES);
+}
+
 /**
  * Tenant-scoped query key prefixes.
  * These queries contain tenant-specific data and must be cleared on mode transitions.
@@ -348,6 +462,7 @@ export const STALE_TIMES = {
 export const TENANT_SCOPED_QUERY_PREFIXES = [
   "/api/projects",
   "/api/clients",
+  "/api/crm/clients",
   "/api/teams",
   "/api/workspaces",
   "/api/tasks",
@@ -358,6 +473,8 @@ export const TENANT_SCOPED_QUERY_PREFIXES = [
   "/api/v1/tenant",
   "/api/v1/workspaces",
   "/api/v1/tasks",
+  "/api/reports",
+  "/api/v1/reports",
   "/api/v1/clients",
   "/api/v1/teams",
   "/api/v1/time",

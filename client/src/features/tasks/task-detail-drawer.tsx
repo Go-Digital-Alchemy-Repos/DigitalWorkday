@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, invalidateTaskRelatedQueries } from "@/lib/queryClient";
 import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
@@ -328,15 +328,12 @@ function TaskDetailDrawerContent({
   });
 
   const invalidateTaskQueries = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-    if (task?.id) {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
-    }
-    if (task?.projectId) {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", task.projectId, "tasks"] });
-    }
-  }, [task?.id, task?.projectId]);
+    invalidateTaskRelatedQueries({
+      taskId: task?.id,
+      projectId: task?.projectId,
+      clientId: task?.project?.clientId,
+    });
+  }, [task?.id, task?.projectId, task?.project?.clientId]);
 
   // Workspace tags query for adding existing tags
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
@@ -441,11 +438,7 @@ function TaskDetailDrawerContent({
       return apiRequest("DELETE", `/api/tasks/${taskId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      if (task?.projectId) {
-        queryClient.invalidateQueries({ queryKey: [`/api/projects/${task.projectId}/sections`] });
-      }
+      invalidateTaskQueries();
       toast({
         title: "Task deleted",
         description: `"${task?.title}" has been permanently deleted.`,
