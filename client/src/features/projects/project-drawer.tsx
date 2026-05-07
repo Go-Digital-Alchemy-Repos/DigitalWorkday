@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/richtext";
+import { normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
 import {
   Select,
   SelectContent,
@@ -161,7 +162,10 @@ export function ProjectDrawer({
       return;
     }
     try {
-      await onSubmit(data);
+      await onSubmit({
+        ...data,
+        description: normalizeRichTextForStorage(data.description),
+      });
       form.reset();
       setHasChanges(false);
       onOpenChange(false);

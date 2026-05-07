@@ -48,6 +48,7 @@ import { useAuth } from "@/lib/auth";
 import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { hasTenantAdminAccess } from "@shared/roles";
+import { normalizeRichTextForStorage, toEditablePlainText } from "@/components/richtext/richTextUtils";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -70,6 +71,10 @@ const editProjectSchema = z.object({
 });
 
 type EditProjectFormData = z.infer<typeof editProjectSchema>;
+
+function getEditableProjectDescription(description: string | null | undefined): string {
+  return toEditablePlainText(description);
+}
 
 interface ProjectSettingsSheetProps {
   project: Project;
@@ -110,7 +115,7 @@ export function ProjectSettingsSheet({
     resolver: zodResolver(editProjectSchema),
     defaultValues: {
       name: project.name,
-      description: project.description || "",
+      description: getEditableProjectDescription(project.description),
       teamId: project.teamId || "",
       color: project.color || "#3B82F6",
       visibility: (project.visibility as "workspace" | "private") || "workspace",
@@ -121,7 +126,7 @@ export function ProjectSettingsSheet({
     if (open) {
       form.reset({
         name: project.name,
-        description: project.description || "",
+        description: getEditableProjectDescription(project.description),
         teamId: project.teamId || "",
         color: project.color || "#3B82F6",
         visibility: (project.visibility as "workspace" | "private") || "workspace",
@@ -134,7 +139,7 @@ export function ProjectSettingsSheet({
     mutationFn: async (data: EditProjectFormData) => {
       const res = await apiRequest("PATCH", `/api/projects/${project.id}`, {
         name: data.name,
-        description: data.description || null,
+        description: normalizeRichTextForStorage(data.description) || null,
         teamId: data.teamId || null,
         color: data.color,
         visibility: data.visibility,

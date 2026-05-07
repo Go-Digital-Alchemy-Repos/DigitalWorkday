@@ -4,9 +4,12 @@ import {
   toPlainText,
   getPreviewText,
   getDocForEditor,
+  isRichTextContentEmpty,
   isValidTipTapDoc,
+  normalizeRichTextForStorage,
   isHtmlString,
   truncateText,
+  toEditablePlainText,
   wrapPlainTextAsDoc,
 } from "../../client/src/components/richtext/richTextUtils";
 
@@ -41,6 +44,16 @@ const MULTI_PARAGRAPH_DOC = {
     },
   ],
 };
+
+const EMPTY_TIPTAP_DOC_STRING = JSON.stringify({
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      attrs: { textAlign: null },
+    },
+  ],
+});
 
 describe("richTextUtils", () => {
   describe("isValidTipTapDoc", () => {
@@ -117,6 +130,39 @@ describe("richTextUtils", () => {
 
     it("returns HTML as-is (since parseRichTextValue treats it as text)", () => {
       expect(toPlainText("<p>Hello</p>")).toBe("<p>Hello</p>");
+    });
+  });
+
+  describe("isRichTextContentEmpty", () => {
+    it("detects empty TipTap document strings", () => {
+      expect(isRichTextContentEmpty(EMPTY_TIPTAP_DOC_STRING)).toBe(true);
+    });
+
+    it("does not treat TipTap documents with text as empty", () => {
+      expect(isRichTextContentEmpty(TIPTAP_DOC_STRING)).toBe(false);
+    });
+
+    it("detects empty HTML placeholders", () => {
+      expect(isRichTextContentEmpty("<p></p>")).toBe(true);
+      expect(isRichTextContentEmpty("<p>&nbsp;</p>")).toBe(true);
+    });
+  });
+
+  describe("normalizeRichTextForStorage", () => {
+    it("normalizes empty TipTap document strings to an empty string", () => {
+      expect(normalizeRichTextForStorage(EMPTY_TIPTAP_DOC_STRING)).toBe("");
+    });
+
+    it("preserves non-empty TipTap document strings", () => {
+      expect(normalizeRichTextForStorage(TIPTAP_DOC_STRING)).toBe(TIPTAP_DOC_STRING);
+    });
+  });
+
+  describe("toEditablePlainText", () => {
+    it("converts TipTap document strings to editable plain text", () => {
+      expect(toEditablePlainText(TIPTAP_DOC_STRING)).toBe(
+        "This project is to keep track of bugs we come across while piloting the DigitalWorkday App."
+      );
     });
   });
 
