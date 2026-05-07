@@ -306,7 +306,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
             <Button
               onClick={handleStartTimer}
               disabled={startMutation.isPending}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto border-blue-700 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-700"
               data-testid="button-start-timer"
             >
               <Play className="h-5 w-5 mr-2" />
@@ -1928,7 +1928,7 @@ export function TimeTrackingContent() {
               <span className="inline-block" data-testid="disabled-start-timer-wrapper">
                 <Button
                   disabled
-                  className="pointer-events-none"
+                  className="pointer-events-none border-blue-700 bg-blue-600 text-white"
                   data-testid="button-start-timer-content"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -1943,6 +1943,7 @@ export function TimeTrackingContent() {
         ) : (
           <Button
             onClick={() => setStartTimerDrawerOpen(true)}
+            className="border-blue-700 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-700"
             data-testid="button-start-timer-content"
           >
             <Play className="h-4 w-4 mr-2" />
