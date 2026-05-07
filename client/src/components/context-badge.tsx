@@ -3,6 +3,7 @@ import type { HTMLAttributes } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 import { cn } from "@/lib/utils";
 
 export type ContextBadgeKind = "client" | "project";
@@ -45,7 +46,7 @@ export function ContextBadge({
     return null;
   }
 
-  const tooltipText = tooltip ?? label;
+  const tooltipText = tooltip ?? (kind === "client" ? DATA_POINT_DEFINITIONS.client : DATA_POINT_DEFINITIONS.project);
   const displayValue = truncateContextValue(normalizedValue, maxLength);
 
   return (
@@ -55,7 +56,7 @@ export function ContextBadge({
           variant="outline"
           tabIndex={0}
           aria-label={`${label}: ${normalizedValue}`}
-          data-tooltip-label={tooltipText}
+          data-tooltip-label={label}
           data-context-badge-kind={kind}
           data-testid={testId}
           className={cn(

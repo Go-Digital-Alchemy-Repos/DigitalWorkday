@@ -27,6 +27,8 @@ import { getReportViewState } from "./report-view-state";
 import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 import { formatMetricValue } from "./report-shared";
 import { fetchReport as fetch } from "./report-fetch";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 const buildQueryParams = buildDateParams;
 
@@ -64,12 +66,14 @@ interface TeamMember {
   overdueRate: number;
 }
 
-function MetricCard({ label, value, sub, icon, color }: {
+function MetricCard({ label, value, sub, icon, color, definition, source }: {
   label: string;
   value: string | number;
   sub?: string;
   icon: React.ReactNode;
   color: string;
+  definition?: string;
+  source?: string;
 }) {
   const displayValue = formatMetricValue(value);
   return (
@@ -80,7 +84,12 @@ function MetricCard({ label, value, sub, icon, color }: {
             {icon}
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{label}</p>
+            <DataPointLabel
+              label={label}
+              definition={definition}
+              source={source}
+              className="text-xs text-muted-foreground"
+            />
             <p className="text-xl font-bold leading-none mt-0.5">{displayValue}</p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>
@@ -217,10 +226,10 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Active Tasks" value={totals.activeTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" />
-          <MetricCard label="Overdue Tasks" value={totals.overdueTasks} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-          <MetricCard label="Completed (Range)" value={totals.completedTasks} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" />
+          <MetricCard label="Active Tasks" value={totals.activeTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" definition={DATA_POINT_DEFINITIONS.activeTasks} source="assigned tasks" />
+          <MetricCard label="Overdue Tasks" value={totals.overdueTasks} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" definition={DATA_POINT_DEFINITIONS.overdue} source="assigned tasks" />
+          <MetricCard label="Completed (Range)" value={totals.completedTasks} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" definition="Tasks completed during the selected report range." source="tasks" />
+          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" />
         </div>
       )}
       {(exceptions.overdue.length > 0 || exceptions.lowEfficiency.length > 0) && (
@@ -499,10 +508,10 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
       {data && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <MetricCard label="Active Tasks" value={data.summary.activeTasksNow} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" />
-            <MetricCard label="Overdue" value={data.summary.overdueCount} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-            <MetricCard label="Completed" value={data.summary.completedCount} sub="in range" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
-            <MetricCard label="Hours Tracked" value={`${data.summary.totalHours}h`} sub="in range" icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" />
+            <MetricCard label="Active Tasks" value={data.summary.activeTasksNow} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" definition={DATA_POINT_DEFINITIONS.activeTasks} source="assigned tasks" />
+            <MetricCard label="Overdue" value={data.summary.overdueCount} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" definition={DATA_POINT_DEFINITIONS.overdue} source="assigned tasks" />
+            <MetricCard label="Completed" value={data.summary.completedCount} sub="in range" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" definition="Tasks completed by this employee during the selected report range." source="tasks" />
+            <MetricCard label="Hours Tracked" value={`${data.summary.totalHours}h`} sub="in range" icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">

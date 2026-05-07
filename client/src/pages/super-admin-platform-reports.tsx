@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Building2, FolderKanban, Users, CheckSquare, Clock, AlertTriangle, TrendingUp } from "lucide-react";
+import { DataPointLabel } from "@/components/data-point-help";
 
 interface TenantsSummary {
   total: number;
@@ -47,11 +48,33 @@ interface TimeSummary {
   topUsersByHours: Array<{ userId: string; userName: string; totalMinutes: number }>;
 }
 
+const PLATFORM_STAT_DEFINITIONS: Record<string, string> = {
+  "Total Tenants": "All tenants currently visible to the platform reporting scope.",
+  Active: "Records currently marked active in this platform summary.",
+  "Missing Agreement": "Tenants that do not yet have an agreement date recorded.",
+  "Recently Created": "Tenants created during the recent activity window shown below the metric.",
+  "Total Projects": "All projects across tenants in the platform reporting scope.",
+  Archived: "Projects that have been archived and removed from active project lists.",
+  "With Overdue Tasks": "Projects that currently contain at least one overdue task.",
+  "Total Users": "All user accounts across tenants in the platform reporting scope.",
+  "Active Users": "Users with recent application activity.",
+  "Pending Invites": "Users invited to the platform who have not accepted yet.",
+  "Platform Admins": "Users with super admin access.",
+  "Total Tasks": "All tasks across tenants in the platform reporting scope.",
+  Overdue: "Open tasks past their due date.",
+  "Due Today": "Open tasks with a due date today.",
+  Unassigned: "Open tasks without a current assignee.",
+  "This Week": "Tracked time recorded during the current week.",
+  "This Month": "Tracked time recorded during the current month.",
+};
+
 function StatCard({ title, value, subtitle, icon: Icon }: { title: string; value: number | string; subtitle?: string; icon: React.ComponentType<{ className?: string }> }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          <DataPointLabel label={title} definition={PLATFORM_STAT_DEFINITIONS[title]} source="platform reports" />
+        </CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>

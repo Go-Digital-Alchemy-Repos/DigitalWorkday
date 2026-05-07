@@ -1,7 +1,8 @@
+import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DataPointLabel } from "@/components/data-point-help";
 import { cn, formatNumber } from "@/lib/utils";
-import { Info, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 export function formatComparisonSub(current: number, prior: number, suffix = "") {
   const delta = Math.round((current - prior) * 10) / 10;
@@ -49,28 +50,12 @@ export function MetricCard({ label, value, sub, icon, color, definition, source 
             {icon}
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="text-xs text-muted-foreground truncate">{label}</p>
-              {(definition || source) && (
-                <TooltipProvider delayDuration={150}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground shrink-0"
-                        aria-label={`${label} definition`}
-                      >
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-[260px] space-y-1 leading-relaxed">
-                      {definition && <p>{definition}</p>}
-                      {source && <p className="text-muted-foreground">Source: {source}</p>}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
+            <DataPointLabel
+              label={label}
+              definition={definition}
+              source={source}
+              className="text-xs text-muted-foreground"
+            />
             <p className="text-xl font-bold leading-none mt-0.5">{displayValue}</p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>

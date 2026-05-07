@@ -60,6 +60,8 @@ import {
 import { getClientReportPath, getReportBasePath } from "@/components/reports/report-paths";
 import { formatMetricValue } from "@/components/reports/report-shared";
 import { fetchReport as fetch } from "@/components/reports/report-fetch";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 interface ClientProfileData {
   client: {
@@ -147,17 +149,21 @@ interface ClientProfileData {
   }>;
 }
 
-function MetricCard({ title, value, subValue, icon: Icon, testId }: {
+function MetricCard({ title, value, subValue, icon: Icon, testId, definition, source }: {
   title: string;
   value: string | number;
   subValue?: string;
   icon: any;
   testId: string;
+  definition?: string;
+  source?: string;
 }) {
   return (
     <Card data-testid={testId}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-1">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium">
+          <DataPointLabel label={title} definition={definition} source={source} />
+        </CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
@@ -479,36 +485,48 @@ export default function ClientProfileReportPage() {
                   subValue="out of 100"
                   icon={HeartPulse}
                   testId="metric-health-score"
+                  definition={DATA_POINT_DEFINITIONS.healthScore}
+                  source="client health engine"
                 />
                 <MetricCard
                   title="Completion Rate"
                   value={`${data.summary.completionRate}%`}
                   icon={CheckSquare}
                   testId="metric-completion-rate"
+                  definition={DATA_POINT_DEFINITIONS.completionRate}
+                  source="tasks"
                 />
                 <MetricCard
                   title="Overdue Rate"
                   value={`${data.summary.overdueRate}%`}
                   icon={AlertTriangle}
                   testId="metric-overdue-rate"
+                  definition="Percent of open client work that is past its due date."
+                  source="tasks"
                 />
                 <MetricCard
                   title="SLA Compliance"
                   value={`${data.summary.slaComplianceRate}%`}
                   icon={Target}
                   testId="metric-sla-compliance"
+                  definition="Percent of client work completed within the expected service window."
+                  source="tasks + due dates"
                 />
                 <MetricCard
                   title="Engagement"
                   value={`${data.summary.engagementScore}%`}
                   icon={TrendingUp}
                   testId="metric-engagement"
+                  definition="Recent activity signal based on tracked hours, completed work, and open work."
+                  source="tasks + time entries"
                 />
                 <MetricCard
                   title="Total Hours"
                   value={`${data.summary.totalHours}h`}
                   icon={Clock}
                   testId="metric-total-hours"
+                  definition={DATA_POINT_DEFINITIONS.hoursTracked}
+                  source="time entries"
                 />
               </div>
 

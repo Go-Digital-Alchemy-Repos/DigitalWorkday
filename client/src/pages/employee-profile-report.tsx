@@ -77,6 +77,8 @@ import {
 import { getEmployeeReportPath, getReportBasePath } from "@/components/reports/report-paths";
 import { formatMetricValue } from "@/components/reports/report-shared";
 import { fetchReport as fetch } from "@/components/reports/report-fetch";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 interface ProfileData {
   employee: {
@@ -166,7 +168,7 @@ interface AiSummaryData {
   expiresAt: string;
 }
 
-function MetricCard({ title, value, subValue, icon: Icon, iconColor, description, testId }: { 
+function MetricCard({ title, value, subValue, icon: Icon, iconColor, description, testId, definition, source }: {
   title: string; 
   value: string | number; 
   subValue?: string;
@@ -174,6 +176,8 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
   iconColor?: string;
   description?: string;
   testId: string;
+  definition?: string;
+  source?: string;
 }) {
   const colorMap: Record<string, { bg: string; text: string }> = {
     blue: { bg: "bg-blue-500/10", text: "text-blue-500" },
@@ -189,7 +193,9 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
   return (
     <Card data-testid={testId}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-1">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium">
+          <DataPointLabel label={title} definition={definition} source={source} />
+        </CardTitle>
         <div className={cn("h-8 w-8 rounded-full flex items-center justify-center shrink-0", colors.bg)}>
           <Icon className={cn("h-4 w-4", colors.text)} />
         </div>
@@ -780,6 +786,8 @@ export default function EmployeeProfileReportPage() {
                   icon={Award}
                   iconColor="purple"
                   testId="metric-performance-index"
+                  definition="Composite Employee Performance Index from completion, overdue, utilization, efficiency, and time compliance signals."
+                  source="employee performance engine"
                 />
                 <MetricCard 
                   title="Completion Rate" 
@@ -787,6 +795,8 @@ export default function EmployeeProfileReportPage() {
                   icon={CheckSquare}
                   iconColor="green"
                   testId="metric-completion-rate"
+                  definition={DATA_POINT_DEFINITIONS.completionRate}
+                  source="tasks"
                 />
                 <MetricCard 
                   title="Overdue Rate" 
@@ -794,6 +804,8 @@ export default function EmployeeProfileReportPage() {
                   icon={AlertTriangle}
                   iconColor="red"
                   testId="metric-overdue-rate"
+                  definition="Percent of this employee's open assigned work that is past its due date."
+                  source="tasks + assignees"
                 />
                 <MetricCard 
                   title="Utilization" 
@@ -801,6 +813,8 @@ export default function EmployeeProfileReportPage() {
                   icon={TrendingUp}
                   iconColor="blue"
                   testId="metric-utilization"
+                  definition={DATA_POINT_DEFINITIONS.utilization}
+                  source="time entries"
                 />
                 <MetricCard 
                   title="Capacity" 
@@ -808,6 +822,8 @@ export default function EmployeeProfileReportPage() {
                   icon={Activity}
                   iconColor="amber"
                   testId="metric-capacity"
+                  definition="Current workload compared with expected employee capacity."
+                  source="assigned tasks + estimates"
                 />
                 <MetricCard 
                   title="Total Hours" 
@@ -815,6 +831,8 @@ export default function EmployeeProfileReportPage() {
                   icon={Clock}
                   iconColor="cyan"
                   testId="metric-total-hours"
+                  definition={DATA_POINT_DEFINITIONS.hoursTracked}
+                  source="time entries"
                 />
               </div>
 

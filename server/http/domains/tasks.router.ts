@@ -1256,7 +1256,7 @@ router.patch("/tasks/:id", async (req, res) => {
       const projectName = project?.name || "Unknown project";
       const notificationContext = { tenantId, excludeUserId: userId };
 
-      if (updateData.status === "completed" && taskBefore.status !== "completed") {
+      if (updateData.status === "done" && taskBefore.status !== "done") {
         const assignees = (taskWithRelations as any)?.assignees || [];
         for (const assignee of assignees) {
           if (assignee.id !== userId) {
@@ -1292,7 +1292,7 @@ router.patch("/tasks/:id", async (req, res) => {
           if (task.sectionId && section && task.projectId) {
             const projectTasks = await storage.getTasksByProject(task.projectId);
             const sectionTasks = projectTasks.filter(t => t.sectionId === task.sectionId);
-            const allComplete = sectionTasks.every(t => t.id === task.id ? true : t.status === "completed");
+            const allComplete = sectionTasks.every(t => t.id === task.id ? true : t.status === "done");
             if (allComplete && sectionTasks.length > 0) {
               evaluateAutomation({
                 tenantId,
@@ -1312,7 +1312,7 @@ router.patch("/tasks/:id", async (req, res) => {
         }
       }
 
-      if (updateData.status && updateData.status !== taskBefore.status && updateData.status !== "completed") {
+      if (updateData.status && updateData.status !== taskBefore.status && updateData.status !== "done") {
         const assignees = (taskWithRelations as any)?.assignees || [];
         for (const assignee of assignees) {
           if (assignee.id !== userId) {

@@ -24,6 +24,7 @@ import {
   ReportDataNote,
   relativeDate,
 } from "./report-shared";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 type ProjectStatusFilter = "all" | "active" | "completed" | "on_hold" | "archived";
 
@@ -1008,10 +1009,10 @@ function HealthTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
     <div className="space-y-4">
       {summary && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Avg CHI Score" value={summary.avgScore} sub="out of 100" icon={<HeartPulse className="h-4 w-4 text-white" />} color="bg-emerald-500" />
-          <MetricCard label="Healthy" value={summary.healthy} sub="score ≥ 85" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Critical" value={summary.critical} sub="score < 50" icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-          <MetricCard label="With Risk Flags" value={summary.withFlags} sub="one or more flags" icon={<ShieldAlert className="h-4 w-4 text-white" />} color="bg-orange-500" />
+          <MetricCard label="Avg CHI Score" value={summary.avgScore} sub="out of 100" icon={<HeartPulse className="h-4 w-4 text-white" />} color="bg-emerald-500" definition="Average Client Health Index score for clients in the selected scope." source="client health engine" />
+          <MetricCard label="Healthy" value={summary.healthy} sub="score ≥ 85" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" definition="Clients whose CHI score is at or above 85." source="client health engine" />
+          <MetricCard label="Critical" value={summary.critical} sub="score < 50" icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" definition="Clients whose CHI score is below 50 and may need attention." source="client health engine" />
+          <MetricCard label="With Risk Flags" value={summary.withFlags} sub="one or more flags" icon={<ShieldAlert className="h-4 w-4 text-white" />} color="bg-orange-500" definition={DATA_POINT_DEFINITIONS.riskFlags} source="client health engine" />
         </div>
       )}
       {topFlags.length > 0 && (

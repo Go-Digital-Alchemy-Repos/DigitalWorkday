@@ -66,6 +66,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ShareModal } from "@/features/sharing/share-modal";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
 import { normalizeTaskStatus } from "@shared/taskStatus";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 const LazyStartTimerDrawer = lazy(() =>
   import("@/features/timer/start-timer-drawer").then((module) => ({
@@ -1240,6 +1241,7 @@ function TaskDetailDrawerContent({
               <FormFieldWrapper
                 label="Assignees"
                 labelIcon={<Users className="h-3.5 w-3.5" />}
+                helpTooltip={DATA_POINT_DEFINITIONS.assignees}
               >
                 <MultiSelectAssignees
                   taskId={task.id}
@@ -1253,6 +1255,7 @@ function TaskDetailDrawerContent({
               <FormFieldWrapper
                 label="Due Date"
                 labelIcon={<Calendar className="h-3.5 w-3.5" />}
+                helpTooltip={DATA_POINT_DEFINITIONS.dueDate}
               >
                 <DatePickerWithChips
                   value={task.dueDate ? new Date(task.dueDate) : null}
@@ -1265,6 +1268,7 @@ function TaskDetailDrawerContent({
               <FormFieldWrapper
                 label="Priority"
                 labelIcon={<Flag className="h-3.5 w-3.5" />}
+                helpTooltip={DATA_POINT_DEFINITIONS.priority}
               >
                 <PrioritySelector
                   value={task.priority as PriorityLevel}
@@ -1277,6 +1281,7 @@ function TaskDetailDrawerContent({
               <FormFieldWrapper
                 label="Status"
                 labelIcon={<Layers className="h-3.5 w-3.5" />}
+                helpTooltip={DATA_POINT_DEFINITIONS.status}
               >
                 <StatusSelector
                   value={task.status as TaskStatus}
@@ -1290,6 +1295,7 @@ function TaskDetailDrawerContent({
                 label="Estimate"
                 labelIcon={<Clock className="h-3.5 w-3.5" />}
                 helpText="Time in minutes"
+                helpTooltip={DATA_POINT_DEFINITIONS.estimate}
               >
                 <Input
                   type="number"

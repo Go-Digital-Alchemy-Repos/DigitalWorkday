@@ -9,6 +9,9 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { formatNumber } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams, type ReportRangeValue } from "./report-command-center-layout";
 import { fetchReport as fetch } from "./report-fetch";
+import { ContextBadge } from "@/components/context-badge";
+import { DataPointHelp } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 import {
   ResponsiveContainer,
   BarChart,
@@ -277,21 +280,32 @@ export default function TaskAnalytics() {
                         className="h-2.5 w-2.5 rounded-sm shrink-0"
                         style={{ backgroundColor: project.project_color || "#3B82F6" }}
                       />
-                      <span className="min-w-0 truncate font-medium">{project.project_name}</span>
+                      <ContextBadge
+                        kind="project"
+                        label="Project"
+                        value={project.project_name}
+                        maxLength={30}
+                        data-testid={`badge-completion-project-${project.project_id}`}
+                      />
                       {project.client_name ? (
-                        <Badge
-                          variant="secondary"
-                          className="h-5 max-w-[140px] shrink-0 truncate px-1.5 text-[10px] font-medium"
-                          title={project.client_name}
+                        <ContextBadge
+                          kind="client"
+                          label="Client"
+                          value={project.client_name}
+                          maxLength={22}
                           data-testid={`badge-project-client-${project.project_id}`}
-                        >
-                          {project.client_name}
-                        </Badge>
+                        />
                       ) : null}
                     </div>
-                    <span className="shrink-0 text-muted-foreground">
-                      {formatNumber(project.completed)}/{formatNumber(project.total)} ({formatNumber(project.completion_rate)}%)
-                    </span>
+                    <DataPointHelp
+                      label="Completion Rate"
+                      definition={DATA_POINT_DEFINITIONS.completionRate}
+                      source="tasks"
+                    >
+                      <span className="shrink-0 text-muted-foreground">
+                        {formatNumber(project.completed)}/{formatNumber(project.total)} ({formatNumber(project.completion_rate)}%)
+                      </span>
+                    </DataPointHelp>
                   </div>
                   <Progress value={project.completion_rate} className="h-2" />
                 </div>

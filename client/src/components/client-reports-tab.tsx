@@ -33,6 +33,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import { format } from "date-fns";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
 
@@ -189,7 +191,9 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="grid-summary-cards">
         <Card data-testid="card-total-hours">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Total Hours</CardTitle>
+            <CardTitle className="font-medium">
+              <DataPointLabel label="Total Hours" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" />
+            </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -204,7 +208,9 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
         <Card data-testid="card-billable-hours">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Billable Hours</CardTitle>
+            <CardTitle className="font-medium">
+              <DataPointLabel label="Billable Hours" definition={DATA_POINT_DEFINITIONS.billable} source="time entries" />
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -219,7 +225,9 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
         <Card data-testid="card-nonbillable-hours">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Non-Billable</CardTitle>
+            <CardTitle className="font-medium">
+              <DataPointLabel label="Non-Billable" definition="Tracked time categorized as non-billable for this client." source="time entries" />
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -234,7 +242,9 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
         <Card data-testid="card-revenue-estimate">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Revenue Est.</CardTitle>
+            <CardTitle className="font-medium">
+              <DataPointLabel label="Revenue Est." definition="Estimated revenue calculated from billable hours and the configured billing rate." source="time entries + client billing rate" />
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -340,12 +350,12 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
               <Table data-testid="table-time-entries">
                 <TableHeader>
                   <TableRow>
-                    <TableHead data-testid="header-date">Date</TableHead>
-                    <TableHead data-testid="header-title">Title</TableHead>
-                    <TableHead data-testid="header-project">Project</TableHead>
-                    <TableHead data-testid="header-employee">Employee</TableHead>
-                    <TableHead className="text-right" data-testid="header-duration">Duration</TableHead>
-                    <TableHead data-testid="header-scope">Scope</TableHead>
+                    <TableHead data-testid="header-date"><DataPointLabel label="Date" definition="Date the time entry was recorded." source="time entries" /></TableHead>
+                    <TableHead data-testid="header-title"><DataPointLabel label="Title" definition="Time entry title or related work item." source="time entries" /></TableHead>
+                    <TableHead data-testid="header-project"><DataPointLabel label="Project" definition={DATA_POINT_DEFINITIONS.project} /></TableHead>
+                    <TableHead data-testid="header-employee"><DataPointLabel label="Employee" definition="Team member who recorded the time entry." source="time entries" /></TableHead>
+                    <TableHead className="text-right" data-testid="header-duration"><DataPointLabel label="Duration" definition="Amount of tracked time for this entry." source="time entries" /></TableHead>
+                    <TableHead data-testid="header-scope"><DataPointLabel label="Scope" definition="Billable classification for the time entry." source="time entries" /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

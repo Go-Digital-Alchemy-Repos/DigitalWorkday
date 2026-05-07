@@ -656,8 +656,11 @@ export default function MyTasks() {
       }
     },
     onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"], refetchType: "inactive" });
+
+      if (selectedTask?.id === variables.taskId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId], refetchType: "active" });
+      }
     },
   });
 

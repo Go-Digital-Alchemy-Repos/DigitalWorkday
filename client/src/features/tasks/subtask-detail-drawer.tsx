@@ -39,6 +39,8 @@ import {
   buildSubtaskQuickStartTimerPayload,
 } from "./timer-payloads";
 import { normalizeTaskStatus } from "@shared/taskStatus";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 import {
   AlertDialog,
@@ -797,10 +799,10 @@ export function SubtaskDetailDrawer({
                 )}
                 <div className={cn("grid gap-4 rounded-2xl border border-border/70 bg-background/60 p-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Flag className="h-3.5 w-3.5" />
-                      Priority
-                    </label>
+                      <DataPointLabel label="Priority" definition={DATA_POINT_DEFINITIONS.priority} />
+                    </div>
                     <PrioritySelector
                       value={(subtask.priority || "medium") as PriorityLevel}
                       onChange={(value) => onUpdate?.(subtask.id, { priority: value })}
@@ -810,10 +812,10 @@ export function SubtaskDetailDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Layers className="h-3.5 w-3.5" />
-                      Status
-                    </label>
+                      <DataPointLabel label="Status" definition={DATA_POINT_DEFINITIONS.status} />
+                    </div>
                     <Select
                       value={subtask.status || "todo"}
                       onValueChange={(value) => onUpdate?.(subtask.id, { status: value })}
@@ -832,10 +834,10 @@ export function SubtaskDetailDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
-                      Due Date
-                    </label>
+                      <DataPointLabel label="Due Date" definition={DATA_POINT_DEFINITIONS.dueDate} />
+                    </div>
                     <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -881,10 +883,10 @@ export function SubtaskDetailDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
-                      Estimate
-                    </label>
+                      <DataPointLabel label="Estimate" definition={DATA_POINT_DEFINITIONS.estimate} />
+                    </div>
                     <Input
                       type="number"
                       min="0"
@@ -901,9 +903,9 @@ export function SubtaskDetailDrawer({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    Assignees
-                  </label>
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <DataPointLabel label="Assignees" definition={DATA_POINT_DEFINITIONS.assignees} />
+                  </div>
                   {isActualSubtask ? (
                     loadingAssignees ? (
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />

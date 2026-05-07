@@ -24,6 +24,8 @@ import {
   Legend,
 } from "recharts";
 import { formatNumber } from "@/lib/utils";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 interface OverviewData {
   tasks: {
@@ -68,12 +70,16 @@ function KpiCard({
   value,
   subtitle,
   variant,
+  definition,
+  source,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   subtitle?: string;
   variant?: "default" | "warning" | "success" | "info";
+  definition?: string;
+  source?: string;
 }) {
   const colorClass =
     variant === "warning"
@@ -88,7 +94,12 @@ function KpiCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <DataPointLabel
+              label={label}
+              definition={definition}
+              source={source}
+              className="mb-1 text-xs text-muted-foreground"
+            />
             <p className={`text-2xl font-bold ${colorClass}`}>{typeof value === "number" ? formatNumber(value) : value}</p>
             {subtitle && (
               <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
@@ -158,6 +169,8 @@ export default function OverviewDashboard() {
           label="Total Tasks"
           value={data.tasks.total}
           subtitle={`${formatNumber(data.tasks.completed)} completed`}
+          definition="All non-archived tasks in the current tenant scope."
+          source="tasks"
         />
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
@@ -165,12 +178,16 @@ export default function OverviewDashboard() {
           value={`${data.tasks.completionRate}%`}
           subtitle={`${formatNumber(data.tasks.open)} open`}
           variant="success"
+          definition={DATA_POINT_DEFINITIONS.completionRate}
+          source="tasks"
         />
         <KpiCard
           icon={<AlertTriangle className="h-4 w-4" />}
           label="Overdue Tasks"
           value={data.tasks.overdue}
           variant={data.tasks.overdue > 0 ? "warning" : "default"}
+          definition={DATA_POINT_DEFINITIONS.overdue}
+          source="tasks"
         />
         <KpiCard
           icon={<FolderKanban className="h-4 w-4" />}
@@ -178,18 +195,24 @@ export default function OverviewDashboard() {
           value={data.projects.active}
           subtitle={`${formatNumber(data.projects.total)} total`}
           variant="info"
+          definition="Projects currently marked active in the tenant workspace."
+          source="projects"
         />
         <KpiCard
           icon={<Clock className="h-4 w-4" />}
           label="Hours Tracked"
           value={formatHours(data.time.totalHours)}
           subtitle={`${formatNumber(data.time.totalEntries)} entries`}
+          definition={DATA_POINT_DEFINITIONS.hoursTracked}
+          source="time entries"
         />
         <KpiCard
           icon={<Building2 className="h-4 w-4" />}
           label="Active Clients"
           value={data.clients.active}
           subtitle={`${formatNumber(data.clients.total)} total`}
+          definition="Clients with at least one active relationship or project in the workspace."
+          source="clients"
         />
         <KpiCard
           icon={<Ticket className="h-4 w-4" />}
@@ -197,12 +220,16 @@ export default function OverviewDashboard() {
           value={data.tickets.open}
           subtitle={`${formatNumber(data.tickets.resolved)} resolved`}
           variant={data.tickets.open > 0 ? "warning" : "default"}
+          definition="Support tickets that are open and awaiting resolution."
+          source="support tickets"
         />
         <KpiCard
           icon={<Users className="h-4 w-4" />}
           label="Team Members"
           value={data.members.total}
           subtitle={`${formatNumber(data.time.activeUsers)} tracking time`}
+          definition="Users in this tenant workspace, with active time trackers counted in the subtitle."
+          source="users + time entries"
         />
       </div>
 

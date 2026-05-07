@@ -6,6 +6,8 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { formatNumber } from "@/lib/utils";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 import {
   ResponsiveContainer,
   BarChart,
@@ -118,26 +120,26 @@ export default function ClientAnalytics() {
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card data-testid="metric-total-clients">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Clients</p>
+            <DataPointLabel label="Total Clients" definition="All clients included in this analytics view." source="clients" className="text-xs text-muted-foreground" />
             <p className="text-2xl font-bold">{formatNumber(totalClients)}</p>
             <p className="text-xs text-muted-foreground">{formatNumber(activeClients)} active</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-projects">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Client Projects</p>
+            <DataPointLabel label="Client Projects" definition="Projects associated with clients in this analytics view." source="projects" className="text-xs text-muted-foreground" />
             <p className="text-2xl font-bold">{formatNumber(totalProjects)}</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-hours">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Hours</p>
+            <DataPointLabel label="Total Hours" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" className="text-xs text-muted-foreground" />
             <p className="text-2xl font-bold">{formatHours(Math.round(totalHours * 10) / 10)}</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-budget-clients">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Budgeted Clients</p>
+            <DataPointLabel label="Budgeted Clients" definition="Clients with an allocated budget available for utilization tracking." source="client budgets" className="text-xs text-muted-foreground" />
             <p className="text-2xl font-bold">{formatNumber(data.budgetUtilization.length)}</p>
           </CardContent>
         </Card>
@@ -243,11 +245,11 @@ export default function ClientAnalytics() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Projects</TableHead>
-                <TableHead>Tasks</TableHead>
-                <TableHead>Hours</TableHead>
+                <TableHead><DataPointLabel label="Client" definition={DATA_POINT_DEFINITIONS.client} /></TableHead>
+                <TableHead><DataPointLabel label="Stage" definition="Current pipeline or relationship stage for the client." source="clients" /></TableHead>
+                <TableHead><DataPointLabel label="Projects" definition="Projects associated with this client." source="projects" /></TableHead>
+                <TableHead><DataPointLabel label="Tasks" definition="Total client project tasks, with completion progress shown below." source="tasks" /></TableHead>
+                <TableHead><DataPointLabel label="Hours" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" /></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

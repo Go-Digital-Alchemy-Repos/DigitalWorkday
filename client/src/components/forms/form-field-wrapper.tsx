@@ -1,12 +1,15 @@
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
+import { DataPointHelp } from "@/components/data-point-help";
 
 interface FormFieldWrapperProps {
   label: string;
   labelIcon?: ReactNode;
   required?: boolean;
   helpText?: string;
+  helpTooltip?: string;
+  helpSource?: string;
   error?: string;
   children: ReactNode;
   className?: string;
@@ -19,6 +22,8 @@ export function FormFieldWrapper({
   labelIcon,
   required = false,
   helpText,
+  helpTooltip,
+  helpSource,
   error,
   children,
   className,
@@ -27,7 +32,7 @@ export function FormFieldWrapper({
 }: FormFieldWrapperProps) {
   return (
     <div className={cn("space-y-1.5", className)} data-testid={testId}>
-      <label
+      <div
         className={cn(
           "flex items-center gap-1.5 text-xs font-medium",
           error ? "text-destructive" : "text-muted-foreground",
@@ -37,7 +42,8 @@ export function FormFieldWrapper({
         {labelIcon && <span className="flex-shrink-0">{labelIcon}</span>}
         <span>{label}</span>
         {required && <span className="text-destructive">*</span>}
-      </label>
+        <DataPointHelp label={label} definition={helpTooltip} source={helpSource} />
+      </div>
       
       {children}
       
