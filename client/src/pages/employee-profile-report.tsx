@@ -1,7 +1,7 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { 
   ChevronLeft, 
   Users, 
@@ -33,6 +33,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -60,9 +61,24 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getStorageUrl } from "@/lib/storageUrl";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  REPORT_DATE_RANGES,
+  buildReportRangeSearchParams,
+  dateInputsForReportRange,
+  defaultCustomRange,
+  reportRangeDaysFromValue,
+  reportRangeSearchParamsFromQuery,
+  reportRangeValueFromQuery,
+  type ReportRangeValue,
+} from "@/components/reports/report-command-center-layout";
+import { getEmployeeReportPath, getReportBasePath } from "@/components/reports/report-paths";
+import { formatMetricValue } from "@/components/reports/report-shared";
+import { fetchReport as fetch } from "@/components/reports/report-fetch";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 interface ProfileData {
   employee: {
@@ -128,6 +144,8 @@ interface ProfileData {
     dueDate: string | null;
     projectId: string | null;
     projectName: string | null;
+    clientId: string | null;
+    clientName: string | null;
     estimateMinutes: number | null;
     createdAt: string;
     updatedAt: string;
@@ -150,7 +168,7 @@ interface AiSummaryData {
   expiresAt: string;
 }
 
-function MetricCard({ title, value, subValue, icon: Icon, iconColor, description, testId }: { 
+function MetricCard({ title, value, subValue, icon: Icon, iconColor, description, testId, definition, source }: {
   title: string; 
   value: string | number; 
   subValue?: string;
@@ -158,6 +176,8 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
   iconColor?: string;
   description?: string;
   testId: string;
+  definition?: string;
+  source?: string;
 }) {
   const colorMap: Record<string, { bg: string; text: string }> = {
     blue: { bg: "bg-blue-500/10", text: "text-blue-500" },
@@ -173,13 +193,15 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
   return (
     <Card data-testid={testId}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-1">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium">
+          <DataPointLabel label={title} definition={definition} source={source} />
+        </CardTitle>
         <div className={cn("h-8 w-8 rounded-full flex items-center justify-center shrink-0", colors.bg)}>
           <Icon className={cn("h-4 w-4", colors.text)} />
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className="text-2xl font-bold">{formatMetricValue(value)}</div>
         {subValue && (
           <p className="text-xs text-muted-foreground mt-1">
             {subValue}
@@ -193,6 +215,10 @@ function MetricCard({ title, value, subValue, icon: Icon, iconColor, description
       </CardContent>
     </Card>
   );
+}
+
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number }) {
@@ -454,7 +480,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
                         {data.supportingMetrics.map((m, i) => (
                           <div key={i} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">{m.metric}</span>
-                            <span className="font-medium">{m.value}</span>
+                            <span className="font-medium">{formatMetricValue(m.value)}</span>
                           </div>
                         ))}
                       </div>
@@ -489,7 +515,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
             {data.supportingMetrics.map((m, i) => (
               <div key={i} className="flex justify-between text-xs">
                 <span className="text-muted-foreground">{m.metric}</span>
-                <span className="font-medium">{m.value}</span>
+                <span className="font-medium">{formatMetricValue(m.value)}</span>
               </div>
             ))}
           </div>
@@ -499,19 +525,34 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
   );
 }
 
+function getDaysForReportRange(range: ReportRangeValue): number {
+  if (typeof range === "number") return range;
+  const start = new Date(`${range.startDate}T00:00:00`);
+  const end = new Date(`${range.endDate}T23:59:59.999`);
+  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
 export default function EmployeeProfileReportPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const { openTask } = useTaskDrawer();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  const range = searchParams.get("range") || "30d";
-  const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+  const reportRange = reportRangeValueFromQuery(searchParams);
+  const range = typeof reportRange === "number" ? `${reportRange}d` : "custom";
+  const section = searchParams.get("section");
+  const days = getDaysForReportRange(reportRange);
+  const reportBasePath = getReportBasePath(location);
+  const initialCustom = dateInputsForReportRange(reportRange);
+  const [customStart, setCustomStart] = useState(initialCustom.startDate);
+  const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
+  const customInvalid = !customStart || !customEnd || customStart > customEnd;
+  const profileQuery = reportRangeSearchParamsFromQuery(searchParams).toString();
 
   const { data, isLoading, error, refetch } = useQuery<ProfileData>({
-    queryKey: ["/api/reports/v2/employee", employeeId, "profile", range],
+    queryKey: ["/api/reports/v2/employee", employeeId, "profile", profileQuery],
     queryFn: async () => {
       const res = await fetch(
-        `/api/reports/v2/employee/${employeeId}/profile?range=${range}`,
+        `/api/reports/v2/employee/${employeeId}/profile?${profileQuery}`,
         { credentials: "include" }
       );
       if (!res.ok) {
@@ -524,8 +565,45 @@ export default function EmployeeProfileReportPage() {
   });
 
   const handleRangeChange = (value: string) => {
-    setLocation(`/reports/employees/${employeeId}?range=${value}`);
+    if (value === "custom") {
+      const custom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+      setCustomStart(custom.startDate);
+      setCustomEnd(custom.endDate);
+      updateRange(custom);
+      return;
+    }
+    updateRange(reportRangeDaysFromValue(value) ?? 30);
   };
+
+  const updateRange = (value: ReportRangeValue) => {
+    const params = buildReportRangeSearchParams(value);
+    if (section) params.set("section", section);
+    setLocation(`${getEmployeeReportPath(location, employeeId)}?${params.toString()}`);
+  };
+
+  const applyCustomRange = () => {
+    if (customInvalid) return;
+    updateRange({ mode: "custom", startDate: customStart, endDate: customEnd });
+  };
+
+  const updateCustomRange = (nextStart: string, nextEnd: string) => {
+    setCustomStart(nextStart);
+    setCustomEnd(nextEnd);
+    if (!nextStart || !nextEnd || nextStart > nextEnd) return;
+    updateRange({ mode: "custom", startDate: nextStart, endDate: nextEnd });
+  };
+
+  useEffect(() => {
+    setCustomStart(initialCustom.startDate);
+    setCustomEnd(initialCustom.endDate);
+  }, [initialCustom.startDate, initialCustom.endDate]);
+
+  useEffect(() => {
+    if (!data || !section) return;
+    const target = document.getElementById(section);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [data, section]);
 
   if (error) {
     return (
@@ -577,7 +655,7 @@ export default function EmployeeProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/reports">
+            <Link href={reportBasePath}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
                 Back
@@ -586,18 +664,50 @@ export default function EmployeeProfileReportPage() {
             <h1 className="text-xl font-bold hidden sm:block">Employee Intelligence Profile</h1>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Report Range:</span>
             <Select value={range} onValueChange={handleRangeChange}>
               <SelectTrigger className="w-[140px]" data-testid="select-range">
                 <SelectValue placeholder="Select range" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
+                {REPORT_DATE_RANGES.map((option) => (
+                  <SelectItem key={option.days} value={`${option.days}d`}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom">Custom range</SelectItem>
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2 flex-wrap" data-testid="profile-custom-date-range-controls">
+              <Input
+                type="date"
+                value={customStart}
+                onChange={(event) => updateCustomRange(event.target.value, customEnd)}
+                className="w-36 h-9"
+                data-testid="input-profile-custom-start-date"
+                aria-label="Custom start date"
+              />
+              <span className="text-xs text-muted-foreground hidden sm:inline">to</span>
+              <Input
+                type="date"
+                value={customEnd}
+                onChange={(event) => updateCustomRange(customStart, event.target.value)}
+                className="w-36 h-9"
+                data-testid="input-profile-custom-end-date"
+                aria-label="Custom end date"
+              />
+              <Button
+                type="button"
+                variant={range === "custom" ? "default" : "outline"}
+                size="sm"
+                disabled={customInvalid}
+                onClick={applyCustomRange}
+                data-testid="button-profile-apply-custom-range"
+              >
+                Apply
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -676,6 +786,8 @@ export default function EmployeeProfileReportPage() {
                   icon={Award}
                   iconColor="purple"
                   testId="metric-performance-index"
+                  definition="Composite Employee Performance Index from completion, overdue, utilization, efficiency, and time compliance signals."
+                  source="employee performance engine"
                 />
                 <MetricCard 
                   title="Completion Rate" 
@@ -683,6 +795,8 @@ export default function EmployeeProfileReportPage() {
                   icon={CheckSquare}
                   iconColor="green"
                   testId="metric-completion-rate"
+                  definition={DATA_POINT_DEFINITIONS.completionRate}
+                  source="tasks"
                 />
                 <MetricCard 
                   title="Overdue Rate" 
@@ -690,6 +804,8 @@ export default function EmployeeProfileReportPage() {
                   icon={AlertTriangle}
                   iconColor="red"
                   testId="metric-overdue-rate"
+                  definition="Percent of this employee's open assigned work that is past its due date."
+                  source="tasks + assignees"
                 />
                 <MetricCard 
                   title="Utilization" 
@@ -697,6 +813,8 @@ export default function EmployeeProfileReportPage() {
                   icon={TrendingUp}
                   iconColor="blue"
                   testId="metric-utilization"
+                  definition={DATA_POINT_DEFINITIONS.utilization}
+                  source="time entries"
                 />
                 <MetricCard 
                   title="Capacity" 
@@ -704,6 +822,8 @@ export default function EmployeeProfileReportPage() {
                   icon={Activity}
                   iconColor="amber"
                   testId="metric-capacity"
+                  definition="Current workload compared with expected employee capacity."
+                  source="assigned tasks + estimates"
                 />
                 <MetricCard 
                   title="Total Hours" 
@@ -711,6 +831,8 @@ export default function EmployeeProfileReportPage() {
                   icon={Clock}
                   iconColor="cyan"
                   testId="metric-total-hours"
+                  definition={DATA_POINT_DEFINITIONS.hoursTracked}
+                  source="time entries"
                 />
               </div>
 
@@ -721,7 +843,7 @@ export default function EmployeeProfileReportPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Workload Section */}
-                <Card data-testid="section-workload">
+              <Card id="section-workload" data-testid="section-workload">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <CheckSquare className="h-5 w-5 text-primary" />
@@ -732,19 +854,19 @@ export default function EmployeeProfileReportPage() {
                   <CardContent className="space-y-6">
                     <div className="grid grid-cols-4 gap-4">
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-active-tasks">{data.workload.activeTasks}</p>
+                        <p className="text-2xl font-bold" data-testid="text-active-tasks">{formatNumber(data.workload.activeTasks)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Active</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-tasks">{data.workload.overdueTasks}</p>
+                        <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-tasks">{formatNumber(data.workload.overdueTasks)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Overdue</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold text-amber-600" data-testid="text-due-soon">{data.workload.dueSoon}</p>
+                        <p className="text-2xl font-bold text-amber-600" data-testid="text-due-soon">{formatNumber(data.workload.dueSoon)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Due Soon</p>
                       </div>
                       <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-backlog">{data.workload.backlog}</p>
+                        <p className="text-2xl font-bold" data-testid="text-backlog">{formatNumber(data.workload.backlog)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Backlog</p>
                       </div>
                     </div>
@@ -759,7 +881,7 @@ export default function EmployeeProfileReportPage() {
                               value={(item.value / Math.max(data.workload.activeTasks + data.summary.overdueRate, 1)) * 100} 
                               className="h-2 flex-1" 
                             />
-                            <span className="text-xs font-medium w-8 text-right">{item.value}</span>
+                            <span className="text-xs font-medium w-8 text-right">{formatNumber(item.value)}</span>
                           </div>
                         ))}
                       </div>
@@ -768,7 +890,7 @@ export default function EmployeeProfileReportPage() {
                 </Card>
 
                 {/* Time Tracking Section */}
-                <Card data-testid="section-time">
+                <Card id="section-time" data-testid="section-time">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Clock className="h-5 w-5 text-primary" />
@@ -781,32 +903,32 @@ export default function EmployeeProfileReportPage() {
                       <div className="p-4 border rounded-lg space-y-1">
                         <p className="text-xs text-muted-foreground">Billable Ratio</p>
                         <div className="flex items-end justify-between">
-                          <p className="text-2xl font-bold" data-testid="text-billable-hours">{data.timeTracking.billableHours}h</p>
-                          <p className="text-sm text-muted-foreground pb-1">/ {data.timeTracking.totalHours}h</p>
+                          <p className="text-2xl font-bold" data-testid="text-billable-hours">{formatHours(data.timeTracking.billableHours)}</p>
+                          <p className="text-sm text-muted-foreground pb-1">/ {formatHours(data.timeTracking.totalHours)}</p>
                         </div>
                         <Progress value={(data.timeTracking.billableHours / Math.max(data.timeTracking.totalHours, 1)) * 100} className="h-1.5" />
                       </div>
                       <div className="p-4 border rounded-lg space-y-1">
                         <p className="text-xs text-muted-foreground">Estimation Variance</p>
                         <p className={cn("text-2xl font-bold", data.timeTracking.variance > 0 ? "text-destructive" : "text-green-600")} data-testid="text-time-variance">
-                          {data.timeTracking.variance > 0 ? "+" : ""}{data.timeTracking.variance}h
+                          {data.timeTracking.variance > 0 ? "+" : ""}{formatHours(data.timeTracking.variance)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">vs {data.timeTracking.estimatedHours}h estimated</p>
+                        <p className="text-[10px] text-muted-foreground">vs {formatHours(data.timeTracking.estimatedHours)} estimated</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Avg. Hours per Work Day</span>
-                        <span className="font-medium" data-testid="text-avg-hours-day">{data.timeTracking.avgHoursPerDay}h</span>
+                        <span className="font-medium" data-testid="text-avg-hours-day">{formatHours(data.timeTracking.avgHoursPerDay)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <span className="text-muted-foreground">Non-Billable Internal Time</span>
-                        <span className="font-medium" data-testid="text-non-billable-hours">{data.timeTracking.nonBillableHours}h</span>
+                        <span className="font-medium" data-testid="text-non-billable-hours">{formatHours(data.timeTracking.nonBillableHours)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <span className="text-muted-foreground">Estimated Remaining Work</span>
-                        <span className="font-medium">{data.timeTracking.estimatedHours}h</span>
+                        <span className="font-medium">{formatHours(data.timeTracking.estimatedHours)}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -814,13 +936,13 @@ export default function EmployeeProfileReportPage() {
               </div>
 
               {/* Assigned Tasks Section */}
-              <Card data-testid="section-assigned-tasks">
+              <Card id="section-assigned-tasks" data-testid="section-assigned-tasks">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <ListChecks className="h-5 w-5 text-primary" />
                     Assigned Tasks
                   </CardTitle>
-                  <CardDescription>All non-archived tasks currently assigned to this employee ({data.assignedTasks?.length ?? 0} tasks)</CardDescription>
+                  <CardDescription>All non-archived tasks currently assigned to this employee ({formatNumber(data.assignedTasks?.length ?? 0)} tasks)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {data.assignedTasks && data.assignedTasks.length > 0 ? (
@@ -829,6 +951,7 @@ export default function EmployeeProfileReportPage() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Task</TableHead>
+                            <TableHead>Client</TableHead>
                             <TableHead>Project</TableHead>
                             <TableHead className="text-center">Status</TableHead>
                             <TableHead className="text-center">Priority</TableHead>
@@ -849,6 +972,9 @@ export default function EmployeeProfileReportPage() {
                                   >
                                     {task.title}
                                   </button>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm max-w-[180px] truncate">
+                                  {task.clientName || "—"}
                                 </TableCell>
                                 <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
                                   {task.projectName || "—"}
@@ -893,7 +1019,7 @@ export default function EmployeeProfileReportPage() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">
-                                  {task.estimateMinutes != null ? `${Math.round(task.estimateMinutes / 60 * 10) / 10}h` : "—"}
+                                  {task.estimateMinutes != null ? formatHours(Math.round(task.estimateMinutes / 60 * 10) / 10) : "—"}
                                 </TableCell>
                               </TableRow>
                             );
@@ -912,7 +1038,7 @@ export default function EmployeeProfileReportPage() {
               </Card>
 
               {/* Capacity Section */}
-              <Card data-testid="section-capacity">
+              <Card id="section-capacity" data-testid="section-capacity">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <CalendarRange className="h-5 w-5 text-primary" />
@@ -936,8 +1062,8 @@ export default function EmployeeProfileReportPage() {
                         {data.capacity.weeklyData.map((week) => (
                           <TableRow key={week.week}>
                             <TableCell className="font-medium">{week.week}</TableCell>
-                            <TableCell className="text-center">{week.plannedHours}h</TableCell>
-                            <TableCell className="text-center">{week.actualHours}h</TableCell>
+                            <TableCell className="text-center">{formatHours(week.plannedHours)}</TableCell>
+                            <TableCell className="text-center">{formatHours(week.actualHours)}</TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-2">
                                 <span className={cn(
@@ -945,7 +1071,7 @@ export default function EmployeeProfileReportPage() {
                                   week.utilization > 100 ? "bg-red-500" : 
                                   week.utilization > 80 ? "bg-amber-500" : "bg-green-500"
                                 )} />
-                                {week.utilization}%
+                                {formatNumber(week.utilization)}%
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
@@ -972,7 +1098,7 @@ export default function EmployeeProfileReportPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Risk Section */}
-                <Card data-testid="section-risk">
+                <Card id="section-risk" data-testid="section-risk">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <ShieldAlert className="h-5 w-5 text-primary" />
@@ -1012,7 +1138,7 @@ export default function EmployeeProfileReportPage() {
                 </Card>
 
                 {/* Project Focus Section */}
-                <Card data-testid="section-trend">
+                <Card id="section-trend" data-testid="section-trend">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <TrendingUp className="h-5 w-5 text-primary" />
@@ -1027,7 +1153,7 @@ export default function EmployeeProfileReportPage() {
                           <div key={item.label} className="space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="font-medium truncate pr-4">{item.label}</span>
-                              <span className="text-muted-foreground">{item.value} tasks</span>
+                              <span className="text-muted-foreground">{formatNumber(item.value)} tasks</span>
                             </div>
                             <Progress 
                               value={(item.value / Math.max(data.taskBreakdown.byProject[0]?.value, 1)) * 100} 

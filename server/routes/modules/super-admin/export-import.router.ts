@@ -441,10 +441,11 @@ exportImportRouter.post("/tenants/:tenantId/import/user-client-summary", require
           const [newUser] = await db.insert(users).values({
             tenantId,
             email: userEmail,
+            name: `${firstName} ${lastName}`.trim() || userEmail,
             firstName,
             lastName,
             role,
-            status: "pending",
+            mustChangePasswordOnNextLogin: true,
           }).returning();
           
           user = newUser;

@@ -191,8 +191,9 @@ export function PersonalTaskCreateDrawer({
                   <RichTextEditor
                     value={field.value || ""}
                     onChange={field.onChange}
-                    placeholder="Add more details..."
+                    placeholder="Add more details... Type @ to mention someone"
                     className="min-h-[150px]"
+                    users={tenantUsers}
                     data-testid="textarea-personal-task-description"
                   />
                 </FormControl>

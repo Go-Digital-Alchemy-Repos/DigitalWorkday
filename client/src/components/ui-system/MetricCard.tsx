@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { DataPointLabel } from "@/components/data-point-help";
 import { LucideIcon, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 export type MetricCardVariant = "default" | "compact" | "featured";
@@ -20,6 +21,8 @@ interface MetricCardProps {
   trend?: TrendData;
   variant?: MetricCardVariant;
   loading?: boolean;
+  definition?: string;
+  source?: string;
   className?: string;
   "data-testid"?: string;
 }
@@ -33,6 +36,8 @@ export function MetricCard({
   trend,
   variant = "default",
   loading = false,
+  definition,
+  source,
   className,
   "data-testid": testId,
 }: MetricCardProps) {
@@ -87,7 +92,12 @@ export function MetricCard({
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-muted-foreground truncate">{title}</p>
+              <DataPointLabel
+                label={title}
+                definition={definition}
+                source={source}
+                className="text-sm text-muted-foreground"
+              />
               <p className="text-xl font-bold">{value}</p>
             </div>
             {trend && (
@@ -113,7 +123,13 @@ export function MetricCard({
         <CardContent className="pt-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium opacity-90">{title}</p>
+              <DataPointLabel
+                label={title}
+                definition={definition}
+                source={source}
+                className="text-sm font-medium opacity-90"
+                helpClassName="text-primary-foreground/80 hover:text-primary-foreground"
+              />
               <p className="text-4xl font-bold mt-2">{value}</p>
               {description && (
                 <p className="text-sm opacity-80 mt-1">{description}</p>
@@ -150,7 +166,12 @@ export function MetricCard({
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <DataPointLabel
+              label={title}
+              definition={definition}
+              source={source}
+              className="text-sm font-medium text-muted-foreground"
+            />
             <p className="text-3xl font-bold tracking-tight">{value}</p>
           </div>
           {Icon && (

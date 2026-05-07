@@ -46,7 +46,8 @@ export type ErrorCode =
   | "TENANCY_VIOLATION"
   | "TENANT_REQUIRED"
   | "AGREEMENT_REQUIRED"
-  | "RATE_LIMITED";
+  | "RATE_LIMITED"
+  | "NOT_IMPLEMENTED";
 
 /**
  * Custom application error with HTTP status code and error code.
@@ -164,7 +165,7 @@ export function formatZodErrors(error: ZodError): Record<string, string[]> {
  */
 export function validateBody<T>(
   body: unknown,
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   res: Response,
   req?: Request
 ): T | null {

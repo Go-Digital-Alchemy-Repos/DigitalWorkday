@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
-import { Redirect } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { WorkloadReportsV2 } from "@/components/reports/workload-reports-v2";
@@ -15,11 +15,7 @@ import {
   Clock, 
   Users, 
   TrendingUp, 
-  ArrowLeft,
-  FileText,
-  Calendar,
-  Target,
-  MessageSquare,
+  AlertTriangle,
   Building2,
   FolderKanban,
   LayoutDashboard,
@@ -29,27 +25,39 @@ import {
 import { ReportsTab } from "@/components/settings/reports-tab";
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
+import { fetchReport as fetch } from "@/components/reports/report-fetch";
 
-const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
+interface ClientListItem {
+  id: string;
+  status?: string | null;
+}
+
+function buildReportRangeParams(days: number) {
+  const end = new Date();
+  const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return new URLSearchParams({
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  }).toString();
+}
+
 const OverviewDashboard = lazy(() => import("@/components/reports/overview-dashboard"));
 const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
 const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics"));
 const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
 const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 
-type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
+type ReportView = "overview" | "workload" | "time" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
 
-const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
+const REPORT_TABS: Array<{ view: ReportView; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
+  { view: "overview",        label: "Overview",                Icon: LayoutDashboard },
   { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
   { view: "client-cc",       label: "Client Command Center",   Icon: Building2,      flag: "enableClientCommandCenter" },
-  { view: "overview",        label: "Overview",                Icon: LayoutDashboard },
   { view: "task-analytics",  label: "Task Analysis",           Icon: CheckSquare },
   { view: "client-analytics",label: "Client Analytics",        Icon: PieChart },
   { view: "workload",        label: "Workload Reports",        Icon: Users },
-  { view: "time",            label: "Time Tracking",           Icon: Clock },
-  { view: "projects",        label: "Project Analysis",        Icon: Target },
-  { view: "messages",        label: "Messages",                Icon: MessageSquare },
+  { view: "time",            label: "Time & Projects",         Icon: Clock },
   { view: "pipeline",        label: "Client Pipeline",         Icon: Building2 },
 ];
 
@@ -113,11 +121,22 @@ function PipelineReport() {
   const { data: stageSummary, isLoading } = useQuery<StageSummaryItem[]>({
     queryKey: ["/api/v1/clients/stages/summary"],
   });
+  const { data: clients = [] } = useQuery<ClientListItem[]>({
+    queryKey: ["/api/clients"],
+  });
+
+  const inactiveLikeClientCount = useMemo(() => {
+    return clients.filter((client) => client.status === "inactive" || client.status === "lost").length;
+  }, [clients]);
 
   const totalClients = useMemo(() => {
     if (!stageSummary) return 0;
     return stageSummary.reduce((sum, s) => sum + s.clientCount, 0);
   }, [stageSummary]);
+
+  const activeClientCount = useMemo(() => {
+    return Math.max(totalClients - inactiveLikeClientCount, 0);
+  }, [totalClients, inactiveLikeClientCount]);
 
   const totalProjects = useMemo(() => {
     if (!stageSummary) return 0;
@@ -159,22 +178,30 @@ function PipelineReport() {
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card data-testid="metric-total-clients">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Clients</p>
-            <p className="text-2xl font-semibold">{totalClients}</p>
+            <p className="text-xs text-muted-foreground">Active Pipeline Clients</p>
+            <p className="text-2xl font-semibold">{formatNumber(activeClientCount)}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-inactive-clients">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Inactive Clients</p>
+            <Link href="/clients" className="text-2xl font-semibold hover:underline text-primary">
+              {formatNumber(inactiveLikeClientCount)}
+            </Link>
           </CardContent>
         </Card>
         <Card data-testid="metric-total-projects">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Total Projects</p>
-            <p className="text-2xl font-semibold">{totalProjects}</p>
+            <p className="text-2xl font-semibold">{formatNumber(totalProjects)}</p>
           </CardContent>
         </Card>
         <Card data-testid="metric-stages-used">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Active Stages</p>
             <p className="text-2xl font-semibold">
-              {stageSummary?.filter(s => s.clientCount > 0).length || 0}
-              <span className="text-sm text-muted-foreground font-normal"> / {CLIENT_STAGES_ORDERED.length}</span>
+              {formatNumber(stageSummary?.filter(s => s.clientCount > 0).length || 0)}
+              <span className="text-sm text-muted-foreground font-normal"> / {formatNumber(CLIENT_STAGES_ORDERED.length)}</span>
             </p>
           </CardContent>
         </Card>
@@ -182,7 +209,7 @@ function PipelineReport() {
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Avg Clients/Stage</p>
             <p className="text-2xl font-semibold">
-              {totalClients > 0 ? (totalClients / CLIENT_STAGES_ORDERED.length).toFixed(1) : 0}
+              {totalClients > 0 ? formatNumber(totalClients / CLIENT_STAGES_ORDERED.length, { maximumFractionDigits: 1 }) : "0"}
             </p>
           </CardContent>
         </Card>
@@ -191,7 +218,7 @@ function PipelineReport() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Pipeline Distribution</CardTitle>
-          <CardDescription>Visual breakdown of clients across pipeline stages</CardDescription>
+          <CardDescription>Visual breakdown of active clients across pipeline stages. Inactive clients are tracked separately below.</CardDescription>
         </CardHeader>
         <CardContent>
           {(() => {
@@ -206,7 +233,7 @@ function PipelineReport() {
                       key={stage}
                       className={cn(STAGE_COLORS[stage], "transition-all duration-300")}
                       style={{ width: `${pct}%`, minWidth: activeStages.length > 1 ? "4px" : undefined }}
-                      title={`${CLIENT_STAGE_LABELS[stage]}: ${count} (${pct.toFixed(1)}%)`}
+                      title={`${CLIENT_STAGE_LABELS[stage]}: ${formatNumber(count)} (${formatNumber(pct, { maximumFractionDigits: 1 })}%)`}
                       data-testid={`report-pipeline-segment-${stage}`}
                     />
                   );
@@ -235,13 +262,13 @@ function PipelineReport() {
                       />
                     )}
                     <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-foreground">
-                      {count} client{count !== 1 ? "s" : ""} ({pct.toFixed(0)}%)
+                      {formatNumber(count)} client{count !== 1 ? "s" : ""} ({formatNumber(pct, { maximumFractionDigits: 0 })}%)
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1 text-xs text-muted-foreground w-24 shrink-0 justify-end">
                     <FolderKanban className="h-3 w-3" />
-                    <span>{projects} project{projects !== 1 ? "s" : ""}</span>
+                    <span>{formatNumber(projects)} project{projects !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
               );
@@ -270,10 +297,24 @@ function PipelineReport() {
                       <span className="text-sm">{CLIENT_STAGE_LABELS[stage]}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[stage])}>
-                        {count} client{count !== 1 ? "s" : ""}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{projects} proj.</span>
+                      {count > 0 ? (
+                        <Link href={`/clients?stage=${stage}`}>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "cursor-pointer text-xs transition-colors hover:border-foreground/30 hover:bg-muted/80",
+                              STAGE_TEXT_COLORS[stage]
+                            )}
+                          >
+                            {formatNumber(count)} client{count !== 1 ? "s" : ""}
+                          </Badge>
+                        </Link>
+                      ) : (
+                        <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[stage])}>
+                          {formatNumber(count)} client{count !== 1 ? "s" : ""}
+                        </Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">{formatNumber(projects)} proj.</span>
                     </div>
                   </div>
                 );
@@ -285,7 +326,7 @@ function PipelineReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Pipeline Health</CardTitle>
-            <CardDescription>Distribution insights</CardDescription>
+            <CardDescription>Distribution insights and inactive client context</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -311,14 +352,30 @@ function PipelineReport() {
                       <p className="text-xs text-muted-foreground">{group.description}</p>
                     </div>
                     <div className="text-right">
-                      <p className={cn("text-lg font-semibold", group.color)}>{group.count}</p>
+                      <p className={cn("text-lg font-semibold", group.color)}>{formatNumber(group.count)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {totalClients > 0 ? `${((group.count / totalClients) * 100).toFixed(0)}%` : "0%"}
+                        {totalClients > 0 ? `${formatNumber((group.count / totalClients) * 100, { maximumFractionDigits: 0 })}%` : "0%"}
                       </p>
                     </div>
                   </div>
                 ));
               })()}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">Inactive Clients</p>
+                    <p className="text-xs text-muted-foreground">Clients removed from the active pipeline flow</p>
+                  </div>
+                  <div className="text-right">
+                    <Link href="/clients" className="text-lg font-semibold text-slate-500 hover:underline">
+                      {formatNumber(inactiveLikeClientCount)}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {clients.length > 0 ? `${formatNumber((inactiveLikeClientCount / clients.length) * 100, { maximumFractionDigits: 0 })}% of total` : "0%"}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -327,12 +384,42 @@ function PipelineReport() {
   );
 }
 
-export default function ReportsPage() {
+export default function ReportsPage({ embedded: _embedded }: { embedded?: boolean } = {}) {
   const { user, isLoading } = useAuth();
-  const [currentView, setCurrentView] = useState<ReportView>("landing");
+  const [currentView, setCurrentView] = useState<ReportView>("overview");
   const flags = useFeatureFlags();
+  const overviewRangeParams = useMemo(() => buildReportRangeParams(30), []);
 
   const isAdmin = hasTenantAdminAccess(user?.role);
+
+  const { data: reviewQueue } = useQuery<{ items: Array<unknown>; clearedItems: Array<unknown> }>({
+    queryKey: ["/api/dashboard/review-queue"],
+    enabled: isAdmin && (flags.enableEmployeeCommandCenter || flags.enableClientCommandCenter),
+  });
+  const { data: overdueItems = [] } = useQuery<Array<unknown>>({
+    queryKey: ["/api/dashboard/overdue-tasks"],
+    enabled: isAdmin && (flags.enableEmployeeCommandCenter || flags.enableClientCommandCenter),
+  });
+  const { data: employeeRisk } = useQuery<{ flagged: Array<unknown> }>({
+    queryKey: ["/api/reports/v2/employee/risk", "overview"],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/employee/risk?${overviewRangeParams}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: isAdmin && flags.enableEmployeeCommandCenter,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: clientRisk } = useQuery<{ flagged: Array<unknown> }>({
+    queryKey: ["/api/reports/v2/client/risk", "overview"],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/client/risk?${overviewRangeParams}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: isAdmin && flags.enableClientCommandCenter,
+    staleTime: 2 * 60 * 1000,
+  });
 
   if (isLoading) {
     return (
@@ -362,13 +449,6 @@ export default function ReportsPage() {
       color: "bg-violet-600",
     }] : []),
     {
-      icon: <LayoutDashboard className="h-6 w-6 text-white" />,
-      title: "Overview",
-      description: "Executive dashboard with KPIs across tasks, projects, time, clients, and tickets",
-      view: "overview" as ReportView,
-      color: "bg-slate-700",
-    },
-    {
       icon: <CheckSquare className="h-6 w-6 text-white" />,
       title: "Task Analytics",
       description: "Completion rates, overdue analysis, priority & status distribution, assignee workload",
@@ -391,24 +471,10 @@ export default function ReportsPage() {
     },
     {
       icon: <Clock className="h-6 w-6 text-white" />,
-      title: "Time Tracking",
-      description: "Analyze time entries by project, employee, and date range with detailed breakdowns",
+      title: "Time & Projects",
+      description: "Analyze time entries, project rollups, employee contributions, and team breakdowns in one place",
       view: "time" as ReportView,
       color: "bg-green-500",
-    },
-    {
-      icon: <Target className="h-6 w-6 text-white" />,
-      title: "Project Analytics",
-      description: "Project progress, budget utilization, and milestone tracking across all projects",
-      view: "projects" as ReportView,
-      color: "bg-purple-500",
-    },
-    {
-      icon: <MessageSquare className="h-6 w-6 text-white" />,
-      title: "Messages",
-      description: "Response times, resolution rates, overdue threads, and conversation volume by client",
-      view: "messages" as ReportView,
-      color: "bg-amber-500",
     },
     {
       icon: <Building2 className="h-6 w-6 text-white" />,
@@ -419,56 +485,6 @@ export default function ReportsPage() {
     },
   ];
 
-  if (currentView === "landing") {
-    return (
-      <ScrollArea className="h-full">
-        <div className="container max-w-7xl p-3 sm:p-6">
-          <div className="flex items-center gap-3 mb-4 sm:mb-6">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold">Reports & Analytics</h1>
-              <p className="text-muted-foreground text-xs sm:text-sm">
-                Comprehensive insights into time tracking, workload, and project performance
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6 sm:mb-8">
-            {reportCategories.map((category) => (
-              <ReportCard
-                key={category.title}
-                icon={category.icon}
-                title={category.title}
-                description={category.description}
-                onClick={() => setCurrentView(category.view)}
-                color={category.color}
-              />
-            ))}
-          </div>
-
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Quick Stats
-              </CardTitle>
-              <CardDescription>
-                Overview of your organization's key metrics
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Select a report category above to view detailed analytics and export options.
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </ScrollArea>
-    );
-  }
-
   const getViewTitle = () => {
     switch (currentView) {
       case "employee-cc": return "Employee Command Center";
@@ -477,9 +493,7 @@ export default function ReportsPage() {
       case "task-analytics": return "Task Analytics";
       case "client-analytics": return "Client Analytics";
       case "workload": return "Workload Reports";
-      case "time": return "Time Tracking Reports";
-      case "projects": return "Project Analytics";
-      case "messages": return "Messages Reports";
+      case "time": return "Time & Project Reports";
       case "pipeline": return "Client Pipeline";
       default: return "Reports";
     }
@@ -492,7 +506,7 @@ export default function ReportsPage() {
       case "overview": return "Executive KPIs and trends across your entire organization";
       case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
       case "client-analytics": return "Client profitability, budget utilization, and activity breakdown";
-      case "messages": return "Response times, SLA compliance, and conversation analytics";
+      case "time": return "Tracked hours, project rollups, team contributions, and employee time summaries";
       case "pipeline": return "Pipeline stage distribution and client progression";
       default: return "Detailed analytics and exportable reports";
     }
@@ -505,7 +519,6 @@ export default function ReportsPage() {
       case "overview": return <LayoutDashboard className="h-5 w-5 text-primary" />;
       case "task-analytics": return <CheckSquare className="h-5 w-5 text-primary" />;
       case "client-analytics": return <PieChart className="h-5 w-5 text-primary" />;
-      case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
       case "pipeline": return <Building2 className="h-5 w-5 text-primary" />;
       default: return <BarChart3 className="h-5 w-5 text-primary" />;
     }
@@ -515,16 +528,6 @@ export default function ReportsPage() {
     <ScrollArea className="h-full">
       <div className="container max-w-7xl p-3 sm:p-4 lg:p-6">
         <div className="mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 mb-2 sm:mb-3">
-            <button
-              onClick={() => setCurrentView("landing")}
-              data-testid="button-back-to-reports"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] sm:min-h-0"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              All Reports
-            </button>
-          </div>
           <div className="flex items-center gap-3 mb-3 sm:mb-4">
             <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               {getViewIcon()}
@@ -581,18 +584,89 @@ export default function ReportsPage() {
             </div>
           }
         >
-          {currentView === "employee-cc" && flags.enableEmployeeCommandCenter ? (
+          {currentView === "overview" ? (
+            <div className="space-y-6">
+              <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {reportCategories.map((category) => (
+                  <ReportCard
+                    key={category.title}
+                    icon={category.icon}
+                    title={category.title}
+                    description={category.description}
+                    onClick={() => setCurrentView(category.view)}
+                    color={category.color}
+                  />
+                ))}
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    Management Exceptions
+                  </CardTitle>
+                  <CardDescription>
+                    Highest-priority issues across delivery, reviews, client health, and employee risk
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("employee-cc")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Sent For Review</span>
+                      <Badge variant="secondary">{formatNumber(reviewQueue?.items.length ?? 0)}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Open the command center and PM views to inspect review backlog.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("task-analytics")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Overdue Across Projects</span>
+                      <Badge variant="destructive">{formatNumber(overdueItems.length)}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Open task analytics for overdue and completion detail.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("client-cc")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Clients At Risk</span>
+                      <Badge variant="secondary">{formatNumber(clientRisk?.flagged.length ?? 0)}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Jump into Client Command Center risk and health views for evidence.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("employee-cc")}
+                    className="rounded-lg border border-border bg-muted/30 px-4 py-4 text-left hover:bg-muted/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-sm font-medium">Employees At Risk</span>
+                      <Badge variant="secondary">{formatNumber(employeeRisk?.flagged.length ?? 0)}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Open Employee Command Center for workload, risk, and compliance detail.</p>
+                  </button>
+                </CardContent>
+              </Card>
+
+              <OverviewDashboard />
+            </div>
+          ) : currentView === "employee-cc" && flags.enableEmployeeCommandCenter ? (
             <EmployeeCommandCenter />
           ) : currentView === "client-cc" && flags.enableClientCommandCenter ? (
             <ClientCommandCenter />
-          ) : currentView === "overview" ? (
-            <OverviewDashboard />
           ) : currentView === "task-analytics" ? (
             <TaskAnalytics />
           ) : currentView === "client-analytics" ? (
             <ClientAnalytics />
-          ) : currentView === "messages" ? (
-            <MessagesReports />
           ) : currentView === "pipeline" ? (
             <PipelineReport />
           ) : currentView === "workload" && flags?.reportWorkloadV2 ? (

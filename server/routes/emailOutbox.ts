@@ -31,7 +31,22 @@ const requireSuperUser = (req: Request, res: Response, next: NextFunction) => {
 
 const emailLogFiltersSchema = z.object({
   status: z.enum(["queued", "sent", "failed"]).optional(),
-  messageType: z.enum(["invitation", "mention_notification", "forgot_password", "test_email", "other"]).optional(),
+  messageType: z.enum([
+    "invitation",
+    "mention_notification",
+    "forgot_password",
+    "admin_password_reset",
+    "platform_admin_invite",
+    "user_provision",
+    "welcome_email",
+    "task_assignment",
+    "task_due_reminder",
+    "support_ticket_created",
+    "support_ticket_assigned",
+    "system_notification",
+    "test_email",
+    "other",
+  ]).optional(),
   fromDate: z.string().datetime().optional(),
   toDate: z.string().datetime().optional(),
   limit: z.coerce.number().min(1).max(100).default(50),

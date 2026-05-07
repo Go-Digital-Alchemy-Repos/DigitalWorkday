@@ -13,11 +13,11 @@ import {
   type User, type Section, type Project,
   type TaskWithRelations, type TaskAttachmentWithUser,
   tasks, taskAssignees, subtasks, subtaskAssignees, subtaskTags,
-  tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
+  tags, taskTags, taskWatchers, comments, commentMentions, activityLog, taskAttachments,
   projects, users, timeEntries, activeTimers, sections,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, gte, lte, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, inArray, sql, isNull } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export type CalendarTask = {
@@ -445,6 +445,17 @@ export class TasksRepository {
 
   async updateSubtask(id: string, subtask: Partial<InsertSubtask>): Promise<Subtask | undefined> {
     const [updated] = await db.update(subtasks).set({ ...subtask, updatedAt: new Date() }).where(eq(subtasks.id, id)).returning();
+    if (updated && Object.prototype.hasOwnProperty.call(subtask, "assigneeId")) {
+      const nextAssigneeId = subtask.assigneeId ?? null;
+      if (nextAssigneeId) {
+        await db
+          .insert(subtaskAssignees)
+          .values({ subtaskId: id, userId: nextAssigneeId, tenantId: null })
+          .onConflictDoNothing();
+      } else {
+        await db.delete(subtaskAssignees).where(eq(subtaskAssignees.subtaskId, id));
+      }
+    }
     return updated || undefined;
   }
 
@@ -524,6 +535,10 @@ export class TasksRepository {
 
   async addSubtaskAssignee(assignee: InsertSubtaskAssignee): Promise<SubtaskAssignee> {
     const [result] = await db.insert(subtaskAssignees).values(assignee).returning();
+    await db
+      .update(subtasks)
+      .set({ assigneeId: assignee.userId, updatedAt: new Date() })
+      .where(and(eq(subtasks.id, assignee.subtaskId), isNull(subtasks.assigneeId)));
     return result;
   }
 
@@ -531,6 +546,21 @@ export class TasksRepository {
     await db.delete(subtaskAssignees).where(
       and(eq(subtaskAssignees.subtaskId, subtaskId), eq(subtaskAssignees.userId, userId))
     );
+    const [subtask] = await db
+      .select({ assigneeId: subtasks.assigneeId })
+      .from(subtasks)
+      .where(eq(subtasks.id, subtaskId));
+    if (subtask?.assigneeId === userId) {
+      const [replacement] = await db
+        .select({ userId: subtaskAssignees.userId })
+        .from(subtaskAssignees)
+        .where(eq(subtaskAssignees.subtaskId, subtaskId))
+        .limit(1);
+      await db
+        .update(subtasks)
+        .set({ assigneeId: replacement?.userId ?? null, updatedAt: new Date() })
+        .where(eq(subtasks.id, subtaskId));
+    }
   }
 
   async getSubtaskTags(subtaskId: string): Promise<(SubtaskTag & { tag?: Tag })[]> {

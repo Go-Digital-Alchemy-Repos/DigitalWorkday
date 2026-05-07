@@ -62,8 +62,8 @@ describe('Search Opens Conversation', () => {
     const dmThreads: ChatDmThread[] = [];
     const result: SearchResult = { id: 'msg-1', body: 'test', channelId: 'ch-1', dmThreadId: null };
 
-    let selectedChannel: ChatChannel | null = null;
-    let selectedDm: ChatDmThread | null = null;
+    let selectedChannel = null as ChatChannel | null;
+    let selectedDm = null as ChatDmThread | null;
     let searchOpen = true;
     let searchQuery = 'test';
 
@@ -91,8 +91,8 @@ describe('Search Opens Conversation', () => {
     ];
     const result: SearchResult = { id: 'msg-1', body: 'test', channelId: null, dmThreadId: 'dm-2' };
 
-    let selectedChannel: ChatChannel | null = null;
-    let selectedDm: ChatDmThread | null = null;
+    let selectedChannel = null as ChatChannel | null;
+    let selectedDm = null as ChatDmThread | null;
     let searchOpen = true;
     let searchQuery = 'test';
 
@@ -117,7 +117,7 @@ describe('Search Opens Conversation', () => {
     const dmThreads: ChatDmThread[] = [{ id: 'dm-1', members: [] }];
     const result: SearchResult = { id: 'msg-1', body: 'test', channelId: 'ch-1', dmThreadId: null };
 
-    let selectedChannel: ChatChannel | null = null;
+    let selectedChannel = null as ChatChannel | null;
     let selectedDm: ChatDmThread | null = dmThreads[0];
     let searchOpen = true;
     let searchQuery = 'test';

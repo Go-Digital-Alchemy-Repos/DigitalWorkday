@@ -54,3 +54,13 @@ export const upload = multer({
     }
   },
 });
+
+export function extractMentionedUserIds(body: string): string[] {
+  const userIds = new Set<string>();
+  const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = mentionRegex.exec(body)) !== null) {
+    if (match[2]) userIds.add(match[2]);
+  }
+  return Array.from(userIds);
+}

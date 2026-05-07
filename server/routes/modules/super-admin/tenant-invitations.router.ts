@@ -372,11 +372,21 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/resen
     // Try to send email
     let emailSent = false;
     try {
-      const { sendInviteEmail } = await import("../../../email");
+      const { emailOutboxService } = await import("../../../services/emailOutbox");
       const tenantSettingsData = await storage.getTenantSettings(tenantId);
       const appName = tenantSettingsData?.appName || "MyWorkDay";
-      
-      await sendInviteEmail(invitation.email, inviteUrl, appName, tenantId);
+
+      await emailOutboxService.sendEmail({
+        tenantId,
+        messageType: "invitation",
+        toEmail: invitation.email,
+        subject: `You've been invited to join ${appName}`,
+        textBody: `You've been invited to join ${appName}.\n\nAccept your invitation: ${inviteUrl}`,
+        htmlBody: `<p>You've been invited to join ${appName}.</p><p><a href="${inviteUrl}">Accept Invitation</a></p>`,
+        actionUrl: inviteUrl,
+        actionLabel: "Accept Invitation",
+        metadata: { tenantId, invitationId },
+      });
       emailSent = true;
     } catch (emailError) {
       console.error("Failed to resend invitation email:", emailError);

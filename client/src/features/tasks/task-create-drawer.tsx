@@ -365,8 +365,9 @@ export function TaskCreateDrawer({
                   <RichTextEditor
                     value={field.value || ""}
                     onChange={field.onChange}
-                    placeholder="Add a detailed description..."
+                    placeholder="Add a detailed description... Type @ to mention someone"
                     className="min-h-[120px]"
+                    users={tenantUsers}
                     data-testid="textarea-task-description"
                   />
                 </FormControl>

@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,40 +15,22 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
+  Users, Clock, CheckSquare, AlertTriangle, TrendingUp, CalendarRange,
   ChevronUp, ChevronDown, ArrowUpDown, User, FolderKanban,
-  ShieldAlert, CalendarRange, Activity,
+  ShieldAlert, Activity,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { getEmployeeReportDrilldownPath, getEmployeeReportPath } from "./report-paths";
+import { ReportEmptyState } from "./report-empty-state";
+import { getReportViewState } from "./report-view-state";
+import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
+import { formatMetricValue } from "./report-shared";
+import { fetchReport as fetch } from "./report-fetch";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
-interface DateRange {
-  label: string;
-  days: number;
-}
-
-const DATE_RANGES: DateRange[] = [
-  { label: "Last 7 days", days: 7 },
-  { label: "Last 14 days", days: 14 },
-  { label: "Last 30 days", days: 30 },
-  { label: "Last 60 days", days: 60 },
-  { label: "Last 90 days", days: 90 },
-];
-
-function buildDateRange(days: number) {
-  const end = new Date();
-  const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  return {
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-  };
-}
-
-function buildQueryParams(rangeDays: number, extra?: Record<string, string>) {
-  const { startDate, endDate } = buildDateRange(rangeDays);
-  const params = new URLSearchParams({ startDate, endDate, ...(extra ?? {}) });
-  return params.toString();
-}
+const buildQueryParams = buildDateParams;
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -58,6 +41,10 @@ function userInitials(u: { firstName?: string | null; lastName?: string | null; 
   if (u.firstName && u.lastName) return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
   if (u.firstName) return u.firstName[0].toUpperCase();
   return u.email[0].toUpperCase();
+}
+
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 type SortDir = "asc" | "desc";
@@ -79,13 +66,16 @@ interface TeamMember {
   overdueRate: number;
 }
 
-function MetricCard({ label, value, sub, icon, color }: {
+function MetricCard({ label, value, sub, icon, color, definition, source }: {
   label: string;
   value: string | number;
   sub?: string;
   icon: React.ReactNode;
   color: string;
+  definition?: string;
+  source?: string;
 }) {
+  const displayValue = formatMetricValue(value);
   return (
     <Card>
       <CardContent className="p-4">
@@ -94,8 +84,13 @@ function MetricCard({ label, value, sub, icon, color }: {
             {icon}
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{label}</p>
-            <p className="text-xl font-bold leading-none mt-0.5">{value}</p>
+            <DataPointLabel
+              label={label}
+              definition={definition}
+              source={source}
+              className="text-xs text-muted-foreground"
+            />
+            <p className="text-xl font-bold leading-none mt-0.5">{displayValue}</p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>
         </div>
@@ -111,11 +106,11 @@ function SortIcon({ field, sortBy, sortDir }: { field: SortField; sortBy: SortFi
     : <ChevronDown className="h-3.5 w-3.5 ml-1 shrink-0 text-primary" />;
 }
 
-function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
+function TeamOverviewTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [sortBy, setSortBy] = useState<SortField>("overdueCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError } = useQuery<{
     team: TeamMember[];
     pagination: { total: number };
     range: { startDate: string; endDate: string };
@@ -156,6 +151,29 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     });
   }, [data?.team, sortBy, sortDir]);
 
+  const exceptions = useMemo(() => {
+    if (!data?.team) return { overdue: [], lowEfficiency: [] } as const;
+    const overdue = [...data.team]
+      .filter((m) => m.overdueCount > 0)
+      .sort((a, b) => {
+        const overdueDelta = b.overdueCount - a.overdueCount;
+        if (overdueDelta !== 0) return overdueDelta;
+        return b.activeTasksNow - a.activeTasksNow;
+      })
+      .slice(0, 5);
+    const lowEfficiency = [...data.team]
+      .filter((m) => m.efficiencyRatio !== null && m.efficiencyRatio > 1.2)
+      .sort((a, b) => (b.efficiencyRatio ?? 0) - (a.efficiencyRatio ?? 0))
+      .slice(0, 5);
+    return { overdue, lowEfficiency };
+  }, [data?.team]);
+
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.team?.length ?? 0) > 0,
+  });
+
   function toggleSort(field: SortField) {
     if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortBy(field); setSortDir("desc"); }
@@ -176,20 +194,106 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
     );
   }
 
-  if (isLoading) return (
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
 
+  if (viewState === "error") {
+    return (
+      <ReportEmptyState
+        icon={Users}
+        title="Team workload is unavailable"
+        description="We couldn't load team workload metrics for this range. Refresh and try again, or change the date range to confirm available data."
+      />
+    );
+  }
+
+  if (viewState === "empty") {
+    return (
+      <ReportEmptyState
+        icon={Users}
+        title="No workload data in this range"
+        description="There are no assigned tasks or tracked workload signals for the selected period yet. Try a wider range or revisit after more team activity is recorded."
+      />
+    );
+  }
+
+  const range = getReportRangeLabel(rangeDays);
+
   return (
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Active Tasks" value={totals.activeTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" />
-          <MetricCard label="Overdue Tasks" value={totals.overdueTasks} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-          <MetricCard label="Completed (Range)" value={totals.completedTasks} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" />
+          <MetricCard label="Active Tasks" value={totals.activeTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" definition={DATA_POINT_DEFINITIONS.activeTasks} source="assigned tasks" />
+          <MetricCard label="Overdue Tasks" value={totals.overdueTasks} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" definition={DATA_POINT_DEFINITIONS.overdue} source="assigned tasks" />
+          <MetricCard label="Completed (Range)" value={totals.completedTasks} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" definition="Tasks completed during the selected report range." source="tasks" />
+          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" />
+        </div>
+      )}
+      {(exceptions.overdue.length > 0 || exceptions.lowEfficiency.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                Highest Overdue Load
+              </CardTitle>
+              <CardDescription className="text-xs">Employees carrying the most overdue work right now</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptions.overdue.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No overdue hotspots right now.</p>
+              ) : exceptions.overdue.map((member) => (
+                <Link
+                  key={member.userId}
+                  href={getEmployeeReportDrilldownPath(window.location.pathname, member.userId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName(member)}</p>
+                    <p className="text-xs text-muted-foreground">{formatNumber(member.activeTasksNow)} active tasks</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formatNumber(member.overdueCount)}</p>
+                    <p className="text-xs text-muted-foreground">overdue</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
+                Time Overrun Watchlist
+              </CardTitle>
+              <CardDescription className="text-xs">Employees whose tracked time is running well over estimates</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptions.lowEfficiency.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No notable time overrun signals.</p>
+              ) : exceptions.lowEfficiency.map((member) => (
+                <Link
+                  key={member.userId}
+                  href={getEmployeeReportDrilldownPath(window.location.pathname, member.userId, { range, section: "time" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName(member)}</p>
+                    <p className="text-xs text-muted-foreground">{formatHours(member.totalHours)} tracked vs {formatHours(member.estimatedHours)} est.</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                      {((member.efficiencyRatio ?? 0) * 100).toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">efficiency</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -217,22 +321,44 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
                         <AvatarImage src={getStorageUrl(m.avatarUrl) ?? ""} alt={userName(m)} />
                         <AvatarFallback className="text-xs">{userInitials(m)}</AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium truncate max-w-[140px]">{userName(m)}</span>
+                      <Link
+                        href={getEmployeeReportPath(window.location.pathname, m.userId)}
+                        className="text-sm font-medium truncate max-w-[140px] text-primary hover:underline"
+                      >
+                        {userName(m)}
+                      </Link>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm font-medium">{m.activeTasksNow}</TableCell>
-                  <TableCell>
-                    <span className={cn("text-sm font-medium", m.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                      {m.overdueCount}
-                    </span>
+                  <TableCell className="text-sm font-medium">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "workload" })} className="text-primary hover:underline">
+                      {formatNumber(m.activeTasksNow)}
+                    </Link>
                   </TableCell>
-                  <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{m.completedCount}</TableCell>
-                  <TableCell className="text-sm">{m.totalHours}h</TableCell>
+                  <TableCell>
+                    <Link
+                      href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "risk" })}
+                      className={cn("text-sm font-medium hover:underline", m.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}
+                    >
+                      {formatNumber(m.overdueCount)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "assigned-tasks" })} className="hover:underline">
+                      {formatNumber(m.completedCount)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "time" })} className="text-primary hover:underline">
+                      {formatHours(m.totalHours)}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     {m.efficiencyRatio !== null ? (
-                      <Badge variant={m.efficiencyRatio > 1.2 ? "destructive" : m.efficiencyRatio > 0.8 ? "default" : "secondary"}>
-                        {(m.efficiencyRatio * 100).toFixed(0)}%
-                      </Badge>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "time" })}>
+                        <Badge variant={m.efficiencyRatio > 1.2 ? "destructive" : m.efficiencyRatio > 0.8 ? "default" : "secondary"} className="cursor-pointer hover:opacity-90">
+                          {(m.efficiencyRatio * 100).toFixed(0)}%
+                        </Badge>
+                      </Link>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -240,7 +366,9 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[80px]">
                       <Progress value={m.overdueRate} className="h-1.5 flex-1" />
-                      <span className="text-xs text-muted-foreground w-8 text-right">{m.overdueRate}%</span>
+                      <Link href={getEmployeeReportDrilldownPath(window.location.pathname, m.userId, { range, section: "risk" })} className="text-xs text-primary w-8 text-right hover:underline">
+                        {formatNumber(m.overdueRate)}%
+                      </Link>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -259,10 +387,10 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
+function EmployeeDetailTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
-  const { data: teamData } = useQuery<{ team: TeamMember[] }>({
+  const { data: teamData, isLoading: isTeamLoading, isError: isTeamError } = useQuery<{ team: TeamMember[] }>({
     queryKey: ["/api/reports/v2/workload/team", rangeDays],
     queryFn: async () => {
       const res = await fetch(`/api/reports/v2/workload/team?${buildQueryParams(rangeDays, { limit: "100" })}`);
@@ -271,7 +399,18 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
     },
   });
 
-  const { data, isLoading } = useQuery<{
+  useEffect(() => {
+    const team = teamData?.team ?? [];
+    if (team.length === 0) {
+      if (selectedUserId) setSelectedUserId("");
+      return;
+    }
+    if (!selectedUserId || !team.some((member) => member.userId === selectedUserId)) {
+      setSelectedUserId(team[0].userId);
+    }
+  }, [selectedUserId, teamData?.team]);
+
+  const { data, isLoading, isError } = useQuery<{
     user: { id: string; firstName: string | null; lastName: string | null; email: string; avatarUrl: string | null };
     summary: { activeTasksNow: number; overdueCount: number; completedCount: number; totalHours: number; dueSoonCount: number };
     dailyTrend: Array<{ day: string; completedTasks: number; hoursTracked: number }>;
@@ -295,6 +434,34 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
     none: "text-muted-foreground",
   };
 
+  if (isTeamLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+      </div>
+    );
+  }
+
+  if (isTeamError || !teamData) {
+    return (
+      <ReportEmptyState
+        icon={User}
+        title="Employee detail is unavailable"
+        description="We couldn't load the team roster needed for employee workload detail. Refresh and try again."
+      />
+    );
+  }
+
+  if (!teamData.team.length) {
+    return (
+      <ReportEmptyState
+        icon={User}
+        title="No employees available for workload detail"
+        description="There are no team members with reportable workload data in the selected range yet."
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -303,17 +470,16 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
             <User className="h-4 w-4 text-muted-foreground shrink-0" />
             <Select value={selectedUserId} onValueChange={setSelectedUserId}>
               <SelectTrigger className="w-full sm:w-64" data-testid="select-employee">
-                <SelectValue placeholder="Select an employee…" />
+                <SelectValue placeholder="Select an employee..." />
               </SelectTrigger>
               <SelectContent>
-                {teamData?.team.map((m) => (
+                {teamData.team.map((m) => (
                   <SelectItem key={m.userId} value={m.userId} data-testid={`option-employee-${m.userId}`}>
                     {userName(m)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {!teamData && <Skeleton className="h-9 w-64" />}
           </div>
         </CardContent>
       </Card>
@@ -321,7 +487,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
       {!selectedUserId && (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <User className="h-10 w-10 opacity-30" />
-          <p className="text-sm">Select an employee to view their workload details</p>
+          <p className="text-sm">Loading employee workload details...</p>
         </div>
       )}
 
@@ -331,13 +497,21 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
         </div>
       )}
 
+      {selectedUserId && !isLoading && (isError || !data) && (
+        <ReportEmptyState
+          icon={User}
+          title="No workload detail available for this employee"
+          description="We couldn't load employee workload detail for the selected range. Try another employee or widen the date range."
+        />
+      )}
+
       {data && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <MetricCard label="Active Tasks" value={data.summary.activeTasksNow} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" />
-            <MetricCard label="Overdue" value={data.summary.overdueCount} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-            <MetricCard label="Completed" value={data.summary.completedCount} sub="in range" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
-            <MetricCard label="Hours Tracked" value={`${data.summary.totalHours}h`} sub="in range" icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" />
+            <MetricCard label="Active Tasks" value={data.summary.activeTasksNow} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-blue-500" definition={DATA_POINT_DEFINITIONS.activeTasks} source="assigned tasks" />
+            <MetricCard label="Overdue" value={data.summary.overdueCount} icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" definition={DATA_POINT_DEFINITIONS.overdue} source="assigned tasks" />
+            <MetricCard label="Completed" value={data.summary.completedCount} sub="in range" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" definition="Tasks completed by this employee during the selected report range." source="tasks" />
+            <MetricCard label="Hours Tracked" value={`${data.summary.totalHours}h`} sub="in range" icon={<Clock className="h-4 w-4 text-white" />} color="bg-violet-500" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -423,8 +597,8 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
-  const { data, isLoading } = useQuery<{
+function CapacityPlanningTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+  const { data, isLoading, isError } = useQuery<{
     users: Array<{
       userId: string;
       firstName: string | null;
@@ -447,18 +621,39 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
     },
   });
 
-  if (isLoading) return (
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.users?.length ?? 0) > 0,
+  });
+
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
     </div>
   );
 
-  if (!data?.users.length) return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-      <CalendarRange className="h-10 w-10 opacity-30" />
-      <p className="text-sm">No capacity data available</p>
-    </div>
-  );
+  if (viewState === "error") {
+    return (
+      <ReportEmptyState
+        icon={CalendarRange}
+        title="Capacity planning is unavailable"
+        description="We couldn't load capacity planning data for this range. Refresh and try again, or choose a different period."
+      />
+    );
+  }
+
+  if (viewState === "empty") {
+    return (
+      <ReportEmptyState
+        icon={CalendarRange}
+        title="No capacity data available"
+        description="There are no estimated or tracked weekly workload signals for the selected period yet."
+      />
+    );
+  }
+
+  if (!data) return null;
 
   const weeks = data.users[0]?.weeks.map(w => w.weekStart) ?? [];
 
@@ -505,12 +700,12 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
                             "inline-flex flex-col items-center px-2 py-1 rounded-md text-xs font-medium min-w-[60px]",
                             utilizationColor(w.utilizationPct)
                           )}
-                          title={`${w.actualHours}h tracked, ${w.estimatedHours}h estimated`}
+                          title={`${formatHours(w.actualHours)} tracked, ${formatHours(w.estimatedHours)} estimated`}
                           data-testid={`capacity-cell-${u.userId}-${w.weekStart}`}
                         >
-                          <span>{w.actualHours}h</span>
+                          <span>{formatHours(w.actualHours)}</span>
                           {w.utilizationPct !== null && (
-                            <span className="opacity-80">{w.utilizationPct}%</span>
+                            <span className="opacity-80">{formatNumber(w.utilizationPct)}%</span>
                           )}
                         </div>
                       </td>
@@ -526,8 +721,8 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
-function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
-  const { data, isLoading } = useQuery<{
+function RiskFlagsTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
+  const { data, isLoading, isError } = useQuery<{
     flagged: Array<{
       userId: string;
       firstName: string | null;
@@ -555,11 +750,37 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
     },
   });
 
-  if (isLoading) return (
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.flagged?.length ?? 0) > 0,
+  });
+
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
     </div>
   );
+
+  if (viewState === "error") {
+    return (
+      <ReportEmptyState
+        icon={ShieldAlert}
+        title="Risk flags are unavailable"
+        description="We couldn't load workload risk signals for this range. Refresh and try again, or change the date range to confirm available data."
+      />
+    );
+  }
+
+  if (viewState === "empty") {
+    return (
+      <ReportEmptyState
+        icon={ShieldAlert}
+        title="No risk flags in this range"
+        description="No employees crossed the current workload-risk thresholds for the selected period."
+      />
+    );
+  }
 
   function scoreColor(score: number) {
     if (score >= 5) return "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800";
@@ -578,7 +799,7 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
       {data && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Activity className="h-4 w-4" />
-          <span>Checked {data.totalChecked} team members — {data.flagged.length} flagged for attention</span>
+          <span>Checked {formatNumber(data.totalChecked)} team members — {formatNumber(data.flagged.length)} flagged for attention</span>
         </div>
       )}
 
@@ -606,10 +827,10 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
-                    <span>{u.metrics.activeTasks} active</span>
-                    <span className="text-red-600 dark:text-red-400">{u.metrics.overdueCount} overdue ({u.metrics.overdueRate}%)</span>
-                    <span>{u.metrics.totalHours}h tracked</span>
-                    <span>{u.metrics.avgHoursPerWeek}h/week avg</span>
+                    <span>{formatNumber(u.metrics.activeTasks)} active</span>
+                    <span className="text-red-600 dark:text-red-400">{formatNumber(u.metrics.overdueCount)} overdue ({formatNumber(u.metrics.overdueRate)}%)</span>
+                    <span>{formatHours(u.metrics.totalHours)} tracked</span>
+                    <span>{formatHours(u.metrics.avgHoursPerWeek)}/week avg</span>
                   </div>
                   <div className="space-y-1">
                     {u.reasons.map((reason, i) => (
@@ -630,27 +851,17 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
 }
 
 export function WorkloadReportsV2() {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const [tab, setTab] = useState("team");
 
   return (
-    <div className="space-y-4" data-testid="workload-reports-v2">
-      <div className="flex items-center justify-end gap-3 flex-wrap">
-        <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v))}>
-          <SelectTrigger className="w-44" data-testid="select-date-range">
-            <CalendarRange className="h-3.5 w-3.5 mr-1.5" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {DATE_RANGES.map((r) => (
-              <SelectItem key={r.days} value={String(r.days)} data-testid={`range-option-${r.days}`}>
-                {r.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+    <ReportCommandCenterLayout
+      title="Workload Reports"
+      description="Workload, capacity, and risk reporting"
+      icon={<Users className="h-4 w-4" />}
+      rangeDays={rangeDays}
+      onRangeChange={setRangeDays}
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <MobileTabSelect
           tabs={[
@@ -697,6 +908,6 @@ export function WorkloadReportsV2() {
           <RiskFlagsTab rangeDays={rangeDays} />
         </TabsContent>
       </Tabs>
-    </div>
+    </ReportCommandCenterLayout>
   );
 }

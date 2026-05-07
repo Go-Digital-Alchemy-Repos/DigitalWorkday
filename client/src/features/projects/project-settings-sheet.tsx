@@ -48,6 +48,7 @@ import { useAuth } from "@/lib/auth";
 import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { hasTenantAdminAccess } from "@shared/roles";
+import { normalizeRichTextForStorage, toEditablePlainText } from "@/components/richtext/richTextUtils";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -71,16 +72,24 @@ const editProjectSchema = z.object({
 
 type EditProjectFormData = z.infer<typeof editProjectSchema>;
 
+function getEditableProjectDescription(description: string | null | undefined): string {
+  return toEditablePlainText(description);
+}
+
 interface ProjectSettingsSheetProps {
   project: Project;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onProjectChange?: () => void;
+  deleteRedirect?: string | null;
 }
 
 export function ProjectSettingsSheet({
   project,
   open,
   onOpenChange,
+  onProjectChange,
+  deleteRedirect,
 }: ProjectSettingsSheetProps) {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
@@ -106,7 +115,7 @@ export function ProjectSettingsSheet({
     resolver: zodResolver(editProjectSchema),
     defaultValues: {
       name: project.name,
-      description: project.description || "",
+      description: getEditableProjectDescription(project.description),
       teamId: project.teamId || "",
       color: project.color || "#3B82F6",
       visibility: (project.visibility as "workspace" | "private") || "workspace",
@@ -117,7 +126,7 @@ export function ProjectSettingsSheet({
     if (open) {
       form.reset({
         name: project.name,
-        description: project.description || "",
+        description: getEditableProjectDescription(project.description),
         teamId: project.teamId || "",
         color: project.color || "#3B82F6",
         visibility: (project.visibility as "workspace" | "private") || "workspace",
@@ -130,7 +139,7 @@ export function ProjectSettingsSheet({
     mutationFn: async (data: EditProjectFormData) => {
       const res = await apiRequest("PATCH", `/api/projects/${project.id}`, {
         name: data.name,
-        description: data.description || null,
+        description: normalizeRichTextForStorage(data.description) || null,
         teamId: data.teamId || null,
         color: data.color,
         visibility: data.visibility,
@@ -156,6 +165,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      onProjectChange?.();
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -178,6 +188,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      onProjectChange?.();
       toast({
         title: "Client updated",
         description: "Project client assignment has been updated.",
@@ -213,6 +224,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      onProjectChange?.();
       toast({
         title: status === "archived" ? "Project archived" : "Project restored",
         description: status === "archived" 
@@ -273,7 +285,7 @@ export function ProjectSettingsSheet({
   const leaveProjectMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.userId}`);
+      return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
@@ -304,8 +316,11 @@ export function ProjectSettingsSheet({
         title: "Project deleted",
         description: `"${project.name}" has been permanently deleted.`,
       });
+      onProjectChange?.();
       onOpenChange(false);
-      setLocation("/projects");
+      if (deleteRedirect !== null) {
+        setLocation(deleteRedirect ?? "/projects");
+      }
     },
     onError: () => {
       toast({

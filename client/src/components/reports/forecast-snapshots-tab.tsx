@@ -15,6 +15,7 @@ import { Camera, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { fetchReport as fetch } from "./report-fetch";
 
 const SNAPSHOT_TYPES = [
   { value: "capacity_overload", label: "Capacity Overload" },

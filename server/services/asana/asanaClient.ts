@@ -118,7 +118,7 @@ async function paginateAll<T>(token: string, path: string, params?: Record<strin
   const results: T[] = [];
   let offset: string | undefined;
 
-  const mergedParams = { ...params, limit: String(limit) };
+  const mergedParams: Record<string, string> = { ...params, limit: String(limit) };
 
   while (true) {
     if (offset) mergedParams.offset = offset;
@@ -143,7 +143,7 @@ export class AsanaClient {
   }
 
   static async fromTenant(tenantId: string): Promise<AsanaClient> {
-    const secrets = await tenantIntegrationService.getDecryptedSecrets<AsanaSecretConfig>(tenantId, "asana");
+    const secrets = await tenantIntegrationService.getDecryptedSecrets(tenantId, "asana") as AsanaSecretConfig | null;
     if (!secrets?.personalAccessToken) {
       throw new Error("Asana is not connected. Please add your Personal Access Token first.");
     }

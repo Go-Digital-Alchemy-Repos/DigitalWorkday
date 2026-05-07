@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo, useMemo } from "react";
+import { useState, useEffect, useCallback, memo, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
@@ -60,10 +60,15 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
-import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { RichTextEditor } from "@/components/richtext";
 import { GroupedVirtuoso } from "react-virtuoso";
+
+const LazyStartTimerDrawer = lazy(() =>
+  import("@/features/timer/start-timer-drawer").then((module) => ({
+    default: module.StartTimerDrawer,
+  })),
+);
 
 type ActiveTimer = {
   id: string;
@@ -301,7 +306,7 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
             <Button
               onClick={handleStartTimer}
               disabled={startMutation.isPending}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto border-blue-700 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-700"
               data-testid="button-start-timer"
             >
               <Play className="h-5 w-5 mr-2" />
@@ -1923,7 +1928,7 @@ export function TimeTrackingContent() {
               <span className="inline-block" data-testid="disabled-start-timer-wrapper">
                 <Button
                   disabled
-                  className="pointer-events-none"
+                  className="pointer-events-none border-blue-700 bg-blue-600 text-white"
                   data-testid="button-start-timer-content"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -1938,6 +1943,7 @@ export function TimeTrackingContent() {
         ) : (
           <Button
             onClick={() => setStartTimerDrawerOpen(true)}
+            className="border-blue-700 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-700"
             data-testid="button-start-timer-content"
           >
             <Play className="h-4 w-4 mr-2" />
@@ -1973,10 +1979,12 @@ export function TimeTrackingContent() {
         </TabsContent>
       </Tabs>
 
-      <StartTimerDrawer
-        open={startTimerDrawerOpen}
-        onOpenChange={setStartTimerDrawerOpen}
-      />
+      <Suspense fallback={null}>
+        <LazyStartTimerDrawer
+          open={startTimerDrawerOpen}
+          onOpenChange={setStartTimerDrawerOpen}
+        />
+      </Suspense>
 
       <ManualEntryDialog
         open={manualEntryDrawerOpen}

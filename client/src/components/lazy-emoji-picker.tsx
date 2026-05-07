@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Smile, Loader2 } from "lucide-react";
 import { useTheme } from "@/lib/theme-provider";
 
+type EmojiClickData = import("emoji-picker-react").EmojiClickData;
+type EmojiPickerTheme = import("emoji-picker-react").Theme;
+
 const EmojiPickerModule = lazy(() =>
   import("emoji-picker-react").then((mod) => ({
     default: mod.default,
@@ -20,6 +23,7 @@ export function LazyEmojiPicker({ onEmojiSelect, disabled, "data-testid": testId
   const { theme } = useTheme();
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
+  const pickerTheme = (theme === "dark" ? "dark" : "light") as EmojiPickerTheme;
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -57,11 +61,11 @@ export function LazyEmojiPicker({ onEmojiSelect, disabled, "data-testid": testId
             }
           >
             <EmojiPickerModule
-              onEmojiClick={(emojiData: any) => {
+              onEmojiClick={(emojiData: EmojiClickData) => {
                 onEmojiSelect(emojiData.emoji);
                 setOpen(false);
               }}
-              theme={theme === "dark" ? 1 : 0}
+              theme={pickerTheme}
               width={300}
               height={350}
               searchPlaceHolder="Search emoji..."

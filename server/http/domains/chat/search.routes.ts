@@ -71,6 +71,56 @@ router.get(
 );
 
 router.get(
+  "/mentions",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+    const mentions = await storage.getChatMentionsForUser(tenantId, userId, limit);
+
+    res.json({
+      mentions,
+      total: mentions.length,
+    });
+  })
+);
+
+router.get(
+  "/threads/inbox",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+    const threads = await storage.getChatThreadInboxForUser(tenantId, userId, limit);
+
+    res.json({
+      threads,
+      total: threads.length,
+    });
+  })
+);
+
+router.post(
+  "/threads/mark-all-read",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const result = await storage.markAllChatThreadsReadForUser(tenantId, userId);
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  })
+);
+
+router.get(
   "/users/mentionable",
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);

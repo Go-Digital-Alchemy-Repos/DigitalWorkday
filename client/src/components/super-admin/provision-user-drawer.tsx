@@ -496,7 +496,9 @@ export function ProvisionUserDrawer({
   return (
     <FullScreenDrawer
       open={open}
-      onClose={onClose}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
       title={
         <div className="flex items-center gap-2">
           <UserPlus className="h-5 w-5" />

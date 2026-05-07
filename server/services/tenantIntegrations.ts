@@ -40,7 +40,9 @@ interface R2PublicConfig {
   bucketName: string;
   accountId: string;
   endpoint: string;
+  region?: string;
   keyPrefixTemplate?: string;
+  publicUrl?: string;
 }
 
 interface R2SecretConfig {

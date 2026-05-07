@@ -90,6 +90,7 @@ If you did not request this reset, you can safely ignore this email.`,
               <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px; border-left: 4px solid #3b82f6;">
                 <p style="margin: 0; font-size: 14px; color: #3f3f46; font-style: italic;">{{commentText}}</p>
               </div>
+              {{actionBlock}}
               <p style="margin: 0; font-size: 13px; color: #71717a;">Log in to view the full conversation and respond.</p>
     `),
     textBody: `Hi {{userName}},
@@ -98,12 +99,16 @@ If you did not request this reset, you can safely ignore this email.`,
 
 "{{commentText}}"
 
-Log in to view the full conversation and respond.`,
+Log in to view the full conversation and respond.{{actionText}}`,
     variables: [
       { name: "userName", description: "The recipient's display name", example: "Mike Johnson" },
       { name: "mentionedByName", description: "Name of the person who mentioned the user", example: "Alex Rivera" },
       { name: "itemTitle", description: "Title of the task or subtask", example: "Design homepage mockup" },
       { name: "commentText", description: "The comment text containing the mention", example: "Hey @Mike, can you review this?" },
+      { name: "actionUrl", description: "Direct URL to the mentioned item", example: "https://app.example.com/projects/123?task=456" },
+      { name: "actionLabel", description: "CTA label for the direct item link", example: "View Task" },
+      { name: "actionBlock", description: "Rendered HTML CTA block for the direct item link", example: "<a href=\"...\">View Task</a>" },
+      { name: "actionText", description: "Rendered plain-text CTA for the direct item link", example: "View Task: https://app.example.com/projects/123?task=456" },
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },
@@ -153,6 +158,7 @@ This invitation will expire in {{expiryDays}} days.`,
                 <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Project: {{projectName}}</p>
                 <p style="margin: 0; font-size: 13px; color: #71717a;">Due: {{dueDate}}</p>
               </div>
+              {{actionBlock}}
               <p style="margin: 0; font-size: 13px; color: #71717a;">Log in to view the task details and get started.</p>
     `),
     textBody: `Hi {{userName}},
@@ -163,13 +169,17 @@ Task: {{taskTitle}}
 Project: {{projectName}}
 Due: {{dueDate}}
 
-Log in to view the task details and get started.`,
+Log in to view the task details and get started.{{actionText}}`,
     variables: [
       { name: "userName", description: "The recipient's display name", example: "Mike Johnson" },
       { name: "assignedByName", description: "Name of the person who assigned the task", example: "Alex Rivera" },
       { name: "taskTitle", description: "Title of the assigned task", example: "Design homepage mockup" },
       { name: "projectName", description: "Name of the project", example: "Website Redesign" },
       { name: "dueDate", description: "Task due date", example: "March 15, 2026" },
+      { name: "actionUrl", description: "Direct URL to the assigned task", example: "https://app.example.com/projects/123?task=456" },
+      { name: "actionLabel", description: "CTA label for the direct task link", example: "View Task" },
+      { name: "actionBlock", description: "Rendered HTML CTA block for the direct task link", example: "<a href=\"...\">View Task</a>" },
+      { name: "actionText", description: "Rendered plain-text CTA for the direct task link", example: "View Task: https://app.example.com/projects/123?task=456" },
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },
@@ -318,6 +328,7 @@ If you have any questions, reach out to your administrator.`,
                 <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Due: {{dueDate}}</p>
                 <p style="margin: 0; font-size: 13px; color: #71717a;">Priority: {{priority}}</p>
               </div>
+              {{actionBlock}}
               <p style="margin: 0; font-size: 13px; color: #71717a;">Log in to view the task and update its status.</p>
     `),
     textBody: `Hi {{userName}},
@@ -329,7 +340,7 @@ Project: {{projectName}}
 Due: {{dueDate}}
 Priority: {{priority}}
 
-Log in to view the task and update its status.`,
+Log in to view the task and update its status.{{actionText}}`,
     variables: [
       { name: "userName", description: "The assignee's display name", example: "Mike Johnson" },
       { name: "taskTitle", description: "Title of the task", example: "Design homepage mockup" },
@@ -337,6 +348,10 @@ Log in to view the task and update its status.`,
       { name: "dueDate", description: "The task due date", example: "March 15, 2026" },
       { name: "dueDescription", description: "Relative due description", example: "tomorrow" },
       { name: "priority", description: "Task priority level", example: "High" },
+      { name: "actionUrl", description: "Direct URL to the task", example: "https://app.example.com/projects/123?task=456" },
+      { name: "actionLabel", description: "CTA label for the direct task link", example: "View Task" },
+      { name: "actionBlock", description: "Rendered HTML CTA block for the direct task link", example: "<a href=\"...\">View Task</a>" },
+      { name: "actionText", description: "Rendered plain-text CTA for the direct task link", example: "View Task: https://app.example.com/projects/123?task=456" },
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },
@@ -354,6 +369,7 @@ Log in to view the task and update its status.`,
                 <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Category: {{category}}</p>
                 <p style="margin: 0; font-size: 13px; color: #71717a;">Priority: {{priority}}</p>
               </div>
+              {{actionBlock}}
               <p style="margin: 0; font-size: 13px; color: #71717a;">You can track the status of your ticket by logging into the client portal.</p>
     `),
     textBody: `Hi {{userName}},
@@ -365,13 +381,17 @@ Ticket #: {{ticketNumber}}
 Category: {{category}}
 Priority: {{priority}}
 
-You can track the status of your ticket by logging into the client portal.`,
+You can track the status of your ticket by logging into the client portal.{{actionText}}`,
     variables: [
       { name: "userName", description: "The ticket creator's display name", example: "Client User" },
       { name: "ticketSubject", description: "The ticket subject/title", example: "Cannot access dashboard" },
       { name: "ticketNumber", description: "The ticket reference number", example: "TK-001234" },
       { name: "category", description: "Ticket category", example: "Technical Support" },
       { name: "priority", description: "Ticket priority", example: "Medium" },
+      { name: "actionUrl", description: "Direct URL to the support ticket", example: "https://app.example.com/support/123" },
+      { name: "actionLabel", description: "CTA label for the direct ticket link", example: "View Ticket" },
+      { name: "actionBlock", description: "Rendered HTML CTA block for the direct ticket link", example: "<a href=\"...\">View Ticket</a>" },
+      { name: "actionText", description: "Rendered plain-text CTA for the direct ticket link", example: "View Ticket: https://app.example.com/support/123" },
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },
@@ -390,6 +410,7 @@ You can track the status of your ticket by logging into the client portal.`,
                 <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Priority: {{priority}}</p>
                 <p style="margin: 0; font-size: 13px; color: #71717a;">Assigned by: {{assignedByName}}</p>
               </div>
+              {{actionBlock}}
               <p style="margin: 0; font-size: 13px; color: #71717a;">Log in to view the ticket details and respond.</p>
     `),
     textBody: `Hi {{userName}},
@@ -402,7 +423,7 @@ Client: {{clientName}}
 Priority: {{priority}}
 Assigned by: {{assignedByName}}
 
-Log in to view the ticket details and respond.`,
+Log in to view the ticket details and respond.{{actionText}}`,
     variables: [
       { name: "userName", description: "The assignee's display name", example: "Support Agent" },
       { name: "ticketSubject", description: "The ticket subject/title", example: "Cannot access dashboard" },
@@ -410,6 +431,10 @@ Log in to view the ticket details and respond.`,
       { name: "clientName", description: "Name of the client who submitted the ticket", example: "Acme Corp" },
       { name: "priority", description: "Ticket priority", example: "High" },
       { name: "assignedByName", description: "Name of the person who made the assignment", example: "Alex Rivera" },
+      { name: "actionUrl", description: "Direct URL to the support ticket", example: "https://app.example.com/support/123" },
+      { name: "actionLabel", description: "CTA label for the direct ticket link", example: "View Ticket" },
+      { name: "actionBlock", description: "Rendered HTML CTA block for the direct ticket link", example: "<a href=\"...\">View Ticket</a>" },
+      { name: "actionText", description: "Rendered plain-text CTA for the direct ticket link", example: "View Ticket: https://app.example.com/support/123" },
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },

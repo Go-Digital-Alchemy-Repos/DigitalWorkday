@@ -1,11 +1,12 @@
 import { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Save, Check, Loader2, Pause, Square, RotateCcw } from "lucide-react";
+import { Play, Save, Check, Loader2, Pause, Square, RotateCcw, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DrawerActionBarProps {
   onStartTimer?: () => void;
   onSave?: () => void;
+  onSendToReview?: () => void;
   onMarkComplete?: () => void;
   onMarkIncomplete?: () => void;
   timerState?: "idle" | "running" | "paused" | "other_task" | "loading" | "hidden";
@@ -14,6 +15,8 @@ interface DrawerActionBarProps {
   onStopTimer?: () => void;
   saveDisabled?: boolean;
   saveLabel?: string;
+  reviewDisabled?: boolean;
+  reviewLabel?: string;
   completeDisabled?: boolean;
   completeLabel?: string;
   incompleteDisabled?: boolean;
@@ -21,9 +24,11 @@ interface DrawerActionBarProps {
   isCompleting?: boolean;
   isIncompleting?: boolean;
   isSaving?: boolean;
+  isSendingToReview?: boolean;
   showComplete?: boolean;
   showIncomplete?: boolean;
   showSave?: boolean;
+  showReview?: boolean;
   showTimer?: boolean;
   extraActions?: ReactNode;
   className?: string;
@@ -38,8 +43,11 @@ export function DrawerActionBar({
   onPauseTimer,
   onResumeTimer,
   onStopTimer,
+  onSendToReview,
   saveDisabled = false,
   saveLabel = "Save",
+  reviewDisabled = false,
+  reviewLabel = "Send to Review",
   completeDisabled = false,
   completeLabel = "Mark Complete",
   incompleteDisabled = false,
@@ -47,9 +55,11 @@ export function DrawerActionBar({
   isCompleting = false,
   isIncompleting = false,
   isSaving = false,
+  isSendingToReview = false,
   showComplete = true,
   showIncomplete = false,
   showSave = true,
+  showReview = false,
   extraActions,
   className,
 }: DrawerActionBarProps) {
@@ -95,6 +105,23 @@ export function DrawerActionBar({
               <Save className="h-4 w-4 mr-1.5" />
             )}
             {isSaving ? "Saving..." : saveLabel}
+          </Button>
+        )}
+
+        {showReview && onSendToReview && (
+          <Button
+            size="default"
+            variant="outline"
+            onClick={onSendToReview}
+            disabled={reviewDisabled || isSendingToReview}
+            data-testid="button-action-send-to-review"
+          >
+            {isSendingToReview ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <ClipboardCheck className="h-4 w-4 mr-1.5" />
+            )}
+            {isSendingToReview ? "Sending..." : reviewLabel}
           </Button>
         )}
 

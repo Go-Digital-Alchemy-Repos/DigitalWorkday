@@ -11,14 +11,35 @@ import {
   clientMessages,
   tenantSettings,
   UserRole,
+  type Notification,
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
 import { emitToTenant, emitToUser } from "../../../realtime/socket";
 import { emitNotificationNew } from "../../../realtime/events";
 import { storage } from "../../../storage";
 import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
+import type { NotificationPayload } from "@shared/events";
 
 const router = Router();
+
+function toNotificationPayload(notification: Notification): NotificationPayload {
+  return {
+    id: notification.id,
+    tenantId: notification.tenantId,
+    userId: notification.userId,
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    payloadJson: notification.payloadJson,
+    severity: notification.severity,
+    entityType: notification.entityType,
+    entityId: notification.entityId,
+    href: notification.href,
+    isDismissed: notification.isDismissed,
+    readAt: notification.readAt,
+    createdAt: notification.createdAt,
+  };
+}
 
 const createTemplateSchema = z.object({
   name: z.string().min(1).max(200),
@@ -244,18 +265,11 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
           title: "New client conversation assigned",
           message: `A new conversation "${conversation.subject}" has been auto-assigned to you`,
           payloadJson: { conversationId: conversation.id, clientId: data.clientId } as any,
+          entityType: "client_thread",
+          entityId: conversation.id,
+          href: `/clients/${data.clientId}?tab=messages&conversation=${conversation.id}`,
         });
-        emitNotificationNew(autoAssigneeId, {
-          id: notification.id,
-          tenantId: notification.tenantId,
-          userId: notification.userId,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          payloadJson: notification.payloadJson,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        });
+        emitNotificationNew(autoAssigneeId, toNotificationPayload(notification));
       } catch {}
 
       emitToUser(autoAssigneeId, CLIENT_CONVERSATION_EVENTS.ASSIGNED, {

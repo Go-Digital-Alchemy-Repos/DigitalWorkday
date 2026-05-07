@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SuperSidebar } from "@/components/super-sidebar";
@@ -10,9 +10,13 @@ import { SuperRouteGuard } from "./guards";
 import { SkipLink } from "@/components/skip-link";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { trackChunkLoad } from "@/lib/perf";
+import { TaskDrawerProvider } from "@/lib/task-drawer-context";
+import { ReportContextProvider } from "@/contexts/report-context";
+import { setActingTenantId } from "@/lib/queryClient";
 
 const SuperAdminPage = lazy(trackChunkLoad("SuperAdmin", () => import("@/pages/super-admin")));
 const SuperAdminDashboardPage = lazy(trackChunkLoad("SuperDashboard", () => import("@/pages/super-admin-dashboard")));
+const SuperAdminReportsPage = lazy(trackChunkLoad("SuperReports", () => import("@/pages/super-admin-reports")));
 const SuperAdminSettingsPage = lazy(trackChunkLoad("SuperSettings", () => import("@/pages/super-admin-settings")));
 const SuperAdminStatusPage = lazy(trackChunkLoad("SuperStatus", () => import("@/pages/super-admin-status")));
 const SuperAdminDocsPage = lazy(trackChunkLoad("SuperDocs", () => import("@/pages/super-admin-docs")));
@@ -21,6 +25,42 @@ const SuperChatMonitoringPage = lazy(trackChunkLoad("SuperChat", () => import("@
 const SuperAdminUsersPage = lazy(trackChunkLoad("SuperUsers", () => import("@/pages/super-admin-users")));
 const SuperAdminRetentionPage = lazy(trackChunkLoad("SuperRetention", () => import("@/pages/super-admin-retention")));
 const UserProfilePage = lazy(trackChunkLoad("SuperProfile", () => import("@/pages/user-profile")));
+const EmployeeProfileReportPage = lazy(trackChunkLoad("SuperEmployeeReport", () => import("@/pages/employee-profile-report")));
+const ClientProfileReportPage = lazy(trackChunkLoad("SuperClientReport", () => import("@/pages/client-profile-report")));
+
+const SUPER_REPORTS_TENANT_KEY = "superReports_tenantId";
+
+function SuperReportDrilldownRoute({ component: Component }: { component: React.ComponentType }) {
+  const [selectedTenantId] = useState(() => {
+    const tenantId = sessionStorage.getItem(SUPER_REPORTS_TENANT_KEY);
+    if (tenantId) {
+      setActingTenantId(tenantId);
+    }
+    return tenantId;
+  });
+
+  useEffect(() => {
+    if (selectedTenantId) {
+      setActingTenantId(selectedTenantId);
+    }
+  }, [selectedTenantId]);
+
+  return (
+    <ReportContextProvider isSuperAdmin>
+      <TaskDrawerProvider>
+        <Component />
+      </TaskDrawerProvider>
+    </ReportContextProvider>
+  );
+}
+
+function SuperEmployeeReportRoute() {
+  return <SuperReportDrilldownRoute component={EmployeeProfileReportPage} />;
+}
+
+function SuperClientReportRoute() {
+  return <SuperReportDrilldownRoute component={ClientProfileReportPage} />;
+}
 
 function SuperAdminRouter() {
   return (
@@ -35,8 +75,14 @@ function SuperAdminRouter() {
         <Route path="/super-admin/tenants">
           {() => <SuperRouteGuard component={SuperAdminPage} />}
         </Route>
+        <Route path="/super-admin/reports/employees/:employeeId">
+          {() => <SuperRouteGuard component={SuperEmployeeReportRoute} />}
+        </Route>
+        <Route path="/super-admin/reports/clients/:clientId">
+          {() => <SuperRouteGuard component={SuperClientReportRoute} />}
+        </Route>
         <Route path="/super-admin/reports">
-          {() => <Redirect to="/super-admin/dashboard" />}
+          {() => <SuperRouteGuard component={SuperAdminReportsPage} />}
         </Route>
         <Route path="/super-admin/settings">
           {() => <SuperRouteGuard component={SuperAdminSettingsPage} />}

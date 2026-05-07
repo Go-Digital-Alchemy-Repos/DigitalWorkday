@@ -2,6 +2,7 @@ import { db } from "../db";
 import { emailTemplates, systemSettings, tenantSettings, type EmailTemplate } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { DEFAULT_TEMPLATES, getDefaultTemplate, type DefaultTemplate, type TemplateVariable } from "./emailTemplateDefaults";
+import { buildEmailActionBlock, buildEmailActionText } from "./emailActionLinks";
 
 export interface RenderedEmail {
   subject: string;
@@ -76,6 +77,20 @@ export class EmailTemplateService {
   }
 
   async renderByKey(tenantId: string | null, templateKey: string, variables: Record<string, string>): Promise<RenderedEmail | null> {
+    if (!("actionBlock" in variables)) {
+      variables = {
+        ...variables,
+        actionBlock: buildEmailActionBlock(variables.actionUrl, variables.actionLabel),
+      };
+    }
+
+    if (!("actionText" in variables)) {
+      variables = {
+        ...variables,
+        actionText: buildEmailActionText(variables.actionUrl, variables.actionLabel),
+      };
+    }
+
     // Auto-inject logoBlock unless caller has already provided it
     if (!("logoBlock" in variables)) {
       const logoUrl = await this.resolveLogoUrl(tenantId);

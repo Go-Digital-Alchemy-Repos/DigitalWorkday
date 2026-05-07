@@ -10,3 +10,5 @@ export type { FilterOption, FilterConfig, SortOption } from "./data-toolbar";
 export { ConfirmDialog, useConfirmDialog } from "./confirm-dialog";
 export { DrawerActionBar } from "./drawer-action-bar";
 export { AppDrawer };
+export { SurfacePanel } from "./surface-panel";
+export { SurfaceButtonGroup } from "./surface-button-group";

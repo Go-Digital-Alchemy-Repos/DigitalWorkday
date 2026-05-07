@@ -1,13 +1,13 @@
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 
-async function dbRows<T extends Record<string, unknown>>(
+async function dbRows<T>(
   q: Parameters<typeof db.execute>[0]
 ): Promise<T[]> {
-  const result = await db.execute<T>(q);
-  if (Array.isArray(result)) return result as T[];
+  const result = await db.execute<Record<string, unknown>>(q);
+  if (Array.isArray(result)) return result as unknown as T[];
   if (result && typeof result === "object" && "rows" in result) {
-    return (result as { rows: T[] }).rows;
+    return (result as { rows: unknown[] }).rows as T[];
   }
   return result as unknown as T[];
 }
@@ -115,7 +115,7 @@ export async function computeCapacityOverload(
       AND te.start_time >= ${isoDate(historyStart)}
       AND te.start_time < ${isoDate(historyEnd)}
     WHERE u.tenant_id = ${tenantId}
-      AND u.role IN ('admin', 'employee')
+      AND u.role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
     GROUP BY u.id, u.first_name, u.last_name, u.email, date_trunc('week', te.start_time)
     ORDER BY u.id, week_start
   `);
@@ -129,7 +129,7 @@ export async function computeCapacityOverload(
     SELECT id AS user_id, first_name, last_name, email
     FROM users
     WHERE tenant_id = ${tenantId}
-      AND role IN ('admin', 'employee')
+      AND role = ANY(ARRAY['admin', 'project_manager', 'employee']::text[])
     ORDER BY last_name, first_name
   `);
 
@@ -454,20 +454,88 @@ export async function computeClientRiskTrend(
     SELECT
       c.id AS client_id,
       c.company_name,
-      COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') THEN t.id END) AS curr_open,
-      COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') AND t.due_date < NOW() THEN t.id END) AS curr_overdue,
-      COALESCE(SUM(CASE WHEN te.start_time >= ${isoDate(currentStart)} THEN te.duration_seconds ELSE 0 END) / 3600.0, 0) AS curr_hours,
-      COUNT(DISTINCT CASE WHEN t.status = 'done' AND t.updated_at >= ${isoDate(currentStart)} THEN t.id END) AS curr_completed,
-      COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') AND t.created_at < ${isoDate(currentStart)} THEN t.id END) AS prior_open,
-      COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') AND t.due_date < ${isoDate(currentStart)} AND t.created_at < ${isoDate(currentStart)} THEN t.id END) AS prior_overdue,
-      COALESCE(SUM(CASE WHEN te.start_time >= ${isoDate(priorStart)} AND te.start_time < ${isoDate(currentStart)} THEN te.duration_seconds ELSE 0 END) / 3600.0, 0) AS prior_hours,
-      COUNT(DISTINCT CASE WHEN t.status = 'done' AND t.updated_at >= ${isoDate(priorStart)} AND t.updated_at < ${isoDate(currentStart)} THEN t.id END) AS prior_completed
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+      ) AS curr_open,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+          AND t.due_date < NOW()
+      ) AS curr_overdue,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0) / 3600.0
+        FROM projects p
+        JOIN time_entries te ON te.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= ${isoDate(currentStart)}
+      ) AS curr_hours,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status = 'done'
+          AND t.updated_at >= ${isoDate(currentStart)}
+      ) AS curr_completed,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+          AND t.created_at < ${isoDate(currentStart)}
+      ) AS prior_open,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status NOT IN ('done','cancelled')
+          AND t.due_date < ${isoDate(currentStart)}
+          AND t.created_at < ${isoDate(currentStart)}
+      ) AS prior_overdue,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0) / 3600.0
+        FROM projects p
+        JOIN time_entries te ON te.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= ${isoDate(priorStart)}
+          AND te.start_time < ${isoDate(currentStart)}
+      ) AS prior_hours,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE p.client_id = c.id
+          AND p.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.status = 'done'
+          AND t.updated_at >= ${isoDate(priorStart)}
+          AND t.updated_at < ${isoDate(currentStart)}
+      ) AS prior_completed
     FROM clients c
-    LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
-    LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
-    LEFT JOIN time_entries te ON te.tenant_id = ${tenantId} AND t.id IS NOT NULL
     WHERE c.tenant_id = ${tenantId}
-    GROUP BY c.id, c.company_name
     ORDER BY c.company_name
   `);
 

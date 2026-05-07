@@ -217,7 +217,19 @@ export class TimeTrackingRepository {
       conditions.push(eq(timeEntries.subtaskId, filters.subtaskId));
     }
     if (filters?.divisionId) {
-      conditions.push(eq(timeEntries.divisionId, filters.divisionId));
+      const divisionProjects = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(and(
+          eq(projects.tenantId, tenantId),
+          eq(projects.divisionId, filters.divisionId)
+        ));
+
+      if (divisionProjects.length === 0) {
+        return [];
+      }
+
+      conditions.push(inArray(timeEntries.projectId, divisionProjects.map((project) => project.id)));
     }
     if (filters?.scope) {
       conditions.push(eq(timeEntries.scope, filters.scope));

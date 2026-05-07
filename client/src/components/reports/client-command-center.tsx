@@ -9,45 +9,47 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
+import { cn, formatNumber } from "@/lib/utils";
+import { ReportCommandCenterLayout, buildDateParams, getReportRangeLabel, type ReportRangeValue } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
+import { getClientReportDrilldownPath, getClientReportPath } from "./report-paths";
+import { ReportEmptyState } from "./report-empty-state";
+import { getReportViewState } from "./report-view-state";
+import { fetchReport as fetch } from "./report-fetch";
+import {
+  formatComparisonSub,
+  MetricCard,
+  ReportDataNote,
+  relativeDate,
+} from "./report-shared";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
-interface MetricCardProps {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon: React.ReactNode;
-  color: string;
+type ProjectStatusFilter = "all" | "active" | "completed" | "on_hold" | "archived";
+
+const PROJECT_STATUS_OPTIONS: Array<{ value: ProjectStatusFilter; label: string }> = [
+  { value: "all", label: "All Project Statuses" },
+  { value: "active", label: "Active Projects" },
+  { value: "completed", label: "Completed Projects" },
+  { value: "on_hold", label: "On Hold Projects" },
+  { value: "archived", label: "Archived Projects" },
+];
+
+function buildProjectStatusParams(
+  rangeDays: ReportRangeValue,
+  projectStatus: ProjectStatusFilter,
+  extra?: Record<string, string>,
+): string {
+  const params = { ...(extra ?? {}) };
+  if (projectStatus !== "all") {
+    params.status = projectStatus;
+  }
+  return buildDateParams(rangeDays, params);
 }
 
-function MetricCard({ label, value, sub, icon, color }: MetricCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", color)}>
-            {icon}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{label}</p>
-            <p className="text-xl font-bold leading-none mt-0.5">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function relativeDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "1 day ago";
-  return `${diff} days ago`;
+function formatHours(hours: number): string {
+  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
 interface ClientOverviewItem {
@@ -63,11 +65,29 @@ interface ClientOverviewItem {
   completedInRange: number;
 }
 
-function OverviewTab({ rangeDays }: { rangeDays: number }) {
-  const { data, isLoading } = useQuery<{ clients: ClientOverviewItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/overview", rangeDays],
+function OverviewTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
+  const { data, isLoading, isError } = useQuery<{
+    clients: ClientOverviewItem[];
+    summary?: {
+      current: {
+        totalClients: number;
+        totalOpenTasks: number;
+        totalHours: number;
+        avgEngagement: number;
+      };
+      prior: {
+        totalClients: number;
+        totalOpenTasks: number;
+        totalHours: number;
+        avgEngagement: number;
+      };
+    };
+    pagination: { total: number; limit: number; offset: number };
+    range: { startDate: string; endDate: string };
+  }>({
+    queryKey: ["/api/reports/v2/client/overview", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/overview?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -75,6 +95,15 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
   });
 
   const totals = useMemo(() => {
+    if (data?.summary) {
+      return {
+        totalClients: data.summary.current.totalClients,
+        totalOpenTasks: data.summary.current.totalOpenTasks,
+        totalHours: data.summary.current.totalHours,
+        avgEngagement: data.summary.current.avgEngagement,
+        prior: data.summary.prior,
+      };
+    }
     if (!data?.clients) return null;
     const clients = data.clients;
     return {
@@ -82,14 +111,68 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
       totalOpenTasks: clients.reduce((s, c) => s + c.openTasks, 0),
       totalHours: Math.round(clients.reduce((s, c) => s + c.totalHours, 0) * 10) / 10,
       avgEngagement: clients.length > 0 ? Math.round(clients.reduce((s, c) => s + c.engagementScore, 0) / clients.length) : 0,
+      prior: null,
     };
+  }, [data?.clients, data?.summary]);
+
+  const exceptionRows = useMemo(() => {
+    if (!data?.clients) return { atRisk: [], inactive: [] } as const;
+    const atRisk = [...data.clients]
+      .filter((c) => c.overdueTasks > 0 || c.engagementScore < 50)
+      .sort((a, b) => {
+        const overdueDelta = b.overdueTasks - a.overdueTasks;
+        if (overdueDelta !== 0) return overdueDelta;
+        return a.engagementScore - b.engagementScore;
+      })
+      .slice(0, 5);
+    const inactive = [...data.clients]
+      .filter((c) => {
+        if (!c.lastActivityDate) return true;
+        const inactivityDays = Math.floor((Date.now() - new Date(c.lastActivityDate).getTime()) / 86400000);
+        return inactivityDays >= 14;
+      })
+      .sort((a, b) => {
+        const aDays = a.lastActivityDate ? Math.floor((Date.now() - new Date(a.lastActivityDate).getTime()) / 86400000) : Number.MAX_SAFE_INTEGER;
+        const bDays = b.lastActivityDate ? Math.floor((Date.now() - new Date(b.lastActivityDate).getTime()) / 86400000) : Number.MAX_SAFE_INTEGER;
+        return bDays - aDays;
+      })
+      .slice(0, 5);
+    return { atRisk, inactive };
   }, [data?.clients]);
 
-  if (isLoading) return (
+  const viewState = getReportViewState({
+    isLoading,
+    isError: isError || !data,
+    hasData: (data?.clients?.length ?? 0) > 0,
+  });
+
+  if (viewState === "loading") return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  if (viewState === "error") {
+    return (
+      <ReportEmptyState
+        icon={Building2}
+        title="Client overview is unavailable"
+        description="We couldn't load client overview metrics for this range just now. Refresh and try again, or switch the date range to confirm whether data exists."
+      />
+    );
+  }
+
+  if (viewState === "empty") {
+    return (
+      <ReportEmptyState
+        icon={Building2}
+        title="No client overview data in this range"
+        description="There are no clients with matching report activity for the selected range and project-status filter yet."
+      />
+    );
+  }
+
+  const range = getReportRangeLabel(rangeDays);
 
   function engagementBadgeVariant(score: number): "default" | "secondary" | "destructive" {
     if (score >= 70) return "default";
@@ -101,10 +184,104 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Total Clients" value={totals.totalClients} icon={<Users className="h-4 w-4 text-white" />} color="bg-blue-500" />
-          <MetricCard label="Open Tasks" value={totals.totalOpenTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-violet-500" />
-          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Avg Engagement" value={`${totals.avgEngagement}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-orange-500" />
+          <MetricCard
+            label="Total Clients"
+            value={totals.totalClients}
+            sub={totals.prior ? formatComparisonSub(totals.totalClients, totals.prior.totalClients) : undefined}
+            icon={<Users className="h-4 w-4 text-white" />}
+            color="bg-blue-500"
+            definition="Clients matching the selected project status filter and tenant scope."
+            source="clients + projects"
+          />
+          <MetricCard
+            label="Open Tasks"
+            value={totals.totalOpenTasks}
+            sub={totals.prior ? formatComparisonSub(totals.totalOpenTasks, totals.prior.totalOpenTasks) : undefined}
+            icon={<CheckSquare className="h-4 w-4 text-white" />}
+            color="bg-violet-500"
+            definition="Open, non-cancelled client project tasks across matching clients."
+            source="client projects + tasks"
+          />
+          <MetricCard
+            label="Hours Tracked"
+            value={`${totals.totalHours}h`}
+            sub={totals.prior ? formatComparisonSub(totals.totalHours, totals.prior.totalHours, "h") : undefined}
+            icon={<Clock className="h-4 w-4 text-white" />}
+            color="bg-green-500"
+            definition="Time entries on client projects started inside the selected date range."
+            source="time entries"
+          />
+          <MetricCard
+            label="Avg Engagement"
+            value={`${totals.avgEngagement}%`}
+            sub={totals.prior ? formatComparisonSub(totals.avgEngagement, totals.prior.avgEngagement, "%") : undefined}
+            icon={<TrendingUp className="h-4 w-4 text-white" />}
+            color="bg-orange-500"
+            definition="Weighted engagement signal from recent tracked hours, open work, and completed work in range."
+            source="tasks + time entries"
+          />
+        </div>
+      )}
+      {(exceptionRows.atRisk.length > 0 || exceptionRows.inactive.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                At-Risk Clients
+              </CardTitle>
+              <CardDescription className="text-xs">Clients with overdue work or low engagement</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptionRows.atRisk.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No at-risk clients right now.</p>
+              ) : exceptionRows.atRisk.map((c) => (
+                <Link
+                  key={c.clientId}
+                  href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.companyName}</p>
+                    <p className="text-xs text-muted-foreground">{formatNumber(c.overdueTasks)} overdue, {formatNumber(c.openTasks)} open tasks</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">{c.engagementScore}%</p>
+                    <p className="text-xs text-muted-foreground">engagement</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Activity className="h-4 w-4 text-amber-500" />
+                No Recent Activity
+              </CardTitle>
+              <CardDescription className="text-xs">Clients with stale recent activity windows</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {exceptionRows.inactive.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No inactive clients in this range.</p>
+              ) : exceptionRows.inactive.map((c) => (
+                <Link
+                  key={c.clientId}
+                  href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 hover:bg-muted/60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.companyName}</p>
+                    <p className="text-xs text-muted-foreground">Last activity {relativeDate(c.lastActivityDate)}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{formatNumber(c.overdueTasks)}</p>
+                    <p className="text-xs text-muted-foreground">overdue</p>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       )}
       {data?.clients && data.clients.length > 0 && (
@@ -113,16 +290,16 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             <Card key={c.clientId} data-testid={`mobile-card-client-${c.clientId}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
+                  <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
                   <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-mobile-${c.clientId}`}>
                     {c.engagementScore}%
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>Active Projects: <span className="text-foreground font-medium">{c.activeProjects}</span></span>
-                  <span>Open Tasks: <span className="text-foreground font-medium">{c.openTasks}</span></span>
-                  <span>Overdue: <span className={cn("font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{c.overdueTasks}</span></span>
-                  <span>Hours: <span className="text-foreground font-medium">{c.totalHours}h</span></span>
+                  <span>Active Projects: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "projects" })} className="text-foreground font-medium hover:underline">{formatNumber(c.activeProjects)}</Link></span>
+                  <span>Open Tasks: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-foreground font-medium hover:underline">{formatNumber(c.openTasks)}</Link></span>
+                  <span>Overdue: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className={cn("font-medium hover:underline", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{formatNumber(c.overdueTasks)}</Link></span>
+                  <span>Hours: <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-foreground font-medium hover:underline">{formatHours(c.totalHours)}</Link></span>
                   <span className="col-span-2">Last Activity: <span className="text-foreground font-medium">{relativeDate(c.lastActivityDate)}</span></span>
                 </div>
               </CardContent>
@@ -149,20 +326,34 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                 <TableBody>
                   {data?.clients.map((c) => (
                     <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
-                      <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                      <TableCell className="text-sm">{c.activeProjects}</TableCell>
-                      <TableCell className="text-sm">{c.openTasks}</TableCell>
-                      <TableCell>
-                        <span className={cn("text-sm font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                          {c.overdueTasks}
-                        </span>
+                      <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                      <TableCell className="text-sm">
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "projects" })} className="text-primary hover:underline">
+                          {formatNumber(c.activeProjects)}
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-sm">{c.totalHours}h</TableCell>
+                      <TableCell className="text-sm">
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-primary hover:underline">
+                          {formatNumber(c.openTasks)}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className={cn("text-sm font-medium hover:underline", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}>
+                          {formatNumber(c.overdueTasks)}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">
+                          {formatHours(c.totalHours)}
+                        </Link>
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{relativeDate(c.lastActivityDate)}</TableCell>
                       <TableCell>
-                        <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-${c.clientId}`}>
-                          {c.engagementScore}%
-                        </Badge>
+                        <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                          <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-${c.clientId}`} className="cursor-pointer hover:opacity-90">
+                            {c.engagementScore}%
+                          </Badge>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -190,11 +381,11 @@ interface ClientActivityItem {
   inactivityDays: number;
 }
 
-function ActivityTab({ rangeDays }: { rangeDays: number }) {
+function ActivityTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/activity", rangeDays],
+    queryKey: ["/api/reports/v2/client/activity", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/activity?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -206,6 +397,8 @@ function ActivityTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  const range = getReportRangeLabel(rangeDays);
 
   return (
     <Card>
@@ -224,14 +417,26 @@ function ActivityTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
-                  <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
-                  <TableCell className="text-sm">{c.commentsInRange}</TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-primary hover:underline">
+                      {formatNumber(c.tasksCreatedInRange)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">
+                      {formatHours(Math.round(c.timeLoggedInRange * 10) / 10)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })} className="text-primary hover:underline">
+                      {formatNumber(c.commentsInRange)}
+                    </Link>
+                  </TableCell>
                   <TableCell>
-                    <span className={cn("text-sm font-medium", c.inactivityDays > 14 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                      {c.inactivityDays}d
-                    </span>
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })} className={cn("text-sm font-medium hover:underline", c.inactivityDays > 14 ? "text-red-600 dark:text-red-400" : "text-primary")}>
+                      {formatNumber(c.inactivityDays)}d
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
@@ -258,11 +463,11 @@ interface ClientTimeItem {
   varianceHours: number;
 }
 
-function TimeTab({ rangeDays }: { rangeDays: number }) {
+function TimeTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/time", rangeDays],
+    queryKey: ["/api/reports/v2/client/time", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/time?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -275,51 +480,62 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = getReportRangeLabel(rangeDays);
+
   function formatVariance(v: number) {
     if (v === 0) return "0h";
-    return v > 0 ? `+${v.toFixed(1)}h` : `${v.toFixed(1)}h`;
+    return v > 0 ? `+${formatHours(Number(v.toFixed(1)))}` : formatHours(Number(v.toFixed(1)));
   }
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Total Hrs</TableHead>
-                <TableHead>Billable</TableHead>
-                <TableHead>Non-Bill</TableHead>
-                <TableHead>Estimated</TableHead>
-                <TableHead>Variance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.clients.map((c) => (
-                <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm">{c.totalHours}h</TableCell>
-                  <TableCell className="text-sm">{c.billableHours}h</TableCell>
-                  <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
-                  <TableCell className="text-sm">{c.estimatedHours}h</TableCell>
-                  <TableCell>
-                    <span className={cn("text-sm font-medium", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
-                      {formatVariance(c.varianceHours)}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {data?.clients.length === 0 && (
+    <div className="space-y-3">
+      <ReportDataNote
+        items={[
+          "Billable means out-of-scope client work.",
+          "Variance compares tracked hours to open task estimates.",
+          "Totals honor the selected date range and project-status filter.",
+        ]}
+      />
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No time data</TableCell>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Total Hrs</TableHead>
+                  <TableHead>Billable</TableHead>
+                  <TableHead>Non-Bill</TableHead>
+                  <TableHead>Estimated</TableHead>
+                  <TableHead>Variance</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {data?.clients.map((c) => (
+                  <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
+                    <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{formatHours(c.totalHours)}</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{formatHours(c.billableHours)}</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{formatHours(c.nonBillableHours)}</Link></TableCell>
+                    <TableCell className="text-sm"><Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className="text-primary hover:underline">{formatHours(c.estimatedHours)}</Link></TableCell>
+                    <TableCell>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })} className={cn("text-sm font-medium hover:underline", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                        {formatVariance(c.varianceHours)}
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {data?.clients.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No time data</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -335,11 +551,11 @@ interface ClientTaskItem {
   agingOver30: number;
 }
 
-function TasksTab({ rangeDays }: { rangeDays: number }) {
+function TasksTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/tasks", rangeDays],
+    queryKey: ["/api/reports/v2/client/tasks", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/tasks?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -352,12 +568,14 @@ function TasksTab({ rangeDays }: { rangeDays: number }) {
     </div>
   );
 
+  const range = getReportRangeLabel(rangeDays);
+
   function AgingBar({ item }: { item: ClientTaskItem }) {
     const total = item.agingUnder7 + item.aging7To14 + item.aging14To30 + item.agingOver30;
     if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
     const pct = (n: number) => Math.round((n / total) * 100);
     return (
-      <div className="flex h-3 rounded-sm overflow-hidden w-[120px]" title={`<7d: ${item.agingUnder7}, 7-14d: ${item.aging7To14}, 14-30d: ${item.aging14To30}, >30d: ${item.agingOver30}`}>
+      <div className="flex h-3 rounded-sm overflow-hidden w-[120px]" title={`<7d: ${formatNumber(item.agingUnder7)}, 7-14d: ${formatNumber(item.aging7To14)}, 14-30d: ${formatNumber(item.aging14To30)}, >30d: ${formatNumber(item.agingOver30)}`}>
         {item.agingUnder7 > 0 && <div className="bg-green-500" style={{ width: `${pct(item.agingUnder7)}%` }} />}
         {item.aging7To14 > 0 && <div className="bg-yellow-500" style={{ width: `${pct(item.aging7To14)}%` }} />}
         {item.aging14To30 > 0 && <div className="bg-orange-500" style={{ width: `${pct(item.aging14To30)}%` }} />}
@@ -390,14 +608,22 @@ function TasksTab({ rangeDays }: { rangeDays: number }) {
               <TableBody>
                 {data?.clients.map((c) => (
                   <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
-                    <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                    <TableCell className="text-sm">{c.openTaskCount}</TableCell>
-                    <TableCell>
-                      <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                        {c.overdueCount}
-                      </span>
+                    <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                    <TableCell className="text-sm">
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="text-primary hover:underline">
+                        {formatNumber(c.openTaskCount)}
+                      </Link>
                     </TableCell>
-                    <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{c.completedInRange}</TableCell>
+                    <TableCell>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className={cn("text-sm font-medium hover:underline", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-primary")}>
+                        {formatNumber(c.overdueCount)}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "workload" })} className="hover:underline">
+                        {formatNumber(c.completedInRange)}
+                      </Link>
+                    </TableCell>
                     <TableCell><AgingBar item={c} /></TableCell>
                   </TableRow>
                 ))}
@@ -426,11 +652,11 @@ interface ClientSlaItem {
   completedWithinDuePct: number;
 }
 
-function SlaTab({ rangeDays }: { rangeDays: number }) {
+function SlaTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/sla", rangeDays],
+    queryKey: ["/api/reports/v2/client/sla", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/sla?${buildProjectStatusParams(rangeDays, projectStatus, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -442,6 +668,8 @@ function SlaTab({ rangeDays }: { rangeDays: number }) {
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
+
+  const range = getReportRangeLabel(rangeDays);
 
   function progressColor(pct: number, invert = false) {
     const high = invert ? pct < 20 : pct > 80;
@@ -467,8 +695,12 @@ function SlaTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
-                  <TableCell className="text-sm">{c.totalTasks}</TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={getClientReportPath(window.location.pathname, c.clientId)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="text-sm">
+                    <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })} className="text-primary hover:underline">
+                      {formatNumber(c.totalTasks)}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[140px]">
                       <Progress value={c.overdueTaskPct} className="h-1.5 flex-1" />
@@ -514,16 +746,25 @@ interface ClientRiskItem {
   };
 }
 
-function RiskTab({ rangeDays }: { rangeDays: number }) {
+function RiskTab({ rangeDays, projectStatus }: { rangeDays: ReportRangeValue; projectStatus: ProjectStatusFilter }) {
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/risk", rangeDays],
+    queryKey: ["/api/reports/v2/client/risk", rangeDays, projectStatus],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays)}`);
+      const res = await fetch(`/api/reports/v2/client/risk?${buildProjectStatusParams(rangeDays, projectStatus)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     staleTime: 2 * 60 * 1000,
   });
+
+  const range = getReportRangeLabel(rangeDays);
+  const topReasons = useMemo(() => {
+    const counts = new Map<string, number>();
+    (data?.flagged ?? []).flatMap((c) => c.reasons).forEach((reason) => {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [data?.flagged]);
 
   if (isLoading) return (
     <div className="space-y-3">
@@ -548,8 +789,24 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
       {data && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Activity className="h-4 w-4" />
-          <span>Checked {data.totalChecked} clients — {data.flagged.length} flagged for attention</span>
+          <span>Checked {formatNumber(data.totalChecked)} clients — {formatNumber(data.flagged.length)} flagged for attention</span>
         </div>
+      )}
+      {topReasons.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Top Client Risk Drivers</CardTitle>
+            <CardDescription className="text-xs">Most common reasons clients are being flagged</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {topReasons.map(([reason, count]) => (
+              <div key={reason} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <span className="truncate">{reason}</span>
+                <Badge variant="secondary">{formatNumber(count)}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {data?.flagged.length === 0 && (
@@ -565,18 +822,18 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
         return (
           <Card key={c.clientId} className={cn("border", scoreColor(c.score))} data-testid={`risk-card-${c.clientId}`}>
             <CardContent className="p-4">
-              <div className="flex items-start gap-3">
+              <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })} className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
+                    <span className="font-semibold text-sm text-primary" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</span>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
-                    <span>{c.metrics.totalTasks} total tasks</span>
-                    <span className="text-red-600 dark:text-red-400">{c.metrics.overdueCount} overdue</span>
-                    <span>{c.metrics.totalHours}h tracked</span>
-                    <span>{c.metrics.inactivityDays}d inactive</span>
+                    <span>{formatNumber(c.metrics.totalTasks)} total tasks</span>
+                    <span className="text-red-600 dark:text-red-400">{formatNumber(c.metrics.overdueCount)} overdue</span>
+                    <span>{formatHours(c.metrics.totalHours)} tracked</span>
+                    <span>{formatNumber(c.metrics.inactivityDays)}d inactive</span>
                   </div>
                   <div className="space-y-1">
                     {c.reasons.map((reason, i) => (
@@ -587,7 +844,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                     ))}
                   </div>
                 </div>
-              </div>
+              </Link>
             </CardContent>
           </Card>
         );
@@ -651,12 +908,12 @@ function ChiScoreBar({ value, colorClass }: { value: number; colorClass: string 
   return (
     <div className="flex items-center gap-1.5 min-w-[80px]">
       <Progress value={value} className={cn("h-1.5 flex-1", colorClass)} />
-      <span className="text-xs text-muted-foreground w-7 text-right tabular-nums">{value}</span>
+      <span className="text-xs text-muted-foreground w-7 text-right tabular-nums">{formatNumber(value)}</span>
     </div>
   );
 }
 
-function HealthTab({ rangeDays }: { rangeDays: number }) {
+function HealthTab({ rangeDays }: { rangeDays: ReportRangeValue }) {
   const [sortBy, setSortBy] = useState<ChiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -723,21 +980,56 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
     };
   }, [data?.clients]);
 
+  const range = getReportRangeLabel(rangeDays);
+  const topFlags = useMemo(() => {
+    const counts = new Map<string, number>();
+    (data?.clients ?? []).flatMap((c) => c.riskFlags).forEach((flag) => {
+      counts.set(flag, (counts.get(flag) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [data?.clients]);
+
   if (isLoading) return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
     </div>
   );
 
+  if (!data?.clients.length) {
+    return (
+      <ReportEmptyState
+        icon={HeartPulse}
+        title="No client health data in this range"
+        description="This tab needs recent client activity, task, time, and SLA signals. Try a wider date range or come back after more client work is logged."
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       {summary && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Avg CHI Score" value={summary.avgScore} sub="out of 100" icon={<HeartPulse className="h-4 w-4 text-white" />} color="bg-emerald-500" />
-          <MetricCard label="Healthy" value={summary.healthy} sub="score ≥ 85" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Critical" value={summary.critical} sub="score < 50" icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
-          <MetricCard label="With Risk Flags" value={summary.withFlags} sub="one or more flags" icon={<ShieldAlert className="h-4 w-4 text-white" />} color="bg-orange-500" />
+          <MetricCard label="Avg CHI Score" value={summary.avgScore} sub="out of 100" icon={<HeartPulse className="h-4 w-4 text-white" />} color="bg-emerald-500" definition="Average Client Health Index score for clients in the selected scope." source="client health engine" />
+          <MetricCard label="Healthy" value={summary.healthy} sub="score ≥ 85" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" definition="Clients whose CHI score is at or above 85." source="client health engine" />
+          <MetricCard label="Critical" value={summary.critical} sub="score < 50" icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" definition="Clients whose CHI score is below 50 and may need attention." source="client health engine" />
+          <MetricCard label="With Risk Flags" value={summary.withFlags} sub="one or more flags" icon={<ShieldAlert className="h-4 w-4 text-white" />} color="bg-orange-500" definition={DATA_POINT_DEFINITIONS.riskFlags} source="client health engine" />
         </div>
+      )}
+      {topFlags.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Most Common Health Flags</CardTitle>
+            <CardDescription className="text-xs">Drivers most often pulling client health down</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {topFlags.map(([flag, count]) => (
+              <div key={flag} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <span className="truncate">{flag}</span>
+                <Badge variant="secondary">{formatNumber(count)}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       <Card>
@@ -763,36 +1055,50 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
                 return (
                   <TableRow key={c.clientId} data-testid={`row-client-health-${c.clientId}`}>
                     <TableCell>
-                      <Link href={`/reports/clients/${c.clientId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
+                      <Link href={getClientReportPath(window.location.pathname, c.clientId)} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
                     </TableCell>
                     <TableCell>
-                      <span className={cn(
-                        "text-base font-bold tabular-nums",
-                        c.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
-                        c.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
-                        c.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
-                        "text-red-600 dark:text-red-400"
-                      )}>
-                        {c.overallScore}
-                      </span>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                        <span className={cn(
+                          "text-base font-bold tabular-nums hover:underline",
+                          c.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
+                          c.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
+                          c.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
+                          "text-red-600 dark:text-red-400"
+                        )}>
+                          {formatNumber(c.overallScore)}
+                        </span>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <Badge className={cn("text-xs font-medium", className)}>{c.healthTier}</Badge>
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                        <Badge className={cn("text-xs font-medium cursor-pointer hover:opacity-90", className)}>{c.healthTier}</Badge>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.overdue} colorClass="[&>div]:bg-blue-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}>
+                        <ChiScoreBar value={c.componentScores.overdue} colorClass="[&>div]:bg-blue-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.engagement} colorClass="[&>div]:bg-violet-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "health-index" })}>
+                        <ChiScoreBar value={c.componentScores.engagement} colorClass="[&>div]:bg-violet-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.timeOverrun} colorClass="[&>div]:bg-amber-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "time" })}>
+                        <ChiScoreBar value={c.componentScores.timeOverrun} colorClass="[&>div]:bg-amber-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.slaCompliance} colorClass="[&>div]:bg-cyan-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "sla" })}>
+                        <ChiScoreBar value={c.componentScores.slaCompliance} colorClass="[&>div]:bg-cyan-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <ChiScoreBar value={c.componentScores.activity} colorClass="[&>div]:bg-green-500" />
+                      <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { range, section: "risk" })}>
+                        <ChiScoreBar value={c.componentScores.activity} colorClass="[&>div]:bg-green-500" />
+                      </Link>
                     </TableCell>
                     <TableCell>
                       {c.riskFlags.length > 0 ? (
@@ -902,10 +1208,10 @@ function ScoreBar({ current, predicted }: { current: number; predicted: number }
           style={{ width: `${current}%` }}
         />
       </div>
-      <span className="text-xs font-medium w-8 text-right">{current}</span>
-      {improving && <span className="text-xs text-emerald-600">→{predicted}</span>}
-      {worsening && <span className="text-xs text-red-500">→{predicted}</span>}
-      {!improving && !worsening && <span className="text-xs text-muted-foreground">={predicted}</span>}
+      <span className="text-xs font-medium w-8 text-right">{formatNumber(current)}</span>
+      {improving && <span className="text-xs text-emerald-600">→{formatNumber(predicted)}</span>}
+      {worsening && <span className="text-xs text-red-500">→{formatNumber(predicted)}</span>}
+      {!improving && !worsening && <span className="text-xs text-muted-foreground">={formatNumber(predicted)}</span>}
     </div>
   );
 }
@@ -947,25 +1253,25 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-red-600">{highRisk}</div>
+            <div className="text-2xl font-bold text-red-600">{formatNumber(highRisk)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">High risk clients</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-red-500">{worsening}</div>
+            <div className="text-2xl font-bold text-red-500">{formatNumber(worsening)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Worsening trend</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-emerald-600">{improving}</div>
+            <div className="text-2xl font-bold text-emerald-600">{formatNumber(improving)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Improving trend</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold">{total}</div>
+            <div className="text-2xl font-bold">{formatNumber(total)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Clients analysed</div>
           </CardContent>
         </Card>
@@ -1009,7 +1315,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                         data-testid={`forecast-client-row-${c.clientId}`}
                       >
                         <TableCell className="font-medium max-w-[160px]">
-                          <Link href={`/reports/clients/${c.clientId}`} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
+                          <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { section: "risk" })} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <ScoreBar current={c.currentHealthScore} predicted={c.predictedHealthScore} />
@@ -1024,14 +1330,18 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                             c.predictedHealthScore >= 70 ? "text-emerald-600" :
                             c.predictedHealthScore >= 50 ? "text-amber-600" : "text-red-600"
                           )}>
-                            {c.predictedHealthScore}
+                            {formatNumber(c.predictedHealthScore)}
                           </span>
                         </TableCell>
-                        <TableCell className="text-center text-sm">{c.metrics.currOpenTasks}</TableCell>
+                        <TableCell className="text-center text-sm">
+                          <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { section: "projects" })} onClick={(e: React.MouseEvent) => e.stopPropagation()} className="text-primary hover:underline">
+                            {formatNumber(c.metrics.currOpenTasks)}
+                          </Link>
+                        </TableCell>
                         <TableCell className="text-center">
-                          <span className={c.metrics.currOverdueTasks > 0 ? "text-red-600 font-medium" : ""}>
-                            {c.metrics.currOverdueTasks}
-                          </span>
+                          <Link href={getClientReportDrilldownPath(window.location.pathname, c.clientId, { section: "risk" })} onClick={(e: React.MouseEvent) => e.stopPropagation()} className={cn("hover:underline", c.metrics.currOverdueTasks > 0 ? "text-red-600 font-medium" : "text-primary")}>
+                            {formatNumber(c.metrics.currOverdueTasks)}
+                          </Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge className={cn("text-xs", CLIENT_RISK_COLORS[c.clientRisk])}>
@@ -1074,9 +1384,10 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
 
 export function ClientCommandCenter() {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const [activeTab, setActiveTab] = useState("overview");
   const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
+  const [projectStatus, setProjectStatus] = useState<ProjectStatusFilter>("all");
   const flags = useFeatureFlags();
 
   return (
@@ -1086,6 +1397,21 @@ export function ClientCommandCenter() {
       icon={<Building2 className="h-4 w-4" />}
       rangeDays={rangeDays}
       onRangeChange={setRangeDays}
+      extraControls={
+        <Select value={projectStatus} onValueChange={(value) => setProjectStatus(value as ProjectStatusFilter)}>
+          <SelectTrigger className="w-full sm:w-56 shrink-0" data-testid="select-client-command-center-project-status">
+            <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+            <SelectValue placeholder="Project status" />
+          </SelectTrigger>
+          <SelectContent>
+            {PROJECT_STATUS_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value} data-testid={`project-status-option-${option.value}`}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <MobileTabSelect
@@ -1145,22 +1471,22 @@ export function ClientCommandCenter() {
         </div>
 
         <TabsContent value="overview" className="mt-4">
-          <OverviewTab rangeDays={rangeDays} />
+          <OverviewTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="activity" className="mt-4">
-          <ActivityTab rangeDays={rangeDays} />
+          <ActivityTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="time" className="mt-4">
-          <TimeTab rangeDays={rangeDays} />
+          <TimeTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="tasks" className="mt-4">
-          <TasksTab rangeDays={rangeDays} />
+          <TasksTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="sla" className="mt-4">
-          <SlaTab rangeDays={rangeDays} />
+          <SlaTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         <TabsContent value="risk" className="mt-4">
-          <RiskTab rangeDays={rangeDays} />
+          <RiskTab rangeDays={rangeDays} projectStatus={projectStatus} />
         </TabsContent>
         {flags.enableClientHealthIndex && (
           <TabsContent value="health" className="mt-4">

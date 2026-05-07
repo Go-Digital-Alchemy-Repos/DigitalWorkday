@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { X } from "lucide-react";
 import type { TaskWithRelations } from "@shared/schema";
+import { getTaskDrawerRenderState } from "@/lib/task-drawer-state";
 
 interface TaskDrawerContextType {
   openTask: (taskId: string) => void;
@@ -49,11 +50,17 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
   }, []);
 
   const isOpen = !!taskIdToOpen;
+  const renderState = getTaskDrawerRenderState({
+    taskIdToOpen,
+    task,
+    isLoading,
+    isError,
+  });
 
   return (
     <TaskDrawerContext.Provider value={{ openTask, closeTask }}>
       {children}
-      {isOpen && isLoading && !task && !isError && (
+      {renderState === "loading" && (
         <Sheet open={isOpen} onOpenChange={(open) => { if (!open) closeTask(); }}>
           <SheetContent
             className="w-full sm:max-w-2xl flex flex-col h-full p-0 overflow-hidden"
@@ -82,7 +89,7 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
           </SheetContent>
         </Sheet>
       )}
-      {isOpen && !isLoading && !task && isError && (
+      {renderState === "error" && (
         <Sheet open={isOpen} onOpenChange={(open) => { if (!open) closeTask(); }}>
           <SheetContent
             className="w-full sm:max-w-2xl flex flex-col h-full p-0 overflow-hidden"
@@ -113,7 +120,7 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
           </SheetContent>
         </Sheet>
       )}
-      {isOpen && task && (
+      {renderState === "ready" && task && (
         <TaskDetailDrawer
           task={task}
           open={isOpen}

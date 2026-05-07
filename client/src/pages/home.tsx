@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ProjectClientBadge } from "@/components/project-client-badge";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { TaskCard } from "@/features/tasks/task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
@@ -125,95 +126,98 @@ function AdminDashboardSection({
   onTaskClick: (task: TaskWithRelations) => void;
 }) {
   const [, setLocation] = useLocation();
+  const metricCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-lg";
+  const panelCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)]";
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card 
-          className="hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation" 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation`}
           onClick={() => setLocation("/projects")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/projects")}
           data-testid="card-active-projects"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Active Projects</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
             <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {analyticsLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold">{analytics?.activeProjects || 0}</div>
+              <div className="text-3xl font-semibold tracking-tight">{analytics?.activeProjects || 0}</div>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">Projects currently moving forward.</p>
           </CardContent>
         </Card>
 
-        <Card 
-          className="hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation border-amber-200 dark:border-amber-800" 
+        <Card
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation border-amber-200/70 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/10`}
           onClick={() => setLocation("/projects")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/projects")}
           data-testid="card-overdue-tasks"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Overdue Tasks</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
             <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {analyticsLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold text-amber-600 dark:text-amber-400">
+              <div className="text-3xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">
                 {analytics?.overdueTasksCount || 0}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">Across all projects</p>
+            <p className="mt-1 text-xs text-muted-foreground">Across all active projects.</p>
           </CardContent>
         </Card>
 
-        <Card className="active:scale-[0.98] touch-manipulation" data-testid="card-due-today">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Due Today</CardTitle>
+        <Card className={`${metricCardClass} active:scale-[0.98] touch-manipulation`} data-testid="card-due-today">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Due Today</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {analyticsLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold">{analytics?.dueTodayCount || 0}</div>
+              <div className="text-3xl font-semibold tracking-tight">{analytics?.dueTodayCount || 0}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">Team-wide deadlines</p>
+            <p className="mt-1 text-xs text-muted-foreground">Deadlines the team is aiming for today.</p>
           </CardContent>
         </Card>
 
         <Card 
-          className="hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation"
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation`}
           onClick={() => setLocation("/settings")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/settings")}
           data-testid="card-unassigned"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Unassigned</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Unassigned</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {analyticsLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold">{analytics?.unassignedOpenCount || 0}</div>
+              <div className="text-3xl font-semibold tracking-tight">{analytics?.unassignedOpenCount || 0}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">Need assignment</p>
+            <p className="mt-1 text-xs text-muted-foreground">Work waiting for a clear owner.</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-        <Card>
+        <Card className={panelCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>Team Workload</CardTitle>
@@ -287,7 +291,7 @@ function AdminDashboardSection({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={panelCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -375,6 +379,8 @@ function EmployeeDashboardSection({
   onTaskClick: (task: TaskWithRelations) => void;
 }) {
   const [, setLocation] = useLocation();
+  const metricCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-lg";
+  const panelCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)]";
 
   const taskBreakdown = useMemo(() => {
     const tasks = myTasks || [];
@@ -444,74 +450,74 @@ function EmployeeDashboardSection({
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card 
-          className={`hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation ${taskBreakdown.overdue.length > 0 ? "border-red-200 dark:border-red-800" : ""}`}
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation ${taskBreakdown.overdue.length > 0 ? "border-red-200/70 bg-red-50/40 dark:border-red-800 dark:bg-red-950/10" : ""}`}
           onClick={() => setLocation("/my-tasks")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/my-tasks")}
           data-testid="card-overdue"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Overdue</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
             <AlertTriangle className={`h-4 w-4 shrink-0 ${taskBreakdown.overdue.length > 0 ? "text-red-500" : "text-muted-foreground"}`} />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {tasksLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className={`text-xl md:text-2xl font-bold ${taskBreakdown.overdue.length > 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+              <div className={`text-3xl font-semibold tracking-tight ${taskBreakdown.overdue.length > 0 ? "text-red-600 dark:text-red-400" : ""}`}>
                 {taskBreakdown.overdue.length}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">Need immediate attention</p>
+            <p className="mt-1 text-xs text-muted-foreground">Needs your immediate attention.</p>
           </CardContent>
         </Card>
 
         <Card 
-          className="hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation"
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation`}
           onClick={() => setLocation("/my-tasks")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/my-tasks")}
           data-testid="card-due-today"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Due Today</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Due Today</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {tasksLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold">{taskBreakdown.dueToday.length}</div>
+              <div className="text-3xl font-semibold tracking-tight">{taskBreakdown.dueToday.length}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">Today's focus</p>
+            <p className="mt-1 text-xs text-muted-foreground">What should get finished today.</p>
           </CardContent>
         </Card>
 
         <Card 
-          className="hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation"
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation`}
           onClick={() => setLocation("/my-time")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/my-time")}
           data-testid="card-time-today"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Time Today</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Time Today</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {timeStatsLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold">
+              <div className="text-3xl font-semibold tracking-tight">
                 {timeStats ? formatDuration(timeStats.today.total) : "0m"}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
+            <p className="mt-1 text-xs text-muted-foreground">
               {timeStats && timeStats.thisWeek.total > 0 
                 ? `${formatDuration(timeStats.thisWeek.total)} this week` 
                 : "Start tracking"}
@@ -520,31 +526,31 @@ function EmployeeDashboardSection({
         </Card>
 
         <Card 
-          className="hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation"
+          className={`${metricCardClass} cursor-pointer active:scale-[0.98] touch-manipulation`}
           onClick={() => setLocation("/my-tasks")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && setLocation("/my-tasks")}
           data-testid="card-completed-today"
         >
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 px-3 pt-3 md:px-6 md:pt-6">
-            <CardTitle className="font-medium text-xs sm:text-sm">Completed</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 pt-4 md:px-6 md:pt-6">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500 shrink-0" />
           </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             {tasksLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">
+              <div className="text-3xl font-semibold tracking-tight text-green-600 dark:text-green-400">
                 {taskBreakdown.completedToday.length}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">Completed today</p>
+            <p className="mt-1 text-xs text-muted-foreground">Wins you’ve already locked in.</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className={panelCardClass}>
         <CardContent className="pt-6">
           <TaskProgressBar 
             stats={taskBreakdown.stats} 
@@ -554,7 +560,7 @@ function EmployeeDashboardSection({
       </Card>
 
       {(taskBreakdown.overdue.length > 0 || taskBreakdown.dueToday.length > 0) && (
-        <Card className="border-amber-200 dark:border-amber-800">
+        <Card className="border-amber-200/70 bg-amber-50/30 shadow-[var(--shadow-soft)] dark:border-amber-800 dark:bg-amber-950/10">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div className="flex items-center gap-2">
               <Flame className="h-5 w-5 text-amber-500" />
@@ -597,7 +603,7 @@ function EmployeeDashboardSection({
       )}
 
       <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-        <Card>
+        <Card className={panelCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>Upcoming Deadlines</CardTitle>
@@ -641,7 +647,7 @@ function EmployeeDashboardSection({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={panelCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>Time This Week</CardTitle>
@@ -874,26 +880,39 @@ export default function Home() {
     return "Good evening";
   }, []);
 
+  const clientNamesById = useMemo(
+    () =>
+      new Map(
+        (clients ?? []).map((client) => [
+          client.id,
+          client.displayName || client.companyName,
+        ]),
+      ),
+    [clients],
+  );
+
   return (
-    <div className="flex flex-col h-full overflow-auto">
-      <div className="border-b border-border bg-background sticky top-0 z-10">
-        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4">
+    <div className="flex h-full flex-col overflow-auto bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+      <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
+        <div className="px-4 py-4 sm:px-5 lg:px-8 md:py-5">
+          <div className="rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5">
           <div>
-            <h1 className="text-xl md:text-2xl font-semibold">
+            <h1 className="text-2xl font-semibold tracking-tight md:text-[2rem]">
               {greeting}{user?.firstName ? `, ${user.firstName}` : ""}
             </h1>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               {isAdmin 
                 ? "Here's an overview of your team's activity" 
                 : "Here's what's on your plate today"}
             </p>
           </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 px-3 sm:px-4 lg:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
+      <div className="flex-1 space-y-5 px-4 py-5 sm:px-5 lg:px-8 md:space-y-6 md:py-6">
         {taskStats.total > 0 && (
-          <Card>
+          <Card className="border-border/70 bg-card/90 shadow-[var(--shadow-soft)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Your Task Progress</CardTitle>
             </CardHeader>
@@ -927,7 +946,7 @@ export default function Home() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           {!isAdmin && (
-            <Card>
+            <Card className="border-border/70 bg-card/90 shadow-[var(--shadow-soft)]">
               <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle>My Tasks</CardTitle>
                 <Link href="/my-tasks">
@@ -969,7 +988,7 @@ export default function Home() {
             </Card>
           )}
 
-          <Card className={isAdmin ? "lg:col-span-2" : ""}>
+          <Card className={`border-border/70 bg-card/90 shadow-[var(--shadow-soft)] ${isAdmin ? "lg:col-span-2" : ""}`}>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle>Recent Projects</CardTitle>
               <Button
@@ -1008,8 +1027,14 @@ export default function Home() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{project.name}</p>
+                          <ProjectClientBadge
+                            clientName={clientNamesById.get(project.clientId ?? "") ?? null}
+                            className="mt-1"
+                            maxLength={16}
+                            testId={`badge-home-project-client-${project.id}`}
+                          />
                           {project.description && (
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="mt-1 text-xs text-muted-foreground truncate">
                               {getPreviewText(project.description)}
                             </p>
                           )}

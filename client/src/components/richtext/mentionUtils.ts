@@ -1,6 +1,9 @@
-import type { User } from "@shared/schema";
-
-export type MentionableUser = User & {
+export type MentionableUser = {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  name?: string | null;
   displayName?: string | null;
 };
 

@@ -3,10 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { formatNumber } from "@/lib/utils";
+import { ReportCommandCenterLayout, buildDateParams, type ReportRangeValue } from "./report-command-center-layout";
+import { fetchReport as fetch } from "./report-fetch";
+import { ContextBadge } from "@/components/context-badge";
+import { DataPointHelp } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 import {
   ResponsiveContainer,
   BarChart,
@@ -63,6 +68,8 @@ interface TaskAnalyticsData {
     project_id: string;
     project_name: string;
     project_color: string;
+    client_id: string | null;
+    client_name: string | null;
     total: number;
     completed: number;
     completion_rate: number;
@@ -104,9 +111,14 @@ function LoadingSkeleton() {
 }
 
 export default function TaskAnalytics() {
-  const [days, setDays] = useState(30);
+  const [rangeDays, setRangeDays] = useState<ReportRangeValue>(30);
   const { data, isLoading } = useQuery<TaskAnalyticsData>({
-    queryKey: ["/api/v1/reports/tasks/analytics", { days }],
+    queryKey: ["/api/v1/reports/tasks/analytics", rangeDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/reports/tasks/analytics?${buildDateParams(rangeDays)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load task analytics");
+      return res.json();
+    },
   });
 
   if (isLoading || !data) return <LoadingSkeleton />;
@@ -138,22 +150,14 @@ export default function TaskAnalytics() {
     }));
 
   return (
+    <ReportCommandCenterLayout
+      title="Task Analysis"
+      description="Task creation, completion, priority, and assignee analytics"
+      icon={null}
+      rangeDays={rangeDays}
+      onRangeChange={setRangeDays}
+    >
     <div className="space-y-6" data-testid="task-analytics">
-      <div className="flex items-center justify-end">
-        <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
-          <SelectTrigger className="w-[150px]" data-testid="select-task-period">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="14">Last 14 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="60">Last 60 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Tasks Created vs Completed</CardTitle>
@@ -270,17 +274,38 @@ export default function TaskAnalytics() {
               )}
               {data.completionByProject.map((project) => (
                 <div key={project.project_id} className="space-y-1.5" data-testid={`project-completion-${project.project_id}`}>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span
                         className="h-2.5 w-2.5 rounded-sm shrink-0"
                         style={{ backgroundColor: project.project_color || "#3B82F6" }}
                       />
-                      <span className="font-medium truncate max-w-[180px]">{project.project_name}</span>
+                      <ContextBadge
+                        kind="project"
+                        label="Project"
+                        value={project.project_name}
+                        maxLength={30}
+                        data-testid={`badge-completion-project-${project.project_id}`}
+                      />
+                      {project.client_name ? (
+                        <ContextBadge
+                          kind="client"
+                          label="Client"
+                          value={project.client_name}
+                          maxLength={22}
+                          data-testid={`badge-project-client-${project.project_id}`}
+                        />
+                      ) : null}
                     </div>
-                    <span className="text-muted-foreground">
-                      {project.completed}/{project.total} ({project.completion_rate}%)
-                    </span>
+                    <DataPointHelp
+                      label="Completion Rate"
+                      definition={DATA_POINT_DEFINITIONS.completionRate}
+                      source="tasks"
+                    >
+                      <span className="shrink-0 text-muted-foreground">
+                        {formatNumber(project.completed)}/{formatNumber(project.total)} ({formatNumber(project.completion_rate)}%)
+                      </span>
+                    </DataPointHelp>
                   </div>
                   <Progress value={project.completion_rate} className="h-2" />
                 </div>
@@ -308,19 +333,19 @@ export default function TaskAnalytics() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{assignee.name}</div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{assignee.total_tasks} tasks</span>
+                      <span>{formatNumber(assignee.total_tasks)} tasks</span>
                       <span>·</span>
-                      <span className="text-green-600 dark:text-green-400">{assignee.completed} done</span>
+                      <span className="text-green-600 dark:text-green-400">{formatNumber(assignee.completed)} done</span>
                       {assignee.overdue > 0 && (
                         <>
                           <span>·</span>
-                          <span className="text-destructive">{assignee.overdue} overdue</span>
+                          <span className="text-destructive">{formatNumber(assignee.overdue)} overdue</span>
                         </>
                       )}
                     </div>
                   </div>
                   <Badge variant={assignee.overdue > 0 ? "destructive" : "secondary"} className="text-xs">
-                    {assignee.open} open
+                    {formatNumber(assignee.open)} open
                   </Badge>
                 </div>
               ))}
@@ -329,5 +354,6 @@ export default function TaskAnalytics() {
         </Card>
       </div>
     </div>
+    </ReportCommandCenterLayout>
   );
 }

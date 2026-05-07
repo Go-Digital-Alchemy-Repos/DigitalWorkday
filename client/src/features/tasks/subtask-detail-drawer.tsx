@@ -4,6 +4,8 @@ import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pa
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +34,13 @@ import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
+import {
+  buildStopTimerPayload,
+  buildSubtaskQuickStartTimerPayload,
+} from "./timer-payloads";
+import { normalizeTaskStatus } from "@shared/taskStatus";
+import { DataPointLabel } from "@/components/data-point-help";
+import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 
 import {
   AlertDialog,
@@ -116,6 +125,15 @@ interface TimeEntryListItem {
   };
 }
 
+function formatDurationShort(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
 interface SubtaskDetailDrawerProps {
   subtask: SubtaskOrTask | null;
   parentTaskTitle: string;
@@ -148,6 +166,10 @@ export function SubtaskDetailDrawer({
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
+  const sectionCardClass =
+    "rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)] sm:p-5";
+  const sectionHeaderClass = "mb-3 flex items-center justify-between gap-3";
+  const sectionTitleClass = "flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground";
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
   const [description, setDescription] = useState<string>(
@@ -174,7 +196,7 @@ export function SubtaskDetailDrawer({
 
   const isActualSubtask = isSubtask(subtask);
 
-  const { data: subtaskAssignees = [], isLoading: loadingAssignees } = useQuery<SubtaskAssignee[]>({
+  const { data: subtaskAssignees = [], isLoading: loadingAssignees } = useQuery<(SubtaskAssignee & { user?: User })[]>({
     queryKey: ["/api/subtasks", subtask?.id, "assignees"],
     queryFn: async () => {
       if (!subtask?.id) return [];
@@ -383,6 +405,42 @@ export function SubtaskDetailDrawer({
     toggleCompleteMutation.mutate(!isCompleted);
   };
 
+  const sendToReviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!subtask) return;
+      const updateData: Record<string, unknown> = {
+        status: "in_review",
+        completed: false,
+      };
+
+      if (title.trim() && title !== subtask.title) {
+        updateData.title = title.trim();
+      }
+      const originalDescription = typeof subtask.description === "string"
+        ? subtask.description
+        : subtask.description ? JSON.stringify(subtask.description) : "";
+      if (description !== originalDescription) {
+        updateData.description = description || null;
+      }
+      const originalDueDate = subtask.dueDate ? new Date(subtask.dueDate).toISOString() : null;
+      const currentDueDate = localDueDate ? localDueDate.toISOString() : null;
+      if (currentDueDate !== originalDueDate) {
+        updateData.dueDate = localDueDate || null;
+      }
+
+      return apiRequest("PATCH", `/api/subtasks/${subtask.id}`, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Subtask sent for review" });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to send subtask for review", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleCreateTag = () => {
     if (!newTagName.trim() || !workspaceId) return;
     createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
@@ -442,14 +500,17 @@ export function SubtaskDetailDrawer({
       if (projectId && !projectContext?.clientId) {
         throw new Error("Client context required for project subtasks");
       }
-      return apiRequest("POST", "/api/timer/start", {
-        clientId: projectContext?.clientId || null,
-        projectId: projectId || null,
-        taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
-        subtaskId: isActualSubtask ? subtask?.id || null : null,
-        title: subtask?.title || undefined,
-        description: null,
-      });
+      return apiRequest(
+        "POST",
+        "/api/timer/start",
+        buildSubtaskQuickStartTimerPayload({
+          clientId: projectContext?.clientId,
+          projectId,
+          taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id,
+          subtaskId: isActualSubtask ? subtask?.id : null,
+          title: subtask?.title,
+        }),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
@@ -482,15 +543,18 @@ export function SubtaskDetailDrawer({
 
   const stopTimerMutation = useMutation({
     mutationFn: async (description: string) =>
-      apiRequest("POST", "/api/timer/stop", {
-        scope: "in_scope",
-        title: subtask?.title || null,
-        description,
-        clientId: projectContext?.clientId || null,
-        projectId: projectId || null,
-        taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id || null,
-        subtaskId: isActualSubtask ? subtask?.id || null : null,
-      }),
+      apiRequest(
+        "POST",
+        "/api/timer/stop",
+        buildStopTimerPayload({
+          title: subtask?.title,
+          description,
+          clientId: projectContext?.clientId,
+          projectId,
+          taskId: isActualSubtask ? (subtask as Subtask).taskId : subtask?.id,
+          subtaskId: isActualSubtask ? subtask?.id : null,
+        }),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
       queryClient.invalidateQueries({ queryKey: timeEntriesQueryKey });
@@ -536,8 +600,9 @@ export function SubtaskDetailDrawer({
     (!activeTimer && !!projectId && !projectContext?.clientId) || projectContextError ? "hidden" :
     "idle";
 
-  const creatorUser = subtask?.createdBy
-    ? mentionUsers.find((user) => user.id === subtask.createdBy)
+  const creatorId = subtask && "createdBy" in subtask ? subtask.createdBy : undefined;
+  const creatorUser = creatorId
+    ? mentionUsers.find((user) => user.id === creatorId)
     : undefined;
   const creatorLabel = creatorUser
     ? `${creatorUser.firstName || ""} ${creatorUser.lastName || ""}`.trim() || creatorUser.email || "Unknown"
@@ -710,14 +775,14 @@ export function SubtaskDetailDrawer({
                       </div>
                     )}
                     {creatorLabel && (
-                      <Badge variant="outline" className="text-[11px]" data-testid="subtask-created-by-badge">
+                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/70 px-3 py-1 text-[11px]" data-testid="subtask-created-by-badge">
                         Created by {creatorLabel}
                       </Badge>
                     )}
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2 text-[11px]"
+                      className="h-8 rounded-xl px-3 text-[11px]"
                       onClick={() => setShowHistory((value) => !value)}
                       data-testid="button-subtask-history"
                     >
@@ -728,14 +793,16 @@ export function SubtaskDetailDrawer({
                 ) : null}
 
                 {showHistory && isActualSubtask && (
-                  <TaskHistoryTab entityType="subtask" entityId={subtask.id} />
+                  <div className="rounded-2xl border border-border/70 bg-background/70 p-3 sm:p-4">
+                    <TaskHistoryTab entityType="subtask" entityId={subtask.id} />
+                  </div>
                 )}
-                <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
+                <div className={cn("grid gap-4 rounded-2xl border border-border/70 bg-background/60 p-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Flag className="h-3.5 w-3.5" />
-                      Priority
-                    </label>
+                      <DataPointLabel label="Priority" definition={DATA_POINT_DEFINITIONS.priority} />
+                    </div>
                     <PrioritySelector
                       value={(subtask.priority || "medium") as PriorityLevel}
                       onChange={(value) => onUpdate?.(subtask.id, { priority: value })}
@@ -745,10 +812,10 @@ export function SubtaskDetailDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Layers className="h-3.5 w-3.5" />
-                      Status
-                    </label>
+                      <DataPointLabel label="Status" definition={DATA_POINT_DEFINITIONS.status} />
+                    </div>
                     <Select
                       value={subtask.status || "todo"}
                       onValueChange={(value) => onUpdate?.(subtask.id, { status: value })}
@@ -759,6 +826,7 @@ export function SubtaskDetailDrawer({
                       <SelectContent>
                         <SelectItem value="todo">To Do</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="in_review">In Review</SelectItem>
                         <SelectItem value="blocked">Blocked</SelectItem>
                         <SelectItem value="done">Done</SelectItem>
                       </SelectContent>
@@ -766,10 +834,10 @@ export function SubtaskDetailDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
-                      Due Date
-                    </label>
+                      <DataPointLabel label="Due Date" definition={DATA_POINT_DEFINITIONS.dueDate} />
+                    </div>
                     <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -815,10 +883,10 @@ export function SubtaskDetailDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
-                      Estimate
-                    </label>
+                      <DataPointLabel label="Estimate" definition={DATA_POINT_DEFINITIONS.estimate} />
+                    </div>
                     <Input
                       type="number"
                       min="0"
@@ -835,9 +903,9 @@ export function SubtaskDetailDrawer({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    Assignees
-                  </label>
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <DataPointLabel label="Assignees" definition={DATA_POINT_DEFINITIONS.assignees} />
+                  </div>
                   {isActualSubtask ? (
                     loadingAssignees ? (
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -849,6 +917,7 @@ export function SubtaskDetailDrawer({
                         invalidateKeys={[
                           ["/api/subtasks", subtask.id, "assignees"],
                           ["/api/subtasks", subtask.id],
+                          ["/api/tasks", subtask.taskId],
                           ["/api/tasks/my"],
                         ]}
                       />
@@ -863,10 +932,8 @@ export function SubtaskDetailDrawer({
                 </div>
               </div>
 
-              <Separator />
-
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <div className={cn(sectionCardClass, "space-y-2")}>
+                <label className={sectionTitleClass}>Description</label>
                 <RichTextEditor
                   value={description}
                   onChange={handleDescriptionChange}
@@ -877,23 +944,15 @@ export function SubtaskDetailDrawer({
                 />
               </div>
 
-              <Separator />
-
               {projectId && (
-                <div 
-                  className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
-                  style={{ borderRadius: "10px" }}
-                >
+                <div className={sectionCardClass}>
                   <AttachmentUploader taskId={subtask.id} projectId={projectId} />
                 </div>
               )}
 
-              <div 
-                className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[hsl(var(--section-tags))] border border-[#ade8f5] dark:border-[hsl(var(--section-tags-border))]"
-                style={{ borderRadius: "10px" }}
-              >
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+              <div className={sectionCardClass}>
+                <div className={sectionHeaderClass}>
+                  <label className={sectionTitleClass}>
                     <Tag className="h-3.5 w-3.5" />
                     Tags
                   </label>
@@ -906,7 +965,7 @@ export function SubtaskDetailDrawer({
                       }
                     }}>
                       <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-6 px-2" data-testid="button-add-subtask-tag">
+                        <Button variant="ghost" size="sm" className="h-8 rounded-xl px-3" data-testid="button-add-subtask-tag">
                           <Plus className="h-3.5 w-3.5 mr-1" />
                           Add
                         </Button>
@@ -1049,16 +1108,11 @@ export function SubtaskDetailDrawer({
                 </div>
               </div>
 
-              <Separator />
-
               {isActualSubtask && (
-                <div 
-                  className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[hsl(var(--section-time))] border border-[#f5ac5b] dark:border-[hsl(var(--section-time-border))]"
-                  style={{ borderRadius: "10px" }}
-                >
+                <div className={sectionCardClass}>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+                    <div className={sectionHeaderClass}>
+                      <label className={sectionTitleClass}>
                         <Timer className="h-3.5 w-3.5" />
                         Time Entries
                       </label>
@@ -1067,25 +1121,25 @@ export function SubtaskDetailDrawer({
                           <Button
                             size="sm"
                             onClick={() => startTimerMutation.mutate()}
-                            className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]"
+                            className="h-9 rounded-xl shadow-[var(--shadow-soft)]"
                           >
                             <Play className="h-3.5 w-3.5 mr-1.5" />
                             Start Timer
                           </Button>
                         )}
                         {timerState === "loading" && (
-                          <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+                          <Button size="sm" disabled className="h-9 rounded-xl">
                             <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                             Loading...
                           </Button>
                         )}
                         {timerState === "running" && (
                           <>
-                            <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+                            <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-9 rounded-xl">
                               <Pause className="h-3.5 w-3.5 mr-1.5" />
                               Pause
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-8">
+                            <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-9 rounded-xl">
                               <Square className="h-3.5 w-3.5 mr-1.5" />
                               Stop
                             </Button>
@@ -1093,11 +1147,11 @@ export function SubtaskDetailDrawer({
                         )}
                         {timerState === "paused" && (
                           <>
-                            <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+                            <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-9 rounded-xl">
                               <Play className="h-3.5 w-3.5 mr-1.5" />
                               Resume
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-8">
+                            <Button variant="destructive" size="sm" onClick={() => setShowStopTimerDialog(true)} className="h-9 rounded-xl">
                               <Square className="h-3.5 w-3.5 mr-1.5" />
                               Stop
                             </Button>
@@ -1117,7 +1171,7 @@ export function SubtaskDetailDrawer({
                     ) : (
                       <div className="space-y-2">
                         {timeEntries.map((entry) => (
-                          <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
+                          <div key={entry.id} className="flex items-start justify-between rounded-2xl border border-border/70 bg-background/70 p-3 shadow-[var(--shadow-soft)]">
                             <div className="space-y-1 flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-medium">
@@ -1165,14 +1219,8 @@ export function SubtaskDetailDrawer({
                 </div>
               )}
 
-              <Separator />
-
               {isActualSubtask && (
-                <div 
-                  className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[hsl(var(--section-comments))] border border-[#adc6e6] dark:border-[hsl(var(--section-comments-border))]"
-                  style={{ borderRadius: "10px" }}
-                  data-testid="subtask-comments-section"
-                >
+                <div className={sectionCardClass} data-testid="subtask-comments-section">
                   <CommentThread
                     comments={subtaskComments}
                     taskId={subtask.id}
@@ -1195,6 +1243,15 @@ export function SubtaskDetailDrawer({
           showSave={true}
           onSave={handleSaveAll}
           saveLabel="Save Subtask"
+          showReview={
+            isActualSubtask &&
+            Boolean(projectId) &&
+            normalizeTaskStatus(subtask.status) !== "done" &&
+            normalizeTaskStatus(subtask.status) !== "in_review"
+          }
+          onSendToReview={() => sendToReviewMutation.mutate()}
+          reviewDisabled={sendToReviewMutation.isPending}
+          isSendingToReview={sendToReviewMutation.isPending}
           showComplete={isActualSubtask}
           onMarkComplete={handleMarkComplete}
           isCompleting={toggleCompleteMutation.isPending}

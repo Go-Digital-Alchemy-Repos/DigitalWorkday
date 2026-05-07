@@ -226,10 +226,10 @@ export function MobileNavBar() {
   return (
     <>
       <nav 
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden pb-safe"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/80 bg-background/90 shadow-[0_-8px_32px_rgba(15,23,42,0.08)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:hidden pb-safe"
         data-testid="mobile-nav-bar"
       >
-        <div className="flex h-16 items-center justify-around px-0.5">
+        <div className="flex h-16 items-center justify-around px-1.5">
           {navItems.slice(0, 2).map((item) => {
             const Icon = item.icon;
             const active = isActive(item);
@@ -239,7 +239,7 @@ export function MobileNavBar() {
                 variant="ghost"
                 size="sm"
                 asChild
-                className={cn("flex-1 max-w-14 h-full px-0", active && "text-primary bg-primary/5")}
+                className={cn("flex-1 max-w-16 h-12 rounded-2xl px-0", active && "text-primary bg-primary/10 shadow-[var(--shadow-soft)]")}
               >
                 <Link
                   href={item.href}
@@ -256,7 +256,7 @@ export function MobileNavBar() {
           <div className="relative -mt-6">
             <Button
               size="icon"
-              className="h-12 w-12 rounded-full shadow-lg border-4 border-background"
+              className="h-12 w-12 rounded-full border-4 border-background shadow-[var(--shadow-float)]"
               onClick={() => setShowQuickActions(true)}
               data-testid="mobile-nav-quick-add"
             >
@@ -273,7 +273,7 @@ export function MobileNavBar() {
                 variant="ghost"
                 size="sm"
                 asChild
-                className={cn("flex-1 max-w-14 h-full px-0", active && "text-primary bg-primary/5")}
+                className={cn("flex-1 max-w-16 h-12 rounded-2xl px-0", active && "text-primary bg-primary/10 shadow-[var(--shadow-soft)]")}
               >
                 <Link
                   href={item.href}
@@ -292,7 +292,7 @@ export function MobileNavBar() {
             size="sm"
             onClick={() => setShowMobileSidebar(true)}
             data-testid="mobile-nav-menu"
-            className="flex-1 max-w-14 h-full px-0 flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 max-w-16 h-12 rounded-2xl px-0 flex flex-col items-center justify-center gap-0.5"
           >
             <Menu className="h-5 w-5" />
             <span className="text-[10px] font-medium leading-none">More</span>
@@ -304,16 +304,18 @@ export function MobileNavBar() {
         open={showMobileSidebar}
         onOpenChange={setShowMobileSidebar}
         side="left"
-        className="w-72 p-0"
+        className="w-72 p-0 bg-background/95 backdrop-blur-xl"
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
+          <div className="flex items-center justify-between px-4 py-4 border-b border-border/80">
             <div className="flex items-center gap-3 min-w-0">
-              <img
-                src={iconUrl || logoUrl || appLogo}
-                alt={appName}
-                className="h-7 w-7 flex-shrink-0 rounded-sm object-contain"
-              />
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-card shadow-[var(--shadow-soft)]">
+                <img
+                  src={iconUrl || logoUrl || appLogo}
+                  alt={appName}
+                  className="h-7 w-7 flex-shrink-0 rounded-sm object-contain"
+                />
+              </div>
               <span className="font-semibold text-sm truncate" data-testid="mobile-menu-app-name">
                 {appName}
               </span>
@@ -356,10 +358,10 @@ export function MobileNavBar() {
                           key={item.href + item.title}
                           onClick={() => handleMenuNav(item.href)}
                           className={cn(
-                            "flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors",
+                            "flex items-center gap-3 w-full rounded-2xl px-4 py-3 text-sm transition-colors",
                             active
-                              ? "bg-primary/8 text-primary font-medium"
-                              : "text-foreground hover:bg-muted/50"
+                              ? "bg-primary/10 text-primary font-medium shadow-[var(--shadow-soft)]"
+                              : "text-foreground hover:bg-muted/60"
                           )}
                           data-testid={`mobile-menu-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                         >
@@ -375,10 +377,10 @@ export function MobileNavBar() {
             </div>
           </ScrollArea>
 
-          <div className="border-t px-4 py-3">
+          <div className="border-t border-border/80 px-4 py-4">
             <button
               onClick={() => handleMenuNav("/profile")}
-              className="flex items-center gap-3 w-full text-left"
+              className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card/70 px-3 py-3 text-left shadow-[var(--shadow-soft)]"
               data-testid="mobile-menu-profile"
             >
               <Avatar className="h-8 w-8">

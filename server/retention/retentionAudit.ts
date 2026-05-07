@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { tasks, chatMessages, dataRetentionPolicies, tenants } from "@shared/schema";
-import { eq, and, isNull, isNotNull, lt, count } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, lt, count, sql } from "drizzle-orm";
 
 export interface RetentionAuditSummary {
   tenantId: string;

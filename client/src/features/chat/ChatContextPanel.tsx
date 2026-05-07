@@ -6,6 +6,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Link } from "wouter";
 import {
   X,
   Users,
@@ -16,6 +17,8 @@ import {
   Hash,
   Lock,
   ExternalLink,
+  Download,
+  Calendar,
 } from "lucide-react";
 
 interface ChatChannel {
@@ -69,11 +72,42 @@ interface ChannelMember {
   };
 }
 
+interface PinnedMessage {
+  id: string;
+  messageId: string;
+  createdAt: Date | string;
+  message: {
+    body: string;
+    createdAt: Date | string;
+    author?: {
+      name?: string | null;
+      email?: string | null;
+    } | null;
+  };
+  pinnedBy?: {
+    name?: string | null;
+    email?: string | null;
+  } | null;
+}
+
+interface SharedFile {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  messageId: string;
+  createdAt: Date | string;
+  authorName?: string | null;
+}
+
 interface ChatContextPanelProps {
   selectedChannel: ChatChannel | null;
   selectedDm: ChatDmThread | null;
   currentUserId?: string;
   channelMembers?: ChannelMember[];
+  pinnedMessages?: PinnedMessage[];
+  sharedFiles?: SharedFile[];
   isOpen: boolean;
   onToggle: () => void;
   className?: string;
@@ -88,11 +122,21 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+function getChatMemberProfilePath(userId: string): string {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/super-admin")) {
+    return `/super-admin/reports/employees/${userId}`;
+  }
+
+  return `/reports/employees/${userId}`;
+}
+
 export function ChatContextPanel({
   selectedChannel,
   selectedDm,
   currentUserId,
   channelMembers = [],
+  pinnedMessages = [],
+  sharedFiles = [],
   isOpen,
   onToggle,
   className,
@@ -103,6 +147,7 @@ export function ChatContextPanel({
   };
 
   const otherMember = getOtherDmMember();
+  const otherMemberProfilePath = otherMember ? getChatMemberProfilePath(otherMember.id) : null;
 
   if (!selectedChannel && !selectedDm) {
     return null;
@@ -242,12 +287,41 @@ export function ChatContextPanel({
                   <div className="flex items-center gap-2">
                     <Pin className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Pinned Messages</span>
+                    {pinnedMessages.length > 0 && (
+                      <Badge variant="outline" className="ml-auto text-xs">
+                        {pinnedMessages.length}
+                      </Badge>
+                    )}
                   </div>
-                  <div className="p-3 rounded-md bg-muted/50 text-center">
-                    <p className="text-xs text-muted-foreground">
-                      No pinned messages
-                    </p>
-                  </div>
+                  {pinnedMessages.length > 0 ? (
+                    <div className="space-y-2">
+                      {pinnedMessages.slice(0, 5).map((pin) => (
+                        <div key={pin.id} className="rounded-md border border-border/50 bg-muted/30 p-2">
+                          <p className="text-xs line-clamp-3 whitespace-pre-wrap">
+                            {pin.message.body}
+                          </p>
+                          <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            <span>
+                              {new Date(pin.createdAt).toLocaleDateString()}
+                            </span>
+                            <span>by {pin.pinnedBy?.name || pin.pinnedBy?.email || "Unknown"}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {pinnedMessages.length > 5 && (
+                        <p className="text-xs text-muted-foreground text-center py-1">
+                          +{pinnedMessages.length - 5} more pinned
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-md bg-muted/50 text-center">
+                      <p className="text-xs text-muted-foreground">
+                        No pinned messages
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -256,12 +330,13 @@ export function ChatContextPanel({
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Shared Files</span>
+                    {sharedFiles.length > 0 && (
+                      <Badge variant="outline" className="ml-auto text-xs">
+                        {sharedFiles.length}
+                      </Badge>
+                    )}
                   </div>
-                  <div className="p-3 rounded-md bg-muted/50 text-center">
-                    <p className="text-xs text-muted-foreground">
-                      No shared files
-                    </p>
-                  </div>
+                  <SharedFilesList files={sharedFiles} />
                 </div>
               </div>
             )}
@@ -300,13 +375,13 @@ export function ChatContextPanel({
                       className="w-full justify-start h-8 text-xs px-2"
                       asChild
                     >
-                      <a
-                        href={`/team?user=${otherMember.id}`}
+                      <Link
+                        href={otherMemberProfilePath ?? "/reports"}
                         data-testid="button-view-profile"
                       >
                         <User className="h-3 w-3 mr-2" />
                         View Profile
-                      </a>
+                      </Link>
                     </Button>
                     <Button
                       variant="ghost"
@@ -338,6 +413,21 @@ export function ChatContextPanel({
                     <p>Participants: {selectedDm.members.length}</p>
                   </div>
                 </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Shared Files</span>
+                    {sharedFiles.length > 0 && (
+                      <Badge variant="outline" className="ml-auto text-xs">
+                        {sharedFiles.length}
+                      </Badge>
+                    )}
+                  </div>
+                  <SharedFilesList files={sharedFiles} />
+                </div>
               </div>
             )}
           </ScrollArea>
@@ -347,3 +437,49 @@ export function ChatContextPanel({
   );
 }
 
+function SharedFilesList({ files }: { files: SharedFile[] }) {
+  if (files.length === 0) {
+    return (
+      <div className="p-3 rounded-md bg-muted/50 text-center">
+        <p className="text-xs text-muted-foreground">No shared files</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {files.slice(0, 8).map((file) => (
+        <a
+          key={file.id}
+          href={file.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 p-2 hover:bg-muted/60 transition-colors"
+          data-testid={`shared-file-${file.id}`}
+        >
+          <div className="h-8 w-8 rounded-md bg-background flex items-center justify-center flex-shrink-0">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium truncate">{file.fileName}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {formatFileSize(file.sizeBytes)} - {file.authorName || "Unknown"}
+            </p>
+          </div>
+          <Download className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+        </a>
+      ))}
+      {files.length > 8 && (
+        <p className="text-xs text-muted-foreground text-center py-1">
+          +{files.length - 8} more files
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

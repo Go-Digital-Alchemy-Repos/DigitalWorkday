@@ -3,7 +3,7 @@ import { withSocketPolicy, cleanupSocketMembershipCache, getMembershipCacheStats
 
 vi.mock("../storage", () => ({
   storage: {
-    isUserInChatChannel: vi.fn(),
+    getUserChatChannels: vi.fn(),
     getUserChatDmThreads: vi.fn(),
     validateChatRoomAccess: vi.fn(),
   },
@@ -42,17 +42,17 @@ describe("withSocketPolicy", () => {
   });
 
   it("caches membership results to prevent redundant DB calls", async () => {
-    vi.mocked(storage.isUserInChatChannel).mockResolvedValue(true);
+    vi.mocked(storage.getUserChatChannels).mockResolvedValue([{ channelId: "ch1" }] as any);
     const socket = createFakeSocket({ userId: "u1", tenantId: "t1" });
     const guarded = withSocketPolicy(socket as any, { requireChatMembership: true }, handler);
 
     // First call
     await guarded({ conversationId: "channel:ch1" });
-    expect(storage.isUserInChatChannel).toHaveBeenCalledTimes(1);
+    expect(storage.getUserChatChannels).toHaveBeenCalledTimes(1);
 
     // Second call - should be cached
     await guarded({ conversationId: "channel:ch1" });
-    expect(storage.isUserInChatChannel).toHaveBeenCalledTimes(1);
+    expect(storage.getUserChatChannels).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledTimes(2);
   });
 

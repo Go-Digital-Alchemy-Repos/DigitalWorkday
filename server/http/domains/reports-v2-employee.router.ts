@@ -15,6 +15,9 @@ const router = Router();
 
 router.use(reportingGuard);
 
+const REPORTING_USER_ROLE_ARRAY_SQL = sql`ARRAY['admin', 'project_manager', 'employee']::text[]`;
+const BILLABLE_TIME_CONDITION = sql`te.scope = 'out_of_scope'`;
+
 function firstRow<T>(result: unknown): T | null {
   if (Array.isArray(result)) return (result[0] ?? null) as T | null;
   if (result && typeof result === "object" && "rows" in result) {
@@ -34,6 +37,125 @@ async function dbRows<T extends Record<string, unknown>>(
   return result as unknown as T[];
 }
 
+function previousRange(startDate: Date, endDate: Date) {
+  const durationMs = Math.max(endDate.getTime() - startDate.getTime(), 24 * 60 * 60 * 1000);
+  return {
+    startDate: new Date(startDate.getTime() - durationMs),
+    endDate: new Date(endDate.getTime() - durationMs),
+  };
+}
+
+type EmployeeOverviewRow = {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  avatar_url: string | null;
+  active_tasks: string;
+  overdue_tasks: string;
+  completed_in_range: string;
+  total_seconds: string;
+  billable_seconds: string;
+  estimated_minutes: string;
+};
+
+async function loadEmployeeOverviewRows({
+  tenantId,
+  startDate,
+  endDate,
+  userIds,
+  limit,
+  offset,
+}: {
+  tenantId: string;
+  startDate: Date;
+  endDate: Date;
+  userIds: string[];
+  limit?: number;
+  offset?: number;
+}) {
+  const userFilter = userIds.length > 0
+    ? sql`AND u.id = ANY(ARRAY[${sql.join(userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+    : sql``;
+  const paginationClause = limit != null
+    ? sql`LIMIT ${limit} OFFSET ${offset ?? 0}`
+    : sql``;
+
+  return dbRows<EmployeeOverviewRow>(sql`
+    SELECT
+      u.id AS user_id,
+      u.first_name,
+      u.last_name,
+      u.email,
+      u.avatar_url,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
+          AND t.status NOT IN ('done', 'cancelled')
+      ) AS active_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
+          AND t.status NOT IN ('done', 'cancelled')
+          AND t.due_date < NOW()
+      ) AS overdue_tasks,
+      (
+        SELECT COUNT(DISTINCT t.id)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
+          AND t.status = 'done'
+          AND t.updated_at >= ${startDate}
+          AND t.updated_at <= ${endDate}
+      ) AS completed_in_range,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0)
+        FROM time_entries te
+        WHERE te.user_id = u.id
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= ${startDate}
+          AND te.start_time <= ${endDate}
+      ) AS total_seconds,
+      (
+        SELECT COALESCE(SUM(CASE WHEN ${BILLABLE_TIME_CONDITION} THEN te.duration_seconds ELSE 0 END), 0)
+        FROM time_entries te
+        WHERE te.user_id = u.id
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= ${startDate}
+          AND te.start_time <= ${endDate}
+      ) AS billable_seconds,
+      (
+        SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = u.id
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.is_personal = false
+          AND t.status NOT IN ('done', 'cancelled')
+      ) AS estimated_minutes
+    FROM users u
+    WHERE u.tenant_id = ${tenantId}
+      AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
+      ${userFilter}
+    ORDER BY active_tasks DESC, overdue_tasks DESC
+    ${paginationClause}
+  `);
+}
+
 router.get("/employee/overview", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
@@ -41,72 +163,42 @@ router.get("/employee/overview", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
 
-    const userFilter = filters.userIds.length > 0
-      ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
-      : sql``;
-
     const daysInRange = Math.max(
       Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1,
       1
     );
+    const prior = previousRange(startDate, endDate);
 
-    const rows = await dbRows<{
-      user_id: string;
-      first_name: string | null;
-      last_name: string | null;
-      email: string;
-      avatar_url: string | null;
-      active_tasks: string;
-      overdue_tasks: string;
-      completed_in_range: string;
-      total_seconds: string;
-      billable_seconds: string;
-      estimated_minutes: string;
-    }>(sql`
-      SELECT
-        u.id AS user_id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.avatar_url,
-        COUNT(DISTINCT CASE
-          WHEN t.status NOT IN ('done', 'cancelled') THEN t.id
-        END) AS active_tasks,
-        COUNT(DISTINCT CASE
-          WHEN t.status NOT IN ('done', 'cancelled') AND t.due_date < NOW() THEN t.id
-        END) AS overdue_tasks,
-        COUNT(DISTINCT CASE
-          WHEN t.status = 'done'
-            AND t.updated_at >= ${startDate}
-            AND t.updated_at <= ${endDate}
-          THEN t.id
-        END) AS completed_in_range,
-        COALESCE(SUM(
-          CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-          THEN te.duration_seconds ELSE 0 END
-        ), 0) AS total_seconds,
-        0 AS billable_seconds,
-        COALESCE(SUM(
-          CASE WHEN t.status NOT IN ('done', 'cancelled')
-          THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END
-        ), 0) AS estimated_minutes
-      FROM users u
-      LEFT JOIN task_assignees ta ON ta.user_id = u.id AND ta.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.user_id = u.id AND te.tenant_id = ${tenantId}
-      WHERE u.tenant_id = ${tenantId}
-        AND u.role IN ('admin', 'employee')
-        ${userFilter}
-      GROUP BY u.id, u.first_name, u.last_name, u.email, u.avatar_url
-      ORDER BY active_tasks DESC, overdue_tasks DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `);
+    const [rows, currentSummaryRows, priorSummaryRows] = await Promise.all([
+      loadEmployeeOverviewRows({
+        tenantId,
+        startDate,
+        endDate,
+        userIds: filters.userIds,
+        limit,
+        offset,
+      }),
+      loadEmployeeOverviewRows({
+        tenantId,
+        startDate,
+        endDate,
+        userIds: filters.userIds,
+      }),
+      loadEmployeeOverviewRows({
+        tenantId,
+        startDate: prior.startDate,
+        endDate: prior.endDate,
+        userIds: filters.userIds,
+      }),
+    ]);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(DISTINCT u.id) AS total
       FROM users u
-      WHERE u.tenant_id = ${tenantId} AND u.role IN ('admin', 'employee')
-      ${userFilter}
+      WHERE u.tenant_id = ${tenantId} AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
+      ${filters.userIds.length > 0
+        ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+        : sql``}
     `));
 
     const employees = rows.map((r) => {
@@ -143,8 +235,32 @@ router.get("/employee/overview", async (req: Request, res: Response) => {
       };
     });
 
+    function buildSummary(summaryRows: EmployeeOverviewRow[]) {
+      const mapped = summaryRows.map((r) => {
+        const totalHours = Math.round(Number(r.total_seconds) / 3600 * 10) / 10;
+        return {
+          activeTasks: Number(r.active_tasks),
+          overdueTasks: Number(r.overdue_tasks),
+          totalHours,
+          utilizationPct: Math.round(totalHours / (daysInRange * 8) * 100),
+        };
+      });
+      return {
+        activeTasks: mapped.reduce((sum, row) => sum + row.activeTasks, 0),
+        overdueTasks: mapped.reduce((sum, row) => sum + row.overdueTasks, 0),
+        totalHours: Math.round(mapped.reduce((sum, row) => sum + row.totalHours, 0) * 10) / 10,
+        avgUtilization: mapped.length > 0
+          ? Math.round(mapped.reduce((sum, row) => sum + row.utilizationPct, 0) / mapped.length)
+          : 0,
+      };
+    }
+
     res.json({
       employees,
+      summary: {
+        current: buildSummary(currentSummaryRows),
+        prior: buildSummary(priorSummaryRows),
+      },
       pagination: {
         total: Number(countRow?.total ?? 0),
         limit,
@@ -209,19 +325,19 @@ router.get("/employee/workload", async (req: Request, res: Response) => {
         END) AS backlog_count
       FROM users u
       LEFT JOIN task_assignees ta ON ta.user_id = u.id AND ta.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
+      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId} AND t.is_personal = false
       WHERE u.tenant_id = ${tenantId}
-        AND u.role IN ('admin', 'employee')
+        AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
         ${userFilter}
       GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY assigned_count DESC, overdue_count DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(DISTINCT u.id) AS total
       FROM users u
-      WHERE u.tenant_id = ${tenantId} AND u.role IN ('admin', 'employee')
+      WHERE u.tenant_id = ${tenantId} AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
       ${userFilter}
     `));
 
@@ -279,35 +395,52 @@ router.get("/employee/time", async (req: Request, res: Response) => {
         u.first_name,
         u.last_name,
         u.email,
-        COALESCE(SUM(
-          CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-          THEN te.duration_seconds ELSE 0 END
-        ), 0) AS total_seconds,
-        0 AS billable_seconds,
-        COALESCE(SUM(
-          CASE WHEN t.status NOT IN ('done', 'cancelled')
-          THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END
-        ), 0) AS estimated_minutes,
-        COUNT(DISTINCT
-          CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-          THEN DATE(te.start_time) END
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)
+          FROM time_entries te
+          WHERE te.user_id = u.id
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time >= ${startDate}
+            AND te.start_time <= ${endDate}
+        ) AS total_seconds,
+        (
+          SELECT COALESCE(SUM(CASE WHEN ${BILLABLE_TIME_CONDITION} THEN te.duration_seconds ELSE 0 END), 0)
+          FROM time_entries te
+          WHERE te.user_id = u.id
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time >= ${startDate}
+            AND te.start_time <= ${endDate}
+        ) AS billable_seconds,
+        (
+          SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+          FROM task_assignees ta
+          JOIN tasks t ON t.id = ta.task_id
+          WHERE ta.user_id = u.id
+            AND ta.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.is_personal = false
+            AND t.status NOT IN ('done', 'cancelled')
+        ) AS estimated_minutes,
+        (
+          SELECT COUNT(DISTINCT DATE(te.start_time))
+          FROM time_entries te
+          WHERE te.user_id = u.id
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time >= ${startDate}
+            AND te.start_time <= ${endDate}
         ) AS logged_days
       FROM users u
-      LEFT JOIN task_assignees ta ON ta.user_id = u.id AND ta.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.user_id = u.id AND te.tenant_id = ${tenantId}
       WHERE u.tenant_id = ${tenantId}
-        AND u.role IN ('admin', 'employee')
+        AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
         ${userFilter}
-      GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY total_seconds DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow<{ total: string }>(await db.execute<{ total: string }>(sql`
       SELECT COUNT(DISTINCT u.id) AS total
       FROM users u
-      WHERE u.tenant_id = ${tenantId} AND u.role IN ('admin', 'employee')
+      WHERE u.tenant_id = ${tenantId} AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
       ${userFilter}
     `));
 
@@ -335,8 +468,40 @@ router.get("/employee/time", async (req: Request, res: Response) => {
       };
     });
 
+    const summary = employees.reduce((acc, e) => {
+      acc.totalHours += e.totalHours;
+      acc.billableHours += e.billableHours;
+      acc.nonBillableHours += e.nonBillableHours;
+      acc.estimatedHours += e.estimatedHours;
+      acc.varianceHours += e.varianceHours;
+      acc.loggedDays += e.loggedDays;
+      return acc;
+    }, {
+      totalHours: 0,
+      billableHours: 0,
+      nonBillableHours: 0,
+      estimatedHours: 0,
+      varianceHours: 0,
+      loggedDays: 0,
+    });
+
+    const billablePct = summary.totalHours > 0
+      ? Math.round((summary.billableHours / summary.totalHours) * 100)
+      : 0;
+
     res.json({
       employees,
+      summary: {
+        totalHours: Math.round(summary.totalHours * 10) / 10,
+        billableHours: Math.round(summary.billableHours * 10) / 10,
+        nonBillableHours: Math.round(summary.nonBillableHours * 10) / 10,
+        estimatedHours: Math.round(summary.estimatedHours * 10) / 10,
+        varianceHours: Math.round(summary.varianceHours * 10) / 10,
+        avgHoursPerLoggedDay: summary.loggedDays > 0
+          ? Math.round((summary.totalHours / summary.loggedDays) * 10) / 10
+          : 0,
+        billablePct,
+      },
       pagination: {
         total: Number(countRow?.total ?? 0),
         limit,
@@ -374,28 +539,35 @@ router.get("/employee/capacity", async (req: Request, res: Response) => {
         u.last_name,
         u.email,
         date_trunc('week', gs.week)::date AS week_start,
-        COALESCE(SUM(CASE
-          WHEN t.due_date >= gs.week AND t.due_date < gs.week + INTERVAL '7 days'
+        (
+          SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+          FROM task_assignees ta
+          JOIN tasks t ON t.id = ta.task_id
+          WHERE ta.user_id = u.id
+            AND ta.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.is_personal = false
             AND t.status NOT IN ('done', 'cancelled')
-          THEN COALESCE(t.estimate_minutes, 0) ELSE 0
-        END), 0) AS planned_minutes,
-        COALESCE(SUM(CASE
-          WHEN te.start_time >= gs.week AND te.start_time < gs.week + INTERVAL '7 days'
-          THEN te.duration_seconds ELSE 0
-        END), 0) AS actual_seconds
+            AND t.due_date >= gs.week
+            AND t.due_date < gs.week + INTERVAL '7 days'
+        ) AS planned_minutes,
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)
+          FROM time_entries te
+          WHERE te.user_id = u.id
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time >= gs.week
+            AND te.start_time < gs.week + INTERVAL '7 days'
+        ) AS actual_seconds
       FROM users u
       CROSS JOIN generate_series(
         date_trunc('week', ${startDate}::timestamp),
         date_trunc('week', ${endDate}::timestamp),
         '1 week'::interval
       ) AS gs(week)
-      LEFT JOIN task_assignees ta ON ta.user_id = u.id AND ta.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.user_id = u.id AND te.tenant_id = ${tenantId}
       WHERE u.tenant_id = ${tenantId}
-        AND u.role IN ('admin', 'employee')
+        AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
         ${userFilter}
-      GROUP BY u.id, u.first_name, u.last_name, u.email, gs.week
       ORDER BY u.email, week_start
     `);
 
@@ -449,7 +621,11 @@ router.get("/employee/capacity", async (req: Request, res: Response) => {
 router.get("/employee/risk", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
+    const userFilter = filters.userIds.length > 0
+      ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
+      : sql``;
 
     const rows = await dbRows<{
       user_id: string;
@@ -469,20 +645,50 @@ router.get("/employee/risk", async (req: Request, res: Response) => {
         u.last_name,
         u.email,
         u.avatar_url,
-        COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') THEN t.id END) AS active_tasks,
-        COUNT(DISTINCT CASE WHEN t.status NOT IN ('done','cancelled') AND t.due_date < NOW() THEN t.id END) AS overdue_count,
-        COALESCE(SUM(CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS total_seconds,
-        COUNT(DISTINCT CASE
-          WHEN t.status NOT IN ('done','cancelled') AND t.updated_at < NOW() - INTERVAL '14 days'
-          THEN t.id
-        END) AS backlog_count,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM task_assignees ta
+          JOIN tasks t ON t.id = ta.task_id
+          WHERE ta.user_id = u.id
+            AND ta.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.is_personal = false
+            AND t.status NOT IN ('done','cancelled')
+        ) AS active_tasks,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM task_assignees ta
+          JOIN tasks t ON t.id = ta.task_id
+          WHERE ta.user_id = u.id
+            AND ta.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.is_personal = false
+            AND t.status NOT IN ('done','cancelled')
+            AND t.due_date < NOW()
+        ) AS overdue_count,
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)
+          FROM time_entries te
+          WHERE te.user_id = u.id
+            AND te.tenant_id = ${tenantId}
+            AND te.start_time >= ${startDate}
+            AND te.start_time <= ${endDate}
+        ) AS total_seconds,
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM task_assignees ta
+          JOIN tasks t ON t.id = ta.task_id
+          WHERE ta.user_id = u.id
+            AND ta.tenant_id = ${tenantId}
+            AND t.tenant_id = ${tenantId}
+            AND t.is_personal = false
+            AND t.status NOT IN ('done','cancelled')
+            AND t.updated_at < NOW() - INTERVAL '14 days'
+        ) AS backlog_count,
         GREATEST(${Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))}, 1) AS days_in_range
       FROM users u
-      LEFT JOIN task_assignees ta ON ta.user_id = u.id AND ta.tenant_id = ${tenantId}
-      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.user_id = u.id AND te.tenant_id = ${tenantId}
-      WHERE u.tenant_id = ${tenantId} AND u.role IN ('admin', 'employee')
-      GROUP BY u.id, u.first_name, u.last_name, u.email, u.avatar_url
+      WHERE u.tenant_id = ${tenantId} AND u.role = ANY(${REPORTING_USER_ROLE_ARRAY_SQL})
+        ${userFilter}
     `);
 
     const WEEKLY_HOURS_THRESHOLD = 50;
@@ -559,19 +765,17 @@ router.get("/employee/risk", async (req: Request, res: Response) => {
 router.get("/employee/trends", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
     const userId = req.query.userId as string | undefined;
+    const scopedUserIds = userId ? [userId] : filters.userIds;
 
-    const userFilter = userId
-      ? sql`AND ta.user_id = ${userId} AND te.user_id = ${userId}`
+    const userJoinFilter = scopedUserIds.length > 0
+      ? sql`AND ta.user_id = ANY(ARRAY[${sql.join(scopedUserIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const userJoinFilter = userId
-      ? sql`AND ta.user_id = ${userId}`
-      : sql``;
-
-    const timeUserFilter = userId
-      ? sql`AND te.user_id = ${userId}`
+    const timeUserFilter = scopedUserIds.length > 0
+      ? sql`AND te.user_id = ANY(ARRAY[${sql.join(scopedUserIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
     const rows = await dbRows<{
@@ -581,25 +785,31 @@ router.get("/employee/trends", async (req: Request, res: Response) => {
     }>(sql`
       SELECT
         date_trunc('week', gs.week)::date AS week_start,
-        COUNT(DISTINCT CASE
-          WHEN t.status = 'done'
+        (
+          SELECT COUNT(DISTINCT t.id)
+          FROM task_assignees ta
+          JOIN tasks t ON t.id = ta.task_id
+          WHERE ta.tenant_id = ${tenantId}
+            ${userJoinFilter}
+            AND t.tenant_id = ${tenantId}
+            AND t.is_personal = false
+            AND t.status = 'done'
             AND t.updated_at >= gs.week
             AND t.updated_at < gs.week + INTERVAL '7 days'
-          THEN t.id
-        END) AS completed_tasks,
-        COALESCE(SUM(
-          CASE WHEN te.start_time >= gs.week AND te.start_time < gs.week + INTERVAL '7 days'
-          THEN te.duration_seconds ELSE 0 END
-        ), 0)::float / 3600.0 AS hours_tracked
+        ) AS completed_tasks,
+        (
+          SELECT COALESCE(SUM(te.duration_seconds), 0)::float / 3600.0
+          FROM time_entries te
+          WHERE te.tenant_id = ${tenantId}
+            ${timeUserFilter}
+            AND te.start_time >= gs.week
+            AND te.start_time < gs.week + INTERVAL '7 days'
+        ) AS hours_tracked
       FROM generate_series(
         date_trunc('week', ${startDate}::timestamp),
         date_trunc('week', ${endDate}::timestamp),
         '1 week'::interval
       ) AS gs(week)
-      LEFT JOIN task_assignees ta ON ta.tenant_id = ${tenantId} ${userJoinFilter}
-      LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
-      LEFT JOIN time_entries te ON te.tenant_id = ${tenantId} ${timeUserFilter}
-      GROUP BY gs.week
       ORDER BY gs.week
     `);
 
@@ -610,6 +820,7 @@ router.get("/employee/trends", async (req: Request, res: Response) => {
         hoursTracked: Math.round(Number(r.hours_tracked) * 10) / 10,
       })),
       userId: userId ?? null,
+      userIds: scopedUserIds,
       range: { startDate, endDate },
     });
   } catch (error) {
@@ -634,6 +845,7 @@ router.get("/employee/performance", async (req: Request, res: Response) => {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       userId,
+      userIds: filters.userIds,
       limit,
       offset,
     });

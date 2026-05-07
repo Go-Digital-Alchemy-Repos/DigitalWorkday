@@ -104,7 +104,8 @@ async function checkMembership(
 
   let isMember = false;
   if (type === "channel") {
-    isMember = await storage.isUserInChatChannel(ctx.userId, id);
+    const userChannels = await storage.getUserChatChannels(ctx.tenantId, ctx.userId);
+    isMember = userChannels.some((membership) => membership.channelId === id);
   } else if (type === "dm") {
     const userDmThreads = await storage.getUserChatDmThreads(ctx.tenantId, ctx.userId);
     isMember = userDmThreads.some((t) => t.id === id);

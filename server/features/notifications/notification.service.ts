@@ -4,6 +4,7 @@ import type { NotificationPayload } from "@shared/events";
 import { db } from "../../db";
 import { clientCrm, clients } from "@shared/schema";
 import { eq, and, lte, isNotNull } from "drizzle-orm";
+import { buildChatUrl } from "../../lib/appLinks";
 
 type NotificationType = 
   | "task_deadline"
@@ -378,6 +379,7 @@ export async function notifyChatMessage(
   channelName: string,
   senderName: string,
   messagePreview: string,
+  messageId: string | null,
   context: NotificationContext
 ): Promise<void> {
   const preview = messagePreview.length > 80
@@ -389,12 +391,12 @@ export async function notifyChatMessage(
     "chat_message",
     `New message in #${channelName}`,
     `${senderName}: ${preview}`,
-    { channelId },
+    { targetType: "channel", channelId, messageId },
     context,
     {
       entityType: "channel",
       entityId: channelId,
-      href: `/chat?channel=${channelId}`,
+      href: buildChatUrl({ type: "channel", conversationId: channelId, messageId }),
       dedupeKey: `chat:${channelId}`,
     }
   );
@@ -402,9 +404,11 @@ export async function notifyChatMessage(
 
 export async function notifyDirectMessage(
   userId: string,
+  dmThreadId: string,
   senderId: string,
   senderName: string,
   messagePreview: string,
+  messageId: string | null,
   context: NotificationContext
 ): Promise<void> {
   const preview = messagePreview.length > 80
@@ -416,13 +420,13 @@ export async function notifyDirectMessage(
     "chat_message",
     `New message from ${senderName}`,
     preview,
-    { senderId },
+    { targetType: "dm", dmThreadId, senderId, messageId },
     context,
     {
       entityType: "dm",
-      entityId: senderId,
-      href: `/chat?dm=${senderId}`,
-      dedupeKey: `dm:${senderId}`,
+      entityId: dmThreadId,
+      href: buildChatUrl({ type: "dm", conversationId: dmThreadId, messageId }),
+      dedupeKey: `dm:${dmThreadId}`,
     }
   );
 }
@@ -449,7 +453,7 @@ export async function notifyClientMessage(
     {
       entityType: "client_thread",
       entityId: threadId,
-      href: `/clients/${clientId}/messages?thread=${threadId}`,
+      href: `/clients/${clientId}?tab=messages&conversation=${threadId}`,
       dedupeKey: `client_msg:${threadId}`,
     }
   );
@@ -472,7 +476,7 @@ export async function notifySupportTicketCreated(
     {
       entityType: "support_ticket",
       entityId: ticketId,
-      href: `/support/tickets/${ticketId}`,
+      href: `/support/${ticketId}`,
     }
   );
 }
@@ -495,7 +499,7 @@ export async function notifySupportTicketUpdated(
     {
       entityType: "support_ticket",
       entityId: ticketId,
-      href: `/support/tickets/${ticketId}`,
+      href: `/support/${ticketId}`,
       dedupeKey: `ticket:${ticketId}`,
     }
   );
@@ -519,7 +523,7 @@ export async function notifySupportTicketAssigned(
       severity: "warning",
       entityType: "support_ticket",
       entityId: ticketId,
-      href: `/support/tickets/${ticketId}`,
+      href: `/support/${ticketId}`,
     }
   );
 }
@@ -541,7 +545,7 @@ export async function notifyWorkOrderCreated(
     {
       entityType: "work_order",
       entityId: workOrderId,
-      href: `/support/work-orders/${workOrderId}`,
+      href: `/support/${workOrderId}`,
     }
   );
 }
@@ -658,6 +662,7 @@ let followUpCheckerInterval: NodeJS.Timeout | null = null;
 export async function notifyApprovalResponse(
   requestedByUserId: string,
   approvalId: string,
+  clientId: string,
   approvalTitle: string,
   status: string,
   respondedByName: string,
@@ -669,9 +674,9 @@ export async function notifyApprovalResponse(
     "approval_response",
     `Approval ${statusLabel}: ${approvalTitle}`,
     `${respondedByName} ${status === "approved" ? "approved" : "requested changes on"} "${approvalTitle}"`,
-    { approvalId, status },
+    { approvalId, clientId, status },
     context,
-    { entityType: "approval", entityId: approvalId }
+    { entityType: "approval", entityId: approvalId, href: `/clients/${clientId}?tab=approvals&approval=${approvalId}` }
   );
 }
 

@@ -11,11 +11,13 @@ import {
   FileArchive,
   FileCode2,
   Download, 
+  Eye,
   Trash2,
   Loader2,
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { TaskAttachmentWithUser } from "@shared/schema";
@@ -39,6 +41,14 @@ interface AttachmentConfig {
   configured: boolean;
   maxFileSizeBytes: number;
   allowedMimeTypes: string[];
+}
+
+interface PreviewAttachment {
+  id: string;
+  url: string;
+  fileName: string;
+  fileSizeBytes: number;
+  uploadedByName?: string | null;
 }
 
 function getFileIcon(mimeType: string) {
@@ -68,6 +78,16 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function triggerFileDownload(url: string, fileName: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 const ATTACHMENT_MAX_DIMENSION = 2000;
@@ -159,6 +179,8 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [previewAttachment, setPreviewAttachment] = useState<PreviewAttachment | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
 
   const attachmentPath = subtaskId
     ? `/api/projects/${projectId}/subtasks/${subtaskId}/attachments`
@@ -306,16 +328,36 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
     setIsDragOver(true);
   }, []);
 
+  const getAttachmentUrl = useCallback(async (
+    attachmentId: string,
+    mode: "inline" | "download" = "inline",
+  ) => {
+    const query = mode === "download" ? "?mode=download" : "";
+    const response = await apiRequest(
+      "GET",
+      `${attachmentPath}/${attachmentId}/download${query}`
+    );
+    const data = await response.json();
+    return data.url as string;
+  }, [attachmentPath]);
+
   const downloadMutation = useMutation({
-    mutationFn: async (attachmentId: string) => {
+    mutationFn: async ({
+      attachmentId,
+      fileName,
+    }: {
+      attachmentId: string;
+      fileName: string;
+    }) => {
       const response = await apiRequest(
         "GET",
-        `${attachmentPath}/${attachmentId}/download`
+        `${attachmentPath}/${attachmentId}/download?mode=download`
       );
-      return response.json();
+      const data = await response.json();
+      return { url: data.url as string, fileName };
     },
-    onSuccess: (data: { url: string }) => {
-      window.open(data.url, "_blank");
+    onSuccess: (data) => {
+      triggerFileDownload(data.url, data.fileName);
     },
     onError: () => {
       toast({
@@ -325,6 +367,31 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
       });
     },
   });
+
+  const handlePreviewAttachment = useCallback(async (attachment: TaskAttachmentWithUser) => {
+    if (!isImageAttachment(attachment.mimeType)) return;
+
+    setPreviewLoadingId(attachment.id);
+    try {
+      const url = previewUrls[attachment.id] ?? await getAttachmentUrl(attachment.id, "inline");
+      setPreviewUrls((prev) => ({ ...prev, [attachment.id]: url }));
+      setPreviewAttachment({
+        id: attachment.id,
+        url,
+        fileName: attachment.originalFileName,
+        fileSizeBytes: attachment.fileSizeBytes,
+        uploadedByName: attachment.uploadedByUser?.name,
+      });
+    } catch {
+      toast({
+        title: "Preview failed",
+        description: `Could not preview ${attachment.originalFileName}. Please try again.`,
+        variant: "destructive",
+      });
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  }, [getAttachmentUrl, previewUrls, toast]);
 
   const deleteMutation = useMutation({
     mutationFn: async (attachmentId: string) => {
@@ -364,9 +431,8 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
       const entries = await Promise.all(
         missingPreviewAttachments.map(async (attachment) => {
           try {
-            const response = await apiRequest("GET", `${attachmentPath}/${attachment.id}/download`);
-            const data = await response.json();
-            return [attachment.id, data.url] as const;
+            const url = await getAttachmentUrl(attachment.id, "inline");
+            return [attachment.id, url] as const;
           } catch {
             return null;
           }
@@ -386,7 +452,7 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
     return () => {
       cancelled = true;
     };
-  }, [attachmentPath, completedAttachments, previewUrls]);
+  }, [completedAttachments, getAttachmentUrl, previewUrls]);
 
   const removeUploadingFile = useCallback((id: string) => {
     setUploadingFiles(prev => prev.filter(f => f.id !== id));
@@ -511,13 +577,34 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
                       {attachment.uploadedByUser && ` • ${attachment.uploadedByUser.name}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                    {isImage && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handlePreviewAttachment(attachment)}
+                        disabled={previewLoadingId === attachment.id}
+                        aria-label={`Preview ${attachment.originalFileName}`}
+                        data-testid={`button-preview-${attachment.id}`}
+                      >
+                        {previewLoadingId === attachment.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => downloadMutation.mutate(attachment.id)}
+                      onClick={() => downloadMutation.mutate({
+                        attachmentId: attachment.id,
+                        fileName: attachment.originalFileName,
+                      })}
                       disabled={downloadMutation.isPending}
+                      aria-label={`Download ${attachment.originalFileName}`}
                       data-testid={`button-download-${attachment.id}`}
                     >
                       <Download className="h-3.5 w-3.5" />
@@ -528,6 +615,7 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
                       className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => deleteMutation.mutate(attachment.id)}
                       disabled={deleteMutation.isPending}
+                      aria-label={`Delete ${attachment.originalFileName}`}
                       data-testid={`button-delete-${attachment.id}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -543,6 +631,39 @@ export function AttachmentUploader({ taskId, projectId, subtaskId = null, onUplo
           </p>
         )}
       </div>
+      <Dialog
+        open={!!previewAttachment}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAttachment(null);
+        }}
+      >
+        <DialogContent
+          className="h-[80vh] w-[95vw] max-w-none grid-rows-[auto_1fr] gap-0 overflow-hidden p-0 sm:h-[75vh] sm:w-[75vw]"
+          data-testid="attachment-preview-modal"
+        >
+          {previewAttachment && (
+            <>
+              <DialogHeader className="border-b px-4 py-3 pr-12">
+                <DialogTitle className="truncate text-base">
+                  {previewAttachment.fileName}
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(previewAttachment.fileSizeBytes)}
+                  {previewAttachment.uploadedByName && ` • ${previewAttachment.uploadedByName}`}
+                </p>
+              </DialogHeader>
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black/90 p-4">
+                <img
+                  src={previewAttachment.url}
+                  alt={previewAttachment.fileName}
+                  className="max-h-full max-w-full object-contain"
+                  data-testid="attachment-preview-image"
+                />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

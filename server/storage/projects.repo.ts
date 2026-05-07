@@ -7,7 +7,7 @@ import {
   projects, projectMembers, sections, tasks, users, hiddenProjects,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, sql, inArray, notInArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, notInArray, isNull } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export class ProjectsRepository {
@@ -179,7 +179,9 @@ export class ProjectsRepository {
   }
 
   async getSectionsByProject(projectId: string): Promise<Section[]> {
-    return db.select().from(sections).where(eq(sections.projectId, projectId)).orderBy(asc(sections.orderIndex));
+    return db.select().from(sections)
+      .where(and(eq(sections.projectId, projectId), isNull(sections.archivedAt)))
+      .orderBy(asc(sections.orderIndex));
   }
 
   async getSectionsWithTasks(projectId: string): Promise<SectionWithTasks[]> {
@@ -221,8 +223,20 @@ export class ProjectsRepository {
     return updated || undefined;
   }
 
+  async archiveSection(id: string, archivedBy?: string | null): Promise<Section | undefined> {
+    const [updated] = await db
+      .update(sections)
+      .set({ archivedAt: new Date(), archivedBy: archivedBy || null })
+      .where(eq(sections.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
   async deleteSection(id: string): Promise<void> {
-    await db.delete(tasks).where(eq(tasks.sectionId, id));
+    await db
+      .update(tasks)
+      .set({ sectionId: null, updatedAt: new Date() })
+      .where(eq(tasks.sectionId, id));
     await db.delete(sections).where(eq(sections.id, id));
   }
 

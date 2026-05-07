@@ -77,6 +77,43 @@ export function toPlainText(value: unknown): string {
   return "";
 }
 
+export function isRichTextContentEmpty(value: unknown): boolean {
+  const parsed = parseRichTextValue(value);
+
+  if (parsed.type === "tiptap") {
+    return toPlainText(value).trim() === "";
+  }
+
+  const text = parsed.text || "";
+  if (isHtmlString(text)) {
+    return text
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() === "";
+  }
+
+  return text.trim() === "";
+}
+
+export function normalizeRichTextForStorage(value: unknown): string {
+  if (isRichTextContentEmpty(value)) {
+    return "";
+  }
+
+  return normalizeRichTextValue(value);
+}
+
+export function toEditablePlainText(value: unknown): string {
+  const parsed = parseRichTextValue(value);
+
+  if (parsed.type === "tiptap") {
+    return toPlainText(value);
+  }
+
+  return parsed.text || "";
+}
+
 function extractTextFromDoc(node: JSONContent): string {
   if (node.type === "text" && node.text) {
     return node.text;

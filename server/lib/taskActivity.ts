@@ -1,14 +1,7 @@
-import type { Task, Subtask } from "@shared/schema";
+import type { InsertActivityLog, Task, Subtask } from "@shared/schema";
 
 type ActivityStorage = {
-  createActivityLog: (log: {
-    workspaceId: string;
-    actorUserId: string;
-    entityType: string;
-    entityId: string;
-    action: string;
-    diffJson?: unknown;
-  }) => Promise<unknown>;
+  createActivityLog: (log: InsertActivityLog) => Promise<unknown>;
   getUser: (userId: string) => Promise<{
     id: string;
     name: string | null;

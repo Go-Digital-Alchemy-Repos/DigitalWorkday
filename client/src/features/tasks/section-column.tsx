@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus, MoreHorizontal, Pencil, Trash2, XCircle } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, XCircle, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ interface SectionColumnProps {
   onTaskSelect?: (task: TaskWithRelations) => void;
   onTaskStatusChange?: (taskId: string, completed: boolean) => void;
   onEditSection?: (sectionId: string, name: string) => void;
+  onArchiveSection?: (sectionId: string) => void;
   onDeleteSection?: (sectionId: string) => void;
   onClearSectionTasks?: (sectionId: string) => void;
 }
@@ -40,11 +41,13 @@ export function SectionColumn({
   onTaskSelect,
   onTaskStatusChange,
   onEditSection,
+  onArchiveSection,
   onDeleteSection,
   onClearSectionTasks,
 }: SectionColumnProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [editName, setEditName] = useState(section.name);
   
   const tasks = section.tasks || [];
@@ -113,6 +116,18 @@ export function SectionColumn({
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit Section
                 </DropdownMenuItem>
+                {onArchiveSection && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setArchiveDialogOpen(true)}
+                      data-testid={`menu-item-archive-section-${section.id}`}
+                    >
+                      <Archive className="h-4 w-4 mr-2" />
+                      Archive Section
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {onClearSectionTasks && tasks.length > 0 && (
                   <>
                     <DropdownMenuSeparator />
@@ -122,7 +137,7 @@ export function SectionColumn({
                       data-testid={`menu-item-clear-tasks-${section.id}`}
                     >
                       <XCircle className="h-4 w-4 mr-2" />
-                      Clear All Tasks
+                      Delete All Tasks
                     </DropdownMenuItem>
                   </>
                 )}
@@ -237,7 +252,7 @@ export function SectionColumn({
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
         <DialogContent className="sm:max-w-[400px]" data-testid="dialog-clear-section-tasks">
           <DialogHeader>
-            <DialogTitle>Clear All Tasks</DialogTitle>
+            <DialogTitle>Delete All Tasks</DialogTitle>
             <DialogDescription>
               This will permanently delete all {taskCount} task{taskCount !== 1 ? "s" : ""} in "{section.name}". This action cannot be undone.
             </DialogDescription>
@@ -259,6 +274,36 @@ export function SectionColumn({
               data-testid="button-confirm-clear-tasks"
             >
               Delete All Tasks
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]" data-testid="dialog-archive-section">
+          <DialogHeader>
+            <DialogTitle>Archive Section</DialogTitle>
+            <DialogDescription>
+              This will remove "{section.name}" from active project views while keeping the section record for reporting and task history.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setArchiveDialogOpen(false)}
+              data-testid="button-cancel-archive-section"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                onArchiveSection?.(section.id);
+                setArchiveDialogOpen(false);
+              }}
+              data-testid="button-confirm-archive-section"
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              Archive Section
             </Button>
           </DialogFooter>
         </DialogContent>

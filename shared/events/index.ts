@@ -23,14 +23,21 @@ export const PROJECT_EVENTS = {
 export interface ProjectCreatedPayload {
   project: {
     id: string;
-    name: string;
-    description: string | null;
-    color: string;
-    icon: string | null;
+    tenantId: string | null;
     workspaceId: string;
     teamId: string | null;
-    isArchived: boolean;
+    clientId: string | null;
+    divisionId: string | null;
+    name: string;
+    description: string | null;
+    visibility: string;
+    status: string;
+    color: string | null;
+    budgetMinutes: number | null;
+    stickyAt: Date | null;
+    createdBy: string | null;
     createdAt: Date;
+    updatedAt: Date;
   };
 }
 
@@ -245,6 +252,7 @@ export interface ClientPayload {
   companyName: string;
   displayName: string | null;
   status: string;
+  stage?: string | null;
   workspaceId: string;
   createdAt: Date;
 }
@@ -942,6 +950,7 @@ export type ClientToServerEvents = {
   [CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED]: (payload: ClientConversationMessagePayload) => void;
   [CLIENT_CONVERSATION_EVENTS.INTERNAL_NOTE_ADDED]: (payload: ClientConversationMessagePayload) => void;
   [CLIENT_CONVERSATION_EVENTS.MERGED]: (payload: ClientConversationMergedPayload) => void;
+  [CLIENT_CONVERSATION_EVENTS.UPDATED]: (payload: ClientConversationUpdatedPayload) => void;
 };
 
 // =============================================================================
@@ -953,6 +962,7 @@ export const CLIENT_CONVERSATION_EVENTS = {
   MESSAGE_ADDED: 'client_conversation:messageAdded',
   INTERNAL_NOTE_ADDED: 'client_conversation:internalNoteAdded',
   MERGED: 'client_conversation:merged',
+  UPDATED: 'client_conversation:updated',
 } as const;
 
 export interface ClientConversationAssignedPayload {
@@ -980,4 +990,11 @@ export interface ClientConversationMergedPayload {
   tenantId: string;
   clientId: string;
   mergedByUserId: string;
+}
+
+export interface ClientConversationUpdatedPayload {
+  conversationId: string;
+  tenantId: string;
+  clientId: string;
+  closedAt?: string | null;
 }

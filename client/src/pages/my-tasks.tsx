@@ -103,7 +103,7 @@ import { useAuth } from "@/lib/auth";
 import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
-import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
+import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar, SurfacePanel } from "@/components/layout";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
 import type { TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
@@ -370,10 +370,12 @@ function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryPr
     return null;
   }
 
+  const summaryCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)]";
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-        <Card data-testid="card-quick-insights">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card className={summaryCardClass} data-testid="card-quick-insights">
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-blue-500" />
@@ -404,7 +406,7 @@ function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryPr
           </CardContent>
         </Card>
 
-        <Card data-testid="card-recently-added">
+        <Card className={summaryCardClass} data-testid="card-recently-added">
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-purple-500" />
@@ -439,7 +441,7 @@ function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryPr
           </CardContent>
         </Card>
 
-        <Card data-testid="card-recently-completed">
+        <Card className={summaryCardClass} data-testid="card-recently-completed">
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Target className="h-4 w-4 text-green-500" />
@@ -654,8 +656,11 @@ export default function MyTasks() {
       }
     },
     onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"], refetchType: "inactive" });
+
+      if (selectedTask?.id === variables.taskId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId], refetchType: "active" });
+      }
     },
   });
 
@@ -759,7 +764,7 @@ export default function MyTasks() {
   const handleDueDateChange = useCallback((taskId: string, dueDate: Date | null) => {
     updateTaskMutation.mutate({ 
       taskId, 
-      data: { dueDate: dueDate ? dueDate.toISOString() : null } 
+      data: { dueDate } 
     });
   }, [updateTaskMutation]);
 
@@ -946,16 +951,17 @@ export default function MyTasks() {
   }, [tasks]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
       {isEmployee && (
         <AccessInfoBanner variant="tasks" className="mx-4 md:mx-6 mt-4" />
       )}
-      <div className="border-b border-border bg-background sticky top-0 z-10">
-        <div className="flex flex-col gap-3 px-3 sm:px-4 lg:px-6 py-3 md:py-4">
+      <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
+        <div className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:px-8 md:py-5">
+          <SurfacePanel className="px-4 py-4 md:px-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
               <CheckSquare className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-              <h1 className="text-lg md:text-2xl font-semibold">My Tasks</h1>
+              <h1 className="text-xl md:text-[2rem] font-semibold tracking-tight">My Tasks</h1>
               <span className="text-xs md:text-sm text-muted-foreground">({totalTasks})</span>
             </div>
             <div className="flex items-center gap-2">
@@ -963,7 +969,7 @@ export default function MyTasks() {
                 variant={showCompleted ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setShowCompleted(!showCompleted)}
-                className="gap-1 shrink-0"
+                className="gap-1 shrink-0 rounded-xl"
                 data-testid="button-toggle-completed"
               >
                 {showCompleted ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -974,20 +980,21 @@ export default function MyTasks() {
                 size="sm"
                 onClick={() => setShowNewTaskDrawer(true)}
                 data-testid="button-add-personal-task"
-                className="md:hidden"
+                className="rounded-xl md:hidden"
               >
                 <Plus className="h-4 w-4" />
               </Button>
-              <Button
-                onClick={() => setShowNewTaskDrawer(true)}
-                data-testid="button-add-personal-task-desktop"
-                className="hidden md:flex"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Personal Task
-              </Button>
-            </div>
-          </div>
+	              <Button
+	                onClick={() => setShowNewTaskDrawer(true)}
+	                data-testid="button-add-personal-task-desktop"
+	                className="hidden rounded-xl shadow-[var(--shadow-soft)] md:flex"
+	              >
+	                <Plus className="h-4 w-4 mr-1" />
+	                Personal Task
+	              </Button>
+	            </div>
+	          </div>
+	          </SurfacePanel>
           <DataToolbar
             searchValue={searchQuery}
             onSearchChange={setSearchQuery}
@@ -1004,7 +1011,7 @@ export default function MyTasks() {
         </div>
 
         {taskStats.total > 0 && (
-          <div className="hidden md:block px-3 sm:px-4 lg:px-6 pb-4">
+          <div className="hidden md:block px-1 pb-4">
             <TaskProgressBar stats={taskStats} showMilestones />
           </div>
         )}
@@ -1012,11 +1019,11 @@ export default function MyTasks() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 space-y-6">
+        <div className="space-y-6 px-4 py-5 sm:px-5 lg:px-8 md:py-6">
           <div className="block md:hidden">
             {!isLoading && (
               <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth -mx-1 px-1">
-                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                  <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                   </div>
@@ -1024,9 +1031,9 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">Completion</p>
                     <p className="text-sm font-semibold">{dashboardStats.completionRate}%</p>
                   </div>
-                </div>
+                </SurfacePanel>
                 {dashboardStats.overdueCount > 0 && (
-                  <div className="flex items-center gap-2 bg-card border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                  <SurfacePanel tone="warning" padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                     <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center">
                       <AlertCircle className="h-4 w-4 text-red-500" />
                     </div>
@@ -1034,9 +1041,9 @@ export default function MyTasks() {
                       <p className="text-xs text-muted-foreground">Overdue</p>
                       <p className="text-sm font-semibold text-red-600 dark:text-red-400">{dashboardStats.overdueCount}</p>
                     </div>
-                  </div>
+                  </SurfacePanel>
                 )}
-                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
                     <Target className="h-4 w-4 text-amber-500" />
                   </div>
@@ -1044,8 +1051,8 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">Today</p>
                     <p className="text-sm font-semibold">{dashboardStats.todayCount}</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                </SurfacePanel>
+                <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center">
                     <Flame className="h-4 w-4 text-orange-500" />
                   </div>
@@ -1053,8 +1060,8 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">High Priority</p>
                     <p className="text-sm font-semibold">{dashboardStats.highPriorityCount}</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                </SurfacePanel>
+                <SurfacePanel padding="none" radius="xl" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
                   <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                   </div>
@@ -1062,7 +1069,7 @@ export default function MyTasks() {
                     <p className="text-xs text-muted-foreground">This Week</p>
                     <p className="text-sm font-semibold">{dashboardStats.completedThisWeek}</p>
                   </div>
-                </div>
+                </SurfacePanel>
               </div>
             )}
           </div>
@@ -1081,8 +1088,8 @@ export default function MyTasks() {
             </div>
           ) : totalTasks > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Scheduled Tasks</h2>
+              <SurfacePanel tone="subtle" className="space-y-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scheduled Tasks</h2>
                 {leftColumn.map((section) => (
                   <TaskSectionList
                     key={section.id}
@@ -1095,10 +1102,10 @@ export default function MyTasks() {
                     onDragEnd={handleDragEnd}
                   />
                 ))}
-              </div>
+              </SurfacePanel>
 
-              <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Personal & Unscheduled</h2>
+              <SurfacePanel tone="subtle" className="space-y-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Personal & Unscheduled</h2>
                 {rightColumn.map((section) => (
                   <TaskSectionList
                     key={section.id}
@@ -1113,7 +1120,7 @@ export default function MyTasks() {
                     supportsAddTask={section.id === "personal"}
                   />
                 ))}
-              </div>
+              </SurfacePanel>
             </div>
           ) : (
             <EmptyState

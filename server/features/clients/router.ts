@@ -130,7 +130,7 @@ router.patch("/:id/stage", async (req, res) => {
       throw AppError.notFound("Client");
     }
 
-    emitClientUpdated(updated);
+    emitClientUpdated(updated.id, updated.workspaceId, { stage });
     return res.json(updated);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /:id/stage", req);

@@ -14,37 +14,8 @@
 
 import { db } from "../db";
 import { sql } from "drizzle-orm";
-import * as fs from "fs";
-import * as path from "path";
-
-// Required tables for application to function
-// Must match server/startup/schemaReadiness.ts REQUIRED_TABLES
-const REQUIRED_TABLES = [
-  "users",
-  "tenants",
-  "workspaces",
-  "projects",
-  "tasks",
-  "clients",
-  "teams",
-  "chat_channels",
-  "chat_dm_members",
-  "chat_messages",
-  "error_logs",
-  "notification_preferences",
-  "time_entries",
-  "active_timers",
-];
-
-// Critical columns that must exist
-// Must match server/startup/schemaReadiness.ts REQUIRED_COLUMNS
-const REQUIRED_COLUMNS = [
-  { table: "tenants", column: "chat_retention_days" },
-  { table: "active_timers", column: "title" },
-  { table: "users", column: "tenant_id" },
-  { table: "projects", column: "client_id" },
-  { table: "tasks", column: "project_id" },
-];
+import { getTrackedMigrationEntries } from "../lib/migrationJournal";
+import { REQUIRED_COLUMNS, REQUIRED_TABLES } from "../startup/schemaReadiness";
 
 interface HealthCheckResult {
   healthy: boolean;
@@ -58,6 +29,7 @@ interface HealthCheckResult {
     tableExists: boolean;
     appliedCount: number;
     lastApplied: string | null;
+    lastAppliedAt: number | null;
     pendingCount: number;
     pendingFiles: string[];
   };
@@ -116,12 +88,17 @@ async function checkColumnExists(tableName: string, columnName: string): Promise
   }
 }
 
-async function getMigrationStatus(): Promise<{ tableExists: boolean; appliedCount: number; lastApplied: string | null }> {
+async function getMigrationStatus(): Promise<{
+  tableExists: boolean;
+  appliedCount: number;
+  lastApplied: string | null;
+  lastAppliedAt: number | null;
+}> {
   try {
     const result = await db.execute(sql`
-      SELECT hash, created_at 
+      SELECT hash, created_at
       FROM drizzle.__drizzle_migrations 
-      ORDER BY id DESC 
+      ORDER BY created_at DESC
       LIMIT 1
     `);
     
@@ -136,31 +113,29 @@ async function getMigrationStatus(): Promise<{ tableExists: boolean; appliedCoun
       tableExists: true,
       appliedCount: count,
       lastApplied: last?.hash || null,
+      lastAppliedAt: last?.created_at ? Number(last.created_at) : null,
     };
   } catch (e: any) {
     // Table doesn't exist yet
     if (e?.message?.includes("does not exist") || e?.message?.includes("relation")) {
-      return { tableExists: false, appliedCount: 0, lastApplied: null };
+      return {
+        tableExists: false,
+        appliedCount: 0,
+        lastApplied: null,
+        lastAppliedAt: null,
+      };
     }
     throw e;
   }
 }
 
-function getPendingMigrations(appliedHashes: string[]): { count: number; files: string[] } {
-  const migrationsPath = path.resolve(process.cwd(), "migrations");
-  
-  if (!fs.existsSync(migrationsPath)) {
-    return { count: 0, files: [] };
-  }
-  
-  const migrationFiles = fs.readdirSync(migrationsPath)
-    .filter(f => f.endsWith(".sql"))
-    .map(f => f.replace(".sql", ""));
-  
-  const appliedSet = new Set(appliedHashes);
-  const pending = migrationFiles.filter(f => !appliedSet.has(f));
-  
-  return { count: pending.length, files: pending };
+function getPendingMigrations(lastAppliedAt: number | null): { count: number; files: string[] } {
+  const entries = getTrackedMigrationEntries();
+  const pending = lastAppliedAt
+    ? entries.filter((entry) => entry.when > lastAppliedAt)
+    : entries;
+
+  return { count: pending.length, files: pending.map((entry) => entry.tag) };
 }
 
 async function runHealthCheck(): Promise<HealthCheckResult> {
@@ -180,7 +155,14 @@ async function runHealthCheck(): Promise<HealthCheckResult> {
       healthy: false,
       timestamp: new Date().toISOString(),
       database: dbStatus,
-      migrations: { tableExists: false, appliedCount: 0, lastApplied: null, pendingCount: 0, pendingFiles: [] },
+      migrations: {
+        tableExists: false,
+        appliedCount: 0,
+        lastApplied: null,
+        lastAppliedAt: null,
+        pendingCount: 0,
+        pendingFiles: [],
+      },
       tables: { allPresent: false, present: [], missing: REQUIRED_TABLES },
       columns: { allPresent: false, present: [], missing: REQUIRED_COLUMNS.map(c => `${c.table}.${c.column}`) },
       issues,
@@ -197,21 +179,10 @@ async function runHealthCheck(): Promise<HealthCheckResult> {
   if (!migrationStatus.tableExists) {
     issues.push("Migrations table does not exist - database needs initial migration");
     recommendations.push("Set AUTO_MIGRATE=true environment variable");
-    recommendations.push("Or run: npx drizzle-kit migrate");
+    recommendations.push("Or run: npx tsx server/scripts/migrate.ts");
   }
   
-  // Get applied migration hashes for pending check
-  let appliedHashes: string[] = [];
-  if (migrationStatus.tableExists) {
-    try {
-      const result = await db.execute(sql`
-        SELECT hash FROM drizzle.__drizzle_migrations
-      `);
-      appliedHashes = (result.rows as any[]).map(r => r.hash);
-    } catch { /* ignore */ }
-  }
-  
-  const pendingMigrations = getPendingMigrations(appliedHashes);
+  const pendingMigrations = getPendingMigrations(migrationStatus.lastAppliedAt);
   
   if (pendingMigrations.count > 0) {
     issues.push(`${pendingMigrations.count} pending migration(s): ${pendingMigrations.files.join(", ")}`);
@@ -277,6 +248,7 @@ async function runHealthCheck(): Promise<HealthCheckResult> {
       tableExists: migrationStatus.tableExists,
       appliedCount: migrationStatus.appliedCount,
       lastApplied: migrationStatus.lastApplied,
+      lastAppliedAt: migrationStatus.lastAppliedAt,
       pendingCount: pendingMigrations.count,
       pendingFiles: pendingMigrations.files,
     },
@@ -362,7 +334,8 @@ async function main() {
 }
 
 // Export for programmatic use
-export { runHealthCheck, HealthCheckResult };
+export { runHealthCheck };
+export type { HealthCheckResult };
 
 // Run if executed directly
 main();

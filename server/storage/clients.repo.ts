@@ -69,8 +69,11 @@ export class ClientsRepository {
   }
 
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const normalizedClient = client.status === "inactive"
+      ? { ...client, stage: null }
+      : client;
     const [updated] = await db.update(clients)
-      .set({ ...client, updatedAt: new Date() })
+      .set({ ...normalizedClient, updatedAt: new Date() })
       .where(eq(clients.id, id))
       .returning();
     return updated || undefined;
@@ -276,8 +279,11 @@ export class ClientsRepository {
   }
 
   async updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const normalizedClient = client.status === "inactive"
+      ? { ...client, stage: null }
+      : client;
     const [updated] = await db.update(clients)
-      .set({ ...client, updatedAt: new Date() })
+      .set({ ...normalizedClient, updatedAt: new Date() })
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
       .returning();
     return updated || undefined;

@@ -106,7 +106,7 @@ export async function getEmployeeProfileReport({
   }>(sql`
     SELECT
       COALESCE(SUM(CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS total_seconds,
-      0 AS billable_seconds, -- placeholder if billable not in schema
+      COALESCE(SUM(CASE WHEN te.scope = 'out_of_scope' AND te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN te.duration_seconds ELSE 0 END), 0) AS billable_seconds,
       COUNT(DISTINCT CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate} THEN DATE(te.start_time) END) AS logged_days,
       COALESCE((
         SELECT SUM(COALESCE(t2.estimate_minutes, 0))
@@ -128,24 +128,31 @@ export async function getEmployeeProfileReport({
   }>(sql`
     SELECT
       date_trunc('week', gs.week)::date AS week_start,
-      COALESCE(SUM(CASE
-        WHEN t.due_date >= gs.week AND t.due_date < gs.week + INTERVAL '7 days'
+      (
+        SELECT COALESCE(SUM(COALESCE(t.estimate_minutes, 0)), 0)
+        FROM task_assignees ta
+        JOIN tasks t ON t.id = ta.task_id
+        WHERE ta.user_id = ${employeeId}
+          AND ta.tenant_id = ${tenantId}
+          AND t.tenant_id = ${tenantId}
+          AND t.archived_at IS NULL
           AND t.status NOT IN ('done', 'cancelled')
-        THEN COALESCE(t.estimate_minutes, 0) ELSE 0
-      END), 0) AS planned_minutes,
-      COALESCE(SUM(CASE
-        WHEN te.start_time >= gs.week AND te.start_time < gs.week + INTERVAL '7 days'
-        THEN te.duration_seconds ELSE 0
-      END), 0) AS actual_seconds
+          AND t.due_date >= gs.week
+          AND t.due_date < gs.week + INTERVAL '7 days'
+      ) AS planned_minutes,
+      (
+        SELECT COALESCE(SUM(te.duration_seconds), 0)
+        FROM time_entries te
+        WHERE te.user_id = ${employeeId}
+          AND te.tenant_id = ${tenantId}
+          AND te.start_time >= gs.week
+          AND te.start_time < gs.week + INTERVAL '7 days'
+      ) AS actual_seconds
     FROM generate_series(
       date_trunc('week', ${startDate}::timestamp),
       date_trunc('week', ${endDate}::timestamp),
       '1 week'::interval
     ) AS gs(week)
-    LEFT JOIN task_assignees ta ON ta.user_id = ${employeeId} AND ta.tenant_id = ${tenantId}
-    LEFT JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId} AND t.archived_at IS NULL
-    LEFT JOIN time_entries te ON te.user_id = ${employeeId} AND te.tenant_id = ${tenantId}
-    GROUP BY gs.week
     ORDER BY gs.week
   `);
 
@@ -189,6 +196,8 @@ export async function getEmployeeProfileReport({
     due_date: string | null;
     project_id: string | null;
     project_name: string | null;
+    client_id: string | null;
+    client_name: string | null;
     estimate_minutes: string | null;
     created_at: string;
     updated_at: string;
@@ -201,12 +210,15 @@ export async function getEmployeeProfileReport({
       t.due_date,
       t.project_id,
       p.name as project_name,
+      c.id as client_id,
+      COALESCE(c.display_name, c.company_name) as client_name,
       t.estimate_minutes,
       t.created_at,
       t.updated_at
     FROM task_assignees ta
     JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
     LEFT JOIN projects p ON p.id = t.project_id AND p.tenant_id = ${tenantId}
+    LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
     WHERE ta.user_id = ${employeeId} AND ta.tenant_id = ${tenantId}
       AND t.archived_at IS NULL
     ORDER BY
@@ -353,6 +365,8 @@ export async function getEmployeeProfileReport({
       dueDate: r.due_date,
       projectId: r.project_id,
       projectName: r.project_name,
+      clientId: r.client_id,
+      clientName: r.client_name,
       estimateMinutes: r.estimate_minutes ? Number(r.estimate_minutes) : null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,

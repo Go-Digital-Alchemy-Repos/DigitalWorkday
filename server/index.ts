@@ -511,6 +511,7 @@ app.get("/ready", async (_req, res) => {
     response.migrations = {
       applied: schemaCheck.migrationAppliedCount,
       lastApplied: schemaCheck.lastMigrationHash,
+      pending: schemaCheck.pendingMigrationTags,
     };
     
     response.requiredTables = {

@@ -69,10 +69,14 @@ export class NotificationsRepository {
             title: notification.title,
             message: notification.message,
             payloadJson: notification.payloadJson,
+            severity: notification.severity,
+            entityType: notification.entityType,
+            entityId: notification.entityId,
+            href: notification.href,
             readAt: null,
             lastEventAt: now,
             eventCount: sql`${notifications.eventCount} + 1`,
-            groupMeta: updatedMeta as Record<string, unknown>,
+            groupMeta: updatedMeta as unknown as Record<string, unknown>,
           })
           .where(eq(notifications.id, existing.id))
           .returning();
@@ -83,6 +87,10 @@ export class NotificationsRepository {
             title: notification.title,
             message: notification.message,
             payloadJson: notification.payloadJson,
+            severity: notification.severity,
+            entityType: notification.entityType,
+            entityId: notification.entityId,
+            href: notification.href,
             readAt: null,
             createdAt: new Date(),
             lastEventAt: new Date(),
@@ -98,7 +106,7 @@ export class NotificationsRepository {
       eventCount: 1,
       lastEventAt: new Date(),
       groupMeta: coalesceMeta
-        ? (buildGroupMeta(null, coalesceMeta.actorId, coalesceMeta.actorName, coalesceMeta.entityId, coalesceMeta.messagePreview) as Record<string, unknown>)
+        ? (buildGroupMeta(null, coalesceMeta.actorId, coalesceMeta.actorName, coalesceMeta.entityId, coalesceMeta.messagePreview) as unknown as Record<string, unknown>)
         : null,
     };
     return this.createNotification(insertData);

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { ProjectClientBadge } from "@/components/project-client-badge";
 import { TeamDrawer } from "@/features/teams";
 import {
   AlertDialog,
@@ -43,7 +44,7 @@ import {
   ArrowLeft,
   FolderKanban
 } from "lucide-react";
-import type { Team, User, TeamMember, Project } from "@shared/schema";
+import type { Team, User, TeamMember, Project, Client } from "@shared/schema";
 
 interface TeamMemberWithUser extends TeamMember {
   user?: User;
@@ -72,6 +73,16 @@ export default function TeamDetailPage() {
     queryKey: ["/api/v1/projects", { teamId }],
     enabled: !!teamId,
   });
+
+  const { data: clients = [] } = useQuery<Client[]>({
+    queryKey: ["/api/clients"],
+  });
+
+  const getClientName = (clientId: string | null) => {
+    if (!clientId) return null;
+    const client = clients.find((item) => item.id === clientId);
+    return client ? (client.displayName || client.companyName) : null;
+  };
 
   const updateTeamMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
@@ -335,7 +346,15 @@ export default function TeamDetailPage() {
                       className="h-3 w-3 rounded-sm"
                       style={{ backgroundColor: project.color || "#3B82F6" }}
                     />
-                    <span className="font-medium">{project.name}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{project.name}</span>
+                      <ProjectClientBadge
+                        clientName={getClientName(project.clientId)}
+                        className="mt-1"
+                        maxLength={14}
+                        testId={`badge-team-project-client-${project.id}`}
+                      />
+                    </div>
                     <Badge variant="outline" className="ml-auto">{project.status}</Badge>
                   </div>
                 ))}

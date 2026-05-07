@@ -22,9 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
-import type { User } from "@shared/schema";
 import { PromptDialog } from "@/components/prompt-dialog";
-import { getMentionUserLabel, matchesMentionUser } from "./mentionUtils";
+import { getMentionUserLabel, matchesMentionUser, type MentionableUser } from "./mentionUtils";
 
 interface CommentEditorProps {
   value?: string;
@@ -34,7 +33,7 @@ interface CommentEditorProps {
   className?: string;
   disabled?: boolean;
   autoFocus?: boolean;
-  users?: User[];
+  users?: MentionableUser[];
   isSubmitting?: boolean;
   attachButton?: React.ReactNode;
   "data-testid"?: string;
@@ -51,8 +50,18 @@ export interface MentionListHandle {
 
 interface MentionSuggestionProps {
   query: string;
-  users: User[];
+  users: MentionableUser[];
   command: (props: { id: string; label: string }) => void;
+}
+
+interface MentionSuggestionRenderProps {
+  query: string;
+  editor: Editor;
+  range: {
+    from: number;
+    to: number;
+  };
+  clientRect?: (() => DOMRect | null) | null;
 }
 
 const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
@@ -117,11 +126,11 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              selectUser(index);
             }}
             onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              selectUser(index);
             }}
             onClick={(event) => {
               event.preventDefault();
@@ -297,7 +306,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
     const [linkDefaultValue, setLinkDefaultValue] = useState("");
     const editorHostRef = useRef<HTMLDivElement | null>(null);
 
-    const usersRef = useRef<User[]>(users);
+    const usersRef = useRef<MentionableUser[]>(users);
     useEffect(() => { usersRef.current = users; }, [users]);
 
     const updateMentionRect = useCallback((clientRect?: (() => DOMRect | null) | null) => {
@@ -348,15 +357,29 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
               return usersRef.current.filter((user) => matchesMentionUser(user, query)).slice(0, 5);
             },
             render: () => {
+              const createMentionCommand = (props: MentionSuggestionRenderProps) => {
+                return ({ id, label }: { id: string; label: string }) => {
+                  props.editor
+                    .chain()
+                    .focus()
+                    .insertContentAt(props.range, [
+                      { type: "mention", attrs: { id, label } },
+                      { type: "text", text: " " },
+                    ])
+                    .run();
+                };
+              };
+
               return {
-                onStart: (props: { query: string; command: (props: { id: string; label: string }) => void; clientRect?: (() => DOMRect | null) | null }) => {
+                onStart: (props: MentionSuggestionRenderProps) => {
                   setMentionQuery(props.query);
-                  setMentionCommand(() => props.command);
+                  setMentionCommand(() => createMentionCommand(props));
                   setMentionPopupOpen(true);
                   updateMentionRect(props.clientRect);
                 },
-                onUpdate: (props: { query: string; clientRect?: (() => DOMRect | null) | null }) => {
+                onUpdate: (props: MentionSuggestionRenderProps) => {
                   setMentionQuery(props.query);
+                  setMentionCommand(() => createMentionCommand(props));
                   updateMentionRect(props.clientRect);
                 },
                 onKeyDown: (props: { event: KeyboardEvent }) => {
@@ -466,7 +489,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       const currentDoc = serializeDocToString(editor.getJSON());
       const nextDoc = serializeDocToString(getDocForEditor(nextValue));
       if (currentDoc !== nextDoc) {
-        editor.commands.setContent(getDocForEditor(nextValue), false);
+        editor.commands.setContent(getDocForEditor(nextValue), { emitUpdate: false });
       }
     }, [editor, value]);
 
@@ -492,22 +515,14 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
           )}
         />
         {mentionPopupOpen && mentionCommand && mentionRect && createPortal(
-          <div
-            className="fixed z-[9999] pointer-events-auto select-none"
-            style={{
-              top: mentionRect.top - 4,
-              left: mentionRect.left,
-              transform: "translateY(-100%)",
-            }}
-            onPointerDownCapture={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
+        <div
+          className="fixed z-[9999] pointer-events-auto select-none"
+          style={{
+            top: mentionRect.top - 4,
+            left: mentionRect.left,
+            transform: "translateY(-100%)",
+          }}
+        >
             <MentionList
               ref={mentionListRef}
               query={mentionQuery}

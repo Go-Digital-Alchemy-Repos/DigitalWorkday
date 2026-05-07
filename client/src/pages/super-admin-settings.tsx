@@ -193,7 +193,7 @@ function AgreementsManagementTab({
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { tenantId: string; title: string; body: string }) => {
+    mutationFn: async (data: { tenantId: string | null; title: string; body: string }) => {
       return apiRequest("POST", "/api/v1/super/agreements", data);
     },
     onSuccess: () => {

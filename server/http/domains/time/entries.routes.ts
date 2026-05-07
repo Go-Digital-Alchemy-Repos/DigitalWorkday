@@ -152,7 +152,7 @@ router.get("/time-entries/my/stats", async (req, res) => {
           id: entry.id,
           date: entryDate.toISOString(),
           duration: seconds,
-          clientName: entry.client?.displayName || entry.client?.legalName,
+          clientName: entry.client?.displayName || entry.client?.legalName || undefined,
           projectName: entry.project?.name,
         });
       }

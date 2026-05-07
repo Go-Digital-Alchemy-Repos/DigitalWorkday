@@ -117,9 +117,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users", requireSuperUser, async (req,
       role: getWorkspaceMembershipRoleForUserRole(data.role),
     }).onConflictDoNothing();
 
-    if (data.role !== "client") {
-      await storage.addUserToAllTenantProjects(newUser.id, tenantId);
-    }
+    await storage.addUserToAllTenantProjects(newUser.id, tenantId);
     
     await recordTenantAuditEvent(
       tenantId,
@@ -351,7 +349,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/provision", requireSuperUser, a
         role: finalUser?.role,
         isActive: finalUser?.isActive,
         mustChangeOnNextLogin: finalUser?.mustChangePasswordOnNextLogin,
-        lastLoginAt: finalUser?.lastLoginAt,
+        lastLoginAt: null,
       },
       isNewUser,
       resetUrl,
@@ -906,11 +904,21 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/send-invite", requireSu
     
     let emailSent = false;
     try {
-      const { sendInviteEmail } = await import("../../../email");
+      const { emailOutboxService } = await import("../../../services/emailOutbox");
       const tenantSettingsData = await storage.getTenantSettings(tenantId);
       const appName = tenantSettingsData?.appName || "MyWorkDay";
-      
-      await sendInviteEmail(user.email, inviteUrl, appName, tenantId);
+
+      await emailOutboxService.sendEmail({
+        tenantId,
+        messageType: "invitation",
+        toEmail: user.email,
+        subject: `You've been invited to join ${appName}`,
+        textBody: `You've been invited to join ${appName}.\n\nAccept your invitation: ${inviteUrl}`,
+        htmlBody: `<p>You've been invited to join ${appName}.</p><p><a href="${inviteUrl}">Accept Invitation</a></p>`,
+        actionUrl: inviteUrl,
+        actionLabel: "Accept Invitation",
+        metadata: { tenantId, invitationId: existingInvitation.id, userId },
+      });
       emailSent = true;
     } catch (emailError) {
       console.error("Failed to send invitation email:", emailError);

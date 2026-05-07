@@ -28,6 +28,7 @@
  *     GET    /projects/:projectId/sections     — list sections with tasks
  *     POST   /sections                         — create section
  *     PATCH  /sections/:id                     — update section
+ *     POST   /sections/:id/archive             — archive section
  *     DELETE /sections/:id                     — delete section
  *
  *   Task Reorder (project-scoped):
@@ -113,6 +114,56 @@ function getProjectUpdateDescription(updates: Record<string, unknown>): string |
   return descriptions.slice(0, -1).join(', ') + ' and ' + descriptions.slice(-1);
 }
 
+function extractTipTapText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+
+  const record = node as Record<string, unknown>;
+  if (record.type === "text" && typeof record.text === "string") {
+    return record.text;
+  }
+
+  if (record.type === "mention" && record.attrs && typeof record.attrs === "object") {
+    const attrs = record.attrs as Record<string, unknown>;
+    const label = attrs.label || attrs.id || "";
+    return label ? `@${String(label)}` : "";
+  }
+
+  if (Array.isArray(record.content)) {
+    return record.content.map((child) => extractTipTapText(child)).join("\n");
+  }
+
+  return "";
+}
+
+function isEmptyTipTapDocString(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return false;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Boolean(
+      parsed &&
+      typeof parsed === "object" &&
+      parsed.type === "doc" &&
+      Array.isArray(parsed.content) &&
+      extractTipTapText(parsed).trim() === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function normalizeProjectDescriptionInput(data: Record<string, unknown>): void {
+  if (!Object.prototype.hasOwnProperty.call(data, "description")) return;
+
+  const description = data.description;
+  if (description == null) return;
+
+  if (typeof description === "string" && (!description.trim() || isEmptyTipTapDocString(description))) {
+    data.description = null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Project CRUD
 // ---------------------------------------------------------------------------
@@ -138,12 +189,13 @@ router.get("/projects", async (req: Request, res: Response) => {
         if (teamId) conditions.push(eq(projects.teamId, teamId));
         if (search) conditions.push(ilike(projects.name, `%${search}%`));
         
-        const sortCol = ({
-          'name': projects.name,
-          'status': projects.status,
-          'createdAt': projects.createdAt,
-          'updatedAt': projects.updatedAt,
-        } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
+        const sortColumns = {
+          name: projects.name,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        } as const;
+        const sortCol = sortColumns[sortBy as keyof typeof sortColumns] ?? projects.createdAt;
         const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
         
         const projectList = await db
@@ -255,6 +307,7 @@ router.post("/projects", async (req: Request, res: Response) => {
     if (body.divisionId === "") {
       body.divisionId = null;
     }
+    normalizeProjectDescriptionInput(body);
     
     const memberIds: string[] = Array.isArray(body.memberIds) ? body.memberIds : [];
     delete body.memberIds;
@@ -371,6 +424,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
   try {
     const data = validateBody(req.body, updateProjectSchema, res);
     if (!data) return;
+    normalizeProjectDescriptionInput(data as Record<string, unknown>);
     
     const tenantId = getEffectiveTenantId(req);
     const currentUserId = getCurrentUserId(req);
@@ -833,6 +887,30 @@ router.patch("/sections/:id", async (req: Request, res: Response) => {
     res.json(section);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/sections/:id", req);
+  }
+});
+
+router.post("/sections/:id/archive", async (req: Request, res: Response) => {
+  try {
+    const section = await storage.getSection(req.params.id);
+    if (!section) {
+      return sendError(res, AppError.notFound("Section"), req);
+    }
+
+    if (section.archivedAt) {
+      return res.json(section);
+    }
+
+    const archived = await storage.archiveSection(req.params.id, req.user?.id || null);
+    if (!archived) {
+      return sendError(res, AppError.notFound("Section"), req);
+    }
+
+    emitSectionDeleted(archived.id, archived.projectId);
+
+    res.json(archived);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/sections/:id/archive", req);
   }
 });
 

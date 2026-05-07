@@ -19,7 +19,7 @@ import {
 interface FullScreenDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  title: string
+  title: React.ReactNode
   description?: string
   children: React.ReactNode
   footer?: React.ReactNode

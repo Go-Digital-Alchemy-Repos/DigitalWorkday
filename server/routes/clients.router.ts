@@ -639,7 +639,7 @@ router.delete("/v1/divisions/:divisionId/members/:userId", async (req, res) => {
 const createClientNoteSchema = z.object({
   body: z.any(),
   category: z.string().default("general"),
-  categoryId: z.string().uuid().optional(),
+  categoryId: z.string().uuid().optional().nullable(),
 });
 
 const updateClientNoteSchema = z.object({

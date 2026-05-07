@@ -28,8 +28,7 @@ import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
 import { PromptDialog } from "@/components/prompt-dialog";
-import type { User } from "@shared/schema";
-import { getMentionUserLabel, matchesMentionUser } from "./mentionUtils";
+import { getMentionUserLabel, matchesMentionUser, type MentionableUser } from "./mentionUtils";
 
 interface RichTextEditorProps {
   value: string | null | undefined;
@@ -45,7 +44,7 @@ interface RichTextEditorProps {
   showToolbar?: boolean;
   showAlignment?: boolean;
   showAttachment?: boolean;
-  users?: User[];
+  users?: MentionableUser[];
   "data-testid"?: string;
 }
 
@@ -64,8 +63,18 @@ interface MentionListHandle {
 
 interface MentionSuggestionProps {
   query: string;
-  users: User[];
+  users: MentionableUser[];
   command: (props: { id: string; label: string }) => void;
+}
+
+interface MentionSuggestionRenderProps {
+  query: string;
+  editor: Editor;
+  range: {
+    from: number;
+    to: number;
+  };
+  clientRect?: (() => DOMRect | null) | null;
 }
 
 const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
@@ -130,11 +139,11 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              selectUser(index);
             }}
             onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              selectUser(index);
             }}
             onClick={(event) => {
               event.preventDefault();
@@ -349,7 +358,7 @@ export function RichTextEditor({
   const [mentionRect, setMentionRect] = useState<{ top: number; left: number } | null>(null);
   const editorHostRef = useRef<HTMLDivElement | null>(null);
 
-  const usersRef = useRef<User[]>(users);
+  const usersRef = useRef<MentionableUser[]>(users);
   useEffect(() => { usersRef.current = users; }, [users]);
 
   const updateMentionRect = useCallback((clientRect?: (() => DOMRect | null) | null) => {
@@ -397,39 +406,53 @@ export function RichTextEditor({
         class: "mention",
       },
       suggestion: {
-        char: "@",
-        items: ({ query }: { query: string }) => {
-          return usersRef.current.filter((user) => matchesMentionUser(user, query)).slice(0, 5);
-        },
-        render: () => {
-          return {
-            onStart: (props: { query: string; command: (props: { id: string; label: string }) => void; clientRect?: (() => DOMRect | null) | null }) => {
-              setMentionQuery(props.query);
-              setMentionCommand(() => props.command);
-              setMentionPopupOpen(true);
-              updateMentionRect(props.clientRect);
+            char: "@",
+            items: ({ query }: { query: string }) => {
+              return usersRef.current.filter((user) => matchesMentionUser(user, query)).slice(0, 5);
             },
-            onUpdate: (props: { query: string; clientRect?: (() => DOMRect | null) | null }) => {
-              setMentionQuery(props.query);
-              updateMentionRect(props.clientRect);
+            render: () => {
+              const createMentionCommand = (props: MentionSuggestionRenderProps) => {
+                return ({ id, label }: { id: string; label: string }) => {
+                  props.editor
+                    .chain()
+                    .focus()
+                    .insertContentAt(props.range, [
+                      { type: "mention", attrs: { id, label } },
+                      { type: "text", text: " " },
+                    ])
+                    .run();
+                };
+              };
+
+              return {
+                onStart: (props: MentionSuggestionRenderProps) => {
+                  setMentionQuery(props.query);
+                  setMentionCommand(() => createMentionCommand(props));
+                  setMentionPopupOpen(true);
+                  updateMentionRect(props.clientRect);
+                },
+                onUpdate: (props: MentionSuggestionRenderProps) => {
+                  setMentionQuery(props.query);
+                  setMentionCommand(() => createMentionCommand(props));
+                  updateMentionRect(props.clientRect);
+                },
+                onKeyDown: (props: { event: KeyboardEvent }) => {
+                  if (props.event.key === "Escape") {
+                    setMentionPopupOpen(false);
+                    return true;
+                  }
+                  if (mentionListRef.current) {
+                    return mentionListRef.current.onKeyDown(props.event);
+                  }
+                  return false;
+                },
+                onExit: () => {
+                  setMentionPopupOpen(false);
+                  setMentionCommand(null);
+                  setMentionRect(null);
+                },
+              };
             },
-            onKeyDown: (props: { event: KeyboardEvent }) => {
-              if (props.event.key === "Escape") {
-                setMentionPopupOpen(false);
-                return true;
-              }
-              if (mentionListRef.current) {
-                return mentionListRef.current.onKeyDown(props.event);
-              }
-              return false;
-            },
-            onExit: () => {
-              setMentionPopupOpen(false);
-              setMentionCommand(null);
-              setMentionRect(null);
-            },
-          };
-        },
       },
     }),
     Placeholder.configure({
@@ -489,7 +512,7 @@ export function RichTextEditor({
       
       if (currentDoc !== newDoc) {
         suppressOnChangeRef.current = true;
-        editor.commands.setContent(getDocForEditor(value), false);
+        editor.commands.setContent(getDocForEditor(value), { emitUpdate: false });
         suppressOnChangeRef.current = false;
       }
       prevValueRef.current = value;
@@ -563,14 +586,6 @@ export function RichTextEditor({
             top: mentionRect.top - 4,
             left: mentionRect.left,
             transform: "translateY(-100%)",
-          }}
-          onPointerDownCapture={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
           }}
         >
           <MentionList

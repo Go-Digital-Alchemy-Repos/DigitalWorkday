@@ -3,19 +3,10 @@ import { getMentionUserLabel, matchesMentionUser, mergeMentionUsers, type Mentio
 
 const baseUser: MentionableUser = {
   id: "user-1",
-  tenantId: "tenant-1",
   email: "alissa@example.com",
   name: "",
   firstName: "Alissa",
   lastName: "King",
-  passwordHash: null,
-  avatarUrl: null,
-  role: "employee",
-  isActive: true,
-  googleId: null,
-  mustChangePasswordOnNextLogin: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
 };
 
 describe("mentionUtils", () => {

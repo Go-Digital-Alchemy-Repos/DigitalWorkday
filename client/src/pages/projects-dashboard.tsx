@@ -31,6 +31,7 @@ import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
 import { ReviewQueueCard, type DashboardReviewQueueItem, type DashboardReviewQueueResponse } from "@/components/review-queue-card";
+import { applyApprovedReviewToDashboardQueue } from "@/components/reports/review-queue-utils";
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
@@ -222,24 +223,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
       queryClient.setQueryData<DashboardReviewQueueResponse>(
         ["/api/dashboard/review-queue"],
         (current) => {
-          if (!current) return current;
-          return {
-            items: current.items.filter(
-              (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
-            ),
-            clearedItems: [
-              {
-                ...item,
-                status: "in_progress",
-                approvedAt: now,
-                updatedAt: now,
-                approverName,
-              },
-              ...current.clearedItems.filter(
-                (queueItem) => !(queueItem.id === item.id && queueItem.type === item.type),
-              ),
-            ].slice(0, 20),
-          };
+          return applyApprovedReviewToDashboardQueue(current, item, approverName, now);
         },
       );
 
@@ -394,43 +378,47 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
       />
 
       {analytics?.totals && (
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="border-border/70 bg-card/85 shadow-[var(--shadow-soft)]">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
                 <FolderKanban className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">Active Projects</span>
+                <span className="text-muted-foreground">Active Projects</span>
               </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
+              <div className="mt-2 text-3xl font-semibold tracking-tight">{analytics.totals.activeProjects}</div>
+              <p className="mt-1 text-xs text-muted-foreground">Currently moving across the workspace.</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
+          <Card className="border-destructive/20 bg-destructive/[0.04] shadow-[var(--shadow-soft)]">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span className="text-sm text-muted-foreground">Projects at Risk</span>
+                <span className="text-muted-foreground">Projects at Risk</span>
               </div>
-              <div className="text-2xl font-bold mt-1 text-destructive">
+              <div className="mt-2 text-3xl font-semibold tracking-tight text-destructive">
                 {analytics.totals.projectsWithOverdue}
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">Projects carrying overdue work right now.</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
+          <Card className="border-border/70 bg-card/85 shadow-[var(--shadow-soft)]">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
                 <Clock className="h-4 w-4 text-orange-500" />
-                <span className="text-sm text-muted-foreground">Due Today</span>
+                <span className="text-muted-foreground">Due Today</span>
               </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
+              <div className="mt-2 text-3xl font-semibold tracking-tight">{analytics.totals.tasksDueToday}</div>
+              <p className="mt-1 text-xs text-muted-foreground">Tasks that need attention before end of day.</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
+          <Card className="border-border/70 bg-card/85 shadow-[var(--shadow-soft)]">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
                 <CircleOff className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
+                <span className="text-muted-foreground">Unassigned Tasks</span>
               </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
+              <div className="mt-2 text-3xl font-semibold tracking-tight">{analytics.totals.unassignedOpenTasks}</div>
+              <p className="mt-1 text-xs text-muted-foreground">Open work without a clear owner yet.</p>
             </CardContent>
           </Card>
         </div>
@@ -444,7 +432,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
             onApproveItem={(item) => approveReviewMutation.mutate(item)}
             approvingItemKey={approveReviewMutation.variables ? `${approveReviewMutation.variables.type}-${approveReviewMutation.variables.id}` : null}
           />
-          <Card className="mb-6" data-testid="pm-overdue-tasks">
+          <Card className="mb-8 border-border/70 bg-card/90 shadow-[var(--shadow-soft)]" data-testid="pm-overdue-tasks">
             <CardContent className="pt-6">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -485,7 +473,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
                       key={`overdue-${item.type}-${item.id}`}
                       role="button"
                       tabIndex={0}
-                      className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 cursor-pointer transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="cursor-pointer rounded-2xl border border-destructive/20 bg-gradient-to-r from-destructive/[0.07] via-destructive/[0.03] to-transparent p-4 transition-all hover:border-destructive/30 hover:bg-destructive/[0.08] hover:shadow-[var(--shadow-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={() => handleOpenReviewItem(item)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
@@ -495,14 +483,14 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
                       }}
                       data-testid={`pm-overdue-row-${item.type}-${item.id}`}
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate font-medium">{item.title}</span>
+                            <span className="truncate text-sm font-semibold text-foreground">{item.title}</span>
                             <Badge variant="outline">{item.type === "task" ? "Task" : "Subtask"}</Badge>
                             {item.projectName ? <Badge variant="secondary">{item.projectName}</Badge> : null}
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                             {item.clientName ? <span>{item.clientName}</span> : null}
                             {item.dueDate ? (
                               <span className="text-destructive">
@@ -535,8 +523,15 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
           </Card>
         </>
       )}
-      <div className="mb-6" data-testid="projects-pipeline-bar">
-        <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted mb-3">
+      <div className="mb-6 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)]" data-testid="projects-pipeline-bar">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Project Snapshot</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Filter the portfolio quickly by active and archived work.</p>
+          </div>
+          <Badge variant="secondary" className="shrink-0">{projects?.length || 0} total</Badge>
+        </div>
+        <div className="mb-3 flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted">
           {projects && projects.length > 0 && (
             <>
               {(() => {
@@ -607,7 +602,17 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         <AccessInfoBanner variant="projects" className="mb-4" />
       )}
 
-      <div className="flex flex-col gap-3 md:gap-4 mb-4 md:mb-6">
+      <div className="mb-6 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-[var(--shadow-soft)] md:p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Portfolio Filters</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Search, narrow, and clear filters without leaving the dashboard.</p>
+          </div>
+          {hasActiveFilters && (
+            <Badge variant="outline" className="shrink-0">Filtered</Badge>
+          )}
+        </div>
+        <div className="flex flex-col gap-3 md:gap-4">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -690,6 +695,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
             </Button>
           )}
         </div>
+        </div>
       </div>
 
       {filteredProjects.length === 0 ? (
@@ -719,7 +725,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
               return (
                 <Card
                   key={project.id}
-                  className={`hover-elevate cursor-pointer ${project.status === "archived" ? "opacity-60" : ""}`}
+                  className={`cursor-pointer border-border/70 bg-card/90 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-lg ${project.status === "archived" ? "opacity-60" : ""}`}
                   onClick={() => handleRowClick(project)}
                   data-testid={`card-project-${project.id}`}
                 >
@@ -933,8 +939,8 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         open={createProjectOpen}
         onOpenChange={setCreateProjectOpen}
         onSubmit={handleCreateProject}
-        clients={clients || []}
-        teams={teams || []}
+        isLoading={createProjectMutation.isPending}
+        mode="create"
       />
 
       <ProjectDrawer
@@ -942,8 +948,8 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
         onOpenChange={setEditProjectOpen}
         onSubmit={handleUpdateProject}
         project={editingProject}
-        clients={clients || []}
-        teams={teams || []}
+        isLoading={updateProjectMutation.isPending}
+        mode="edit"
       />
     </PageShell>
   );

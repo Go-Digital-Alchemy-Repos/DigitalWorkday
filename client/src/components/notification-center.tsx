@@ -92,11 +92,15 @@ type NotificationType =
   | "task_deadline"
   | "task_assigned"
   | "task_completed"
+  | "task_review_requested"
+  | "task_review_approved"
   | "comment_added"
   | "comment_mention"
   | "project_update"
   | "project_member_added"
   | "task_status_changed"
+  | "crm_followup_due"
+  | "approval_response"
   | "chat_message"
   | "client_message"
   | "support_ticket"
@@ -106,11 +110,15 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   task_deadline: "Task Deadlines",
   task_assigned: "Task Assignments",
   task_completed: "Task Completions",
+  task_review_requested: "Review Requests",
+  task_review_approved: "Review Approvals",
   comment_added: "New Comments",
   comment_mention: "Mentions",
   project_update: "Project Updates",
   project_member_added: "Team Additions",
   task_status_changed: "Status Changes",
+  crm_followup_due: "Follow-ups",
+  approval_response: "Approvals",
   chat_message: "Chat Messages",
   client_message: "Client Messages",
   support_ticket: "Support Tickets",
@@ -121,11 +129,15 @@ const NOTIFICATION_TYPE_ICONS: Record<NotificationType, typeof Bell> = {
   task_deadline: Clock,
   task_assigned: Users,
   task_completed: Check,
+  task_review_requested: CheckCheck,
+  task_review_approved: Check,
   comment_added: MessageSquare,
   comment_mention: MessageSquare,
   project_update: FolderKanban,
   project_member_added: Users,
   task_status_changed: FolderKanban,
+  crm_followup_due: Clock,
+  approval_response: CheckCheck,
   chat_message: Hash,
   client_message: MessageSquare,
   support_ticket: Headphones,
@@ -151,6 +163,8 @@ const TASK_NOTIFICATION_TYPES = [
   "task_deadline",
   "task_assigned",
   "task_completed",
+  "task_review_requested",
+  "task_review_approved",
   "task_status_changed",
 ];
 
@@ -165,13 +179,109 @@ function getTaskIdFromPayload(payload: unknown): string | null {
   return null;
 }
 
+function getTaskIdFromHref(href: string | null): string | null {
+  if (!href) return null;
+
+  try {
+    const url = new URL(href, window.location.origin);
+    return url.searchParams.get("taskId");
+  } catch {
+    return null;
+  }
+}
+
+function getPayloadString(payload: unknown, key: string): string | null {
+  if (!payload || typeof payload !== "object" || !(key in payload)) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function buildChatHref(type: "channel" | "dm", id: string, messageId?: string | null): string {
+  const params = new URLSearchParams({ c: `${type}:${id}` });
+  if (messageId) params.set("message", messageId);
+  return `/chat?${params.toString()}`;
+}
+
+function normalizeNotificationHref(notification: Notification): string | null {
+  const messageId =
+    getPayloadString(notification.payloadJson, "messageId") ||
+    getPayloadString(notification.payloadJson, "parentMessageId");
+
+  if (notification.type === "chat_message" || notification.entityType === "channel" || notification.entityType === "dm") {
+    const targetType = getPayloadString(notification.payloadJson, "targetType");
+    const channelId =
+      getPayloadString(notification.payloadJson, "channelId") ||
+      (notification.entityType === "channel" ? notification.entityId : null);
+    const dmThreadId =
+      getPayloadString(notification.payloadJson, "dmThreadId") ||
+      (notification.entityType === "dm" ? notification.entityId : null);
+    const senderId = getPayloadString(notification.payloadJson, "senderId");
+
+    if (targetType === "channel" && channelId) return buildChatHref("channel", channelId, messageId);
+    if (targetType === "dm" && dmThreadId) return buildChatHref("dm", dmThreadId, messageId);
+    if (channelId) return buildChatHref("channel", channelId, messageId);
+    if (dmThreadId) return buildChatHref("dm", dmThreadId, messageId);
+    if (senderId) {
+      const params = new URLSearchParams({ dm: senderId });
+      if (messageId) params.set("message", messageId);
+      return `/chat?${params.toString()}`;
+    }
+  }
+
+  if (!notification.href) return null;
+
+  try {
+    const url = new URL(notification.href, window.location.origin);
+    if (url.pathname === "/chat") {
+      const currentConversation = url.searchParams.get("c");
+      if (currentConversation) {
+        const params = new URLSearchParams(url.searchParams);
+        if (messageId && !params.has("message")) params.set("message", messageId);
+        return `/chat?${params.toString()}`;
+      }
+
+      const channelId = url.searchParams.get("channel") || url.searchParams.get("channelId");
+      if (channelId) return buildChatHref("channel", channelId, messageId || url.searchParams.get("message"));
+
+      const dmThreadId = url.searchParams.get("dmThreadId") || url.searchParams.get("dmThread");
+      if (dmThreadId) return buildChatHref("dm", dmThreadId, messageId || url.searchParams.get("message"));
+
+      const legacyDmUserId = url.searchParams.get("dm");
+      if (legacyDmUserId) {
+        const params = new URLSearchParams({ dm: legacyDmUserId });
+        const linkedMessageId = messageId || url.searchParams.get("message");
+        if (linkedMessageId) params.set("message", linkedMessageId);
+        return `/chat?${params.toString()}`;
+      }
+    }
+
+    const supportMatch = url.pathname.match(/^\/support\/(?:tickets|work-orders)\/([^/]+)$/);
+    if (supportMatch?.[1]) {
+      return `/support/${encodeURIComponent(supportMatch[1])}`;
+    }
+
+    const clientMessageMatch = url.pathname.match(/^\/clients\/([^/]+)\/messages$/);
+    if (clientMessageMatch?.[1]) {
+      const threadId = url.searchParams.get("thread") || getPayloadString(notification.payloadJson, "threadId");
+      if (threadId) {
+        const params = new URLSearchParams({ tab: "messages", conversation: threadId });
+        return `/clients/${encodeURIComponent(clientMessageMatch[1])}?${params.toString()}`;
+      }
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return notification.href;
+  }
+}
+
 type FilterTab = "all" | "unread" | "mentions" | "tasks" | "messages" | "tickets";
 
 const FILTER_TAB_CONFIG: { value: FilterTab; label: string; typeFilter?: string }[] = [
   { value: "all", label: "All" },
   { value: "unread", label: "Unread" },
   { value: "mentions", label: "Mentions", typeFilter: "comment_mention" },
-  { value: "tasks", label: "Tasks", typeFilter: "task_deadline,task_assigned,task_completed,task_status_changed" },
+  { value: "tasks", label: "Tasks", typeFilter: "task_deadline,task_assigned,task_completed,task_review_requested,task_review_approved,task_status_changed" },
   { value: "messages", label: "Chat", typeFilter: "chat_message,client_message" },
   { value: "tickets", label: "Tickets", typeFilter: "support_ticket,work_order" },
 ];
@@ -638,18 +748,27 @@ export function NotificationCenter() {
       markAsReadMutation.mutate(notification.id);
     }
 
-    if (notification.href) {
+    const taskId =
+      getTaskIdFromPayload(notification.payloadJson) ||
+      (notification.entityType === "task" ? notification.entityId : null) ||
+      getTaskIdFromHref(notification.href);
+
+    const isTaskLinkedNotification =
+      isTaskNotification(notification.type) ||
+      notification.entityType === "task" ||
+      !!getTaskIdFromHref(notification.href);
+
+    if (isTaskLinkedNotification && taskId && openTask) {
       setIsOpen(false);
-      setLocation(notification.href);
+      openTask(taskId);
       return;
     }
 
-    if (isTaskNotification(notification.type)) {
-      const taskId = getTaskIdFromPayload(notification.payloadJson);
-      if (taskId && openTask) {
-        setIsOpen(false);
-        openTask(taskId);
-      }
+    const notificationHref = normalizeNotificationHref(notification);
+    if (notificationHref) {
+      setIsOpen(false);
+      setLocation(notificationHref);
+      return;
     }
   }, [markAsReadMutation, openTask, setIsOpen, setLocation]);
 
@@ -665,11 +784,15 @@ export function NotificationCenter() {
     task_deadline: "taskDeadline",
     task_assigned: "taskAssigned",
     task_completed: "taskCompleted",
+    task_review_requested: "taskStatusChanged",
+    task_review_approved: "taskStatusChanged",
     comment_added: "commentAdded",
     comment_mention: "commentMention",
     project_update: "projectUpdate",
     project_member_added: "projectMemberAdded",
     task_status_changed: "taskStatusChanged",
+    crm_followup_due: "projectUpdate",
+    approval_response: "projectUpdate",
     chat_message: "chatMessage",
     client_message: "clientMessage",
     support_ticket: "supportTicket",

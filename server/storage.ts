@@ -59,6 +59,8 @@ import {
   type ChatDmMember, type InsertChatDmMember,
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
+  type ChatMessageReaction,
+  type InsertChatMention,
   type ChatPin, type InsertChatPin,
   type ChatExportJob, type InsertChatExportJob,
   type ErrorLog, type InsertErrorLog,
@@ -108,7 +110,7 @@ export type CalendarTask = {
 // Project Activity Feed Types
 export type ProjectActivityItem = {
   id: string;
-  type: "task_created" | "task_updated" | "comment_added" | "time_logged";
+  type: string;
   timestamp: Date;
   actorId: string;
   actorName: string;
@@ -123,6 +125,7 @@ import { encryptValue, decryptValue } from "./lib/encryption";
 import { SupportRepository } from "./storage/support.repo";
 import { ChatRepository } from "./storage/chat.repo";
 import { NotificationsRepository } from "./storage/notifications.repo";
+import { ClientsRepository } from "./storage/clients.repo";
 
 const supportRepo = new SupportRepository();
 const chatRepo = new ChatRepository();
@@ -179,6 +182,7 @@ export interface IStorage {
   getSectionsWithTasks(projectId: string): Promise<SectionWithTasks[]>;
   createSection(section: InsertSection): Promise<Section>;
   updateSection(id: string, section: Partial<InsertSection>): Promise<Section | undefined>;
+  archiveSection(id: string, archivedBy?: string | null): Promise<Section | undefined>;
   deleteSection(id: string): Promise<void>;
   
   getTask(id: string): Promise<Task | undefined>;
@@ -240,6 +244,7 @@ export interface IStorage {
   getTaskAttachment(id: string): Promise<TaskAttachment | undefined>;
   getTaskAttachmentsByIds(ids: string[]): Promise<TaskAttachment[]>;
   getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]>;
+  getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]>;
   createTaskAttachment(attachment: InsertTaskAttachment): Promise<TaskAttachment>;
   updateTaskAttachment(id: string, attachment: Partial<InsertTaskAttachment>): Promise<TaskAttachment | undefined>;
   deleteTaskAttachment(id: string): Promise<void>;
@@ -444,6 +449,12 @@ export interface IStorage {
   // Chat - Channels
   getChatChannel(id: string): Promise<ChatChannel | undefined>;
   getChatChannelsByTenant(tenantId: string): Promise<ChatChannel[]>;
+  getPublicChatChannelDirectory(tenantId: string, userId: string): Promise<Array<{
+    channel: ChatChannel;
+    isMember: boolean;
+    memberCount: number;
+    lastMessage: { body: string; createdAt: Date; authorName: string | null } | null;
+  }>>;
   createChatChannel(channel: InsertChatChannel): Promise<ChatChannel>;
   updateChatChannel(id: string, channel: Partial<InsertChatChannel>): Promise<ChatChannel | undefined>;
   deleteChatChannel(id: string): Promise<void>;
@@ -486,9 +497,15 @@ export interface IStorage {
   }): Promise<{ messages: any[]; total: number }>;
 
   // Chat - Threads
-  getThreadReplies(parentMessageId: string, limit?: number): Promise<(ChatMessage & { author: User })[]>;
+  getThreadReplies(parentMessageId: string, limit?: number): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[]; reactions?: (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[] })[]>;
   getThreadReplyCount(parentMessageId: string): Promise<number>;
-  getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>>;
+  getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string, tenantId?: string, userId?: string): Promise<Map<string, { replyCount: number; unreadReplyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null; lastReplyAuthor: Pick<User, "id" | "name" | "email" | "avatarUrl"> | null; lastReplyBody: string | null; participants: Array<Pick<User, "id" | "name" | "email" | "avatarUrl">> }>>;
+  getChatThreadInboxForUser(tenantId: string, userId: string, limit?: number): Promise<any[]>;
+  upsertChatThreadRead(tenantId: string, userId: string, parentMessageId: string, lastReadReplyId: string | null): Promise<{ lastReadAt: Date }>;
+  markAllChatThreadsReadForUser(tenantId: string, userId: string): Promise<{
+    threads: Array<{ parentMessageId: string; lastReadReplyId: string; lastReadAt: Date }>;
+  }>;
+  getChatThreadReadStateForUser(tenantId: string, userId: string, parentMessageId: string): Promise<{ unreadReplyCount: number; firstUnreadReplyId: string | null; lastReadAt: Date | null }>;
 
   // Chat - Attachments
   createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment>;
@@ -496,6 +513,8 @@ export interface IStorage {
   getChatAttachment(id: string): Promise<ChatAttachment | undefined>;
   getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]>;
   linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void>;
+  createChatMentions(mentions: InsertChatMention[]): Promise<void>;
+  getChatMentionsForUser(tenantId: string, userId: string, limit?: number): Promise<any[]>;
 
   // Chat - Pins
   getPinnedMessages(channelId: string, tenantId: string): Promise<any[]>;
@@ -506,6 +525,10 @@ export interface IStorage {
 
   // Chat - Read Tracking
   upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }>;
+  markAllChatReadForUser(tenantId: string, userId: string): Promise<{
+    channels: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+    dmThreads: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+  }>;
   getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
@@ -618,6 +641,11 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private readonly clientsRepo = new ClientsRepository({
+    getUser: (id) => this.getUser(id),
+    getProjectsByClient: (clientId) => this.getProjectsByClient(clientId),
+  });
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -916,6 +944,7 @@ export class DatabaseStorage implements IStorage {
         status: projects.status,
         color: projects.color,
         budgetMinutes: projects.budgetMinutes,
+        stickyAt: projects.stickyAt,
         createdBy: projects.createdBy,
         createdAt: projects.createdAt,
         updatedAt: projects.updatedAt,
@@ -972,7 +1001,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSectionsByProject(projectId: string): Promise<Section[]> {
-    return db.select().from(sections).where(eq(sections.projectId, projectId)).orderBy(asc(sections.orderIndex));
+    return db.select().from(sections)
+      .where(and(eq(sections.projectId, projectId), isNull(sections.archivedAt)))
+      .orderBy(asc(sections.orderIndex));
   }
 
   async getSectionsWithTasks(projectId: string): Promise<SectionWithTasks[]> {
@@ -1014,8 +1045,20 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async archiveSection(id: string, archivedBy?: string | null): Promise<Section | undefined> {
+    const [updated] = await db
+      .update(sections)
+      .set({ archivedAt: new Date(), archivedBy: archivedBy || null })
+      .where(eq(sections.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
   async deleteSection(id: string): Promise<void> {
-    await db.delete(tasks).where(eq(tasks.sectionId, id));
+    await db
+      .update(tasks)
+      .set({ sectionId: null, updatedAt: new Date() })
+      .where(eq(tasks.sectionId, id));
     await db.delete(sections).where(eq(sections.id, id));
   }
 
@@ -1414,6 +1457,17 @@ export class DatabaseStorage implements IStorage {
 
   async updateSubtask(id: string, subtask: Partial<InsertSubtask>): Promise<Subtask | undefined> {
     const [updated] = await db.update(subtasks).set({ ...subtask, updatedAt: new Date() }).where(eq(subtasks.id, id)).returning();
+    if (updated && Object.prototype.hasOwnProperty.call(subtask, "assigneeId")) {
+      const nextAssigneeId = subtask.assigneeId ?? null;
+      if (nextAssigneeId) {
+        await db
+          .insert(subtaskAssignees)
+          .values({ subtaskId: id, userId: nextAssigneeId, tenantId: null })
+          .onConflictDoNothing();
+      } else {
+        await db.delete(subtaskAssignees).where(eq(subtaskAssignees.subtaskId, id));
+      }
+    }
     return updated || undefined;
   }
 
@@ -1493,6 +1547,10 @@ export class DatabaseStorage implements IStorage {
 
   async addSubtaskAssignee(assignee: InsertSubtaskAssignee): Promise<SubtaskAssignee> {
     const [result] = await db.insert(subtaskAssignees).values(assignee).returning();
+    await db
+      .update(subtasks)
+      .set({ assigneeId: assignee.userId, updatedAt: new Date() })
+      .where(and(eq(subtasks.id, assignee.subtaskId), isNull(subtasks.assigneeId)));
     return result;
   }
 
@@ -1500,6 +1558,21 @@ export class DatabaseStorage implements IStorage {
     await db.delete(subtaskAssignees).where(
       and(eq(subtaskAssignees.subtaskId, subtaskId), eq(subtaskAssignees.userId, userId))
     );
+    const [subtask] = await db
+      .select({ assigneeId: subtasks.assigneeId })
+      .from(subtasks)
+      .where(eq(subtasks.id, subtaskId));
+    if (subtask?.assigneeId === userId) {
+      const [replacement] = await db
+        .select({ userId: subtaskAssignees.userId })
+        .from(subtaskAssignees)
+        .where(eq(subtaskAssignees.subtaskId, subtaskId))
+        .limit(1);
+      await db
+        .update(subtasks)
+        .set({ assigneeId: replacement?.userId ?? null, updatedAt: new Date() })
+        .where(eq(subtasks.id, subtaskId));
+    }
   }
 
   async getSubtaskTags(subtaskId: string): Promise<(SubtaskTag & { tag?: Tag })[]> {
@@ -1741,6 +1814,7 @@ export class DatabaseStorage implements IStorage {
         .limit(limit);
 
       for (const comment of recentComments) {
+        if (!comment.taskId) continue;
         userIds.add(comment.userId);
         const task = taskCache.get(comment.taskId);
         activityItems.push({
@@ -1905,6 +1979,23 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]> {
+    const attachmentsList = await db.select().from(taskAttachments)
+      .where(eq(taskAttachments.subtaskId, subtaskId))
+      .orderBy(desc(taskAttachments.createdAt));
+
+    if (attachmentsList.length === 0) return [];
+    const uploaderIds = [...new Set(attachmentsList.map(a => a.uploadedByUserId).filter(Boolean))];
+    const uploaderList = uploaderIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, uploaderIds))
+      : [];
+    const uploaderMap = new Map(uploaderList.map(u => [u.id, u]));
+    return attachmentsList.map(attachment => ({
+      ...attachment,
+      uploadedByUser: uploaderMap.get(attachment.uploadedByUserId),
+    }));
+  }
+
   async createTaskAttachment(insertAttachment: InsertTaskAttachment): Promise<TaskAttachment> {
     const [attachment] = await db.insert(taskAttachments).values(insertAttachment).returning();
     return attachment;
@@ -1927,50 +2018,27 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getClient(id: string): Promise<Client | undefined> {
-    const [client] = await db.select().from(clients).where(eq(clients.id, id));
-    return client || undefined;
+    return this.clientsRepo.getClient(id);
   }
 
   async getClientsByIds(ids: string[]): Promise<Client[]> {
-    return clientsRepo.getClientsByIds(ids);
+    return this.clientsRepo.getClientsByIds(ids);
   }
 
   async getClientWithContacts(id: string): Promise<ClientWithContacts | undefined> {
-    const client = await this.getClient(id);
-    if (!client) return undefined;
-    
-    const contacts = await this.getContactsByClient(id);
-    const clientProjects = await this.getProjectsByClient(id);
-    
-    return { ...client, contacts, projects: clientProjects };
+    return this.clientsRepo.getClientWithContacts(id);
   }
 
   async getClientsByWorkspace(workspaceId: string): Promise<ClientWithContacts[]> {
-    const clientsList = await db.select()
-      .from(clients)
-      .where(eq(clients.workspaceId, workspaceId))
-      .orderBy(asc(clients.companyName));
-    
-    const result: ClientWithContacts[] = [];
-    for (const client of clientsList) {
-      const contacts = await this.getContactsByClient(client.id);
-      const clientProjects = await this.getProjectsByClient(client.id);
-      result.push({ ...client, contacts, projects: clientProjects });
-    }
-    return result;
+    return this.clientsRepo.getClientsByWorkspace(workspaceId);
   }
 
   async createClient(insertClient: InsertClient): Promise<Client> {
-    const [client] = await db.insert(clients).values(insertClient).returning();
-    return client;
+    return this.clientsRepo.createClient(insertClient);
   }
 
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
-    const [updated] = await db.update(clients)
-      .set({ ...client, updatedAt: new Date() })
-      .where(eq(clients.id, id))
-      .returning();
-    return updated || undefined;
+    return this.clientsRepo.updateClient(id, client);
   }
 
   async deleteClient(id: string): Promise<void> {
@@ -2127,10 +2195,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContactsByClient(clientId: string): Promise<ClientContact[]> {
-    return db.select()
-      .from(clientContacts)
-      .where(eq(clientContacts.clientId, clientId))
-      .orderBy(desc(clientContacts.isPrimary), asc(clientContacts.firstName));
+    return this.clientsRepo.getContactsByClient(clientId);
   }
 
   async createClientContact(insertContact: InsertClientContact): Promise<ClientContact> {
@@ -2606,18 +2671,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientsByTenant(tenantId: string, _workspaceId?: string): Promise<ClientWithContacts[]> {
-    const clientsList = await db.select()
-      .from(clients)
-      .where(eq(clients.tenantId, tenantId))
-      .orderBy(asc(clients.companyName));
-    
-    const result: ClientWithContacts[] = [];
-    for (const client of clientsList) {
-      const contacts = await this.getContactsByClient(client.id);
-      const clientProjects = await this.getProjectsByClient(client.id);
-      result.push({ ...client, contacts, projects: clientProjects });
-    }
-    return result;
+    return this.clientsRepo.getClientsByTenant(tenantId, _workspaceId);
   }
 
   async getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]> {
@@ -2863,7 +2917,7 @@ export class DatabaseStorage implements IStorage {
 
     if (!existing) return undefined;
 
-    const fromStage = existing.stage;
+    const fromStage = existing.stage || "lead";
     if (fromStage === toStage) return existing;
 
     const [updated] = await db.update(clients)
@@ -2890,10 +2944,14 @@ export class DatabaseStorage implements IStorage {
     })
       .from(clients)
       .leftJoin(projects, eq(projects.clientId, clients.id))
-      .where(eq(clients.tenantId, tenantId))
+      .where(and(
+        eq(clients.tenantId, tenantId),
+        sql`${clients.stage} IS NOT NULL`,
+        sql`${clients.status} <> 'inactive'`
+      ))
       .groupBy(clients.stage);
 
-    return results;
+    return results.filter((result) => !!result.stage) as { stage: string; clientCount: number; projectCount: number }[];
   }
 
   async getClientStageHistory(clientId: string, tenantId: string): Promise<ClientStageHistory[]> {
@@ -2967,10 +3025,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildClients(parentClientId: string): Promise<Client[]> {
-    return db.select()
-      .from(clients)
-      .where(eq(clients.parentClientId, parentClientId))
-      .orderBy(asc(clients.companyName));
+    return this.clientsRepo.getChildClients(parentClientId);
   }
 
   async validateParentClient(parentClientId: string, tenantId: string): Promise<boolean> {
@@ -2991,8 +3046,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const normalizedClient = client.status === "inactive"
+      ? { ...client, stage: null }
+      : client;
     const [updated] = await db.update(clients)
-      .set({ ...client, updatedAt: new Date() })
+      .set({ ...normalizedClient, updatedAt: new Date() })
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
       .returning();
     return updated || undefined;
@@ -3444,27 +3502,18 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getTaskAttachmentByIdAndTenant(id: string, tenantId: string): Promise<TaskAttachment | undefined> {
-    const [attachment] = await db.select().from(taskAttachments)
-      .where(and(eq(taskAttachments.id, id), eq(taskAttachments.tenantId, tenantId)));
-    return attachment || undefined;
+    const attachment = await this.getTaskAttachment(id);
+    if (!attachment) return undefined;
+
+    const task = await this.getTaskByIdAndTenant(attachment.taskId, tenantId);
+    return task ? attachment : undefined;
   }
 
   async getTaskAttachmentsByTaskAndTenant(taskId: string, tenantId: string): Promise<TaskAttachmentWithUser[]> {
-    const attachments = await db.select()
-      .from(taskAttachments)
-      .where(and(eq(taskAttachments.taskId, taskId), eq(taskAttachments.tenantId, tenantId)))
-      .orderBy(desc(taskAttachments.uploadedAt));
-    
-    const result: TaskAttachmentWithUser[] = [];
-    for (const att of attachments) {
-      const enriched: TaskAttachmentWithUser = { ...att };
-      if (att.uploadedBy) {
-        const [user] = await db.select().from(users).where(eq(users.id, att.uploadedBy));
-        if (user) enriched.uploadedByUser = user;
-      }
-      result.push(enriched);
-    }
-    return result;
+    const task = await this.getTaskByIdAndTenant(taskId, tenantId);
+    if (!task) return [];
+
+    return this.getTaskAttachmentsByTask(taskId);
   }
 
   // =============================================================================
@@ -3649,8 +3698,7 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getClientDivision(id: string): Promise<ClientDivision | undefined> {
-    const results = await db.select().from(clientDivisions).where(eq(clientDivisions.id, id));
-    return results[0];
+    return this.clientsRepo.getClientDivision(id);
   }
 
   async getClientDivisionsByClient(clientId: string, tenantId: string): Promise<ClientDivision[]> {
@@ -4002,7 +4050,7 @@ export class DatabaseStorage implements IStorage {
       const settings = settingsMap.get(tenant.id);
       return {
         ...tenant,
-        settings, // undefined when missing, preserving prior JSON serialization behavior
+        settings: settings || null,
         userCount: userCountMap.get(tenant.id) || 0,
       };
     });
@@ -4018,6 +4066,15 @@ export class DatabaseStorage implements IStorage {
 
   async getChatChannelsByTenant(tenantId: string): Promise<ChatChannel[]> {
     return chatRepo.getChatChannelsByTenant(tenantId);
+  }
+
+  async getPublicChatChannelDirectory(tenantId: string, userId: string): Promise<Array<{
+    channel: ChatChannel;
+    isMember: boolean;
+    memberCount: number;
+    lastMessage: { body: string; createdAt: Date; authorName: string | null } | null;
+  }>> {
+    return chatRepo.getPublicChatChannelDirectory(tenantId, userId);
   }
 
   async createChatChannel(channel: InsertChatChannel): Promise<ChatChannel> {
@@ -4116,7 +4173,7 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.getReactionsForMessages(messageIds);
   }
 
-  async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User })[]> {
+  async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[]; reactions?: (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[] })[]> {
     return chatRepo.getThreadReplies(parentMessageId, limit);
   }
 
@@ -4124,8 +4181,26 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.getThreadReplyCount(parentMessageId);
   }
 
-  async getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>> {
-    return chatRepo.getThreadSummariesForConversation(targetType, targetId);
+  async getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string, tenantId?: string, userId?: string): Promise<Map<string, { replyCount: number; unreadReplyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null; lastReplyAuthor: Pick<User, "id" | "name" | "email" | "avatarUrl"> | null; lastReplyBody: string | null; participants: Array<Pick<User, "id" | "name" | "email" | "avatarUrl">> }>> {
+    return chatRepo.getThreadSummariesForConversation(targetType, targetId, tenantId, userId);
+  }
+
+  async getChatThreadInboxForUser(tenantId: string, userId: string, limit = 50): Promise<any[]> {
+    return chatRepo.getChatThreadInboxForUser(tenantId, userId, limit);
+  }
+
+  async upsertChatThreadRead(tenantId: string, userId: string, parentMessageId: string, lastReadReplyId: string | null): Promise<{ lastReadAt: Date }> {
+    return chatRepo.upsertChatThreadRead(tenantId, userId, parentMessageId, lastReadReplyId);
+  }
+
+  async markAllChatThreadsReadForUser(tenantId: string, userId: string): Promise<{
+    threads: Array<{ parentMessageId: string; lastReadReplyId: string; lastReadAt: Date }>;
+  }> {
+    return chatRepo.markAllChatThreadsReadForUser(tenantId, userId);
+  }
+
+  async getChatThreadReadStateForUser(tenantId: string, userId: string, parentMessageId: string): Promise<{ unreadReplyCount: number; firstUnreadReplyId: string | null; lastReadAt: Date | null }> {
+    return chatRepo.getChatThreadReadStateForUser(tenantId, userId, parentMessageId);
   }
 
   async searchChatMessages(tenantId: string, userId: string, options: {
@@ -4159,6 +4234,14 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.linkChatAttachmentsToMessage(messageId, attachmentIds);
   }
 
+  async createChatMentions(mentions: InsertChatMention[]): Promise<void> {
+    return chatRepo.createChatMentions(mentions);
+  }
+
+  async getChatMentionsForUser(tenantId: string, userId: string, limit = 50): Promise<any[]> {
+    return chatRepo.getChatMentionsForUser(tenantId, userId, limit);
+  }
+
   async getPinnedMessages(channelId: string, tenantId: string): Promise<any[]> {
     return chatRepo.getPinnedMessages(channelId, tenantId);
   }
@@ -4181,6 +4264,13 @@ export class DatabaseStorage implements IStorage {
 
   async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }> {
     return chatRepo.upsertChatRead(tenantId, userId, targetType, targetId, lastReadMessageId);
+  }
+
+  async markAllChatReadForUser(tenantId: string, userId: string): Promise<{
+    channels: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+    dmThreads: Array<{ targetId: string; lastReadMessageId: string; lastReadAt: Date }>;
+  }> {
+    return chatRepo.markAllChatReadForUser(tenantId, userId);
   }
 
   async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined> {

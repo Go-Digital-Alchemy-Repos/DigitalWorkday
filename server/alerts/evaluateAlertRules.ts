@@ -9,12 +9,13 @@ import {
 } from "../reports/forecasting/snapshotService";
 import { storage } from "../storage";
 import { emailOutboxService } from "../services/emailOutbox";
+import { buildAppUrl } from "../lib/appLinks";
 
 
-async function dbRows<T extends Record<string, unknown>>(
+async function dbRows<T>(
   q: Parameters<typeof db.execute>[0]
 ): Promise<T[]> {
-  const result = await db.execute<T>(q);
+  const result = await db.execute(q);
   if (Array.isArray(result)) return result as T[];
   if (result && typeof result === "object" && "rows" in result) {
     return (result as { rows: T[] }).rows;
@@ -122,6 +123,7 @@ async function deliverAlertNotifications(
   const href = ["employee_overload", "employee_underutilized", "employee_low_compliance"].includes(rule.ruleType)
     ? "/reports/employee-cc"
     : "/reports/client-cc";
+  const actionUrl = buildAppUrl(href);
 
   for (const recipient of recipients) {
     if (deliverInApp) {
@@ -149,8 +151,10 @@ async function deliverAlertNotifications(
           messageType: "other",
           toEmail: recipient.email,
           subject: `[Alert] ${event.title}`,
-          textBody: `${event.message}\n\nView details: ${href}`,
-          metadata: { alertRuleId: rule.id, alertEventId: eventId },
+          textBody: `${event.message}\n\nView details: ${actionUrl}`,
+          actionUrl,
+          actionLabel: "View Report",
+          metadata: { alertRuleId: rule.id, alertEventId: eventId, actionUrl },
         });
       } catch (err) {
         console.warn({ err }, "Failed to send email notification for alert event");

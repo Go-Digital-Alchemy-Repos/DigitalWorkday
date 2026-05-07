@@ -72,7 +72,7 @@ export function perfLoggerMiddleware(
 }
 
 export function instrumentDbPool(pool: import("pg").Pool): void {
-  const origQuery = pool.query.bind(pool);
+  const origQuery = pool.query.bind(pool) as (...args: any[]) => any;
 
   (pool as any).query = function (...args: any[]) {
     totalQueryCount++;
