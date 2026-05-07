@@ -200,12 +200,41 @@ export async function createPresignedUploadUrl(
   };
 }
 
-export async function createPresignedDownloadUrl(storageKey: string, tenantId: string | null = null): Promise<string> {
+interface PresignedDownloadOptions {
+  contentDisposition?: "inline" | "attachment";
+  fileName?: string;
+  contentType?: string;
+}
+
+export function buildDownloadContentDisposition(
+  disposition: "inline" | "attachment",
+  fileName?: string,
+) {
+  if (!fileName) {
+    return disposition;
+  }
+
+  const asciiFileName = fileName
+    .replace(/["\\\r\n]/g, "_")
+    .replace(/[^\x20-\x7E]/g, "_");
+
+  return `${disposition}; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+}
+
+export async function createPresignedDownloadUrl(
+  storageKey: string,
+  tenantId: string | null = null,
+  options: PresignedDownloadOptions = {},
+): Promise<string> {
   const { client, config } = await initStorageConfig(tenantId);
   
   const command = new GetObjectCommand({
     Bucket: config.bucketName,
     Key: storageKey,
+    ResponseContentDisposition: options.contentDisposition
+      ? buildDownloadContentDisposition(options.contentDisposition, options.fileName)
+      : undefined,
+    ResponseContentType: options.contentType,
   });
   
   return getSignedUrl(client, command, { expiresIn: DOWNLOAD_EXPIRES_SECONDS });

@@ -34,6 +34,12 @@ const router = createApiRouter({
   skipEnvelope: true,
 });
 
+function getDownloadDisposition(req: { query: Record<string, unknown> }) {
+  return req.query.mode === "download" || req.query.disposition === "attachment"
+    ? "attachment"
+    : "inline";
+}
+
 const presignRequestSchema = z.object({
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1),
@@ -316,7 +322,11 @@ router.get(
         throw AppError.badRequest("Attachment upload is not complete");
       }
 
-      const url = await createPresignedDownloadUrl(attachment.storageKey);
+      const url = await createPresignedDownloadUrl(attachment.storageKey, null, {
+        contentDisposition: getDownloadDisposition(req),
+        contentType: attachment.mimeType,
+        fileName: attachment.originalFileName,
+      });
       res.json({ url });
     } catch (error) {
       return handleRouteError(res, error, "GET /api/projects/:projectId/tasks/:taskId/attachments/:attachmentId/download", req);
@@ -519,7 +529,11 @@ router.get(
         throw AppError.badRequest("Attachment upload is not complete");
       }
 
-      const url = await createPresignedDownloadUrl(attachment.storageKey);
+      const url = await createPresignedDownloadUrl(attachment.storageKey, null, {
+        contentDisposition: getDownloadDisposition(req),
+        contentType: attachment.mimeType,
+        fileName: attachment.originalFileName,
+      });
       res.json({ url });
     } catch (error) {
       return handleRouteError(res, error, "GET /api/projects/:projectId/subtasks/:subtaskId/attachments/:attachmentId/download", req);
