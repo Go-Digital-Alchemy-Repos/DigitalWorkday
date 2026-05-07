@@ -97,8 +97,15 @@ export function MultiSelectAssignees({
 
   const isLoading = addAssigneeMutation.isPending || removeAssigneeMutation.isPending;
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setSearch("");
+    }
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={false}>
+    <Popover open={open} onOpenChange={handleOpenChange} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -118,8 +125,6 @@ export function MultiSelectAssignees({
       <PopoverContent
         className="flex w-80 flex-col overflow-hidden p-0"
         align="start"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
         style={{ maxHeight: "min(520px, calc(var(--radix-popover-content-available-height) - 8px))" }}
       >
         <div className="shrink-0 p-2 border-b">
