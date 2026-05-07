@@ -100,6 +100,7 @@ export function ProjectDrawer({
   });
 
   const clientIdValue = form.watch("clientId");
+  const divisionIdValue = form.watch("divisionId");
   const hasClientAssigned = !!clientIdValue;
   const projectMissingClient = mode === "edit" && project && !project.clientId && !hasClientAssigned;
 
@@ -109,10 +110,19 @@ export function ProjectDrawer({
   });
 
   const clientHasDivisions = divisions && divisions.length > 0;
+  const requiresDivision = Boolean(clientHasDivisions);
 
   const handleClientChange = (newClientId: string) => {
-    form.setValue("clientId", newClientId, { shouldDirty: true });
-    form.setValue("divisionId", "", { shouldDirty: true });
+    form.setValue("clientId", newClientId, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    form.setValue("divisionId", "", {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
   };
 
   useEffect(() => {
@@ -213,7 +223,7 @@ export function ProjectDrawer({
           onSave={form.handleSubmit(handleSubmit)}
           isLoading={isLoading}
           saveLabel={mode === "create" ? "Create Project" : "Save Changes"}
-          saveDisabled={!form.formState.isValid || !hasClientAssigned}
+          saveDisabled={!form.formState.isValid || !hasClientAssigned || (requiresDivision && !divisionIdValue)}
         />
       }
     >
