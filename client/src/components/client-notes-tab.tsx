@@ -636,13 +636,6 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     });
   }, [notes, searchQuery, filterCategory, sortBy]);
 
-  // Latest notes (top 3 most recent, explicitly sorted by createdAt desc)
-  const latestNotes = useMemo(() => {
-    return [...notes]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 3);
-  }, [notes]);
-
   const hasUnsavedChanges = useMemo(() => {
     if (drawerMode === "create") {
       return noteBody.trim() !== "" && noteBody !== "<p></p>";
@@ -753,52 +746,6 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main Content Area */}
         <div className="flex-1 min-w-0 space-y-4">
-          {/* Latest Notes Section */}
-          {latestNotes.length > 0 && (
-            <Card data-testid="section-latest-notes">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <StickyNote className="h-4 w-4" />
-                  Latest Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {latestNotes.map((note) => (
-                  <div 
-                    key={note.id} 
-                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer"
-                    onClick={() => openEditDrawer(note)}
-                    data-testid={`latest-note-${note.id}`}
-                  >
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback>{getAuthorInitials(note.author)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">
-                          {getAuthorDisplayName(note.author)}
-                        </span>
-                        <Badge 
-                          variant="secondary" 
-                          className={getCategoryBadgeStyle(note.category, null)}
-                          style={getCategoryInlineStyle(customCategories.find(c => c.name.toLowerCase() === note.category.toLowerCase())?.color || null)}
-                        >
-                          {note.category}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                        </span>
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        <RichTextViewer content={note.body} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Notes List */}
           {notes.length === 0 ? (
             <Card data-testid="empty-state-no-notes">
