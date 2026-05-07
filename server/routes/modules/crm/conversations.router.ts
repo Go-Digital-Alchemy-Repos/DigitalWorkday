@@ -53,6 +53,12 @@ function toNotificationPayload(notification: Notification): NotificationPayload 
   };
 }
 
+function buildClientConversationHref(clientId: string, conversationId: string, messageId?: string | null): string {
+  const params = new URLSearchParams({ tab: "messages", conversation: conversationId });
+  if (messageId) params.set("message", messageId);
+  return `/clients/${clientId}?${params.toString()}`;
+}
+
 async function getMessagePermissions(tenantId: string): Promise<MessagePermissions> {
   const [settings] = await db.select({ messagePermissions: tenantSettings.messagePermissions })
     .from(tenantSettings)
@@ -525,6 +531,9 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
           title: "New conversation assigned",
           message: `You have been assigned to conversation: "${conversation.subject}"`,
           payloadJson: { conversationId: conversation.id, clientId } as any,
+          entityType: "client_thread",
+          entityId: conversation.id,
+          href: buildClientConversationHref(clientId, conversation.id),
         });
         emitNotificationNew(assigneeId, toNotificationPayload(notification));
       } catch {}
@@ -614,6 +623,9 @@ router.patch("/crm/conversations/:conversationId/assign", requireAuth, async (re
           title: "Conversation assigned to you",
           message: `You have been assigned to conversation: "${conversation.subject}"`,
           payloadJson: { conversationId, clientId: conversation.clientId } as any,
+          entityType: "client_thread",
+          entityId: conversationId,
+          href: buildClientConversationHref(conversation.clientId, conversationId),
         });
         emitNotificationNew(data.assignedToUserId, toNotificationPayload(notification));
       } catch {}
@@ -841,10 +853,13 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
             const notification = await storage.createNotification({
               tenantId,
               userId: conversation.assignedToUserId,
-              type: "mention",
+              type: "client_message",
               title: "New reply on assigned conversation",
               message: `New reply on "${conversation.subject}": ${data.bodyText.substring(0, 100)}${data.bodyText.length > 100 ? "..." : ""}`,
               payloadJson: { conversationId, clientId: conversation.clientId, messageId: message.id } as any,
+              entityType: "client_thread",
+              entityId: conversationId,
+              href: buildClientConversationHref(conversation.clientId, conversationId, message.id),
             });
             emitNotificationNew(conversation.assignedToUserId, toNotificationPayload(notification));
           } catch {}
@@ -1302,6 +1317,9 @@ export async function evaluateConversationSla(tenantId?: string) {
               title: "SLA Breach: First Response",
               message: `Conversation "${convo.subject}" has breached the first response SLA (${policy.firstResponseMinutes} min)`,
               payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "first_response" } as any,
+              entityType: "client_thread",
+              entityId: convo.id,
+              href: buildClientConversationHref(convo.clientId, convo.id),
             });
             emitNotificationNew(convo.assignedToUserId, toNotificationPayload(notification));
           } catch {}
@@ -1326,6 +1344,9 @@ export async function evaluateConversationSla(tenantId?: string) {
               title: "SLA Breach: Resolution Time",
               message: `Conversation "${convo.subject}" has breached the resolution SLA (${policy.resolutionMinutes} min)`,
               payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "resolution" } as any,
+              entityType: "client_thread",
+              entityId: convo.id,
+              href: buildClientConversationHref(convo.clientId, convo.id),
             });
             emitNotificationNew(convo.assignedToUserId, toNotificationPayload(notification));
           } catch {}

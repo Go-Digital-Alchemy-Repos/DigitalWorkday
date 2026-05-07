@@ -236,9 +236,11 @@ router.post(
           if (recipient.userId === userId) continue;
           notifyDirectMessage(
             recipient.userId,
+            thread.id,
             userId,
             senderName,
             preview,
+            message.id,
             { tenantId, excludeUserId: userId }
           ).catch(() => {});
         }

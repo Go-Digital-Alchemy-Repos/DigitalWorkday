@@ -23,8 +23,15 @@ export function useChatUrlState() {
   const getConversationFromUrl = useCallback((): SelectedConversation | null => {
     const params = new URLSearchParams(searchString);
     const conversationParam = params.get("c");
-    if (!conversationParam) return null;
-    return parseConversationParam(conversationParam);
+    if (conversationParam) return parseConversationParam(conversationParam);
+
+    const channelId = params.get("channel") || params.get("channelId");
+    if (channelId) return { type: "channel", id: channelId };
+
+    const dmThreadId = params.get("dmThread") || params.get("dmThreadId") || params.get("dm");
+    if (dmThreadId) return { type: "dm", id: dmThreadId };
+
+    return null;
   }, [searchString]);
 
   const updateUrl = useCallback((type: ConversationType | null, id: string | null) => {

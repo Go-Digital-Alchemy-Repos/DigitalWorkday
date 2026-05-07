@@ -366,6 +366,10 @@ export default function ChatPage() {
 
   // URL-based conversation state management (shared hook for consistency)
   const { searchString, getConversationFromUrl, updateUrl: updateUrlForConversation } = useChatUrlState();
+  const targetMessageId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("message") || params.get("messageId");
+  }, [searchString]);
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
@@ -1521,7 +1525,8 @@ export default function ChatPage() {
         joinChannelMutation.mutate(channel.id);
       }
     } else if (urlConversation.type === "dm" && dmThreads.length > 0) {
-      const dm = dmThreads.find(d => d.id === urlConversation.id);
+      const dm = dmThreads.find(d => d.id === urlConversation.id)
+        || dmThreads.find(d => d.members.some(member => member.userId === urlConversation.id));
       if (dm) {
         setSelectedDm(dm);
         setSelectedChannel(null);
@@ -3140,6 +3145,7 @@ export default function ChatPage() {
               onOpenThread={handleOpenThread}
               threadSummaries={threadSummaries}
               readByMap={readByMap}
+              focusedMessageId={targetMessageId}
               renderMessageBody={renderMessageBody}
               getFileIcon={getFileIcon}
               formatFileSize={formatFileSize}

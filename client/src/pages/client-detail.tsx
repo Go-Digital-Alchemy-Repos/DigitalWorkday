@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -399,7 +399,10 @@ export default function ClientDetailPage() {
   const [divisionMode, setDivisionMode] = useState<"create" | "edit">("create");
   const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
   const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") return "overview";
+    return new URLSearchParams(window.location.search).get("tab") || "overview";
+  });
   const [editingCard, setEditingCard] = useState<string | null>(null);
   const [convertToPortalOpen, setConvertToPortalOpen] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] = useState<{ email: string; password: string } | null>(null);
@@ -417,7 +420,18 @@ export default function ClientDetailPage() {
   const tabBarSections = allVisibleSections;
   const visibleSections = allVisibleSections;
   const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
+  const searchString = useSearch();
   const cmdPalette = useClientCommandPaletteState();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const linkedTab = params.get("tab") || params.get("section");
+    if (!linkedTab) return;
+    if (!visibleSections.some((section) => section.id === linkedTab)) return;
+
+    setActiveTab(linkedTab);
+    setActiveSection(linkedTab);
+  }, [searchString, setActiveSection, visibleSections]);
   const useV2Layout = featureFlags.clientProfileLayoutV2;
 
   useEffect(() => {

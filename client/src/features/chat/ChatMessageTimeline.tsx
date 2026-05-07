@@ -134,6 +134,7 @@ interface ChatMessageTimelineProps {
   threadSummaries?: Map<string, ThreadSummary>;
   readByMap?: Map<string, ReadByUser[]>;
   firstUnreadMessageId?: string | null;
+  focusedMessageId?: string | null;
   onMarkAsRead?: () => void;
   renderMessageBody?: (body: string) => React.ReactNode;
   getFileIcon?: (mimeType: string) => React.ComponentType<{ className?: string }>;
@@ -375,6 +376,7 @@ interface MessageBubbleProps {
   canPin: boolean;
   threadSummary?: ThreadSummary;
   readBy?: ReadByUser[];
+  isHighlighted?: boolean;
   onEditSave: (messageId: string, body: string) => void;
   onEditCancel: () => void;
   onSetEditing: (messageId: string, body: string) => void;
@@ -434,6 +436,7 @@ function messageBubbleAreEqual(prev: MessageBubbleProps, next: MessageBubbleProp
   if (prev.isPinned !== next.isPinned) return false;
   if (prev.threadSummary !== next.threadSummary) return false;
   if (prev.readBy !== next.readBy) return false;
+  if (prev.isHighlighted !== next.isHighlighted) return false;
 
   return true;
 }
@@ -456,6 +459,7 @@ const MessageBubble = memo(function MessageBubble({
   canPin,
   threadSummary,
   readBy,
+  isHighlighted,
   onEditSave,
   onEditCancel,
   onSetEditing,
@@ -511,7 +515,9 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       )}
       <div
-        className={`group relative ${isOwnMessage ? "flex justify-end" : ""}`}
+        className={`group relative ${isOwnMessage ? "flex justify-end" : ""} ${
+          isHighlighted ? "rounded-2xl ring-2 ring-primary/60 ring-offset-2 ring-offset-background transition-shadow" : ""
+        }`}
         data-testid={`message-${message._tempId || message.id}`}
         onTouchStart={() => onLongPressStart(message.id)}
         onTouchEnd={onLongPressEnd}
@@ -1143,6 +1149,7 @@ export function ChatMessageTimeline({
   threadSummaries,
   readByMap,
   firstUnreadMessageId,
+  focusedMessageId,
   onMarkAsRead,
   renderMessageBody,
   getFileIcon,
@@ -1162,6 +1169,7 @@ export function ChatMessageTimeline({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageCountRef = useRef(messages.length);
@@ -1190,6 +1198,33 @@ export function ChatMessageTimeline({
   useEffect(() => {
     hasMarkedAsReadRef.current = false;
   }, [firstUnreadMessageId]);
+
+  useEffect(() => {
+    if (!focusedMessageId || messageGroups.length === 0) return;
+
+    const groupIndex = messageGroups.findIndex((group) =>
+      group.messages.some((message) => message.id === focusedMessageId)
+    );
+    if (groupIndex === -1) return;
+
+    const scrollTimeout = window.setTimeout(() => {
+      virtuosoRef.current?.scrollToIndex({
+        index: groupIndex,
+        behavior: "smooth",
+        align: "center",
+      });
+      setHighlightedMessageId(focusedMessageId);
+    }, 80);
+
+    const clearTimeoutId = window.setTimeout(() => {
+      setHighlightedMessageId((current) => current === focusedMessageId ? null : current);
+    }, 3500);
+
+    return () => {
+      window.clearTimeout(scrollTimeout);
+      window.clearTimeout(clearTimeoutId);
+    };
+  }, [focusedMessageId, messageGroups]);
 
   useEffect(() => {
     if (messages.length > lastMessageCountRef.current) {
@@ -1390,6 +1425,7 @@ export function ChatMessageTimeline({
                     canPin={canPin}
                     threadSummary={threadSummaries?.get(message.id)}
                     readBy={readByMap?.get(message.id)}
+                    isHighlighted={highlightedMessageId === message.id}
                     onEditSave={handleEditSave}
                     onEditCancel={handleEditCancel}
                     onSetEditing={handleSetEditing}

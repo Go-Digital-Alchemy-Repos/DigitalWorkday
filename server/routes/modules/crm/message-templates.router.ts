@@ -265,6 +265,9 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
           title: "New client conversation assigned",
           message: `A new conversation "${conversation.subject}" has been auto-assigned to you`,
           payloadJson: { conversationId: conversation.id, clientId: data.clientId } as any,
+          entityType: "client_thread",
+          entityId: conversation.id,
+          href: `/clients/${data.clientId}?tab=messages&conversation=${conversation.id}`,
         });
         emitNotificationNew(autoAssigneeId, toNotificationPayload(notification));
       } catch {}

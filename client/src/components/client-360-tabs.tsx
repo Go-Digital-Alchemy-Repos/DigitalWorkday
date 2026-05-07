@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1613,6 +1613,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   const canViewInternal = permsData?.effective?.viewInternalNotes ?? isAdmin;
   const canAssign = permsData?.effective?.assignThread ?? isAdmin;
   const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
+  const searchString = useSearch();
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newMessage, setNewMessage] = useState("");
@@ -1644,6 +1645,14 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   useEffect(() => {
     setPage(1);
   }, [assignedFilter, statusFilter, priorityFilter, typeFilter, debouncedSearch, dateFrom, dateTo, sortBy]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const linkedConversationId = params.get("conversation") || params.get("thread");
+    if (linkedConversationId && linkedConversationId !== selectedConvoId) {
+      setSelectedConvoId(linkedConversationId);
+    }
+  }, [searchString, selectedConvoId]);
 
   const activeFilterCount = useMemo(() => {
     let c = 0;

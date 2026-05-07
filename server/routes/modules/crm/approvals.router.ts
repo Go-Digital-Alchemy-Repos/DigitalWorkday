@@ -159,6 +159,7 @@ router.patch("/crm/approvals/:id", requireAuth, async (req: Request, res: Respon
       await notifyApprovalResponse(
         existing.requestedByUserId,
         updated.id,
+        existing.clientId,
         updated.title,
         body.status,
         respondedByName,

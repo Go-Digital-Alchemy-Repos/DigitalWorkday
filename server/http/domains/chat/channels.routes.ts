@@ -407,6 +407,7 @@ router.post(
             channel.name,
             senderName,
             preview,
+            message.id,
             { tenantId, excludeUserId: userId }
           ).catch(() => {});
         }
