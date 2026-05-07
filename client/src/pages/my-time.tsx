@@ -354,15 +354,11 @@ export default function MyTimePage() {
           </h1>
           <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
         </div>
-<<<<<<< Updated upstream
-        <Button className="rounded-xl shadow-[var(--shadow-soft)]" onClick={handleStartTimer} data-testid="button-start-timer">
-=======
         <Button
           onClick={handleStartTimer}
           className="border-blue-700 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-700"
           data-testid="button-start-timer"
         >
->>>>>>> Stashed changes
           <Play className="h-4 w-4 mr-2" />
           Start Timer
         </Button>
