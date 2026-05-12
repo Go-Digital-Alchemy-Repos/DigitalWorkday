@@ -20,7 +20,7 @@ import { TaskDrawerProvider } from "@/lib/task-drawer-context";
 import { GlobalActiveTimer } from "@/features/timer/global-active-timer";
 import { MobileActiveTimerBar } from "@/features/timer/mobile-active-timer-bar";
 import { useTheme } from "@/lib/theme-provider";
-import { TenantRouteGuard, ProtectedRoute } from "./guards";
+import { TenantAdminRouteGuard, TenantRouteGuard, ProtectedRoute } from "./guards";
 import { SkipLink } from "@/components/skip-link";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,7 +124,7 @@ function TenantRouter() {
           {() => <TenantRouteGuard component={ChatPage} />}
         </Route>
         <Route path="/service-requests">
-          {() => <TenantRouteGuard component={ServiceRequestsPage} />}
+          {() => <TenantAdminRouteGuard component={ServiceRequestsPage} />}
         </Route>
         <Route path="/settings">
           {() => <TenantRouteGuard component={SettingsPage} />}

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { ClientAccessLevel, commentMentions, UserRole } from "@shared/schema";
+import { ClientAccessLevel, commentMentions, UserRole, users } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { getClientUserAccessibleClients } from "../../middleware/clientAccess";
@@ -10,6 +10,7 @@ import { z } from "zod";
 import { createHash, randomBytes } from "crypto";
 import { emailOutboxService } from "../../services/emailOutbox";
 import { isTaskDoneStatus } from "@shared/taskStatus";
+import { hashPassword } from "../../auth";
 
 const router = Router();
 
@@ -60,7 +61,7 @@ const clientContactMutationSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-const portalInviteSchema = z.object({
+const portalUserCreateBaseSchema = z.object({
   contactId: z.string().uuid().optional(),
   email: z.string().trim().email().optional(),
   firstName: z.string().trim().optional().default(""),
@@ -70,6 +71,14 @@ const portalInviteSchema = z.object({
     ClientAccessLevel.COLLABORATOR,
     ClientAccessLevel.PORTAL_ADMIN,
   ]).default(ClientAccessLevel.VIEWER),
+});
+
+const portalInviteSchema = portalUserCreateBaseSchema.refine(data => Boolean(data.contactId || data.email), {
+  message: "Contact ID or email is required",
+});
+
+const portalDirectProvisionSchema = portalUserCreateBaseSchema.extend({
+  password: z.string().min(8, "Password must be at least 8 characters"),
 }).refine(data => Boolean(data.contactId || data.email), {
   message: "Contact ID or email is required",
 });
@@ -83,6 +92,7 @@ const portalUserUpdateSchema = z.object({
   isActive: z.boolean().optional(),
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().optional(),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
 });
 
 function generateInviteToken(): string {
@@ -533,6 +543,104 @@ router.post("/clients/:clientId/users/invite", async (req, res) => {
   }
 });
 
+router.post("/clients/:clientId/users/create", async (req, res) => {
+  try {
+    const currentUserId = req.user!.id;
+    const { clientId } = req.params;
+    const access = await getClientAccessOrThrow(currentUserId, clientId);
+    assertCanManagePortalUsers(access.accessLevel);
+
+    const client = await storage.getClient(clientId);
+    if (!client) {
+      throw AppError.notFound("Client");
+    }
+
+    const data = portalDirectProvisionSchema.parse(req.body);
+    let contact = data.contactId ? await storage.getClientContact(data.contactId) : undefined;
+    if (data.contactId && (!contact || contact.clientId !== clientId)) {
+      throw AppError.notFound("Contact");
+    }
+
+    const email = (contact?.email || data.email || "").trim().toLowerCase();
+    if (!email) {
+      throw AppError.badRequest("An email address is required");
+    }
+
+    if (!contact) {
+      contact = await storage.createClientContact({
+        tenantId: client.tenantId,
+        workspaceId: client.workspaceId,
+        clientId,
+        firstName: data.firstName || null,
+        lastName: data.lastName || null,
+        email,
+        isPrimary: false,
+      });
+    }
+
+    const firstName = data.firstName || contact.firstName || "";
+    const lastName = data.lastName || contact.lastName || "";
+    const name = `${firstName} ${lastName}`.trim() || email;
+    const passwordHash = await hashPassword(data.password);
+
+    let user = await storage.getUserByEmail(email);
+    if (user) {
+      if (user.role !== UserRole.CLIENT) {
+        throw AppError.conflict("This email belongs to an internal user. Use a different client portal email.");
+      }
+
+      const [updated] = await db.update(users)
+        .set({
+          firstName: firstName || user.firstName,
+          lastName: lastName || user.lastName,
+          name,
+          passwordHash,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+      user = updated || user;
+    } else {
+      user = await storage.createUser({
+        tenantId: client.tenantId,
+        email,
+        name,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        passwordHash,
+        role: UserRole.CLIENT,
+        isActive: true,
+      } as any);
+    }
+
+    let userAccess = await storage.getClientUserAccessByUserAndClient(user.id, clientId);
+    if (userAccess) {
+      userAccess = await storage.updateClientUserAccess(clientId, user.id, { accessLevel: data.accessLevel }) || userAccess;
+    } else {
+      userAccess = await storage.addClientUserAccess({
+        workspaceId: client.workspaceId,
+        clientId,
+        userId: user.id,
+        accessLevel: data.accessLevel,
+      });
+    }
+
+    res.status(201).json({
+      ...userAccess,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /clients/:clientId/users/create", req);
+  }
+});
+
 router.patch("/clients/:clientId/users/:userId", async (req, res) => {
   try {
     const currentUserId = req.user!.id;
@@ -571,9 +679,15 @@ router.patch("/clients/:clientId/users/:userId", async (req, res) => {
         userUpdates.name = `${targetUser.firstName ?? ""} ${data.lastName}`.trim();
       }
     }
+    if (data.password) {
+      userUpdates.passwordHash = await hashPassword(data.password);
+    }
 
     const updatedUser = Object.keys(userUpdates).length > 0
-      ? await storage.updateUser(userId, userUpdates)
+      ? (await db.update(users)
+        .set({ ...userUpdates, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning())[0]
       : targetUser;
 
     res.json({

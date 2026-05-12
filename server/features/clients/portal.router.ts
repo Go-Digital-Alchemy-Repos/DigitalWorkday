@@ -1,14 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../../storage";
+import { db } from "../../db";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { UserRole, ClientAccessLevel } from "@shared/schema";
+import { UserRole, ClientAccessLevel, users } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { emailOutboxService } from "../../services/emailOutbox";
+import { eq } from "drizzle-orm";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -282,12 +284,115 @@ router.post("/:clientId/users/invite", async (req, res) => {
   }
 });
 
-// Direct password-based portal user creation is intentionally disabled.
 router.post("/:clientId/users/create", async (req, res) => {
-  res.status(410).json({
-    message: "Direct portal user creation has been replaced by the invite flow.",
-    inviteEndpoint: `/api/clients/${req.params.clientId}/users/invite`,
-  });
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { clientId } = req.params;
+    await ensureCanManagePortalUsers(req, clientId);
+
+    const schema = z.object({
+      contactId: z.string().uuid().optional(),
+      email: z.string().email().optional(),
+      firstName: z.string().trim().optional().default(""),
+      lastName: z.string().trim().optional().default(""),
+      accessLevel: clientAccessLevelSchema.default(ClientAccessLevel.VIEWER),
+      password: z.string().min(8, "Password must be at least 8 characters"),
+    }).refine((data) => Boolean(data.contactId || data.email), {
+      message: "Contact ID or email is required",
+    });
+    const data = schema.parse(req.body);
+
+    const client = tenantId
+      ? await storage.getClientByIdAndTenant(clientId, tenantId)
+      : await storage.getClient(clientId);
+    if (!client) {
+      throw AppError.notFound("Client");
+    }
+
+    let contact = data.contactId ? await storage.getClientContact(data.contactId) : undefined;
+    if (data.contactId && (!contact || contact.clientId !== clientId)) {
+      throw AppError.notFound("Contact");
+    }
+
+    const email = (contact?.email || data.email || "").trim().toLowerCase();
+    if (!email) {
+      throw AppError.badRequest("An email address is required");
+    }
+
+    if (!contact) {
+      contact = await storage.createClientContact({
+        tenantId: client.tenantId,
+        workspaceId: client.workspaceId,
+        clientId,
+        firstName: data.firstName || null,
+        lastName: data.lastName || null,
+        email,
+        isPrimary: false,
+      });
+    }
+
+    const firstName = data.firstName || contact.firstName || "";
+    const lastName = data.lastName || contact.lastName || "";
+    const name = `${firstName} ${lastName}`.trim() || email;
+    const passwordHash = await hashPassword(data.password);
+
+    let user = await storage.getUserByEmail(email);
+    if (user) {
+      if (user.role !== UserRole.CLIENT) {
+        throw AppError.conflict("This email belongs to an internal user. Use a different client portal email.");
+      }
+
+      const [updated] = await db.update(users)
+        .set({
+          firstName: firstName || user.firstName,
+          lastName: lastName || user.lastName,
+          name,
+          passwordHash,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+      user = updated || user;
+    } else {
+      user = await storage.createUser({
+        tenantId: client.tenantId,
+        email,
+        name,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        passwordHash,
+        role: UserRole.CLIENT,
+        isActive: true,
+      } as any);
+    }
+
+    let access = await storage.getClientUserAccessByUserAndClient(user.id, clientId);
+    if (access) {
+      access = await storage.updateClientUserAccess(clientId, user.id, { accessLevel: data.accessLevel }) || access;
+    } else {
+      access = await storage.addClientUserAccess({
+        workspaceId: client.workspaceId,
+        clientId,
+        userId: user.id,
+        accessLevel: data.accessLevel,
+      });
+    }
+
+    res.status(201).json({
+      message: "Portal user provisioned",
+      access,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /:clientId/users/create", req);
+  }
 });
 
 // Update client user (access level, name, and optionally password)
@@ -350,7 +455,10 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
 
     let updatedUser = existingUser;
     if (Object.keys(userUpdates).length > 0) {
-      const result = await storage.updateUser(userId, userUpdates);
+      const [result] = await db.update(users)
+        .set({ ...userUpdates, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning();
       if (result) updatedUser = result;
     }
 

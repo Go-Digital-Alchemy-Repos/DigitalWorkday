@@ -7,6 +7,7 @@ import { setLastAttemptedTenantUrl, isTenantRoute } from "@/lib/tenant-url-stora
 import { markNavigationStart, markNavigationEnd } from "@/lib/perf";
 import { Loader2 } from "lucide-react";
 import { createElement } from "react";
+import { hasTenantAdminAccess } from "@shared/roles";
 
 function useNavTiming(componentName: string) {
   const started = useRef(false);
@@ -92,6 +93,48 @@ export function TenantRouteGuard({ component: Component }: { component: React.Co
       setLastAttemptedTenantUrl(location);
     }
     return createElement(Redirect, { to: "/super-admin/dashboard" });
+  }
+
+  return createElement(Component);
+}
+
+export function TenantAdminRouteGuard({ component: Component }: { component: React.ComponentType }) {
+  useNavTiming(Component.displayName || Component.name || "TenantAdminView");
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const { appMode } = useAppMode();
+  const { toast } = useToast();
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.role === "super_user" && appMode === "super") {
+      if (isTenantRoute(location)) {
+        setLastAttemptedTenantUrl(location);
+      }
+      toast({
+        title: "Tenant access required",
+        description: "Switch to a tenant to access this page.",
+      });
+      setLocation("/super-admin/dashboard");
+    }
+  }, [isLoading, isAuthenticated, user?.role, appMode, toast, setLocation, location]);
+
+  if (isLoading) {
+    return createElement(LoadingSpinner);
+  }
+
+  if (!isAuthenticated) {
+    return createElement(Redirect, { to: "/login" });
+  }
+
+  if (user?.role === "super_user" && appMode === "super") {
+    if (isTenantRoute(location)) {
+      setLastAttemptedTenantUrl(location);
+    }
+    return createElement(Redirect, { to: "/super-admin/dashboard" });
+  }
+
+  if (!hasTenantAdminAccess(user?.role)) {
+    return createElement(Redirect, { to: "/" });
   }
 
   return createElement(Component);

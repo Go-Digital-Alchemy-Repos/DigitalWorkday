@@ -27,6 +27,7 @@ import {
   User,
   ChevronRight,
   X,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,7 @@ interface MenuLink {
   icon: React.ComponentType<{ className?: string }>;
   color?: string;
   matchFn?: (loc: string) => boolean;
+  adminOnly?: boolean;
 }
 
 interface MenuSection {
@@ -169,6 +171,8 @@ export function MobileNavBar() {
         { title: "My Time", href: "/my-time", icon: Clock, color: "text-rose-500" },
         { title: "Chat", href: "/chat", icon: MessageCircle, color: "text-violet-500" },
         { title: "Calendar", href: "/calendar", icon: Calendar, color: "text-teal-500" },
+        { title: "Support Center", href: "/support", icon: Headphones, color: "text-orange-500", matchFn: (loc) => loc.startsWith("/support") },
+        { title: "Service Requests", href: "/service-requests", icon: ClipboardList, color: "text-lime-600", adminOnly: true },
         { title: "Reports", href: "/reports", icon: BarChart3, color: "text-orange-500", matchFn: (loc) => loc.startsWith("/reports") },
       ],
     },
@@ -180,7 +184,6 @@ export function MobileNavBar() {
         { title: "Settings", href: "/settings", icon: Settings, matchFn: (loc) => loc.startsWith("/settings") },
         { title: "User Manager", href: "/user-manager", icon: Users },
         { title: "Templates", href: "/templates", icon: LayoutTemplate },
-        { title: "Support Center", href: "/support", icon: Headphones, matchFn: (loc) => loc.startsWith("/support") },
       ],
     },
     {
@@ -350,7 +353,11 @@ export function MobileNavBar() {
                         </div>
                       </>
                     )}
-                    {section.items.filter((item) => item.href !== "/pm-dashboard" || showPmDashboard).map((item) => {
+                    {section.items.filter((item) => {
+                      if (item.href === "/pm-dashboard" && !showPmDashboard) return false;
+                      if (item.adminOnly && !isAdmin && !isSuperUser) return false;
+                      return true;
+                    }).map((item) => {
                       const Icon = item.icon;
                       const active = isMenuActive(item);
                       return (

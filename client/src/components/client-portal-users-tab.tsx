@@ -90,9 +90,27 @@ const createUserSchema = z.object({
   firstName: z.string().optional().default(""),
   lastName: z.string().optional().default(""),
   accessLevel: z.enum(["viewer", "collaborator", "portal_admin"]),
+  password: z.string().optional().default(""),
+  confirmPassword: z.string().optional().default(""),
 }).refine((data) => Boolean(data.contactId || data.email), {
   message: "Choose a contact or enter an email address",
   path: ["email"],
+}).refine((data) => {
+  if (data.password && data.password.length > 0 && data.password.length < 8) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Password must be at least 8 characters",
+  path: ["password"],
+}).refine((data) => {
+  if (data.password && data.password.length >= 8 && data.password !== data.confirmPassword) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
@@ -133,6 +151,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
   const [userToRevoke, setUserToRevoke] = useState<ClientUser | null>(null);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const apiBase = portalMode ? `/api/client-portal/clients/${clientId}` : `/api/clients/${clientId}`;
   const usersQueryKey = portalMode
@@ -150,6 +169,8 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       firstName: "",
       lastName: "",
       accessLevel: "portal_admin",
+      password: "",
+      confirmPassword: "",
     },
   });
 
@@ -200,13 +221,43 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
     },
   });
 
+  const provisionUserMutation = useMutation({
+    mutationFn: async (data: CreateUserFormData) => {
+      if (!data.password || data.password.length < 8) {
+        throw new Error("Password must be at least 8 characters");
+      }
+      const payload = {
+        contactId: data.contactId || undefined,
+        email: data.email || undefined,
+        firstName: data.firstName || undefined,
+        lastName: data.lastName || undefined,
+        accessLevel: data.accessLevel,
+        password: data.password,
+      };
+      const res = await apiRequest("POST", `${apiBase}/users/create`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Portal user created" });
+      queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      handleCloseAddUser();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to create user",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { userId: string; data: EditUserFormData }) => {
       const payload: Record<string, any> = {};
       if (data.firstName) payload.firstName = data.firstName;
       if (data.lastName !== undefined) payload.lastName = data.lastName;
       if (data.accessLevel) payload.accessLevel = data.accessLevel;
-      if (!portalMode && data.password && data.password.length >= 8) payload.password = data.password;
+      if (data.password && data.password.length >= 8) payload.password = data.password;
       const res = await apiRequest("PATCH", `${apiBase}/users/${userId}`, payload);
       return res.json();
     },
@@ -244,6 +295,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
 
   const handleCloseAddUser = () => {
     setAddUserOpen(false);
+    setShowCreatePassword(false);
     createForm.reset();
   };
 
@@ -254,7 +306,10 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       firstName: "",
       lastName: "",
       accessLevel: "portal_admin",
+      password: "",
+      confirmPassword: "",
     });
+    setShowCreatePassword(false);
     setAddUserOpen(true);
   };
 
@@ -265,7 +320,10 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       firstName: contact.firstName,
       lastName: contact.lastName || "",
       accessLevel: "portal_admin",
+      password: "",
+      confirmPassword: "",
     });
+    setShowCreatePassword(false);
     setAddUserOpen(true);
   };
 
@@ -479,9 +537,9 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       <Sheet open={addUserOpen} onOpenChange={(open) => !open && handleCloseAddUser()}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="sheet-add-portal-user">
           <SheetHeader>
-            <SheetTitle>Invite Portal User</SheetTitle>
+            <SheetTitle>Add Portal User</SheetTitle>
             <SheetDescription>
-              Send a setup link so this client user can choose their password and access the portal.
+              Send an invite link, or create the portal account now with a password.
             </SheetDescription>
           </SheetHeader>
           <div className="py-6">
@@ -572,10 +630,85 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                   />
                 </div>
 
+                <div className="border-t pt-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <KeyRound className="h-4 w-4 text-muted-foreground" />
+                    <Label className="font-medium">Direct Provisioning Password</Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Required for Create User. Leave blank if you only want to send an invite.
+                  </p>
+                  <div className="space-y-4">
+                    <FormField
+                      control={createForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input
+                                type={showCreatePassword ? "text" : "password"}
+                                placeholder="Minimum 8 characters"
+                                {...field}
+                                data-testid="input-create-password"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1/2 -translate-y-1/2"
+                                onClick={() => setShowCreatePassword(!showCreatePassword)}
+                                data-testid="button-toggle-create-password-visibility"
+                              >
+                                {showCreatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={createForm.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm Password</FormLabel>
+                          <FormControl>
+                            <Input
+                              type={showCreatePassword ? "text" : "password"}
+                              placeholder="Re-enter password"
+                              {...field}
+                              data-testid="input-create-confirmPassword"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <div className="flex gap-3 pt-4 border-t">
                   <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={provisionUserMutation.isPending || createUserMutation.isPending}
+                    onClick={createForm.handleSubmit((data) => provisionUserMutation.mutate(data))}
+                    className="flex-1"
+                    data-testid="button-provision-create-user"
+                  >
+                    {provisionUserMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <KeyRound className="h-4 w-4 mr-2" />
+                    )}
+                    Create User
+                  </Button>
+                  <Button
                     type="submit"
-                    disabled={createUserMutation.isPending}
+                    disabled={createUserMutation.isPending || provisionUserMutation.isPending}
                     className="flex-1"
                     data-testid="button-submit-create-user"
                   >
@@ -695,67 +828,65 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                     )}
                   />
 
-                  {!portalMode && (
-                    <div className="border-t pt-5">
-                      <div className="flex items-center gap-2 mb-4">
-                        <KeyRound className="h-4 w-4 text-muted-foreground" />
-                        <Label className="font-medium">Change Password</Label>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Leave blank to keep the current password.
-                      </p>
-                      <div className="space-y-4">
-                        <FormField
-                          control={editForm.control}
-                          name="password"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>New Password</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Input
-                                    type={showEditPassword ? "text" : "password"}
-                                    placeholder="Minimum 8 characters"
-                                    {...field}
-                                    data-testid="input-edit-password"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-1 top-1/2 -translate-y-1/2"
-                                    onClick={() => setShowEditPassword(!showEditPassword)}
-                                    data-testid="button-toggle-edit-password-visibility"
-                                  >
-                                    {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                  </Button>
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={editForm.control}
-                          name="confirmPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Confirm New Password</FormLabel>
-                              <FormControl>
+                  <div className="border-t pt-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <KeyRound className="h-4 w-4 text-muted-foreground" />
+                      <Label className="font-medium">Change Password</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Leave blank to keep the current password.
+                    </p>
+                    <div className="space-y-4">
+                      <FormField
+                        control={editForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>New Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
                                 <Input
                                   type={showEditPassword ? "text" : "password"}
-                                  placeholder="Re-enter new password"
+                                  placeholder="Minimum 8 characters"
                                   {...field}
-                                  data-testid="input-edit-confirmPassword"
+                                  data-testid="input-edit-password"
                                 />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                                  onClick={() => setShowEditPassword(!showEditPassword)}
+                                  data-testid="button-toggle-edit-password-visibility"
+                                >
+                                  {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </Button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={editForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm New Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type={showEditPassword ? "text" : "password"}
+                                placeholder="Re-enter new password"
+                                {...field}
+                                data-testid="input-edit-confirmPassword"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
-                  )}
+                  </div>
 
                   <div className="flex gap-3 pt-4 border-t">
                     <Button
