@@ -53,6 +53,7 @@ import crmRouter from "../routes/crm.router";
 import clientsRouter from "../routes/clients.router";
 import { searchRouter } from "../routes/modules/search/search.router";
 import featuresRoutes from "../features";
+import clientPortalFeature from "../features/client-portal";
 import superAdminRoutes from "../routes/superAdmin";
 import superSystemStatusRouter from "../routes/super/systemStatus.router";
 import superIntegrationsRouter from "../routes/super/integrations.router";
@@ -358,6 +359,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "superUser",
     domain: "data-retention",
     description: "Data retention: audit, run, and policy management.",
+  },
+  {
+    path: "/api",
+    router: clientPortalFeature,
+    policy: "authOnly",
+    domain: "client-portal",
+    description: "Client portal APIs scoped by client access rather than tenant workspace membership.",
   },
   {
     path: "/api",

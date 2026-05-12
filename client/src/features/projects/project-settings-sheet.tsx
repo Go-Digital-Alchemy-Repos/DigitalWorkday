@@ -171,10 +171,10 @@ export function ProjectSettingsSheet({
         description: "Project details have been saved.",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to update project.",
+        description: error.message || "Failed to update project.",
         variant: "destructive",
       });
     },

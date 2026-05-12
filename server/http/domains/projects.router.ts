@@ -67,7 +67,7 @@ import {
   comments,
   projectAccess,
 } from "@shared/schema";
-import type { ProjectTemplateContent } from "@shared/schema";
+import type { Project, ProjectTemplateContent } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { db } from "../../db";
 import { eq, and, inArray, ilike, asc, desc } from "drizzle-orm";
@@ -162,6 +162,94 @@ function normalizeProjectDescriptionInput(data: Record<string, unknown>): void {
   if (typeof description === "string" && (!description.trim() || isEmptyTipTapDocString(description))) {
     data.description = null;
   }
+}
+
+type ProjectResolution = {
+  project: Project;
+  legacyClientLinked: boolean;
+};
+
+async function resolveProjectForTenantOrLegacyClientLink(
+  projectId: string,
+  tenantId: string | null | undefined,
+): Promise<ProjectResolution | null> {
+  if (!tenantId) return null;
+
+  const tenantProject = await storage.getProjectByIdAndTenant(projectId, tenantId);
+  if (tenantProject) {
+    return { project: tenantProject, legacyClientLinked: false };
+  }
+
+  const legacyProject = await storage.getProject(projectId);
+  if (!legacyProject?.clientId) return null;
+
+  if (legacyProject.tenantId && legacyProject.tenantId !== tenantId) {
+    return null;
+  }
+
+  const client = await storage.getClientByIdAndTenant(legacyProject.clientId, tenantId);
+  if (!client) return null;
+
+  return { project: legacyProject, legacyClientLinked: !legacyProject.tenantId };
+}
+
+async function repairLegacyProjectTenantLink(
+  project: Project,
+  tenantId: string,
+  currentUserId: string,
+  updates: Record<string, unknown> = {},
+): Promise<Project | undefined> {
+  if (project.tenantId) return project;
+
+  const updatedProject = await storage.updateProject(project.id, {
+    ...updates,
+    tenantId,
+  } as any);
+
+  if (!updatedProject) return undefined;
+
+  if (updatedProject.visibility !== "private") {
+    await storage.addAllTenantUsersToProject(
+      updatedProject.id,
+      tenantId,
+      updatedProject.createdBy || currentUserId,
+    );
+    return updatedProject;
+  }
+
+  await db
+    .insert(projectMembers)
+    .values({
+      projectId: updatedProject.id,
+      userId: updatedProject.createdBy || currentUserId,
+      role: "owner",
+    })
+    .onConflictDoNothing();
+
+  if (updatedProject.createdBy && updatedProject.createdBy !== currentUserId) {
+    await db
+      .insert(projectMembers)
+      .values({
+        projectId: updatedProject.id,
+        userId: currentUserId,
+        role: "member",
+      })
+      .onConflictDoNothing();
+  }
+
+  if (config.features.enablePrivateProjects) {
+    await db
+      .insert(projectAccess)
+      .values({
+        tenantId,
+        projectId: updatedProject.id,
+        userId: currentUserId,
+        role: "admin",
+      })
+      .onConflictDoNothing();
+  }
+
+  return updatedProject;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,10 +358,24 @@ router.get("/projects/:id", async (req: Request, res: Response) => {
     const userId = getCurrentUserId(req);
     
     if (tenantId) {
-      const project = await storage.getProjectByIdAndTenant(req.params.id, tenantId);
-      if (!project) {
+      const resolvedProject = await resolveProjectForTenantOrLegacyClientLink(req.params.id, tenantId);
+      if (!resolvedProject) {
         return sendError(res, AppError.notFound("Project"), req);
       }
+
+      let project = resolvedProject.project;
+      if (resolvedProject.legacyClientLinked) {
+        const currentUser = await storage.getUser(userId);
+        if (!hasTenantAdminAccess(currentUser?.role)) {
+          return sendError(res, AppError.notFound("Project"), req);
+        }
+
+        const repairedProject = await repairLegacyProjectTenantLink(project, tenantId, userId);
+        if (repairedProject) {
+          project = repairedProject;
+        }
+      }
+
       if (!(await canViewProject(tenantId, req.params.id, userId))) {
         return sendError(res, AppError.notFound("Project"), req);
       }
@@ -429,20 +531,21 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
     const tenantId = getEffectiveTenantId(req);
     const currentUserId = getCurrentUserId(req);
     
-    let existingProject;
-    if (tenantId) {
-      existingProject = await storage.getProjectByIdAndTenant(req.params.id, tenantId);
-    } else {
-      existingProject = await storage.getProject(req.params.id);
-    }
+    const resolvedProject = tenantId
+      ? await resolveProjectForTenantOrLegacyClientLink(req.params.id, tenantId)
+      : null;
+    const existingProject = tenantId
+      ? resolvedProject?.project
+      : await storage.getProject(req.params.id);
     if (!existingProject) {
       return sendError(res, AppError.notFound("Project"), req);
     }
     
     const effectiveClientId = data.clientId !== undefined ? data.clientId : existingProject.clientId;
     const effectiveDivisionId = data.divisionId !== undefined ? data.divisionId : existingProject.divisionId;
+    const isChangingClientAssignment = data.clientId !== undefined || data.divisionId !== undefined;
     
-    if (effectiveClientId && tenantId) {
+    if (isChangingClientAssignment && effectiveClientId && tenantId) {
       const client = await storage.getClientByIdAndTenant(effectiveClientId, tenantId);
       if (!client) {
         return sendError(res, AppError.badRequest("Client not found or does not belong to tenant"), req);
@@ -474,11 +577,22 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
 
     let project;
     if (tenantId) {
-      project = await storage.updateProjectWithTenant(req.params.id, tenantId, data);
+      project = resolvedProject?.legacyClientLinked
+        ? await repairLegacyProjectTenantLink(
+          existingProject,
+          tenantId,
+          currentUserId,
+          data as Record<string, unknown>,
+        )
+        : await storage.updateProjectWithTenant(req.params.id, tenantId, data);
     } else if (isSuperUser(req)) {
       project = await storage.updateProject(req.params.id, data);
     } else {
       return sendError(res, AppError.internal("User tenant not configured"), req);
+    }
+
+    if (!project) {
+      return sendError(res, AppError.notFound("Project"), req);
     }
 
     if (data.visibility === 'private' && config.features.enablePrivateProjects && tenantId) {
@@ -559,12 +673,14 @@ router.delete("/projects/:id", async (req: Request, res: Response) => {
       return sendError(res, AppError.forbidden("Only admins can delete projects"), req);
     }
 
-    let existingProject;
-    if (tenantId) {
-      existingProject = await storage.getProjectByIdAndTenant(req.params.id, tenantId);
-    } else if (isSuperUser(req)) {
-      existingProject = await storage.getProject(req.params.id);
-    }
+    const resolvedProject = tenantId
+      ? await resolveProjectForTenantOrLegacyClientLink(req.params.id, tenantId)
+      : null;
+    const existingProject = tenantId
+      ? resolvedProject?.project
+      : isSuperUser(req)
+        ? await storage.getProject(req.params.id)
+        : undefined;
 
     if (!existingProject) {
       return sendError(res, AppError.notFound("Project"), req);
@@ -598,6 +714,7 @@ router.delete("/projects/:id", async (req: Request, res: Response) => {
       await tx.delete(sections).where(eq(sections.projectId, projectId));
       await tx.delete(projectNotes).where(eq(projectNotes.projectId, projectId));
       await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
+      await tx.delete(projectAccess).where(eq(projectAccess.projectId, projectId));
       await tx.update(timeEntries).set({ projectId: null }).where(eq(timeEntries.projectId, projectId));
       await tx.update(activeTimers).set({ projectId: null }).where(eq(activeTimers.projectId, projectId));
       await tx.update(approvalRequests).set({ projectId: null }).where(eq(approvalRequests.projectId, projectId));

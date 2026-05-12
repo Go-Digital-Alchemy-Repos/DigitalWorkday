@@ -20,6 +20,7 @@ import {
   clientNotes,
   clientNoteVersions,
   clientNoteCategories,
+  projectAccess,
   users,
 } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
@@ -418,6 +419,50 @@ router.delete("/clients/:clientId/invites/:inviteId", async (req, res) => {
 // PROJECTS BY CLIENT
 // =============================================================================
 
+function extractTipTapText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const record = node as { text?: unknown; content?: unknown };
+
+  if (typeof record.text === "string") {
+    return record.text;
+  }
+
+  if (Array.isArray(record.content)) {
+    return record.content.map((child) => extractTipTapText(child)).join("\n");
+  }
+
+  return "";
+}
+
+function isEmptyTipTapDocString(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return false;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Boolean(
+      parsed &&
+        typeof parsed === "object" &&
+        parsed.type === "doc" &&
+        Array.isArray(parsed.content) &&
+        extractTipTapText(parsed).trim() === "",
+    );
+  } catch {
+    return false;
+  }
+}
+
+function normalizeProjectDescriptionInput(data: Record<string, unknown>): void {
+  if (!Object.prototype.hasOwnProperty.call(data, "description")) return;
+
+  const description = data.description;
+  if (description == null) return;
+
+  if (typeof description === "string" && (!description.trim() || isEmptyTipTapDocString(description))) {
+    data.description = null;
+  }
+}
+
 router.get("/clients/:clientId/projects", async (req, res) => {
   try {
     const projects = await storage.getProjectsByClient(req.params.clientId);
@@ -430,18 +475,81 @@ router.get("/clients/:clientId/projects", async (req, res) => {
 router.post("/clients/:clientId/projects", async (req, res) => {
   try {
     const { clientId } = req.params;
+    const tenantId = getEffectiveTenantId(req);
+    const creatorId = getCurrentUserId(req);
+    const workspaceId = getCurrentWorkspaceId(req);
 
-    const client = await storage.getClient(clientId);
-    if (!client) throw AppError.notFound("Client");
+    const client = tenantId
+      ? await storage.getClientByIdAndTenant(clientId, tenantId)
+      : await storage.getClient(clientId);
+    if (!client) {
+      const clientExists = tenantId ? await storage.getClient(clientId) : null;
+      if (clientExists) {
+        return sendError(res, AppError.forbidden("Access denied: client belongs to a different tenant"), req);
+      }
+      return sendError(res, AppError.notFound("Client"), req);
+    }
+
+    const body = { ...req.body };
+    if (body.teamId === "") {
+      body.teamId = null;
+    }
+    if (body.divisionId === "") {
+      body.divisionId = null;
+    }
+    normalizeProjectDescriptionInput(body);
+
+    const memberIds: string[] = Array.isArray(body.memberIds) ? body.memberIds : [];
+    delete body.memberIds;
+
+    if (memberIds.length > 0 && tenantId) {
+      for (const memberId of memberIds) {
+        const member = await storage.getUserByIdAndTenant(memberId, tenantId);
+        if (!member) {
+          return sendError(res, AppError.badRequest(`User ${memberId} not found or does not belong to tenant`), req);
+        }
+      }
+    }
 
     const data = insertProjectSchema.parse({
-      ...req.body,
-      workspaceId: getCurrentWorkspaceId(req),
-      createdBy: getCurrentUserId(req),
-      clientId: clientId,
+      ...body,
+      workspaceId,
+      createdBy: creatorId,
+      clientId,
     });
 
-    const project = await storage.createProject(data);
+    let project;
+    if (tenantId) {
+      project = await storage.createProjectWithTenant(data, tenantId);
+    } else if (isSuperUser(req)) {
+      project = await storage.createProject(data);
+    } else {
+      return sendError(res, AppError.badRequest("Tenant context required - user not associated with a tenant"), req);
+    }
+
+    if (tenantId && project.visibility !== "private") {
+      await storage.addAllTenantUsersToProject(project.id, tenantId, creatorId);
+    } else {
+      await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
+      for (const memberId of memberIds) {
+        if (memberId !== creatorId) {
+          await storage.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
+        }
+      }
+    }
+
+    if (project.visibility === "private" && config.features.enablePrivateProjects && tenantId) {
+      try {
+        await db.insert(projectAccess).values({
+          tenantId,
+          projectId: project.id,
+          userId: creatorId,
+          role: "admin",
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Client Project Create] Failed to create access row for private project ${project.id}:`, accessError);
+      }
+    }
 
     emitProjectCreated(project as any);
     emitProjectClientAssigned(project as any, null);
