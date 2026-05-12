@@ -123,6 +123,15 @@ const agreementCache = new Map<string, AgreementCache>();
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
 /**
+ * Product-facing agreement acceptance is temporarily disabled while the client
+ * portal is still pre-market. Flip this back to an environment-driven check
+ * when the agreement gate is ready to be sold and supported.
+ */
+export function isAgreementEnforcementEnabled(): boolean {
+  return false;
+}
+
+/**
  * Fetch active agreement for a tenant with caching.
  * 
  * RESOLUTION LOGIC:
@@ -243,6 +252,10 @@ export async function agreementEnforcementGuard(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  if (!isAgreementEnforcementEnabled()) {
+    return next();
+  }
+
   // INVARIANT 4: Exempt routes bypass enforcement
   if (isExemptRoute(req.path)) {
     return next();
