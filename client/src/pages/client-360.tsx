@@ -1634,8 +1634,8 @@ function MessagesTab({ clientId }: { clientId: string }) {
 
   const handleCreateConvo = () => {
     if (!newSubject.trim() || !newMessage.trim()) return;
-    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority, type: newType };
-    if (newType === "everyday" && newAssignee && newAssignee !== "__self__") {
+    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority, type: "everyday" };
+    if (newAssignee && newAssignee !== "__self__") {
       payload.assignedToUserId = newAssignee;
     }
     createMutation.mutate(payload);
@@ -2111,37 +2111,19 @@ function MessagesTab({ clientId }: { clientId: string }) {
         <Card>
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-1.5">
-              <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Select value={newType} onValueChange={(value) => {
-                setNewType(value);
-                setNewAssignee("__self__");
-              }}>
-                <SelectTrigger className="flex-1" data-testid="select-new-convo-type">
-                  <SelectValue placeholder="Type" />
+              <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Select value={newAssignee} onValueChange={setNewAssignee}>
+                <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
+                  <SelectValue placeholder="Select recipient" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="everyday">Conversation</SelectItem>
-                  <SelectItem value="service_request">Service Request</SelectItem>
-                  <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                  <SelectItem value="__self__">Me</SelectItem>
+                  {staffUsers.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            {newType === "everyday" && (
-              <div className="flex items-center gap-1.5">
-                <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Select value={newAssignee} onValueChange={setNewAssignee}>
-                  <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
-                    <SelectValue placeholder="Select recipient" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__self__">Me</SelectItem>
-                    {staffUsers.map((u: any) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             <Input
               value={newSubject}
               onChange={(e) => setNewSubject(e.target.value)}

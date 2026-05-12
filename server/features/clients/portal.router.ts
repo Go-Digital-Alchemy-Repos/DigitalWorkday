@@ -157,7 +157,7 @@ router.post("/:clientId/users/invite", async (req, res) => {
       email: z.string().email().optional(),
       firstName: z.string().trim().optional().default(""),
       lastName: z.string().trim().optional().default(""),
-      accessLevel: clientAccessLevelSchema.default(ClientAccessLevel.VIEWER),
+      accessLevel: clientAccessLevelSchema.default(ClientAccessLevel.COLLABORATOR),
     }).refine((data) => Boolean(data.contactId || data.email), {
       message: "Contact ID or email is required",
     });
@@ -295,7 +295,7 @@ router.post("/:clientId/users/create", async (req, res) => {
       email: z.string().email().optional(),
       firstName: z.string().trim().optional().default(""),
       lastName: z.string().trim().optional().default(""),
-      accessLevel: clientAccessLevelSchema.default(ClientAccessLevel.VIEWER),
+      accessLevel: clientAccessLevelSchema.default(ClientAccessLevel.COLLABORATOR),
       password: z.string().min(8, "Password must be at least 8 characters"),
     }).refine((data) => Boolean(data.contactId || data.email), {
       message: "Contact ID or email is required",
@@ -594,7 +594,7 @@ router.post("/register/complete", async (req, res) => {
     
     // Create client user access
     const parsedAccessLevel = clientAccessLevelSchema.safeParse(invite.roleHint);
-    const accessLevel = parsedAccessLevel.success ? parsedAccessLevel.data : ClientAccessLevel.VIEWER;
+    const accessLevel = parsedAccessLevel.success ? parsedAccessLevel.data : ClientAccessLevel.COLLABORATOR;
     
     await storage.addClientUserAccess({
       workspaceId: client.workspaceId,

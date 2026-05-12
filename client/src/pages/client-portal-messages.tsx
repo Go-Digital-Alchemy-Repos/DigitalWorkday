@@ -3,9 +3,8 @@ import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { formatDistanceToNow } from "date-fns";
-import { Redirect, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,12 +56,8 @@ interface PortalClient {
   accessLevel: string;
 }
 
-interface PortalDashboard {
+interface PortalProfile {
   clients: PortalClient[];
-  projects: unknown[];
-  tasks: unknown[];
-  upcomingDeadlines: unknown[];
-  recentActivity: unknown[];
 }
 
 type PortalMessageType = "everyday" | "service_request" | "support_ticket";
@@ -97,8 +92,8 @@ function NewRequestDialog({
     enabled: open,
   });
 
-  const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<PortalDashboard>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery<PortalProfile>({
+    queryKey: ["/api/client-portal/profile"],
     enabled: open,
   });
   const { data: recipients = [], isLoading: recipientsLoading } = useQuery<ConversationRecipient[]>({
@@ -106,7 +101,7 @@ function NewRequestDialog({
     enabled: open && messageType === "everyday",
   });
 
-  const clients = dashboard?.clients || [];
+  const clients = profile?.clients || [];
 
   useEffect(() => {
     if (clients.length === 1 && !selectedClientId) {
@@ -190,7 +185,7 @@ function NewRequestDialog({
     onOpenChange(newOpen);
   };
 
-  const isDataLoading = templatesLoading || dashboardLoading;
+  const isDataLoading = templatesLoading || profileLoading;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -208,7 +203,7 @@ function NewRequestDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {dashboardError ? (
+        {profileError ? (
           <div className="py-8 text-center">
             <p className="text-sm text-destructive">Failed to load account data. Please try again.</p>
           </div>
@@ -624,14 +619,12 @@ function ConversationThread({
 }
 
 export default function ClientPortalMessages() {
-  const crmFlags = useCrmFlags();
   const [, navigate] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
 
   const { data: conversations = [], isLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/crm/portal/conversations"],
-    enabled: crmFlags.clientMessaging,
   });
 
   const { data: currentUser } = useQuery<{ id: string }>({
@@ -642,10 +635,6 @@ export default function ClientPortalMessages() {
       return res.json();
     },
   });
-
-  if (!crmFlags.clientMessaging) {
-    return <Redirect to="/portal" />;
-  }
 
   if (selectedConversationId && currentUser) {
     return (

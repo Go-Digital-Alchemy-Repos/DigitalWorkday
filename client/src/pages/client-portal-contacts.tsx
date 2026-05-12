@@ -20,7 +20,7 @@ interface ClientInfo {
   accessLevel: string;
 }
 
-interface DashboardData {
+interface PortalProfileData {
   clients: ClientInfo[];
 }
 
@@ -56,8 +56,8 @@ export default function ClientPortalContactsPage() {
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [form, setForm] = useState(emptyContactForm);
 
-  const { data, isLoading } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data, isLoading } = useQuery<PortalProfileData>({
+    queryKey: ["/api/client-portal/profile"],
   });
   const clients = data?.clients || [];
   const selectedClient = clients.find(client => client.id === clientId);
@@ -284,7 +284,7 @@ export default function ClientPortalContactsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Title</Label>
+              <Label>Title / Department</Label>
               <Input value={form.title} onChange={event => setForm(prev => ({ ...prev, title: event.target.value }))} />
             </div>
             <div className="space-y-2">

@@ -551,54 +551,14 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
     const data = validateBody(req.body, schema, res);
     if (!data) return;
 
-    const userId = getCurrentUserId(req);
-
-    if (data.type === ConversationType.SUPPORT_TICKET) {
-      const ticket = await storage.createSupportTicket({
-        tenantId,
-        clientId,
-        createdByUserId: userId,
-        createdByPortalUserId: null,
-        title: data.subject,
-        description: data.initialMessage,
-        priority: data.priority,
-        category: SupportTicketCategory.SUPPORT,
-        source: SupportTicketSource.TENANT,
-        assignedToUserId: null,
-        metadataJson: {
-          createdFrom: "client_360_messages",
-          projectId: data.projectId || null,
-        },
-      });
-
-      await storage.createSupportTicketMessage({
-        tenantId,
-        ticketId: ticket.id,
-        authorUserId: userId,
-        authorPortalUserId: null,
-        authorType: SupportTicketAuthorType.TENANT_USER,
-        bodyText: data.initialMessage,
-        visibility: SupportTicketMessageVisibility.PUBLIC,
-      });
-
-      await storage.createSupportTicketEvent({
-        tenantId,
-        ticketId: ticket.id,
-        actorType: SupportTicketAuthorType.TENANT_USER,
-        actorUserId: userId,
-        eventType: SupportTicketEventType.CREATED,
-        payloadJson: { title: ticket.title },
-      });
-
-      return res.status(201).json({
-        id: ticket.id,
-        kind: "support_ticket",
-        ticket,
-      });
+    if (data.type !== ConversationType.EVERYDAY) {
+      return sendError(res, AppError.forbidden("Only client portal users can start support tickets or service requests"), req);
     }
 
-    let assigneeId: string | null = data.type === ConversationType.SERVICE_REQUEST ? null : data.assignedToUserId || userId;
-    if (data.type === ConversationType.EVERYDAY && !data.assignedToUserId) {
+    const userId = getCurrentUserId(req);
+
+    let assigneeId: string | null = data.assignedToUserId || userId;
+    if (!data.assignedToUserId) {
       const [settings] = await db.select({ defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId })
         .from(tenantSettings)
         .where(eq(tenantSettings.tenantId, tenantId))

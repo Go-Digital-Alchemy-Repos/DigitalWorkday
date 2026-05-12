@@ -12,11 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown, ShieldAlert, CheckCircle2, AlertTriangle, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { RichTextRenderer } from "@/components/richtext";
 
 interface TicketMessage {
   id: string;
@@ -61,6 +62,14 @@ interface TicketDetail {
   createdByPortalUser: { id: string; name: string | null; email: string } | null;
   messages: TicketMessage[];
   events: TicketEvent[];
+}
+
+interface TicketAttachment {
+  fileName: string;
+  fileUrl: string;
+  key: string;
+  mimeType?: string | null;
+  size?: number | null;
 }
 
 interface CannedReply {
@@ -110,6 +119,20 @@ function formatDate(dateStr: string): string {
 function getInitials(name: string | null | undefined, email?: string): string {
   if (name) return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   return email ? email[0].toUpperCase() : "?";
+}
+
+function getTicketAttachments(metadataJson: Record<string, unknown> | null | undefined): TicketAttachment[] {
+  const attachments = metadataJson?.attachments;
+  return Array.isArray(attachments) ? attachments.filter((item): item is TicketAttachment => {
+    return Boolean(item && typeof item === "object" && "fileName" in item && "fileUrl" in item);
+  }) : [];
+}
+
+function formatFileSize(bytes?: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function eventDescription(event: TicketEvent): string {
@@ -258,6 +281,10 @@ export default function SupportTicketDetail() {
 
   const isClosed = ticket.status === "closed";
   const createdBy = ticket.createdByPortalUser || ticket.createdByUser;
+  const attachments = getTicketAttachments(ticket.metadataJson);
+  const requestDetails = ticket.metadataJson
+    ? Object.entries(ticket.metadataJson).filter(([key]) => key !== "attachments")
+    : [];
 
   return (
     <div className="h-full overflow-y-auto">
@@ -292,12 +319,37 @@ export default function SupportTicketDetail() {
                     <span className="font-medium">{createdBy?.name || createdBy?.email || "Unknown"}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</span>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap" data-testid="text-ticket-description">{ticket.description}</p>
+                  <RichTextRenderer value={ticket.description} className="text-sm" data-testid="text-ticket-description" />
                 </CardContent>
               </Card>
             )}
 
-            <div className="space-y-3">
+            {attachments.length > 0 && (
+              <Card data-testid="card-ticket-attachments">
+                <CardContent className="p-4">
+                  <h2 className="mb-3 text-sm font-medium text-muted-foreground">Attachments</h2>
+                  <div className="space-y-2">
+                    {attachments.map((attachment) => (
+                      <a
+                        key={attachment.key}
+                        href={attachment.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{attachment.fileName}</span>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                      </a>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="space-y-4">
               <h2 className="text-sm font-medium text-muted-foreground">Messages</h2>
               {ticket.messages.length === 0 && ticket.events.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No messages yet</p>
@@ -327,7 +379,7 @@ export default function SupportTicketDetail() {
                                 )}
                                 <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                               </div>
-                              <p className="text-sm mt-1 whitespace-pre-wrap">{msg.bodyText}</p>
+                              <RichTextRenderer value={msg.bodyText} className="mt-1 text-sm" />
                             </div>
                           </div>
                         </CardContent>
@@ -615,13 +667,13 @@ export default function SupportTicketDetail() {
               </Card>
             )}
 
-            {ticket.metadataJson && Object.keys(ticket.metadataJson).length > 0 && (
+            {requestDetails.length > 0 && (
               <Card data-testid="card-request-details">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">Request Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {Object.entries(ticket.metadataJson).map(([key, value]) => (
+                  {requestDetails.map(([key, value]) => (
                     <div key={key} className="space-y-0.5">
                       <Label className="text-xs text-muted-foreground capitalize">{key.replace(/_/g, " ")}</Label>
                       <p className="text-sm" data-testid={`text-metadata-${key}`}>{String(value)}</p>

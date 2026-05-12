@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Send, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Send, Clock, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RichTextRenderer } from "@/components/richtext";
 
 interface TicketMessage {
   id: string;
@@ -31,8 +32,17 @@ interface TicketDetail {
   source: string;
   createdAt: string;
   lastActivityAt: string;
+  metadataJson: Record<string, unknown> | null;
   client: { id: string; companyName: string } | null;
   messages: TicketMessage[];
+}
+
+interface TicketAttachment {
+  fileName: string;
+  fileUrl: string;
+  key: string;
+  mimeType?: string | null;
+  size?: number | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -61,6 +71,20 @@ function formatDate(dateStr: string): string {
 function getInitials(name: string | undefined | null, email?: string): string {
   if (name) return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   return email ? email[0].toUpperCase() : "?";
+}
+
+function getTicketAttachments(metadataJson: Record<string, unknown> | null | undefined): TicketAttachment[] {
+  const attachments = metadataJson?.attachments;
+  return Array.isArray(attachments) ? attachments.filter((item): item is TicketAttachment => {
+    return Boolean(item && typeof item === "object" && "fileName" in item && "fileUrl" in item);
+  }) : [];
+}
+
+function formatFileSize(bytes?: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function ClientPortalSupportDetail() {
@@ -122,6 +146,7 @@ export default function ClientPortalSupportDetail() {
   }
 
   const isClosed = ticket.status === "closed";
+  const attachments = getTicketAttachments(ticket.metadataJson);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -149,7 +174,32 @@ export default function ClientPortalSupportDetail() {
         {ticket.description && (
           <Card>
             <CardContent className="p-4">
-              <p className="text-sm whitespace-pre-wrap" data-testid="text-ticket-description">{ticket.description}</p>
+              <RichTextRenderer value={ticket.description} className="text-sm" data-testid="text-ticket-description" />
+            </CardContent>
+          </Card>
+        )}
+
+        {attachments.length > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <h2 className="mb-3 text-sm font-medium text-muted-foreground">Attachments</h2>
+              <div className="space-y-2">
+                {attachments.map((attachment) => (
+                  <a
+                    key={attachment.key}
+                    href={attachment.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{attachment.fileName}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                  </a>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -176,7 +226,7 @@ export default function ClientPortalSupportDetail() {
                           {isStaff && <Badge variant="secondary" className="text-xs">Staff</Badge>}
                           <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                         </div>
-                        <p className="text-sm mt-1 whitespace-pre-wrap">{msg.bodyText}</p>
+                        <RichTextRenderer value={msg.bodyText} className="mt-1 text-sm" />
                       </div>
                     </div>
                   </CardContent>

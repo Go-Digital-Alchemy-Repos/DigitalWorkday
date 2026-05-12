@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { ClientAccessLevel, commentMentions, UserRole, users } from "@shared/schema";
+import { ClientAccessLevel, commentMentions, insertCommentSchema, UserRole, users } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { getClientUserAccessibleClients } from "../../middleware/clientAccess";
@@ -11,6 +11,7 @@ import { createHash, randomBytes } from "crypto";
 import { emailOutboxService } from "../../services/emailOutbox";
 import { isTaskDoneStatus } from "@shared/taskStatus";
 import { hashPassword } from "../../auth";
+import { extractMentionsFromTipTapJson } from "../../utils/mentionUtils";
 
 const router = Router();
 
@@ -70,7 +71,7 @@ const portalUserCreateBaseSchema = z.object({
     ClientAccessLevel.VIEWER,
     ClientAccessLevel.COLLABORATOR,
     ClientAccessLevel.PORTAL_ADMIN,
-  ]).default(ClientAccessLevel.VIEWER),
+  ]).default(ClientAccessLevel.COLLABORATOR),
 });
 
 const portalInviteSchema = portalUserCreateBaseSchema.refine(data => Boolean(data.contactId || data.email), {
@@ -93,6 +94,27 @@ const portalUserUpdateSchema = z.object({
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().optional(),
   password: z.string().min(8, "Password must be at least 8 characters").optional(),
+});
+
+const portalTaskUpdateSchema = z.object({
+  title: z.string().trim().min(1).optional(),
+  description: z.string().optional().nullable(),
+  status: z.string().trim().min(1).optional(),
+  priority: z.string().trim().min(1).optional(),
+  dueDate: z.string().datetime().optional().nullable().or(z.literal("")),
+  estimateMinutes: z.number().int().nonnegative().optional().nullable(),
+});
+
+const portalSubtaskCreateSchema = z.object({
+  title: z.string().trim().min(1),
+  description: z.string().optional().nullable(),
+  status: z.string().trim().optional(),
+  dueDate: z.string().datetime().optional().nullable().or(z.literal("")),
+  estimateMinutes: z.number().int().nonnegative().optional().nullable(),
+});
+
+const portalSubtaskUpdateSchema = portalSubtaskCreateSchema.partial().extend({
+  completed: z.boolean().optional(),
 });
 
 function generateInviteToken(): string {
@@ -177,6 +199,8 @@ async function getClientAccessOrThrow(userId: string, clientId: string) {
 }
 
 function canEditClientData(accessLevel: string) {
+  // Legacy "viewer" records are treated as contributors so older portal users do
+  // not lose access while the product moves to a two-level portal model.
   return [
     ClientAccessLevel.VIEWER,
     ClientAccessLevel.COLLABORATOR,
@@ -185,11 +209,7 @@ function canEditClientData(accessLevel: string) {
 }
 
 function canManagePortalUsers(accessLevel: string) {
-  return [
-    ClientAccessLevel.VIEWER,
-    ClientAccessLevel.COLLABORATOR,
-    ClientAccessLevel.PORTAL_ADMIN,
-  ].includes(accessLevel as any);
+  return accessLevel === ClientAccessLevel.PORTAL_ADMIN;
 }
 
 function assertCanEditClientData(accessLevel: string) {
@@ -200,7 +220,7 @@ function assertCanEditClientData(accessLevel: string) {
 
 function assertCanManagePortalUsers(accessLevel: string) {
   if (!canManagePortalUsers(accessLevel)) {
-    throw AppError.forbidden("Client portal access required");
+    throw AppError.forbidden("Portal admin access is required");
   }
 }
 
@@ -236,11 +256,54 @@ function sanitizeClientOverview(client: any) {
   };
 }
 
+function formatClientUserAccess(entry: { user: any; access: any }) {
+  return {
+    ...entry.access,
+    user: {
+      id: entry.user.id,
+      email: entry.user.email,
+      name: entry.user.name,
+      firstName: entry.user.firstName,
+      lastName: entry.user.lastName,
+      avatarUrl: entry.user.avatarUrl,
+    },
+  };
+}
+
+function derivePortalContactName(user: Express.User) {
+  const firstName = user.firstName || "";
+  const lastName = user.lastName || "";
+  if (firstName || lastName) {
+    return { firstName: firstName || null, lastName: lastName || null };
+  }
+
+  const nameParts = (user.name || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: nameParts[0] || null,
+    lastName: nameParts.length > 1 ? nameParts.slice(1).join(" ") : null,
+  };
+}
+
 function getAssignmentSummary(task: any) {
-  const assigneeCount = Array.isArray(task.assignees) ? task.assignees.length : 0;
+  const assignees = Array.isArray(task.assignees)
+    ? task.assignees
+      .map((assignee: any) => assignee.user)
+      .filter(Boolean)
+      .map((user: any) => ({
+        id: user.id,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+      }))
+    : [];
+  const assigneeCount = assignees.length;
   return {
     assignmentStatus: assigneeCount > 0 ? "Assigned" : "Unassigned",
     assigneeCount,
+    assignees,
+    assigneeNames: assignees.map((assignee: any) => assignee.name || assignee.email).filter(Boolean),
   };
 }
 
@@ -275,6 +338,41 @@ function sanitizeTaskForPortal(task: any, project?: any) {
     tags: task.tags,
     ...getAssignmentSummary(task),
   };
+}
+
+async function getPortalTaskContext(userId: string, taskId: string) {
+  const task = await storage.getTaskWithRelations(taskId);
+  if (!task || !task.projectId) {
+    throw AppError.notFound("Task");
+  }
+  if ((task as any).visibility === "private") {
+    throw AppError.notFound("Task");
+  }
+
+  const project = await storage.getProject(task.projectId);
+  if (!project || !project.clientId) {
+    throw AppError.notFound("Task");
+  }
+  if ((project as any).visibility === "private") {
+    throw AppError.notFound("Task");
+  }
+
+  const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
+  if (!access) {
+    throw AppError.forbidden("Access denied");
+  }
+
+  return { task, project, access };
+}
+
+async function getPortalSubtaskContext(userId: string, subtaskId: string) {
+  const subtask = await storage.getSubtask(subtaskId);
+  if (!subtask) {
+    throw AppError.notFound("Subtask");
+  }
+
+  const context = await getPortalTaskContext(userId, subtask.taskId);
+  return { ...context, subtask };
 }
 
 async function getMentionedCommentIdsForUser(userId: string, commentIds: string[]) {
@@ -339,7 +437,31 @@ router.get("/clients/:clientId/contacts", async (req, res) => {
     const { clientId } = req.params;
     await getClientAccessOrThrow(userId, clientId);
 
-    const contacts = await storage.getContactsByClient(clientId);
+    let contacts = await storage.getContactsByClient(clientId);
+    const currentUserEmail = req.user!.email?.trim().toLowerCase();
+    const currentUserContact = currentUserEmail
+      ? contacts.find(contact => contact.email?.trim().toLowerCase() === currentUserEmail)
+      : undefined;
+
+    if (currentUserEmail && !currentUserContact) {
+      const client = await storage.getClient(clientId);
+      if (!client) {
+        throw AppError.notFound("Client");
+      }
+
+      const { firstName, lastName } = derivePortalContactName(req.user!);
+      const createdContact = await storage.createClientContact({
+        tenantId: client.tenantId,
+        workspaceId: client.workspaceId,
+        clientId,
+        firstName,
+        lastName,
+        email: currentUserEmail,
+        isPrimary: contacts.length === 0,
+      });
+      contacts = [createdContact, ...contacts];
+    }
+
     res.json(contacts);
   } catch (error) {
     return handleRouteError(res, error, "GET /clients/:clientId/contacts", req);
@@ -424,11 +546,10 @@ router.get("/clients/:clientId/users", async (req, res) => {
   try {
     const userId = req.user!.id;
     const { clientId } = req.params;
-    const access = await getClientAccessOrThrow(userId, clientId);
-    assertCanManagePortalUsers(access.accessLevel);
+    await getClientAccessOrThrow(userId, clientId);
 
-    const users = await storage.getClientUsers(clientId);
-    res.json(users);
+    const clientUsers = await storage.getClientUsers(clientId);
+    res.json(clientUsers.map(formatClientUserAccess));
   } catch (error) {
     return handleRouteError(res, error, "GET /clients/:clientId/users", req);
   }
@@ -946,27 +1067,7 @@ router.get("/tasks/:taskId", async (req, res) => {
   try {
     const userId = req.user!.id;
     const { taskId } = req.params;
-    
-    const task = await storage.getTaskWithRelations(taskId);
-    if (!task || !task.projectId) {
-      throw AppError.notFound("Task");
-    }
-    if ((task as any).visibility === 'private') {
-      throw AppError.notFound("Task");
-    }
-    
-    const project = await storage.getProject(task.projectId);
-    if (!project || !project.clientId) {
-      throw AppError.notFound("Task");
-    }
-    if ((project as any).visibility === 'private') {
-      throw AppError.notFound("Task");
-    }
-    
-    const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-    if (!access) {
-      throw AppError.forbidden("Access denied");
-    }
+    const { task, project } = await getPortalTaskContext(userId, taskId);
     
     // Get comments for this task
     const comments = await storage.getCommentsByTask(taskId);
@@ -974,7 +1075,7 @@ router.get("/tasks/:taskId", async (req, res) => {
       userId,
       comments.map(comment => comment.id),
     );
-    const visibleComments = comments.filter(comment => mentionedCommentIds.has(comment.id));
+    const visibleComments = comments.filter(comment => comment.userId === userId || mentionedCommentIds.has(comment.id));
     
     res.json({
       ...sanitizeTaskForPortal(task, project),
@@ -994,13 +1095,104 @@ router.get("/tasks/:taskId", async (req, res) => {
   }
 });
 
-// Portal project views are read-only. Internal team comments remain hidden unless
-// the portal user was explicitly mentioned in an existing comment.
+router.patch("/tasks/:taskId", async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { taskId } = req.params;
+    const { project } = await getPortalTaskContext(userId, taskId);
+    const data = portalTaskUpdateSchema.parse(req.body);
+
+    const updateData: Record<string, unknown> = { ...data };
+    if (data.dueDate !== undefined) {
+      updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    }
+
+    const updatedTask = await storage.updateTask(taskId, updateData as any);
+    if (!updatedTask) {
+      throw AppError.notFound("Task");
+    }
+
+    const taskWithRelations = await storage.getTaskWithRelations(taskId);
+    res.json(sanitizeTaskForPortal(taskWithRelations || updatedTask, project));
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /tasks/:taskId", req);
+  }
+});
+
+// Internal team comments remain hidden unless the portal user was explicitly
+// mentioned. Portal users can always see comments they authored.
 router.post("/tasks/:taskId/comments", async (req, res) => {
   try {
-    throw AppError.forbidden("Portal users cannot add internal task comments from project views");
+    const userId = req.user!.id;
+    const { taskId } = req.params;
+    await getPortalTaskContext(userId, taskId);
+
+    const data = insertCommentSchema.parse({
+      ...req.body,
+      taskId,
+      userId,
+    });
+    const comment = await storage.createComment(data);
+    const mentionedUserIds = extractMentionsFromTipTapJson(data.body);
+    for (const mentionedUserId of mentionedUserIds) {
+      if (mentionedUserId === userId) continue;
+      await storage.createCommentMention({
+        commentId: comment.id,
+        mentionedUserId,
+      });
+    }
+
+    const commenter = await storage.getUser(userId);
+    res.status(201).json({
+      ...comment,
+      user: commenter ? {
+        id: commenter.id,
+        name: commenter.name,
+        avatarUrl: commenter.avatarUrl,
+      } : null,
+    });
   } catch (error) {
     return handleRouteError(res, error, "POST /tasks/:taskId/comments", req);
+  }
+});
+
+router.post("/tasks/:taskId/subtasks", async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { taskId } = req.params;
+    await getPortalTaskContext(userId, taskId);
+    const data = portalSubtaskCreateSchema.parse(req.body);
+    const subtask = await storage.createSubtask({
+      ...data,
+      taskId,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    } as any);
+
+    res.status(201).json(sanitizeSubtaskForPortal(subtask));
+  } catch (error) {
+    return handleRouteError(res, error, "POST /tasks/:taskId/subtasks", req);
+  }
+});
+
+router.patch("/subtasks/:subtaskId", async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { subtaskId } = req.params;
+    await getPortalSubtaskContext(userId, subtaskId);
+    const data = portalSubtaskUpdateSchema.parse(req.body);
+    const updateData: Record<string, unknown> = { ...data };
+    if (data.dueDate !== undefined) {
+      updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    }
+
+    const subtask = await storage.updateSubtask(subtaskId, updateData as any);
+    if (!subtask) {
+      throw AppError.notFound("Subtask");
+    }
+
+    res.json(sanitizeSubtaskForPortal(subtask));
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /subtasks/:subtaskId", req);
   }
 });
 

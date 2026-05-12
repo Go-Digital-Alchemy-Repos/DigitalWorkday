@@ -32,7 +32,8 @@ export type UploadCategory =
   | "tenant-branding-icon"
   | "tenant-branding-favicon"
   | "user-avatar"
-  | "task-attachment";
+  | "task-attachment"
+  | "support-ticket-attachment";
 
 export type AssetType = "logo" | "icon" | "favicon";
 
@@ -129,6 +130,29 @@ const CATEGORY_CONFIGS: Record<UploadCategory, CategoryConfig> = {
     requiresTenantId: true,
     requiresUserId: false,
     requiresTaskContext: true,
+    requiresSuperUser: false,
+    requiresTenantAdmin: false,
+  },
+  "support-ticket-attachment": {
+    allowedMimeTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/gif",
+      "text/plain",
+      "application/zip",
+      "application/x-zip-compressed",
+    ],
+    maxSizeBytes: 25 * 1024 * 1024,
+    requiresTenantId: true,
+    requiresUserId: true,
+    requiresTaskContext: false,
     requiresSuperUser: false,
     requiresTenantAdmin: false,
   },
@@ -258,6 +282,11 @@ export function generateS3Key(
       if (!context.projectId) throw new Error("projectId required for task attachment");
       if (!context.taskId) throw new Error("taskId required for task attachment");
       return `tenants/${context.tenantId}/projects/${context.projectId}/tasks/${context.taskId}/attachments/${year}/${month}/${uuid}-${sanitized}`;
+
+    case "support-ticket-attachment":
+      if (!context.tenantId) throw new Error("tenantId required for support ticket attachment");
+      if (!context.userId) throw new Error("userId required for support ticket attachment");
+      return `tenants/${context.tenantId}/support-tickets/uploads/${context.userId}/${year}/${month}/${uuid}-${sanitized}`;
 
     default:
       throw new Error(`Unknown category: ${category}`);

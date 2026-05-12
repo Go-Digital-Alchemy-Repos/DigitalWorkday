@@ -12,14 +12,14 @@ interface ClientInfo {
   accessLevel: string;
 }
 
-interface DashboardData {
+interface PortalProfileData {
   clients: ClientInfo[];
 }
 
 export default function ClientPortalAssetsPage() {
   const [clientId, setClientId] = useState("");
-  const { data, isLoading } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data, isLoading } = useQuery<PortalProfileData>({
+    queryKey: ["/api/client-portal/profile"],
   });
   const clients = data?.clients || [];
 

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useTenantTheme } from "@/lib/tenant-theme-loader";
 import {
   Home,
   FolderKanban,
@@ -36,9 +37,6 @@ interface ClientInfo {
 
 interface DashboardData {
   clients: ClientInfo[];
-  projects: any[];
-  tasks: any[];
-  upcomingDeadlines: any[];
 }
 
 const mainNavItems = [
@@ -55,9 +53,10 @@ const mainNavItems = [
 export function ClientPortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { displayName, iconUrl, logoUrl } = useTenantTheme();
 
   const { data: dashboardData } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+    queryKey: ["/api/client-portal/profile"],
   });
 
   const isActiveRoute = (url: string) => {
@@ -78,12 +77,17 @@ export function ClientPortalSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-border h-12 flex items-center">
-        <div className="flex items-center gap-2 px-2">
-          <img src={appLogo} alt="Digital Workday" className="h-6 w-6" />
-          <span className="font-semibold text-sm truncate group-data-[collapsible=icon]:hidden">
-            Client Portal
-          </span>
+      <SidebarHeader className="border-b border-border h-16 justify-center px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <img src={iconUrl || logoUrl || appLogo} alt={displayName} className="h-7 w-7 shrink-0 rounded-sm object-contain" />
+          <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
+            <span className="font-semibold text-sm leading-tight truncate" data-testid="text-portal-tenant-name">
+              {displayName}
+            </span>
+            <span className="text-xs leading-tight text-muted-foreground">
+              Client Portal
+            </span>
+          </div>
         </div>
       </SidebarHeader>
 

@@ -279,7 +279,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
         createdByUserId: null,
         createdByPortalUserId: userId,
         title: data.subject,
-        description: data.initialMessage,
+        description: null,
         priority: data.priority,
         category: SupportTicketCategory.SUPPORT,
         source: SupportTicketSource.PORTAL,

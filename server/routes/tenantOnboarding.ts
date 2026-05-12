@@ -343,9 +343,10 @@ router.get("/branding", requireAuth, async (req, res) => {
     const user = req.user as any;
     const tenantId: string | null = getEffectiveTenantId(req) || user?.tenantId || null;
 
-    const [[sys], settings] = await Promise.all([
+    const [[sys], settings, tenant] = await Promise.all([
       db.select().from(systemSettings).limit(1),
       tenantId ? storage.getTenantSettings(tenantId) : Promise.resolve(null),
+      tenantId ? storage.getTenant(tenantId) : Promise.resolve(null),
     ]);
 
     // Resolution: tenant value → system default → null
@@ -357,7 +358,8 @@ router.get("/branding", requireAuth, async (req, res) => {
 
     res.json({
       tenantSettings: {
-        displayName: settings?.displayName || null,
+        displayName: settings?.displayName || tenant?.name || null,
+        tenantName: tenant?.name || null,
         appName,
         logoUrl,
         iconUrl,

@@ -24,6 +24,7 @@ const ClientPortalMessages = lazy(trackChunkLoad("PortalMessages", () => import(
 const ClientPortalSupport = lazy(trackChunkLoad("PortalSupport", () => import("@/pages/client-portal-support")));
 const ClientPortalSupportNew = lazy(trackChunkLoad("PortalSupportNew", () => import("@/pages/client-portal-support-new")));
 const ClientPortalSupportDetail = lazy(trackChunkLoad("PortalSupportDetail", () => import("@/pages/client-portal-support-detail")));
+const UserProfilePage = lazy(trackChunkLoad("PortalProfile", () => import("@/pages/user-profile")));
 
 function ClientPortalRouter() {
   return (
@@ -61,6 +62,9 @@ function ClientPortalRouter() {
         </Route>
         <Route path="/portal/support/:id">
           {() => <ClientPortalRouteGuard component={ClientPortalSupportDetail} />}
+        </Route>
+        <Route path="/portal/profile">
+          {() => <ClientPortalRouteGuard component={UserProfilePage} />}
         </Route>
         <Route>
           {() => <Redirect to="/portal" />}

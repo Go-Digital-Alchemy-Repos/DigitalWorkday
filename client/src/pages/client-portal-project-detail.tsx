@@ -14,6 +14,7 @@ import {
   MessageCircle,
   FolderKanban,
   Clock,
+  User2,
 } from "lucide-react";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
 import { getTaskStatusLabel, isTaskDoneStatus, normalizeTaskStatus } from "@shared/taskStatus";
@@ -36,6 +37,12 @@ interface TaskInfo {
   dueDate: string | null;
   assignmentStatus?: "Assigned" | "Unassigned";
   assigneeCount?: number;
+  assignees?: Array<{
+    id: string;
+    name: string | null;
+    email: string;
+  }>;
+  assigneeNames?: string[];
 }
 
 interface ProjectData {
@@ -97,6 +104,22 @@ function getDueDateClass(dateStr: string | null) {
   if (isPast(date) && !isToday(date)) return "text-destructive";
   if (isToday(date)) return "text-orange-600 dark:text-orange-400";
   return "text-muted-foreground";
+}
+
+function formatAssignees(task: TaskInfo) {
+  const names = task.assigneeNames?.length
+    ? task.assigneeNames
+    : task.assignees?.map((assignee) => assignee.name || assignee.email).filter(Boolean);
+
+  if (!names || names.length === 0) {
+    return "Unassigned";
+  }
+
+  if (names.length <= 2) {
+    return names.join(", ");
+  }
+
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
 }
 
 export default function ClientPortalProjectDetail() {
@@ -299,7 +322,8 @@ function TaskList({ tasks, emptyMessage = "No tasks" }: { tasks: TaskInfo[]; emp
                     {getTaskStatusLabel(task.status)}
                   </Badge>
                   <Badge variant="secondary">
-                    {task.assignmentStatus || "Unassigned"}
+                    <User2 className="h-3 w-3 mr-1" />
+                    {formatAssignees(task)}
                   </Badge>
                 </div>
               </div>

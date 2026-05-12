@@ -39,7 +39,7 @@ export default function ServiceRequestsPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {[1, 2, 3].map(item => <Skeleton key={item} className="h-28 w-full" />)}
         </div>
       ) : requests.length > 0 ? (

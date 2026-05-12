@@ -20,7 +20,7 @@ function hashToken(token: string): string {
 
 function getInviteAccessLevel(roleHint: string | null | undefined) {
   const parsed = clientAccessLevelSchema.safeParse(roleHint);
-  return parsed.success ? parsed.data : ClientAccessLevel.VIEWER;
+  return parsed.success ? parsed.data : ClientAccessLevel.COLLABORATOR;
 }
 
 router.get("/invites/validate", async (req, res) => {

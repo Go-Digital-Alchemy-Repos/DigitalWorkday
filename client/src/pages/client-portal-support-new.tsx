@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { RichTextEditor } from "@/components/richtext";
+import { useS3Upload } from "@/hooks/useS3Upload";
 
 interface ClientInfo {
   id: string;
@@ -20,11 +22,16 @@ interface ClientInfo {
   accessLevel: string;
 }
 
-interface DashboardData {
+interface PortalProfile {
   clients: ClientInfo[];
-  projects: any[];
-  tasks: any[];
-  upcomingDeadlines: any[];
+}
+
+interface TicketAttachment {
+  fileName: string;
+  fileUrl: string;
+  key: string;
+  mimeType: string;
+  size: number;
 }
 
 interface FormField {
@@ -46,6 +53,7 @@ export default function ClientPortalSupportNew() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -53,10 +61,12 @@ export default function ClientPortalSupportNew() {
   const [priority, setPriority] = useState("normal");
   const [clientId, setClientId] = useState("");
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
 
-  const { data: dashboardData } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data: profileData } = useQuery<PortalProfile>({
+    queryKey: ["/api/client-portal/profile"],
   });
+  const { upload, isUploading } = useS3Upload({ category: "support-ticket-attachment" });
 
   const { data: formSchema } = useQuery<FormSchemaData | null>({
     queryKey: ["/api/v1/portal/support/form-schemas", category],
@@ -67,7 +77,7 @@ export default function ClientPortalSupportNew() {
     setCustomFields({});
   }, [category]);
 
-  const clients = dashboardData?.clients || [];
+  const clients = profileData?.clients || [];
   const dynamicFields: FormField[] = formSchema?.schemaJson || [];
 
   const createMutation = useMutation({
@@ -84,6 +94,7 @@ export default function ClientPortalSupportNew() {
         category,
         priority,
         metadataJson,
+        attachments,
       });
     },
     onSuccess: async (res) => {
@@ -114,6 +125,49 @@ export default function ClientPortalSupportNew() {
   };
 
   const effectiveClientId = clientId || (clients.length === 1 ? clients[0].id : "");
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAttachmentSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      try {
+        const result = await upload(file);
+        setAttachments((prev) => ([
+          ...prev,
+          {
+            fileName: file.name,
+            fileUrl: result.fileUrl,
+            key: result.key,
+            mimeType: file.type || "application/octet-stream",
+            size: file.size,
+          },
+        ]));
+        toast({ title: "Attachment added", description: file.name });
+      } catch (error: any) {
+        toast({
+          title: "Unable to upload attachment",
+          description: error?.message || `Failed to upload ${file.name}`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const removeAttachment = (key: string) => {
+    setAttachments((prev) => prev.filter((attachment) => attachment.key !== key));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
     <div className="h-full overflow-y-auto">
@@ -158,14 +212,66 @@ export default function ClientPortalSupportNew() {
 
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
+                <RichTextEditor
                   placeholder="Provide details about your request..."
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="min-h-[120px]"
+                  onChange={setDescription}
+                  minHeight="150px"
+                  showAttachment
+                  onAttachmentClick={handleAttachmentClick}
                   data-testid="input-ticket-description"
                 />
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,application/zip"
+                onChange={handleAttachmentSelected}
+                data-testid="input-ticket-attachments"
+              />
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label>Attachments</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAttachmentClick}
+                    disabled={isUploading}
+                    data-testid="button-add-attachment"
+                  >
+                    {isUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Paperclip className="h-4 w-4 mr-2" />}
+                    Add File
+                  </Button>
+                </div>
+                {attachments.length > 0 && (
+                  <div className="space-y-2 rounded-md border p-2" data-testid="ticket-attachments-list">
+                    {attachments.map((attachment) => (
+                      <div key={attachment.key} className="flex items-center justify-between gap-3 rounded-sm bg-muted/50 px-2 py-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{attachment.fileName}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(attachment.size)}</p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeAttachment(attachment.key)}
+                          aria-label={`Remove ${attachment.fileName}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -298,7 +404,7 @@ export default function ClientPortalSupportNew() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!title.trim() || !effectiveClientId || createMutation.isPending}
+                  disabled={!title.trim() || !effectiveClientId || isUploading || createMutation.isPending}
                   data-testid="button-submit-ticket"
                 >
                   {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}

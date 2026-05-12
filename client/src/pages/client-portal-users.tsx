@@ -13,17 +13,18 @@ interface ClientInfo {
   accessLevel: string;
 }
 
-interface DashboardData {
+interface PortalProfileData {
   clients: ClientInfo[];
 }
 
 export default function ClientPortalUsersPage() {
   const [clientId, setClientId] = useState("");
-  const { data, isLoading } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data, isLoading } = useQuery<PortalProfileData>({
+    queryKey: ["/api/client-portal/profile"],
   });
 
   const manageableClients = data?.clients || [];
+  const selectedClient = manageableClients.find(client => client.id === clientId);
 
   useEffect(() => {
     if (!clientId && manageableClients.length > 0) {
@@ -48,7 +49,11 @@ export default function ClientPortalUsersPage() {
             <Users className="h-6 w-6 text-primary" />
             Portal Users
           </h1>
-          <p className="text-muted-foreground">Invite and manage users who can access this client portal.</p>
+          <p className="text-muted-foreground">
+            {selectedClient?.accessLevel === "portal_admin"
+              ? "Invite and manage users who can access this client portal."
+              : "View users who can access this client portal."}
+          </p>
         </div>
         {manageableClients.length > 1 && (
           <Select value={clientId} onValueChange={setClientId}>
@@ -67,7 +72,7 @@ export default function ClientPortalUsersPage() {
       </div>
 
       {clientId ? (
-        <ClientPortalUsersTab clientId={clientId} portalMode />
+        <ClientPortalUsersTab clientId={clientId} portalMode currentAccessLevel={selectedClient?.accessLevel} />
       ) : (
         <Card>
           <CardHeader>

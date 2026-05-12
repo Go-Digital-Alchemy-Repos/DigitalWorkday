@@ -84,12 +84,18 @@ interface ClientContact {
   title: string | null;
 }
 
+type PortalAccessLevel = "collaborator" | "portal_admin";
+
+function normalizePortalAccessLevel(level: string | null | undefined): PortalAccessLevel {
+  return level === "portal_admin" ? "portal_admin" : "collaborator";
+}
+
 const createUserSchema = z.object({
   contactId: z.string().optional(),
   email: z.string().email("Valid email is required").optional().or(z.literal("")),
   firstName: z.string().optional().default(""),
   lastName: z.string().optional().default(""),
-  accessLevel: z.enum(["viewer", "collaborator", "portal_admin"]),
+  accessLevel: z.enum(["collaborator", "portal_admin"]),
   password: z.string().optional().default(""),
   confirmPassword: z.string().optional().default(""),
 }).refine((data) => Boolean(data.contactId || data.email), {
@@ -118,7 +124,7 @@ type CreateUserFormData = z.infer<typeof createUserSchema>;
 const editUserSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().optional().default(""),
-  accessLevel: z.enum(["viewer", "collaborator", "portal_admin"]),
+  accessLevel: z.enum(["collaborator", "portal_admin"]),
   password: z.string().optional().default(""),
   confirmPassword: z.string().optional().default(""),
 }).refine((data) => {
@@ -144,9 +150,10 @@ type EditUserFormData = z.infer<typeof editUserSchema>;
 interface ClientPortalUsersTabProps {
   clientId: string;
   portalMode?: boolean;
+  currentAccessLevel?: string;
 }
 
-export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPortalUsersTabProps) {
+export function ClientPortalUsersTab({ clientId, portalMode = false, currentAccessLevel }: ClientPortalUsersTabProps) {
   const { toast } = useToast();
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
@@ -160,6 +167,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
   const contactsQueryKey = portalMode
     ? ["/api/client-portal/clients", clientId, "contacts"]
     : ["/api/clients", clientId, "contacts"];
+  const canManageUsers = !portalMode || currentAccessLevel === "portal_admin";
 
   const createForm = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -168,7 +176,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       email: "",
       firstName: "",
       lastName: "",
-      accessLevel: "portal_admin",
+      accessLevel: "collaborator",
       password: "",
       confirmPassword: "",
     },
@@ -179,7 +187,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
     defaultValues: {
       firstName: "",
       lastName: "",
-      accessLevel: "viewer",
+      accessLevel: "collaborator",
       password: "",
       confirmPassword: "",
     },
@@ -305,7 +313,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       email: "",
       firstName: "",
       lastName: "",
-      accessLevel: "portal_admin",
+      accessLevel: "collaborator",
       password: "",
       confirmPassword: "",
     });
@@ -319,7 +327,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       email: contact.email || "",
       firstName: contact.firstName,
       lastName: contact.lastName || "",
-      accessLevel: "portal_admin",
+      accessLevel: "collaborator",
       password: "",
       confirmPassword: "",
     });
@@ -333,7 +341,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
     editForm.reset({
       firstName: portalUser.user.firstName || portalUser.user.name?.split(" ")[0] || "",
       lastName: portalUser.user.lastName || portalUser.user.name?.split(" ").slice(1).join(" ") || "",
-      accessLevel: portalUser.accessLevel as "viewer" | "collaborator" | "portal_admin",
+      accessLevel: normalizePortalAccessLevel(portalUser.accessLevel),
       password: "",
       confirmPassword: "",
     });
@@ -362,10 +370,9 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       case "portal_admin":
         return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Portal Admin</Badge>;
       case "collaborator":
-        return <Badge variant="default">Collaborator</Badge>;
       case "viewer":
       default:
-        return <Badge variant="secondary">Viewer</Badge>;
+        return <Badge variant="default">Contributor</Badge>;
     }
   };
 
@@ -387,6 +394,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
 
   return (
     <div className="space-y-6">
+      {!portalMode && (
       <div className="mb-4">
         <Button
           variant="ghost"
@@ -399,20 +407,25 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
           Back to Overview
         </Button>
       </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold">Portal Users</h3>
           <p className="text-sm text-muted-foreground">
-            Manage client users who can access the client portal to view projects and tasks.
+            {canManageUsers
+              ? "Manage client users who can access the client portal."
+              : "View client users who can access this portal. Only portal admins can manage accounts."}
           </p>
         </div>
+        {canManageUsers && (
         <Button onClick={handleOpenAddUser} data-testid="button-add-portal-user">
           <UserPlus className="h-4 w-4 mr-2" />
           Add Portal User
         </Button>
+        )}
       </div>
 
-      {uninvitedContacts.length > 0 && (
+      {canManageUsers && uninvitedContacts.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Quick Add from Contacts</CardTitle>
@@ -457,8 +470,8 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
               {portalUsers.map((portalUser) => (
                 <div
                   key={portalUser.id}
-                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover-elevate"
-                  onClick={() => handleOpenEditUser(portalUser)}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${canManageUsers ? "cursor-pointer hover-elevate" : ""}`}
+                  onClick={() => canManageUsers && handleOpenEditUser(portalUser)}
                   data-testid={`portal-user-${portalUser.userId}`}
                 >
                   <div className="flex items-center gap-3">
@@ -480,6 +493,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                   </div>
                   <div className="flex items-center gap-2">
                     {getAccessLevelBadge(portalUser.accessLevel)}
+                    {canManageUsers && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" data-testid={`button-portal-user-menu-${portalUser.userId}`}>
@@ -511,6 +525,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </div>
                 </div>
               ))}
@@ -525,16 +540,18 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
             <p className="text-sm text-muted-foreground mb-4">
               Add client users to give them access to view their projects and tasks.
             </p>
+            {canManageUsers && (
             <Button onClick={handleOpenAddUser} data-testid="button-add-first-user">
               <UserPlus className="h-4 w-4 mr-2" />
               Add First User
             </Button>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* Add Portal User Sheet */}
-      <Sheet open={addUserOpen} onOpenChange={(open) => !open && handleCloseAddUser()}>
+      <Sheet open={canManageUsers && addUserOpen} onOpenChange={(open) => !open && handleCloseAddUser()}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="sheet-add-portal-user">
           <SheetHeader>
             <SheetTitle>Add Portal User</SheetTitle>
@@ -601,16 +618,10 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="viewer">
-                              <div className="flex items-center gap-2">
-                                <Eye className="h-4 w-4" />
-                                <span>Viewer - Standard portal access</span>
-                              </div>
-                            </SelectItem>
                             <SelectItem value="collaborator">
                               <div className="flex items-center gap-2">
                                 <Edit3 className="h-4 w-4" />
-                                <span>Collaborator - Use client-facing workflows</span>
+                                <span>Contributor - Full portal access except user management</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="portal_admin">
@@ -622,7 +633,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          All portal users can manage client-facing areas. Access labels are retained for account organization.
+                          Contributors can use client-facing areas. Portal admins can also manage users and passwords.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -730,7 +741,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
       </Sheet>
 
       {/* Edit Portal User Sheet */}
-      <Sheet open={!!editingUser} onOpenChange={(open) => !open && handleCloseEditUser()}>
+      <Sheet open={canManageUsers && !!editingUser} onOpenChange={(open) => !open && handleCloseEditUser()}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="sheet-edit-portal-user">
           <SheetHeader>
             <SheetTitle>Edit Portal User</SheetTitle>
@@ -800,16 +811,10 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="viewer">
-                              <div className="flex items-center gap-2">
-                                <Eye className="h-4 w-4" />
-                                <span>Viewer - Standard portal access</span>
-                              </div>
-                            </SelectItem>
                             <SelectItem value="collaborator">
                               <div className="flex items-center gap-2">
                                 <Edit3 className="h-4 w-4" />
-                                <span>Collaborator - Use client-facing workflows</span>
+                                <span>Contributor - Full portal access except user management</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="portal_admin">
@@ -821,7 +826,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          All portal users can manage client-facing areas. Access labels are retained for account organization.
+                          Contributors can use client-facing areas. Portal admins can also manage users and passwords.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

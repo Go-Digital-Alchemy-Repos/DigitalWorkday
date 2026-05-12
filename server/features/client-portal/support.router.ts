@@ -24,6 +24,13 @@ const createTicketSchema = z.object({
   category: z.enum(["support", "work_order", "billing", "bug", "feature_request"]).optional().default("support"),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
   metadataJson: z.record(z.any()).optional().nullable(),
+  attachments: z.array(z.object({
+    fileName: z.string().min(1),
+    fileUrl: z.string().url(),
+    key: z.string().min(1),
+    mimeType: z.string().optional().nullable(),
+    size: z.number().int().positive().optional().nullable(),
+  })).optional().default([]),
 });
 
 const addReplySchema = z.object({
@@ -128,6 +135,11 @@ router.post("/tickets", async (req, res) => {
       }
     }
 
+    const metadataJson = {
+      ...(body.metadataJson && typeof body.metadataJson === "object" ? body.metadataJson : {}),
+      ...(body.attachments.length > 0 ? { attachments: body.attachments } : {}),
+    };
+
     const ticket = await storage.createSupportTicket({
       tenantId,
       clientId: body.clientId,
@@ -140,7 +152,7 @@ router.post("/tickets", async (req, res) => {
       source: SupportTicketSource.PORTAL,
       assignedToUserId: null,
       dueAt: null,
-      metadataJson: body.metadataJson ?? null,
+      metadataJson: Object.keys(metadataJson).length > 0 ? metadataJson : null,
     });
 
     await storage.createSupportTicketEvent({

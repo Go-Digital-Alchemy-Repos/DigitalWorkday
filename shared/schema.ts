@@ -1804,7 +1804,7 @@ export const clientUserAccess = pgTable("client_user_access", {
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
-  accessLevel: text("access_level").notNull().default("viewer"),
+  accessLevel: text("access_level").notNull().default("collaborator"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("client_user_access_unique").on(table.clientId, table.userId),
@@ -2993,7 +2993,7 @@ export const insertClientUserAccessSchema = createInsertSchema(clientUserAccess)
     ClientAccessLevel.VIEWER,
     ClientAccessLevel.COLLABORATOR,
     ClientAccessLevel.PORTAL_ADMIN,
-  ]).default(ClientAccessLevel.VIEWER),
+  ]).default(ClientAccessLevel.COLLABORATOR),
 });
 
 export const insertAppSettingSchema = createInsertSchema(appSettings).omit({

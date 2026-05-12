@@ -41,6 +41,7 @@ export default function UserProfilePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
+    name: user?.name || "",
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
   });
@@ -53,7 +54,7 @@ export default function UserProfilePage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName?: string; lastName?: string }) => {
+    mutationFn: async (data: { name?: string; firstName?: string; lastName?: string }) => {
       return apiRequest("PATCH", "/api/users/me", data);
     },
     onSuccess: () => {
@@ -145,6 +146,8 @@ export default function UserProfilePage() {
   const handleBack = () => {
     if (user.role === "super_user") {
       setLocation("/super-admin/dashboard");
+    } else if (user.role === "client") {
+      setLocation("/portal");
     } else {
       setLocation("/");
     }
@@ -214,6 +217,17 @@ export default function UserProfilePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="displayName">Display Name</Label>
+                  <Input
+                    id="displayName"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Your profile name"
+                    data-testid="input-display-name"
+                  />
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name</Label>

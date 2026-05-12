@@ -21,19 +21,10 @@ interface ProjectInfo {
   description: string | null;
   status: string;
   clientId: string;
-}
-
-interface ClientInfo {
-  id: string;
-  companyName: string;
-  displayName: string | null;
-  accessLevel: string;
-}
-
-interface DashboardData {
-  clients: ClientInfo[];
-  projects: ProjectInfo[];
-  tasks: any[];
+  clientName?: string | null;
+  taskCount?: number;
+  completedCount?: number;
+  progress?: number;
 }
 
 function getStatusColor(status: string) {
@@ -55,26 +46,21 @@ function getStatusColor(status: string) {
 export default function ClientPortalProjects() {
   const [searchQuery, setSearchQuery] = useState("");
   
-  const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data: projects = [], isLoading, error } = useQuery<ProjectInfo[]>({
+    queryKey: ["/api/client-portal/projects"],
   });
 
   const filteredProjects = useMemo(() => {
-    if (!data?.projects) return [];
-    if (!searchQuery.trim()) return data.projects;
+    if (!searchQuery.trim()) return projects;
     
     const query = searchQuery.toLowerCase();
-    return data.projects.filter(
+    return projects.filter(
       (project) =>
         project.name.toLowerCase().includes(query) ||
-        toPlainText(project.description).toLowerCase().includes(query)
+        toPlainText(project.description).toLowerCase().includes(query) ||
+        (project.clientName || "").toLowerCase().includes(query)
     );
-  }, [data?.projects, searchQuery]);
-
-  const getClientName = (clientId: string) => {
-    const client = data?.clients.find((c) => c.id === clientId);
-    return client?.displayName || client?.companyName || "Unknown";
-  };
+  }, [projects, searchQuery]);
 
   if (isLoading) {
     return (
@@ -150,7 +136,7 @@ export default function ClientPortalProjects() {
                     </Badge>
                   </div>
                   <CardDescription className="text-xs">
-                    {getClientName(project.clientId)}
+                    {project.clientName || "Client account"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -163,6 +149,10 @@ export default function ClientPortalProjects() {
                       No description
                     </p>
                   )}
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    {project.taskCount || 0} tasks
+                    {project.taskCount ? ` - ${project.progress || 0}% complete` : ""}
+                  </div>
                   <div className="flex items-center gap-1 mt-3 text-sm text-primary">
                     View Details <ArrowRight className="h-3 w-3" />
                   </div>

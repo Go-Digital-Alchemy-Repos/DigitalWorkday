@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { getPreviewText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,6 @@ import {
   ArrowRight,
   Calendar,
   TrendingUp,
-  FileText,
   MessageSquare,
   ClipboardCheck,
 } from "lucide-react";
@@ -41,6 +39,11 @@ interface ProjectInfo {
   description: string | null;
   status: string;
   clientId: string;
+  clientName?: string | null;
+  createdAt?: string | null;
+  taskCount?: number;
+  completedCount?: number;
+  progress?: number;
 }
 
 interface TaskInfo {
@@ -52,6 +55,9 @@ interface TaskInfo {
   dueDate: string | null;
   projectId: string;
   projectName: string;
+  assignmentStatus?: string;
+  assigneeCount?: number;
+  assigneeNames?: string[];
 }
 
 interface DashboardStats {
@@ -62,12 +68,8 @@ interface DashboardStats {
   overdueTasks: number;
 }
 
-interface DashboardData {
+interface PortalProfileData {
   clients: ClientInfo[];
-  projects: ProjectInfo[];
-  tasks: TaskInfo[];
-  upcomingDeadlines: TaskInfo[];
-  stats: DashboardStats;
 }
 
 interface ClientOverview {
@@ -119,6 +121,18 @@ function formatDueDate(dateStr: string) {
   return format(date, "MMM d");
 }
 
+function isTaskComplete(status: string) {
+  const normalized = normalizeTaskStatus(status);
+  return normalized === "done" || status === "completed";
+}
+
+function isOverdue(dateStr: string | null, status: string) {
+  if (!dateStr || isTaskComplete(status)) return false;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return false;
+  return isPast(date) && !isToday(date);
+}
+
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
@@ -146,10 +160,18 @@ export default function ClientPortalDashboard() {
     description: "",
   });
 
-  const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+  const { data: profileData, isLoading: isProfileLoading, error: profileError } = useQuery<PortalProfileData>({
+    queryKey: ["/api/client-portal/profile"],
   });
-  const clients = data?.clients || [];
+  const { data: projectsData = [], isLoading: isProjectsLoading, error: projectsError } = useQuery<ProjectInfo[]>({
+    queryKey: ["/api/client-portal/projects"],
+  });
+  const { data: tasksData = [], isLoading: isTasksLoading, error: tasksError } = useQuery<TaskInfo[]>({
+    queryKey: ["/api/client-portal/tasks"],
+  });
+
+  const isLoading = isProfileLoading || isProjectsLoading || isTasksLoading;
+  const clients = profileData?.clients || [];
   const selectedClient = clients.find(client => client.id === selectedClientId);
   const canEditOverview = Boolean(selectedClient);
 
@@ -185,7 +207,7 @@ export default function ClientPortalDashboard() {
     onSuccess: () => {
       toast({ title: "Overview updated" });
       queryClient.invalidateQueries({ queryKey: overviewQueryKey });
-      queryClient.invalidateQueries({ queryKey: ["/api/client-portal/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-portal/profile"] });
     },
     onError: (mutationError: Error) => {
       toast({
@@ -195,6 +217,69 @@ export default function ClientPortalDashboard() {
       });
     },
   });
+
+  const projects = useMemo(() => {
+    if (!selectedClientId) return projectsData;
+    return projectsData.filter(project => project.clientId === selectedClientId);
+  }, [projectsData, selectedClientId]);
+
+  const projectIds = useMemo(() => new Set(projects.map(project => project.id)), [projects]);
+
+  const tasks = useMemo(() => {
+    if (!selectedClientId) return tasksData;
+    return tasksData.filter(task => projectIds.has(task.projectId));
+  }, [projectIds, selectedClientId, tasksData]);
+
+  const upcomingDeadlines = useMemo(() => {
+    const now = new Date();
+    const twoWeeksLater = new Date(now);
+    twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
+
+    return tasks
+      .filter(task => {
+        if (!task.dueDate || isTaskComplete(task.status)) return false;
+        const dueDate = new Date(task.dueDate);
+        if (Number.isNaN(dueDate.getTime())) return false;
+        return dueDate >= now && dueDate <= twoWeeksLater;
+      })
+      .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime())
+      .slice(0, 6);
+  }, [tasks]);
+
+  const activeTasks = useMemo(() => {
+    return tasks
+      .filter(task => !isTaskComplete(task.status))
+      .sort((a, b) => {
+        if (!a.dueDate && !b.dueDate) return a.title.localeCompare(b.title);
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      })
+      .slice(0, 5);
+  }, [tasks]);
+
+  const recentProjects = useMemo(() => {
+    return [...projects]
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, 5);
+  }, [projects]);
+
+  const stats = useMemo<DashboardStats>(() => {
+    const completedTasks = tasks.filter(task => isTaskComplete(task.status)).length;
+    return {
+      totalProjects: projects.length,
+      activeProjects: projects.filter(project => ["active", "in_progress"].includes(project.status)).length,
+      totalTasks: tasks.length,
+      completedTasks,
+      overdueTasks: tasks.filter(task => isOverdue(task.dueDate, task.status)).length,
+    };
+  }, [projects, tasks]);
+
+  const completionRate = stats.totalTasks > 0
+    ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
+    : 0;
+
+  const hasActivityLoadIssue = Boolean(projectsError || tasksError);
 
   if (isLoading) {
     return (
@@ -208,7 +293,7 @@ export default function ClientPortalDashboard() {
     );
   }
 
-  if (error) {
+  if (profileError) {
     return (
       <div className="p-6 flex items-center justify-center h-full">
         <Card className="max-w-md">
@@ -225,18 +310,6 @@ export default function ClientPortalDashboard() {
       </div>
     );
   }
-
-  const stats = data?.stats || {
-    totalProjects: 0,
-    activeProjects: 0,
-    totalTasks: 0,
-    completedTasks: 0,
-    overdueTasks: 0,
-  };
-
-  const completionRate = stats.totalTasks > 0 
-    ? Math.round((stats.completedTasks / stats.totalTasks) * 100) 
-    : 0;
 
   return (
     <div className="p-6 overflow-y-auto h-full">
@@ -312,6 +385,20 @@ export default function ClientPortalDashboard() {
               </div>
             )}
           </CardContent>
+        </Card>
+      )}
+
+      {hasActivityLoadIssue && (
+        <Card className="mb-6 border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              Some Account Activity Could Not Load
+            </CardTitle>
+            <CardDescription>
+              Your account profile is available, but project or task activity could not be refreshed.
+            </CardDescription>
+          </CardHeader>
         </Card>
       )}
 
@@ -416,7 +503,7 @@ export default function ClientPortalDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -430,9 +517,9 @@ export default function ClientPortalDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            {data?.upcomingDeadlines && data.upcomingDeadlines.length > 0 ? (
+            {upcomingDeadlines.length > 0 ? (
               <div className="space-y-3">
-                {data.upcomingDeadlines.map((task) => (
+                {upcomingDeadlines.map((task) => (
                   <div
                     key={task.id}
                     className="flex items-start justify-between p-3 rounded-lg border bg-card"
@@ -442,6 +529,9 @@ export default function ClientPortalDashboard() {
                       <div className="font-medium truncate">{task.title}</div>
                       <div className="text-sm text-muted-foreground truncate">
                         {task.projectName}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {task.assigneeNames?.length ? task.assigneeNames.join(", ") : task.assignmentStatus || "Unassigned"}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="outline" className={getPriorityColor(task.priority)}>
@@ -472,6 +562,53 @@ export default function ClientPortalDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
+              <CardTitle>Open Tasks</CardTitle>
+              <CardDescription>Current work tied to your account</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/portal/projects" data-testid="link-view-active-tasks">
+                View All <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {activeTasks.length > 0 ? (
+              <div className="space-y-3">
+                {activeTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-3 rounded-lg border bg-card"
+                    data-testid={`active-task-${task.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{task.title}</div>
+                        <div className="text-sm text-muted-foreground truncate">{task.projectName}</div>
+                      </div>
+                      <Badge variant="outline" className={getStatusColor(task.status)}>
+                        {getTaskStatusLabel(task.status)}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span>{task.assigneeNames?.length ? task.assigneeNames.join(", ") : task.assignmentStatus || "Unassigned"}</span>
+                      <span>{task.dueDate ? `Due ${formatDueDate(task.dueDate)}` : "No due date"}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                <CheckSquare className="h-8 w-8 mb-2 opacity-50" />
+                <p>No open tasks</p>
+                <p className="text-sm">Completed work and new tasks will show in your projects</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
               <CardTitle>Recent Projects</CardTitle>
               <CardDescription>Your active projects</CardDescription>
             </div>
@@ -482,9 +619,9 @@ export default function ClientPortalDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            {data?.projects && data.projects.length > 0 ? (
+            {recentProjects.length > 0 ? (
               <div className="space-y-3">
-                {data.projects.slice(0, 5).map((project) => (
+                {recentProjects.map((project) => (
                   <Link
                     key={project.id}
                     href={`/portal/projects/${project.id}`}

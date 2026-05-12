@@ -259,7 +259,7 @@ export default function SupportTickets() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {tickets.map((ticket) => (
               <Card key={ticket.id} className="hover-elevate cursor-pointer" data-testid={`card-ticket-${ticket.id}`}>
                 <Link href={`/support/${ticket.id}`} className="block">

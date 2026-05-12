@@ -5,6 +5,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 
 interface TenantSettings {
   displayName?: string;
+  tenantName?: string | null;
   appName?: string | null;
   logoUrl?: string | null;
   iconUrl?: string | null;
@@ -167,6 +168,7 @@ export function useTenantTheme() {
   return {
     settings: data?.tenantSettings,
     appName: data?.tenantSettings?.appName || "MyWorkDay",
+    displayName: data?.tenantSettings?.displayName || data?.tenantSettings?.tenantName || data?.tenantSettings?.appName || "MyWorkDay",
     logoUrl: getStorageUrl(data?.tenantSettings?.logoUrl),
     iconUrl: getStorageUrl(data?.tenantSettings?.iconUrl),
     hideVendorBranding: data?.tenantSettings?.hideVendorBranding || false,
