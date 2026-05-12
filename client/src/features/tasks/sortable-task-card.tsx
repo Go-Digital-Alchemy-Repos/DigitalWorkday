@@ -11,6 +11,8 @@ interface SortableTaskCardProps {
   onPriorityChange?: (priority: "low" | "medium" | "high" | "urgent") => void;
   onDueDateChange?: (dueDate: Date | null) => void;
   showQuickActions?: boolean;
+  showContextBadges?: boolean;
+  clientName?: string | null;
   projectId?: string;
 }
 
@@ -22,6 +24,8 @@ export function SortableTaskCard({
   onPriorityChange,
   onDueDateChange,
   showQuickActions = false,
+  showContextBadges = false,
+  clientName,
   projectId,
 }: SortableTaskCardProps) {
   const {
@@ -50,6 +54,8 @@ export function SortableTaskCard({
         dragHandleProps={{ ...attributes, ...listeners }}
         isDragging={isDragging}
         showQuickActions={showQuickActions}
+        showContextBadges={showContextBadges}
+        clientName={clientName}
         projectId={projectId}
       />
     </div>

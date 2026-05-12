@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCreatePersonalTask, useCreateSubtask } from "@/hooks/use-create-task";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -79,14 +79,7 @@ import {
   Eye,
   EyeOff,
   GripVertical,
-  TrendingUp,
-  Target,
-  Sparkles,
-  ListTodo,
-  Zap,
-  Flame,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -96,17 +89,17 @@ import {
 import { SortableTaskCard } from "@/features/tasks/sortable-task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-drawer";
-import { isToday, isPast, isFuture, subDays, isWithinInterval, addDays, startOfDay } from "date-fns";
+import { isToday, isPast, isFuture, isWithinInterval, addDays, startOfDay } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { fetchTaskDetail } from "@/lib/task-detail";
 import { useAuth } from "@/lib/auth";
 import { useWorkspaceRealtime } from "@/lib/realtime";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
-import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar, SurfacePanel } from "@/components/layout";
+import { EmptyState, LoadingState, DataToolbar, SurfacePanel } from "@/components/layout";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
-import type { TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
+import type { Client, TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 
 type TaskSection = {
@@ -177,13 +170,25 @@ interface TaskSectionListProps {
   onDueDateChange: (taskId: string, dueDate: Date | null) => void;
   localOrder: string[];
   onDragEnd: (event: DragEndEvent, sectionId: string) => void;
+  getClientName?: (task: TaskWithRelations) => string | null;
   onAddTask?: () => void;
   supportsAddTask?: boolean;
 }
 
 const SECTION_INITIAL_SHOW = 20;
 
-function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false }: TaskSectionListProps) {
+function TaskSectionList({
+  section,
+  onTaskSelect,
+  onStatusChange,
+  onPriorityChange,
+  onDueDateChange,
+  localOrder,
+  onDragEnd,
+  getClientName,
+  onAddTask,
+  supportsAddTask = false,
+}: TaskSectionListProps) {
   const [showAll, setShowAll] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -249,6 +254,8 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
                     onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
                     onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
                     showQuickActions
+                    showContextBadges
+                    clientName={getClientName?.(task)}
                   />
                 ))}
               </div>
@@ -302,181 +309,6 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
         )}
       </CollapsibleContent>
     </Collapsible>
-  );
-}
-
-interface DashboardStats {
-  todayCount: number;
-  overdueCount: number;
-  inProgressCount: number;
-  completedThisWeek: number;
-  recentlyAdded: TaskWithRelations[];
-  recentlyCompleted: TaskWithRelations[];
-  completionRate: number;
-  highPriorityCount: number;
-  personalTaskCount: number;
-  projectTaskCount: number;
-}
-
-function computeDashboardStats(tasks: TaskWithRelations[]): DashboardStats {
-  const now = new Date();
-  const weekAgo = subDays(now, 7);
-  
-  const todayTasks = tasks.filter(t => t.dueDate && isToday(new Date(t.dueDate)) && t.status !== "done");
-  const overdueTasks = tasks.filter(t => t.dueDate && isPast(new Date(t.dueDate)) && !isToday(new Date(t.dueDate)) && t.status !== "done");
-  const inProgressTasks = tasks.filter(t => t.status === "in_progress");
-  const completedThisWeek = tasks.filter(t => t.status === "done" && t.updatedAt && new Date(t.updatedAt) >= weekAgo);
-  
-  const recentlyAdded = tasks
-    .filter(t => t.createdAt && new Date(t.createdAt) >= weekAgo && t.status !== "done")
-    .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-    .slice(0, 5);
-  
-  const recentlyCompleted = tasks
-    .filter(t => t.status === "done" && t.updatedAt && new Date(t.updatedAt) >= weekAgo)
-    .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime())
-    .slice(0, 5);
-  
-  const totalTasks = tasks.length;
-  const doneTasks = tasks.filter(t => t.status === "done").length;
-  const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  
-  const highPriorityCount = tasks.filter(t => (t.priority === "high" || t.priority === "urgent") && t.status !== "done").length;
-  const personalTaskCount = tasks.filter(t => !t.projectId).length;
-  const projectTaskCount = tasks.filter(t => !!t.projectId).length;
-
-  return {
-    todayCount: todayTasks.length,
-    overdueCount: overdueTasks.length,
-    inProgressCount: inProgressTasks.length,
-    completedThisWeek: completedThisWeek.length,
-    recentlyAdded,
-    recentlyCompleted,
-    completionRate,
-    highPriorityCount,
-    personalTaskCount,
-    projectTaskCount,
-  };
-}
-
-interface DashboardSummaryProps {
-  stats: DashboardStats;
-  onTaskSelect: (task: TaskWithRelations) => void;
-  isLoading: boolean;
-}
-
-function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryProps) {
-  if (isLoading) {
-    return null;
-  }
-
-  const summaryCardClass = "border-border/70 bg-card/90 shadow-[var(--shadow-soft)]";
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className={summaryCardClass} data-testid="card-quick-insights">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-blue-500" />
-              Quick Insights
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Completion Rate</span>
-              <span className="font-medium">{stats.completionRate}%</span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all" 
-                style={{ width: `${stats.completionRate}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-sm pt-1">
-              <span className="text-muted-foreground">High Priority</span>
-              <span className={`font-medium ${stats.highPriorityCount > 0 ? "text-orange-500" : ""}`}>
-                {stats.highPriorityCount} tasks
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Personal / Project</span>
-              <span className="font-medium">{stats.personalTaskCount} / {stats.projectTaskCount}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={summaryCardClass} data-testid="card-recently-added">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-500" />
-              Recently Added
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {stats.recentlyAdded.length > 0 ? (
-              <div className="space-y-1">
-                {stats.recentlyAdded.slice(0, 3).map((task) => (
-                  <Button
-                    key={task.id}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onTaskSelect(task)}
-                    className="w-full justify-start text-left gap-2"
-                    data-testid={`task-recent-${task.id}`}
-                  >
-                    <ListTodo className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{task.title}</span>
-                  </Button>
-                ))}
-                {stats.recentlyAdded.length > 3 && (
-                  <p className="text-xs text-muted-foreground px-2 pt-1">
-                    +{stats.recentlyAdded.length - 3} more this week
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-2">No new tasks this week</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className={summaryCardClass} data-testid="card-recently-completed">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Target className="h-4 w-4 text-green-500" />
-              Recently Completed
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {stats.recentlyCompleted.length > 0 ? (
-              <div className="space-y-1">
-                {stats.recentlyCompleted.slice(0, 3).map((task) => (
-                  <Button
-                    key={task.id}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onTaskSelect(task)}
-                    className="w-full justify-start text-left gap-2"
-                    data-testid={`task-completed-${task.id}`}
-                  >
-                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                    <span className="truncate text-muted-foreground line-through">{task.title}</span>
-                  </Button>
-                ))}
-                {stats.recentlyCompleted.length > 3 && (
-                  <p className="text-xs text-muted-foreground px-2 pt-1">
-                    +{stats.recentlyCompleted.length - 3} more this week
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-2">Complete tasks to see them here</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
   );
 }
 
@@ -589,6 +421,10 @@ export default function MyTasks() {
 
   const { data: tenantUsers } = useQuery<UserType[]>({
     queryKey: ["/api/v1/users"],
+  });
+
+  const { data: clients = [] } = useQuery<Client[]>({
+    queryKey: ["/api/clients"],
   });
 
   const createPersonalTaskMutation = useCreatePersonalTask({
@@ -931,6 +767,29 @@ export default function MyTasks() {
     });
   }, [filteredTasks, sortBy]);
 
+  const clientNameById = useMemo(() => {
+    return new Map(
+      clients.map((client) => [
+        client.id,
+        client.displayName || client.legalName || client.email || null,
+      ]),
+    );
+  }, [clients]);
+
+  const getTaskClientName = useCallback((task: TaskWithRelations) => {
+    const project = task.project as (NonNullable<TaskWithRelations["project"]> & {
+      client?: (Client & { name?: string | null }) | null;
+      clientName?: string | null;
+    }) | undefined;
+
+    if (project?.client?.name) return project.client.name;
+    if (project?.client?.displayName) return project.client.displayName;
+    if (project?.client?.legalName) return project.client.legalName;
+    if (project?.clientName) return project.clientName;
+    if (project?.clientId) return clientNameById.get(project.clientId) || null;
+    return null;
+  }, [clientNameById]);
+
   const { leftColumn, rightColumn } = categorizeTasksForTwoColumn(sortedTasks);
 
   const totalTasks = filteredTasks.length;
@@ -944,10 +803,6 @@ export default function MyTasks() {
       todo: allTasks.filter(t => t.status === "todo").length,
       blocked: allTasks.filter(t => t.status === "blocked").length,
     };
-  }, [tasks]);
-
-  const dashboardStats = useMemo(() => {
-    return computeDashboardStats(tasks || []);
   }, [tasks]);
 
   return (
@@ -1020,74 +875,13 @@ export default function MyTasks() {
 
       <div className="flex-1 overflow-auto">
         <div className="space-y-6 px-4 py-5 sm:px-5 lg:px-8 md:py-6">
-          <div className="block md:hidden">
-            {!isLoading && (
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth -mx-1 px-1">
-                  <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
-                  <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Completion</p>
-                    <p className="text-sm font-semibold">{dashboardStats.completionRate}%</p>
-                  </div>
-                </SurfacePanel>
-                {dashboardStats.overdueCount > 0 && (
-                  <SurfacePanel tone="warning" padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
-                    <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center">
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Overdue</p>
-                      <p className="text-sm font-semibold text-red-600 dark:text-red-400">{dashboardStats.overdueCount}</p>
-                    </div>
-                  </SurfacePanel>
-                )}
-                <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
-                  <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                    <Target className="h-4 w-4 text-amber-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Today</p>
-                    <p className="text-sm font-semibold">{dashboardStats.todayCount}</p>
-                  </div>
-                </SurfacePanel>
-                <SurfacePanel padding="none" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
-                  <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center">
-                    <Flame className="h-4 w-4 text-orange-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">High Priority</p>
-                    <p className="text-sm font-semibold">{dashboardStats.highPriorityCount}</p>
-                  </div>
-                </SurfacePanel>
-                <SurfacePanel padding="none" radius="xl" className="flex min-w-fit shrink-0 snap-center items-center gap-2 px-3 py-2">
-                  <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">This Week</p>
-                    <p className="text-sm font-semibold">{dashboardStats.completedThisWeek}</p>
-                  </div>
-                </SurfacePanel>
-              </div>
-            )}
-          </div>
-          <div className="hidden md:block">
-            <DashboardSummary 
-              stats={dashboardStats} 
-              onTaskSelect={handleTaskSelect} 
-              isLoading={isLoading} 
-            />
-          </div>
-          
           {isLoading ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <LoadingState type="list" rows={4} />
+            <div className="mx-auto max-w-5xl space-y-4">
+              <LoadingState type="list" rows={6} />
               <LoadingState type="list" rows={4} />
             </div>
           ) : totalTasks > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            <div className="mx-auto max-w-5xl space-y-5">
               <SurfacePanel tone="subtle" className="space-y-4">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scheduled Tasks</h2>
                 {leftColumn.map((section) => (
@@ -1100,6 +894,7 @@ export default function MyTasks() {
                     onDueDateChange={handleDueDateChange}
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
+                    getClientName={getTaskClientName}
                   />
                 ))}
               </SurfacePanel>
@@ -1116,6 +911,7 @@ export default function MyTasks() {
                     onDueDateChange={handleDueDateChange}
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
+                    getClientName={getTaskClientName}
                     onAddTask={section.id === "personal" ? () => setShowNewTaskDrawer(true) : undefined}
                     supportsAddTask={section.id === "personal"}
                   />

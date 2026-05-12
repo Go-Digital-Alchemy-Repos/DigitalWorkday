@@ -35,6 +35,7 @@ import { getPreviewText } from "@/components/richtext/richTextUtils";
 import { usePrefetchTask } from "@/hooks/use-prefetch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
+import { ContextBadge } from "@/components/context-badge";
 
 interface TaskCardProps {
   task: TaskWithRelations;
@@ -46,6 +47,8 @@ interface TaskCardProps {
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   isDragging?: boolean;
   showQuickActions?: boolean;
+  showContextBadges?: boolean;
+  clientName?: string | null;
   projectId?: string;
 }
 
@@ -64,7 +67,20 @@ function useTaskLink(task: TaskWithRelations, projectId?: string) {
 }
 
 export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
-  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false, projectId },
+  {
+    task,
+    view = "list",
+    onSelect,
+    onStatusChange,
+    onPriorityChange,
+    onDueDateChange,
+    dragHandleProps,
+    isDragging,
+    showQuickActions = false,
+    showContextBadges = false,
+    clientName,
+    projectId,
+  },
   ref
 ) {
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
@@ -79,6 +95,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
   const taskTags: Tag[] = task.tags?.map((tt) => tt.tag).filter(Boolean) as Tag[] || [];
   const subtaskCount = task.subtasks?.length || 0;
   const completedSubtasks = task.subtasks?.filter((s) => s.completed).length || 0;
+  const projectName = task.project?.name || null;
 
   useEffect(() => {
     return () => {
@@ -315,7 +332,23 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
                 {completedSubtasks}/{subtaskCount}
               </span>
             )}
-            {task.project?.name && (
+            {showContextBadges && clientName && (
+              <ContextBadge
+                kind="client"
+                label="Client"
+                value={clientName}
+                maxLength={18}
+              />
+            )}
+            {showContextBadges && projectName && (
+              <ContextBadge
+                kind="project"
+                label="Project"
+                value={projectName}
+                maxLength={18}
+              />
+            )}
+            {!showContextBadges && task.project?.name && (
               <span className="text-xs text-muted-foreground truncate max-w-[120px]">
                 {task.project.name}
               </span>
@@ -422,6 +455,24 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             {taskTags.length > 3 && (
               <span className="text-[10px] text-muted-foreground">+{taskTags.length - 3}</span>
             )}
+          </div>
+        )}
+        {showContextBadges && (clientName || projectName) && (
+          <div className="flex flex-wrap gap-1">
+            <ContextBadge
+              kind="client"
+              label="Client"
+              value={clientName}
+              maxLength={18}
+              testId={`task-client-badge-${task.id}`}
+            />
+            <ContextBadge
+              kind="project"
+              label="Project"
+              value={projectName}
+              maxLength={24}
+              testId={`task-project-badge-${task.id}`}
+            />
           </div>
         )}
       </div>
