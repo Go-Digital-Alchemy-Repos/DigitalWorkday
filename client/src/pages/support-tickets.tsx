@@ -1,14 +1,20 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LifeBuoy, Search, Clock, User2, Building2, MessageSquareText, ShieldAlert, FileText } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LifeBuoy, Search, Clock, User2, Building2, MessageSquareText, ShieldAlert, FileText, Settings } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
+import { hasTenantAdminAccess } from "@shared/roles";
+import type { Team, User } from "@shared/schema";
 
 interface SupportTicket {
   id: string;
@@ -29,6 +35,11 @@ interface SupportTicket {
   assignee?: { id: string; name: string | null; email: string } | null;
   createdByUser?: { id: string; name: string | null; email: string } | null;
   createdByPortalUser?: { id: string; name: string | null; email: string } | null;
+}
+
+interface SupportSettings {
+  recipientUserIds: string[];
+  recipientTeamIds: string[];
 }
 
 const statusLabels: Record<string, string> = {
@@ -77,11 +88,15 @@ function getInitials(name: string | null | undefined, email?: string): string {
 }
 
 export default function SupportTickets() {
+  const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState<SupportSettings>({ recipientUserIds: [], recipientTeamIds: [] });
   const [, navigate] = useLocation();
+  const canManageSettings = hasTenantAdminAccess(user?.role);
 
   const queryParams = new URLSearchParams();
   if (statusFilter === "active") {
@@ -101,6 +116,38 @@ export default function SupportTickets() {
       return res.json();
     },
   });
+  const { data: supportSettings } = useQuery<SupportSettings>({
+    queryKey: ["/api/v1/support/settings"],
+    enabled: canManageSettings,
+  });
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: settingsOpen && canManageSettings,
+  });
+  const { data: teams = [] } = useQuery<Team[]>({
+    queryKey: ["/api/teams"],
+    enabled: settingsOpen && canManageSettings,
+  });
+
+  useEffect(() => {
+    if (supportSettings) {
+      setSettingsDraft({
+        recipientUserIds: supportSettings.recipientUserIds || [],
+        recipientTeamIds: supportSettings.recipientTeamIds || [],
+      });
+    }
+  }, [supportSettings]);
+
+  const updateSettings = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", "/api/v1/support/settings", settingsDraft);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/settings"] });
+      setSettingsOpen(false);
+    },
+  });
 
   const tickets = data?.tickets || [];
 
@@ -109,7 +156,7 @@ export default function SupportTickets() {
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-semibold" data-testid="text-support-console-title">Support Console</h1>
+            <h1 className="text-xl font-semibold" data-testid="text-support-console-title">Support Center</h1>
             <p className="text-sm text-muted-foreground">Manage client support tickets and work orders</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -131,6 +178,12 @@ export default function SupportTickets() {
                 Form Schemas
               </Button>
             </Link>
+            {canManageSettings && (
+              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} data-testid="button-support-settings">
+                <Settings className="h-4 w-4 mr-1" />
+                Settings
+              </Button>
+            )}
           </div>
           {data && (
             <span className="text-sm text-muted-foreground" data-testid="text-total-tickets">
@@ -261,6 +314,62 @@ export default function SupportTickets() {
           </div>
         )}
       </div>
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Support Center Settings</DialogTitle>
+            <DialogDescription>
+              Choose users and teams who can see and respond to support tickets. Tenant admins always retain access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 md:grid-cols-2 max-h-[55vh] overflow-y-auto pr-1">
+            <div className="space-y-3">
+              <h3 className="font-medium">Users</h3>
+              {users.filter(u => u.role !== "client").map(u => (
+                <label key={u.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                  <Checkbox
+                    checked={settingsDraft.recipientUserIds.includes(u.id)}
+                    onCheckedChange={(checked) => {
+                      setSettingsDraft(prev => ({
+                        ...prev,
+                        recipientUserIds: checked
+                          ? [...prev.recipientUserIds, u.id]
+                          : prev.recipientUserIds.filter(id => id !== u.id),
+                      }));
+                    }}
+                  />
+                  <span className="min-w-0 truncate">{u.name || u.email}</span>
+                </label>
+              ))}
+            </div>
+            <div className="space-y-3">
+              <h3 className="font-medium">Teams</h3>
+              {teams.map(team => (
+                <label key={team.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                  <Checkbox
+                    checked={settingsDraft.recipientTeamIds.includes(team.id)}
+                    onCheckedChange={(checked) => {
+                      setSettingsDraft(prev => ({
+                        ...prev,
+                        recipientTeamIds: checked
+                          ? [...prev.recipientTeamIds, team.id]
+                          : prev.recipientTeamIds.filter(id => id !== team.id),
+                      }));
+                    }}
+                  />
+                  <span className="min-w-0 truncate">{team.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettingsOpen(false)}>Cancel</Button>
+            <Button onClick={() => updateSettings.mutate()} disabled={updateSettings.isPending}>
+              Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

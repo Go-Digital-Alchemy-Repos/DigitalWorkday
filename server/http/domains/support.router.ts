@@ -1,11 +1,16 @@
 import { z } from "zod";
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
+import { db } from "../../db";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { AppError, handleRouteError } from "../../lib/errors";
-import { SupportTicketStatus, SupportTicketPriority, SupportTicketCategory, SupportTicketAuthorType, SupportTicketEventType, SupportTicketSource } from "@shared/schema";
+import { getCurrentWorkspaceIdAsync } from "../../routes/helpers";
+import { hasTenantAdminAccess } from "@shared/roles";
+import { and, eq, inArray } from "drizzle-orm";
+import { SupportTicketStatus, SupportTicketPriority, SupportTicketCategory, SupportTicketAuthorType, SupportTicketEventType, SupportTicketSource, UserRole, teamMembers } from "@shared/schema";
 
 const router = createApiRouter({ policy: "authTenant" });
+const SUPPORT_ROUTING_SETTINGS_KEY = "support_center_routing";
 
 const createTicketSchema = z.object({
   clientId: z.string().optional().nullable(),
@@ -31,6 +36,89 @@ const updateTicketSchema = z.object({
 const addMessageSchema = z.object({
   bodyText: z.string().min(1),
   visibility: z.enum(["public", "internal"]).optional().default("public"),
+});
+
+const supportRoutingSettingsSchema = z.object({
+  recipientUserIds: z.array(z.string().uuid()).default([]),
+  recipientTeamIds: z.array(z.string().uuid()).default([]),
+});
+
+async function getSupportRoutingSettings(req: any, tenantId: string) {
+  const workspaceId = await getCurrentWorkspaceIdAsync(req);
+  const raw = await storage.getAppSettingsByTenant(tenantId, workspaceId, SUPPORT_ROUTING_SETTINGS_KEY);
+  const parsed = supportRoutingSettingsSchema.safeParse(raw || {});
+  return parsed.success ? parsed.data : { recipientUserIds: [], recipientTeamIds: [] };
+}
+
+async function canUseInternalSupportCenter(req: any, tenantId: string) {
+  const user = req.user;
+  if (!user || user.role === UserRole.CLIENT) return false;
+  if (hasTenantAdminAccess(user.role)) return true;
+
+  const settings = await getSupportRoutingSettings(req, tenantId);
+  if (settings.recipientUserIds.length === 0 && settings.recipientTeamIds.length === 0) {
+    return true;
+  }
+  if (settings.recipientUserIds.includes(user.id)) {
+    return true;
+  }
+  if (settings.recipientTeamIds.length === 0) {
+    return false;
+  }
+
+  const rows = await db.select({ id: teamMembers.id })
+    .from(teamMembers)
+    .where(and(
+      eq(teamMembers.userId, user.id),
+      inArray(teamMembers.teamId, settings.recipientTeamIds),
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
+router.get("/settings", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    if (!hasTenantAdminAccess(req.user?.role)) {
+      throw AppError.forbidden("Only admins can manage Support Center settings");
+    }
+
+    const settings = await getSupportRoutingSettings(req, tenantId);
+    res.json(settings);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/settings", req);
+  }
+});
+
+router.patch("/settings", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    if (!hasTenantAdminAccess(req.user?.role)) {
+      throw AppError.forbidden("Only admins can manage Support Center settings");
+    }
+
+    const workspaceId = await getCurrentWorkspaceIdAsync(req);
+    const settings = supportRoutingSettingsSchema.parse(req.body);
+    await storage.setAppSettingsByTenant(tenantId, workspaceId, SUPPORT_ROUTING_SETTINGS_KEY, settings, req.user?.id);
+    res.json(settings);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/v1/support/settings", req);
+  }
+});
+
+router.use(async (req, res, next) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    if (!(await canUseInternalSupportCenter(req, tenantId))) {
+      throw AppError.forbidden("You do not have access to the Support Center");
+    }
+    next();
+  } catch (error) {
+    return handleRouteError(res, error, "Support Center access", req);
+  }
 });
 
 router.get("/tickets", async (req, res) => {

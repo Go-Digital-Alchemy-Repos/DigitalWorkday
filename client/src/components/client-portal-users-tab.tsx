@@ -85,15 +85,14 @@ interface ClientContact {
 }
 
 const createUserSchema = z.object({
-  email: z.string().email("Valid email is required"),
-  firstName: z.string().min(1, "First name is required"),
+  contactId: z.string().optional(),
+  email: z.string().email("Valid email is required").optional().or(z.literal("")),
+  firstName: z.string().optional().default(""),
   lastName: z.string().optional().default(""),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(1, "Please confirm the password"),
-  accessLevel: z.enum(["viewer", "collaborator"]),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
+  accessLevel: z.enum(["viewer", "collaborator", "portal_admin"]),
+}).refine((data) => Boolean(data.contactId || data.email), {
+  message: "Choose a contact or enter an email address",
+  path: ["email"],
 });
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
@@ -101,7 +100,7 @@ type CreateUserFormData = z.infer<typeof createUserSchema>;
 const editUserSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().optional().default(""),
-  accessLevel: z.enum(["viewer", "collaborator"]),
+  accessLevel: z.enum(["viewer", "collaborator", "portal_admin"]),
   password: z.string().optional().default(""),
   confirmPassword: z.string().optional().default(""),
 }).refine((data) => {
@@ -126,25 +125,31 @@ type EditUserFormData = z.infer<typeof editUserSchema>;
 
 interface ClientPortalUsersTabProps {
   clientId: string;
+  portalMode?: boolean;
 }
 
-export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
+export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPortalUsersTabProps) {
   const { toast } = useToast();
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
   const [userToRevoke, setUserToRevoke] = useState<ClientUser | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
+  const apiBase = portalMode ? `/api/client-portal/clients/${clientId}` : `/api/clients/${clientId}`;
+  const usersQueryKey = portalMode
+    ? ["/api/client-portal/clients", clientId, "users"]
+    : ["/api/clients", clientId, "users"];
+  const contactsQueryKey = portalMode
+    ? ["/api/client-portal/clients", clientId, "contacts"]
+    : ["/api/clients", clientId, "contacts"];
 
   const createForm = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
+      contactId: "",
       email: "",
       firstName: "",
       lastName: "",
-      password: "",
-      confirmPassword: "",
-      accessLevel: "viewer",
+      accessLevel: "portal_admin",
     },
   });
 
@@ -160,24 +165,30 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   });
 
   const { data: portalUsers = [], isLoading: usersLoading } = useQuery<ClientUser[]>({
-    queryKey: ["/api/clients", clientId, "users"],
+    queryKey: usersQueryKey,
     enabled: !!clientId,
   });
 
   const { data: contacts = [] } = useQuery<ClientContact[]>({
-    queryKey: ["/api/clients", clientId, "contacts"],
+    queryKey: contactsQueryKey,
     enabled: !!clientId,
   });
 
   const createUserMutation = useMutation({
     mutationFn: async (data: CreateUserFormData) => {
-      const { confirmPassword, ...payload } = data;
-      const res = await apiRequest("POST", `/api/clients/${clientId}/users/create`, payload);
+      const payload = {
+        contactId: data.contactId || undefined,
+        email: data.email || undefined,
+        firstName: data.firstName || undefined,
+        lastName: data.lastName || undefined,
+        accessLevel: data.accessLevel,
+      };
+      const res = await apiRequest("POST", `${apiBase}/users/invite`, payload);
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Portal user created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      toast({ title: "Portal invitation sent" });
+      queryClient.invalidateQueries({ queryKey: usersQueryKey });
       handleCloseAddUser();
     },
     onError: (error: Error) => {
@@ -195,13 +206,13 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       if (data.firstName) payload.firstName = data.firstName;
       if (data.lastName !== undefined) payload.lastName = data.lastName;
       if (data.accessLevel) payload.accessLevel = data.accessLevel;
-      if (data.password && data.password.length >= 8) payload.password = data.password;
-      const res = await apiRequest("PATCH", `/api/clients/${clientId}/users/${userId}`, payload);
+      if (!portalMode && data.password && data.password.length >= 8) payload.password = data.password;
+      const res = await apiRequest("PATCH", `${apiBase}/users/${userId}`, payload);
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Portal user updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: usersQueryKey });
       handleCloseEditUser();
     },
     onError: (error: Error) => {
@@ -215,11 +226,11 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const revokeAccessMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiRequest("DELETE", `/api/clients/${clientId}/users/${userId}`);
+      await apiRequest("DELETE", `${apiBase}/users/${userId}`);
     },
     onSuccess: () => {
       toast({ title: "Access revoked" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: usersQueryKey });
       setUserToRevoke(null);
     },
     onError: (error: Error) => {
@@ -233,33 +244,28 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const handleCloseAddUser = () => {
     setAddUserOpen(false);
-    setShowPassword(false);
     createForm.reset();
   };
 
   const handleOpenAddUser = () => {
     createForm.reset({
+      contactId: "",
       email: "",
       firstName: "",
       lastName: "",
-      password: "",
-      confirmPassword: "",
-      accessLevel: "viewer",
+      accessLevel: "portal_admin",
     });
-    setShowPassword(false);
     setAddUserOpen(true);
   };
 
   const handleOpenAddUserFromContact = (contact: ClientContact) => {
     createForm.reset({
+      contactId: contact.id,
       email: contact.email || "",
       firstName: contact.firstName,
       lastName: contact.lastName || "",
-      password: "",
-      confirmPassword: "",
-      accessLevel: "viewer",
+      accessLevel: "portal_admin",
     });
-    setShowPassword(false);
     setAddUserOpen(true);
   };
 
@@ -269,7 +275,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     editForm.reset({
       firstName: portalUser.user.firstName || portalUser.user.name?.split(" ")[0] || "",
       lastName: portalUser.user.lastName || portalUser.user.name?.split(" ").slice(1).join(" ") || "",
-      accessLevel: portalUser.accessLevel as "viewer" | "collaborator",
+      accessLevel: portalUser.accessLevel as "viewer" | "collaborator" | "portal_admin",
       password: "",
       confirmPassword: "",
     });
@@ -295,6 +301,8 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const getAccessLevelBadge = (level: string) => {
     switch (level) {
+      case "portal_admin":
+        return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Portal Admin</Badge>;
       case "collaborator":
         return <Badge variant="default">Collaborator</Badge>;
       case "viewer":
@@ -471,9 +479,9 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       <Sheet open={addUserOpen} onOpenChange={(open) => !open && handleCloseAddUser()}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="sheet-add-portal-user">
           <SheetHeader>
-            <SheetTitle>Add Portal User</SheetTitle>
+            <SheetTitle>Invite Portal User</SheetTitle>
             <SheetDescription>
-              Create a new client portal account with login credentials and access permissions.
+              Send a setup link so this client user can choose their password and access the portal.
             </SheetDescription>
           </SheetHeader>
           <div className="py-6">
@@ -522,63 +530,6 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                 </div>
 
                 <div className="border-t pt-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <KeyRound className="h-4 w-4 text-muted-foreground" />
-                    <Label className="font-medium">Login Credentials</Label>
-                  </div>
-                  <div className="space-y-4">
-                    <FormField
-                      control={createForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Minimum 8 characters"
-                                {...field}
-                                data-testid="input-create-password"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1/2 -translate-y-1/2"
-                                onClick={() => setShowPassword(!showPassword)}
-                                data-testid="button-toggle-password-visibility"
-                              >
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </Button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={createForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Confirm Password</FormLabel>
-                          <FormControl>
-                            <Input
-                              type={showPassword ? "text" : "password"}
-                              placeholder="Re-enter password"
-                              {...field}
-                              data-testid="input-create-confirmPassword"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t pt-5">
                   <FormField
                     control={createForm.control}
                     name="accessLevel"
@@ -601,13 +552,19 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                             <SelectItem value="collaborator">
                               <div className="flex items-center gap-2">
                                 <Edit3 className="h-4 w-4" />
-                                <span>Collaborator - Add comments and feedback</span>
+                                <span>Collaborator - Use client-facing workflows</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="portal_admin">
+                              <div className="flex items-center gap-2">
+                                <UserPlus className="h-4 w-4" />
+                                <span>Portal Admin - Manage portal users and client data</span>
                               </div>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Viewers can see projects and tasks. Collaborators can also add comments.
+                          Portal admins can manage portal users. Collaborators can update client-facing areas. Viewers are mostly read-only.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -627,7 +584,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                     ) : (
                       <UserPlus className="h-4 w-4 mr-2" />
                     )}
-                    Create Portal User
+                    Send Invite
                   </Button>
                   <Button type="button" variant="outline" onClick={handleCloseAddUser}>
                     Cancel
@@ -719,78 +676,86 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                             <SelectItem value="collaborator">
                               <div className="flex items-center gap-2">
                                 <Edit3 className="h-4 w-4" />
-                                <span>Collaborator - Add comments and feedback</span>
+                                <span>Collaborator - Use client-facing workflows</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="portal_admin">
+                              <div className="flex items-center gap-2">
+                                <UserPlus className="h-4 w-4" />
+                                <span>Portal Admin - Manage portal users and client data</span>
                               </div>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Viewers can see projects and tasks. Collaborators can also add comments.
+                          Portal admins can manage portal users. Collaborators can update client-facing areas. Viewers are mostly read-only.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <div className="border-t pt-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <KeyRound className="h-4 w-4 text-muted-foreground" />
-                      <Label className="font-medium">Change Password</Label>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Leave blank to keep the current password.
-                    </p>
-                    <div className="space-y-4">
-                      <FormField
-                        control={editForm.control}
-                        name="password"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>New Password</FormLabel>
-                            <FormControl>
-                              <div className="relative">
+                  {!portalMode && (
+                    <div className="border-t pt-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <KeyRound className="h-4 w-4 text-muted-foreground" />
+                        <Label className="font-medium">Change Password</Label>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Leave blank to keep the current password.
+                      </p>
+                      <div className="space-y-4">
+                        <FormField
+                          control={editForm.control}
+                          name="password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>New Password</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Input
+                                    type={showEditPassword ? "text" : "password"}
+                                    placeholder="Minimum 8 characters"
+                                    {...field}
+                                    data-testid="input-edit-password"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-1 top-1/2 -translate-y-1/2"
+                                    onClick={() => setShowEditPassword(!showEditPassword)}
+                                    data-testid="button-toggle-edit-password-visibility"
+                                  >
+                                    {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                  </Button>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={editForm.control}
+                          name="confirmPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Confirm New Password</FormLabel>
+                              <FormControl>
                                 <Input
                                   type={showEditPassword ? "text" : "password"}
-                                  placeholder="Minimum 8 characters"
+                                  placeholder="Re-enter new password"
                                   {...field}
-                                  data-testid="input-edit-password"
+                                  data-testid="input-edit-confirmPassword"
                                 />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="absolute right-1 top-1/2 -translate-y-1/2"
-                                  onClick={() => setShowEditPassword(!showEditPassword)}
-                                  data-testid="button-toggle-edit-password-visibility"
-                                >
-                                  {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </Button>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={editForm.control}
-                        name="confirmPassword"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Confirm New Password</FormLabel>
-                            <FormControl>
-                              <Input
-                                type={showEditPassword ? "text" : "password"}
-                                placeholder="Re-enter new password"
-                                {...field}
-                                data-testid="input-edit-confirmPassword"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex gap-3 pt-4 border-t">
                     <Button

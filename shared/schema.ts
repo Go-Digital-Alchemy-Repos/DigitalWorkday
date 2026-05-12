@@ -93,6 +93,7 @@ export const InvitationStatus = {
 export const ClientAccessLevel = {
   VIEWER: "viewer",
   COLLABORATOR: "collaborator",
+  PORTAL_ADMIN: "portal_admin",
 } as const;
 
 // Client pipeline stages
@@ -2988,7 +2989,11 @@ export const insertClientUserAccessSchema = createInsertSchema(clientUserAccess)
   id: true,
   createdAt: true,
 }).extend({
-  accessLevel: z.enum([ClientAccessLevel.VIEWER, ClientAccessLevel.COLLABORATOR]).default(ClientAccessLevel.VIEWER),
+  accessLevel: z.enum([
+    ClientAccessLevel.VIEWER,
+    ClientAccessLevel.COLLABORATOR,
+    ClientAccessLevel.PORTAL_ADMIN,
+  ]).default(ClientAccessLevel.VIEWER),
 });
 
 export const insertAppSettingSchema = createInsertSchema(appSettings).omit({

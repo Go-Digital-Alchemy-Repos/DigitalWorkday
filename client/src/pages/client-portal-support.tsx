@@ -43,7 +43,7 @@ const priorityLabels: Record<string, string> = {
 };
 
 const categoryLabels: Record<string, string> = {
-  support: "Support",
+  support: "Support Center",
   work_order: "Work Order",
   billing: "Billing",
   bug: "Bug Report",
@@ -86,7 +86,7 @@ export default function ClientPortalSupport() {
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-semibold" data-testid="text-support-title">Support</h1>
+            <h1 className="text-xl font-semibold" data-testid="text-support-title">Support Center</h1>
             <p className="text-sm text-muted-foreground">View and create support tickets</p>
           </div>
           <Button onClick={() => navigate("/portal/support/new")} data-testid="button-create-ticket">

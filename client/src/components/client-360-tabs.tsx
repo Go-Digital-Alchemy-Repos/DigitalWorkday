@@ -2299,7 +2299,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="everyday">Everyday</SelectItem>
+                  <SelectItem value="everyday">Conversation</SelectItem>
                   <SelectItem value="service_request">Service Request</SelectItem>
                   <SelectItem value="support_ticket">Support Ticket</SelectItem>
                 </SelectContent>
@@ -2395,7 +2395,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                     <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="everyday">Everyday</SelectItem>
+                    <SelectItem value="everyday">Conversation</SelectItem>
                     <SelectItem value="service_request">Service Request</SelectItem>
                     <SelectItem value="support_ticket">Support Ticket</SelectItem>
                   </SelectContent>

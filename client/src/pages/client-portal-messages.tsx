@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { formatDistanceToNow } from "date-fns";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +65,15 @@ interface PortalDashboard {
   recentActivity: unknown[];
 }
 
+type PortalMessageType = "everyday" | "service_request" | "support_ticket";
+
+interface ConversationRecipient {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+}
+
 function NewRequestDialog({
   open,
   onOpenChange,
@@ -72,7 +81,7 @@ function NewRequestDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (conversationId: string) => void;
+  onCreated: (id: string, kind?: "conversation" | "support_ticket") => void;
 }) {
   const { toast } = useToast();
   const [step, setStep] = useState<"templates" | "compose">("templates");
@@ -80,6 +89,8 @@ function NewRequestDialog({
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [messageType, setMessageType] = useState<PortalMessageType>("everyday");
+  const [recipientUserId, setRecipientUserId] = useState("");
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<PortalTemplate[]>({
     queryKey: ["/api/crm/portal/message-templates"],
@@ -87,8 +98,12 @@ function NewRequestDialog({
   });
 
   const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<PortalDashboard>({
-    queryKey: ["/api/portal/dashboard"],
+    queryKey: ["/api/client-portal/dashboard"],
     enabled: open,
+  });
+  const { data: recipients = [], isLoading: recipientsLoading } = useQuery<ConversationRecipient[]>({
+    queryKey: ["/api/crm/portal/conversation-recipients"],
+    enabled: open && messageType === "everyday",
   });
 
   const clients = dashboard?.clients || [];
@@ -100,16 +115,23 @@ function NewRequestDialog({
   }, [clients, selectedClientId]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: { clientId: string; subject: string; initialMessage: string; templateId?: string }) => {
+    mutationFn: async (data: {
+      clientId: string;
+      subject: string;
+      initialMessage: string;
+      type: PortalMessageType;
+      recipientUserId?: string;
+      templateId?: string;
+    }) => {
       const res = await apiRequest("POST", "/api/crm/portal/conversations", data);
       return res.json();
     },
-    onSuccess: (data: { id: string }) => {
+    onSuccess: (data: { id: string; kind?: "conversation" | "support_ticket" }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/portal/conversations"] });
-      toast({ title: "Request submitted" });
+      toast({ title: messageType === "everyday" ? "Conversation started" : "Request submitted" });
       onOpenChange(false);
       resetState();
-      onCreated(data.id);
+      onCreated(data.id, data.kind || "conversation");
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -122,6 +144,8 @@ function NewRequestDialog({
     setSubject("");
     setMessage("");
     setSelectedClientId(clients.length === 1 ? clients[0]?.id || "" : "");
+    setMessageType("everyday");
+    setRecipientUserId("");
   };
 
   const handleSelectTemplate = (template: PortalTemplate) => {
@@ -147,10 +171,16 @@ function NewRequestDialog({
       toast({ title: "Please select a client account", variant: "destructive" });
       return;
     }
+    if (messageType === "everyday" && !recipientUserId) {
+      toast({ title: "Please choose a recipient", variant: "destructive" });
+      return;
+    }
     createMutation.mutate({
       clientId: selectedClientId,
       subject: subject.trim(),
       initialMessage: message.trim(),
+      type: messageType,
+      recipientUserId: messageType === "everyday" ? recipientUserId : undefined,
       templateId: selectedTemplate?.id,
     });
   };
@@ -167,7 +197,7 @@ function NewRequestDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {step === "templates" ? "Start a New Request" : "Compose Your Message"}
+            {step === "templates" ? "Start a New Message" : "Compose Your Message"}
           </DialogTitle>
           <DialogDescription>
             {step === "templates"
@@ -251,6 +281,39 @@ function NewRequestDialog({
               </div>
             )}
             <div className="space-y-2">
+              <label className="text-sm font-medium">Message Type</label>
+              <Select value={messageType} onValueChange={(value) => {
+                setMessageType(value as PortalMessageType);
+                setRecipientUserId("");
+              }}>
+                <SelectTrigger data-testid="select-message-type">
+                  <SelectValue placeholder="Select message type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="everyday">Conversation</SelectItem>
+                  <SelectItem value="service_request">Service Request</SelectItem>
+                  <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {messageType === "everyday" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Recipient</label>
+                <Select value={recipientUserId} onValueChange={setRecipientUserId} disabled={recipientsLoading}>
+                  <SelectTrigger data-testid="select-conversation-recipient">
+                    <SelectValue placeholder={recipientsLoading ? "Loading recipients..." : "Select an admin or project manager"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recipients.map((recipient) => (
+                      <SelectItem key={recipient.id} value={recipient.id}>
+                        {recipient.name || recipient.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
               <label className="text-sm font-medium">Subject</label>
               <Input
                 value={subject}
@@ -281,7 +344,7 @@ function NewRequestDialog({
           {step === "compose" && (
             <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="button-submit-request">
               {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Submit Request
+              {messageType === "everyday" ? "Start Conversation" : "Submit Request"}
             </Button>
           )}
         </DialogFooter>
@@ -562,6 +625,7 @@ function ConversationThread({
 
 export default function ClientPortalMessages() {
   const crmFlags = useCrmFlags();
+  const [, navigate] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
 
@@ -624,7 +688,13 @@ export default function ClientPortalMessages() {
       <NewRequestDialog
         open={newRequestOpen}
         onOpenChange={setNewRequestOpen}
-        onCreated={(id) => setSelectedConversationId(id)}
+        onCreated={(id, kind) => {
+          if (kind === "support_ticket") {
+            navigate(`/portal/support/${id}`);
+            return;
+          }
+          setSelectedConversationId(id);
+        }}
       />
     </div>
   );

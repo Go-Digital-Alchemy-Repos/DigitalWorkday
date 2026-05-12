@@ -49,6 +49,7 @@ const AccountPage = lazy(trackChunkLoad("Account", () => import("@/pages/account
 const UserManagerPage = lazy(trackChunkLoad("UserManager", () => import("@/pages/user-manager")));
 const UserProfilePage = lazy(trackChunkLoad("UserProfile", () => import("@/pages/user-profile")));
 const ChatPage = lazy(trackChunkLoad("Chat", () => import("@/pages/chat")));
+const ServiceRequestsPage = lazy(trackChunkLoad("ServiceRequests", () => import("@/pages/service-requests")));
 const ReportsPage = lazy(trackChunkLoad("Reports", () => import("@/pages/reports")));
 const EmployeeProfileReportPage = lazy(trackChunkLoad("EmployeeProfile", () => import("@/pages/employee-profile-report")));
 const ClientProfileReportPage = lazy(trackChunkLoad("ClientProfile", () => import("@/pages/client-profile-report")));
@@ -121,6 +122,9 @@ function TenantRouter() {
         </Route>
         <Route path="/chat">
           {() => <TenantRouteGuard component={ChatPage} />}
+        </Route>
+        <Route path="/service-requests">
+          {() => <TenantRouteGuard component={ServiceRequestsPage} />}
         </Route>
         <Route path="/settings">
           {() => <TenantRouteGuard component={SettingsPage} />}

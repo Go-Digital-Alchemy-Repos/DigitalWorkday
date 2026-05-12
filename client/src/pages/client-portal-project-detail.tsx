@@ -33,7 +33,8 @@ interface TaskInfo {
   status: string;
   priority: string;
   dueDate: string | null;
-  assignees: { name: string }[];
+  assignmentStatus?: "Assigned" | "Unassigned";
+  assigneeCount?: number;
 }
 
 interface ProjectData {
@@ -296,11 +297,9 @@ function TaskList({ tasks, emptyMessage = "No tasks" }: { tasks: TaskInfo[]; emp
                   <Badge variant="outline" className={getStatusColor(task.status)}>
                     {task.status.replace(/_/g, ' ')}
                   </Badge>
-                  {task.assignees && task.assignees.length > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      Assigned to: {task.assignees.map((a) => a.name).join(", ")}
-                    </span>
-                  )}
+                  <Badge variant="secondary">
+                    {task.assignmentStatus || "Unassigned"}
+                  </Badge>
                 </div>
               </div>
               {task.dueDate && (

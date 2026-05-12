@@ -11,6 +11,7 @@ const PlatformInvitePage = lazy(trackChunkLoad("PlatformInvite", () => import("@
 const AcceptInvitePage = lazy(trackChunkLoad("AcceptInvite", () => import("@/pages/accept-invite")));
 const ForgotPasswordPage = lazy(trackChunkLoad("ForgotPassword", () => import("@/pages/forgot-password")));
 const ResetPasswordPage = lazy(trackChunkLoad("ResetPassword", () => import("@/pages/reset-password")));
+const ClientPortalRegisterPage = lazy(trackChunkLoad("ClientPortalRegister", () => import("@/pages/client-portal-register")));
 
 const AUTH_PATHS = [
   "/login",
@@ -20,6 +21,7 @@ const AUTH_PATHS = [
   "/accept-invite/",
   "/auth/forgot-password",
   "/auth/reset-password",
+  "/client-portal/register",
 ];
 
 export function isAuthRoute(location: string): boolean {
@@ -41,6 +43,7 @@ export function AuthRouter() {
         <Route path="/accept-invite/:token" component={AcceptInvitePage} />
         <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
         <Route path="/auth/reset-password" component={ResetPasswordPage} />
+        <Route path="/client-portal/register" component={ClientPortalRegisterPage} />
       </Switch>
     </Suspense>
   );

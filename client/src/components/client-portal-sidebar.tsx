@@ -1,16 +1,15 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { useCrmFlags } from "@/hooks/use-crm-flags";
 import {
-  LayoutDashboard,
+  Home,
   FolderKanban,
-  CheckSquare,
-  Settings,
-  MessageCircle,
+  ContactRound,
+  Library,
+  MessageSquare,
   Building2,
-  FileBox,
   ClipboardCheck,
   LifeBuoy,
+  Users,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -43,16 +42,19 @@ interface DashboardData {
 }
 
 const mainNavItems = [
-  { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
+  { title: "Overview", url: "/portal", icon: Home },
+  { title: "Contacts", url: "/portal/contacts", icon: ContactRound },
   { title: "Projects", url: "/portal/projects", icon: FolderKanban },
-  { title: "Tasks", url: "/portal/tasks", icon: CheckSquare },
-  { title: "Chat", url: "/portal/chat", icon: MessageCircle },
+  { title: "Approvals", url: "/portal/approvals", icon: ClipboardCheck },
+  { title: "Portal Users", url: "/portal/users", icon: Users },
+  { title: "Asset Library", url: "/portal/assets", icon: Library },
+  { title: "Messages", url: "/portal/messages", icon: MessageSquare },
+  { title: "Support Center", url: "/portal/support", icon: LifeBuoy },
 ];
 
 export function ClientPortalSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const crmFlags = useCrmFlags();
 
   const { data: dashboardData } = useQuery<DashboardData>({
     queryKey: ["/api/client-portal/dashboard"],
@@ -103,56 +105,6 @@ export function ClientPortalSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {crmFlags.portal && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActiveRoute("/portal/files")}
-                  >
-                    <Link href="/portal/files" data-testid="nav-portal-files">
-                      <FileBox className="h-4 w-4" />
-                      <span>Files</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {crmFlags.approvals && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActiveRoute("/portal/approvals")}
-                  >
-                    <Link href="/portal/approvals" data-testid="nav-portal-approvals">
-                      <ClipboardCheck className="h-4 w-4" />
-                      <span>Approvals</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {crmFlags.clientMessaging && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActiveRoute("/portal/messages")}
-                  >
-                    <Link href="/portal/messages" data-testid="nav-portal-messages">
-                      <MessageCircle className="h-4 w-4" />
-                      <span>Messages</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActiveRoute("/portal/support")}
-                >
-                  <Link href="/portal/support" data-testid="nav-portal-support">
-                    <LifeBuoy className="h-4 w-4" />
-                    <span>Support</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -179,16 +131,6 @@ export function ClientPortalSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-border">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={location === "/portal/settings"}>
-              <Link href="/portal/settings" data-testid="nav-settings">
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <div className="flex items-center gap-2 px-2 py-2 group-data-[collapsible=icon]:hidden">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="text-xs bg-primary/10">

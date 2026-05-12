@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth, requireAdmin } from "../../../auth";
@@ -10,6 +10,14 @@ import {
   clientConversations,
   clientMessages,
   tenantSettings,
+  users,
+  ConversationType,
+  SupportTicketAuthorType,
+  SupportTicketCategory,
+  SupportTicketEventType,
+  SupportTicketMessageVisibility,
+  SupportTicketPriority,
+  SupportTicketSource,
   UserRole,
   type Notification,
 } from "@shared/schema";
@@ -193,6 +201,36 @@ router.get("/crm/portal/message-templates", requireAuth, async (req: Request, re
   }
 });
 
+router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Portal access only"), req);
+    }
+
+    const recipients = await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+    })
+      .from(users)
+      .where(and(
+        eq(users.tenantId, tenantId),
+        eq(users.isActive, true),
+        inArray(users.role, [UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
+      ))
+      .orderBy(asc(users.name), asc(users.email));
+
+    res.json(recipients);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/portal/conversation-recipients", req);
+  }
+});
+
 router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -207,6 +245,18 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       clientId: z.string().uuid(),
       subject: z.string().min(1).max(500),
       initialMessage: z.string().min(1).max(5000),
+      type: z.enum([
+        ConversationType.EVERYDAY,
+        ConversationType.SERVICE_REQUEST,
+        ConversationType.SUPPORT_TICKET,
+      ]).default(ConversationType.EVERYDAY),
+      recipientUserId: z.string().uuid().optional(),
+      priority: z.enum([
+        SupportTicketPriority.LOW,
+        SupportTicketPriority.NORMAL,
+        SupportTicketPriority.HIGH,
+        SupportTicketPriority.URGENT,
+      ]).optional().default(SupportTicketPriority.NORMAL),
       templateId: z.string().uuid().optional(),
     });
 
@@ -222,19 +272,85 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
 
     const userId = getCurrentUserId(req);
 
+    if (data.type === ConversationType.SUPPORT_TICKET) {
+      const ticket = await storage.createSupportTicket({
+        tenantId,
+        clientId: data.clientId,
+        createdByUserId: null,
+        createdByPortalUserId: userId,
+        title: data.subject,
+        description: data.initialMessage,
+        priority: data.priority,
+        category: SupportTicketCategory.SUPPORT,
+        source: SupportTicketSource.PORTAL,
+        assignedToUserId: null,
+        metadataJson: {
+          createdFrom: "portal_messages",
+          templateId: data.templateId || null,
+        },
+      });
+
+      await storage.createSupportTicketMessage({
+        tenantId,
+        ticketId: ticket.id,
+        authorUserId: null,
+        authorPortalUserId: userId,
+        authorType: SupportTicketAuthorType.PORTAL_USER,
+        bodyText: data.initialMessage,
+        visibility: SupportTicketMessageVisibility.PUBLIC,
+      });
+
+      await storage.createSupportTicketEvent({
+        tenantId,
+        ticketId: ticket.id,
+        actorType: SupportTicketAuthorType.PORTAL_USER,
+        actorPortalUserId: userId,
+        eventType: SupportTicketEventType.CREATED,
+        payloadJson: { title: ticket.title },
+      });
+
+      return res.status(201).json({
+        id: ticket.id,
+        kind: "support_ticket",
+        ticket,
+      });
+    }
+
     let autoAssigneeId: string | null = null;
-    const [settings] = await db.select({ defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId })
-      .from(tenantSettings)
-      .where(eq(tenantSettings.tenantId, tenantId))
-      .limit(1);
-    if (settings?.defaultConversationAssigneeId) {
-      autoAssigneeId = settings.defaultConversationAssigneeId;
+    if (data.type === ConversationType.EVERYDAY) {
+      if (!data.recipientUserId) {
+        return sendError(res, AppError.badRequest("Conversation recipient is required"), req);
+      }
+
+      const [recipient] = await db.select({ id: users.id, role: users.role, tenantId: users.tenantId, isActive: users.isActive })
+        .from(users)
+        .where(eq(users.id, data.recipientUserId))
+        .limit(1);
+      if (!recipient || recipient.tenantId !== tenantId || !recipient.isActive) {
+        return sendError(res, AppError.badRequest("Invalid recipient"), req);
+      }
+      if (![UserRole.ADMIN, UserRole.PROJECT_MANAGER].includes(recipient.role as any)) {
+        return sendError(res, AppError.badRequest("Conversations can only be sent to admins or project managers"), req);
+      }
+      autoAssigneeId = data.recipientUserId;
+    } else if (data.type === ConversationType.SERVICE_REQUEST) {
+      autoAssigneeId = null;
+    } else {
+      const [settings] = await db.select({ defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId })
+        .from(tenantSettings)
+        .where(eq(tenantSettings.tenantId, tenantId))
+        .limit(1);
+      if (settings?.defaultConversationAssigneeId) {
+        autoAssigneeId = settings.defaultConversationAssigneeId;
+      }
     }
 
     const [conversation] = await db.insert(clientConversations).values({
       tenantId,
       clientId: data.clientId,
       subject: data.subject,
+      type: data.type,
+      priority: data.priority,
       createdByUserId: userId,
       assignedToUserId: autoAssigneeId,
     }).returning();
@@ -282,7 +398,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       });
     }
 
-    res.status(201).json(conversation);
+    res.status(201).json({ ...conversation, kind: "conversation" });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/crm/portal/conversations", req);
   }

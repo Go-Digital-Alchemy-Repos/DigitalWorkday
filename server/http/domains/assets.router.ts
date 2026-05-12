@@ -16,7 +16,7 @@ import {
 import { validateUploadRequest, sanitizeFilename, isFilenameUnsafe } from "../middleware/uploadGuards";
 import { storage } from "../../storage";
 import type { Request, Response } from "express";
-import { ASSET_SOURCE_TYPES, ASSET_VISIBILITY } from "@shared/schema";
+import { ASSET_SOURCE_TYPES, ASSET_VISIBILITY, UserRole } from "@shared/schema";
 
 const assetUpload = multer({
   storage: multer.memoryStorage(),
@@ -44,6 +44,47 @@ async function validateClientBelongsToTenant(clientId: string, tenantId: string)
   return client;
 }
 
+function isPortalUser(req: Request): boolean {
+  return (req.user as any)?.role === UserRole.CLIENT;
+}
+
+async function assertClientAssetAccess(req: Request, clientId: string, tenantId: string) {
+  const client = await validateClientBelongsToTenant(clientId, tenantId);
+
+  if (isPortalUser(req)) {
+    const access = await storage.getClientUserAccessByUserAndClient(getCurrentUserId(req), clientId);
+    if (!access) {
+      throw AppError.forbidden("You do not have access to this client asset library");
+    }
+  }
+
+  return client;
+}
+
+async function assertFolderAssetAccess(req: Request, tenantId: string, folderId: string) {
+  const folder = await assetService.getFolder(tenantId, folderId);
+  if (!folder) {
+    throw AppError.notFound("Asset folder");
+  }
+
+  await assertClientAssetAccess(req, folder.clientId, tenantId);
+  return folder;
+}
+
+async function assertAssetAccess(req: Request, tenantId: string, assetId: string) {
+  const asset = await assetService.getAsset(tenantId, assetId);
+  if (!asset) {
+    throw AppError.notFound("Asset");
+  }
+
+  await assertClientAssetAccess(req, asset.clientId, tenantId);
+  if (isPortalUser(req) && asset.visibility !== "client_visible") {
+    throw AppError.forbidden("This asset is not visible in the client portal");
+  }
+
+  return asset;
+}
+
 // ============================================================================
 // FOLDERS (must be defined before /assets/:assetId to avoid route shadowing)
 // ============================================================================
@@ -56,7 +97,7 @@ router.get("/assets/folders", async (req: Request, res: Response) => {
     const clientId = req.query.clientId as string;
     if (!clientId) return res.status(400).json({ error: "clientId is required" });
 
-    await validateClientBelongsToTenant(clientId, tenantId);
+    await assertClientAssetAccess(req, clientId, tenantId);
     const folders = await assetService.listFolders(tenantId, clientId);
     res.json(folders);
   } catch (error) {
@@ -76,7 +117,7 @@ router.post("/assets/folders", async (req: Request, res: Response) => {
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
     const data = createFolderSchema.parse(req.body);
-    await validateClientBelongsToTenant(data.clientId, tenantId);
+    await assertClientAssetAccess(req, data.clientId, tenantId);
 
     const folder = await assetService.createFolder({
       tenantId,
@@ -107,6 +148,8 @@ router.patch("/assets/folders/:folderId", async (req: Request, res: Response) =>
 
     const data = updateFolderSchema.parse(req.body);
     let folder;
+
+    await assertFolderAssetAccess(req, tenantId, req.params.folderId);
 
     if (data.name !== undefined) {
       folder = await assetService.renameFolder(tenantId, req.params.folderId, data.name);
@@ -142,6 +185,9 @@ router.put("/assets/folders/reorder", async (req: Request, res: Response) => {
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
     const { updates } = reorderFoldersSchema.parse(req.body);
+    if (isPortalUser(req)) {
+      await Promise.all(updates.map((update) => assertFolderAssetAccess(req, tenantId, update.id)));
+    }
     await assetService.reorderFolders(tenantId, updates);
     res.json({ success: true });
   } catch (error) {
@@ -157,6 +203,7 @@ router.delete("/assets/folders/:folderId", async (req: Request, res: Response) =
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
+    await assertFolderAssetAccess(req, tenantId, req.params.folderId);
     await assetService.deleteFolder(tenantId, req.params.folderId);
     res.json({ success: true });
   } catch (error) {
@@ -184,7 +231,9 @@ router.get("/assets", async (req: Request, res: Response) => {
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
     const filters = listAssetsSchema.parse(req.query);
-    await validateClientBelongsToTenant(filters.clientId, tenantId);
+    await assertClientAssetAccess(req, filters.clientId, tenantId);
+
+    const visibility = isPortalUser(req) ? "client_visible" : filters.visibility;
 
     const result = await assetService.listAssets({
       tenantId,
@@ -192,7 +241,7 @@ router.get("/assets", async (req: Request, res: Response) => {
       folderId: filters.folderId,
       q: filters.q,
       sourceType: filters.sourceType,
-      visibility: filters.visibility,
+      visibility,
       cursor: filters.cursor,
       limit: filters.limit,
     });
@@ -211,8 +260,7 @@ router.get("/assets/:assetId", async (req: Request, res: Response) => {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
-    const asset = await assetService.getAsset(tenantId, req.params.assetId);
-    if (!asset) return res.status(404).json({ error: "Asset not found" });
+    const asset = await assertAssetAccess(req, tenantId, req.params.assetId);
 
     res.json(asset);
   } catch (error) {
@@ -232,7 +280,17 @@ router.patch("/assets/:assetId", async (req: Request, res: Response) => {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
+    const existingAsset = await assertAssetAccess(req, tenantId, req.params.assetId);
     const updates = updateAssetSchema.parse(req.body);
+    if (updates.folderId) {
+      const folder = await assetService.getFolder(tenantId, updates.folderId);
+      if (!folder || folder.clientId !== existingAsset.clientId) {
+        throw AppError.badRequest("Target folder not found or belongs to different client");
+      }
+    }
+    if (isPortalUser(req)) {
+      updates.visibility = "client_visible";
+    }
     const asset = await assetService.updateAssetMeta(tenantId, req.params.assetId, updates);
     res.json(asset);
   } catch (error) {
@@ -248,6 +306,7 @@ router.delete("/assets/:assetId", async (req: Request, res: Response) => {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
+    await assertAssetAccess(req, tenantId, req.params.assetId);
     await assetService.deleteAsset(tenantId, req.params.assetId);
     res.json({ success: true });
   } catch (error) {
@@ -284,7 +343,7 @@ router.post(
       }
 
       const data = presignSchema.parse(req.body);
-      await validateClientBelongsToTenant(data.clientId, tenantId);
+      await assertClientAssetAccess(req, data.clientId, tenantId);
 
       const validation = validateFile(data.mimeType, data.sizeBytes, data.filename);
       if (!validation.valid) {
@@ -330,9 +389,13 @@ router.post("/assets/upload/complete", async (req: Request, res: Response) => {
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
     const data = completeSchema.parse(req.body);
-    await validateClientBelongsToTenant(data.clientId, tenantId);
+    await assertClientAssetAccess(req, data.clientId, tenantId);
+    if (!data.r2Key.startsWith(`assets/${tenantId}/${data.clientId}/`)) {
+      throw AppError.badRequest("Upload key does not match the selected client");
+    }
 
     const userId = getCurrentUserId(req);
+    const portalUpload = isPortalUser(req);
 
     const { asset, dedupe } = await assetService.createAsset({
       tenantId,
@@ -344,9 +407,10 @@ router.post("/assets/upload/complete", async (req: Request, res: Response) => {
       r2Key: data.r2Key,
       checksum: data.checksum || null,
       sourceType: "manual",
-      visibility: "internal",
-      uploadedByType: "tenant_user",
-      uploadedByUserId: userId,
+      visibility: portalUpload ? "client_visible" : "internal",
+      uploadedByType: portalUpload ? "portal_user" : "tenant_user",
+      uploadedByUserId: portalUpload ? null : userId,
+      uploadedByPortalUserId: portalUpload ? userId : null,
     });
 
     res.status(201).json({ asset, dedupe });
@@ -378,7 +442,7 @@ router.post(
       const folderId = req.body.folderId || null;
       if (!clientId) return res.status(400).json({ error: "clientId is required" });
 
-      await validateClientBelongsToTenant(clientId, tenantId);
+      await assertClientAssetAccess(req, clientId, tenantId);
 
       const mimeType = file.mimetype || "application/octet-stream";
       const validation = validateFile(mimeType, file.size, file.originalname);
@@ -397,6 +461,7 @@ router.post(
       await uploadToS3(file.buffer, r2Key, mimeType, tenantId);
 
       const userId = getCurrentUserId(req);
+      const portalUpload = isPortalUser(req);
 
       const { asset, dedupe } = await assetService.createAsset({
         tenantId,
@@ -408,9 +473,10 @@ router.post(
         r2Key,
         checksum: null,
         sourceType: "manual",
-        visibility: "internal",
-        uploadedByType: "tenant_user",
-        uploadedByUserId: userId,
+        visibility: portalUpload ? "client_visible" : "internal",
+        uploadedByType: portalUpload ? "portal_user" : "tenant_user",
+        uploadedByUserId: portalUpload ? null : userId,
+        uploadedByPortalUserId: portalUpload ? userId : null,
       });
 
       res.status(201).json({ asset, dedupe });
@@ -425,8 +491,7 @@ router.get("/assets/:assetId/download", async (req: Request, res: Response) => {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
 
-    const asset = await assetService.getAsset(tenantId, req.params.assetId);
-    if (!asset) return res.status(404).json({ error: "Asset not found" });
+    const asset = await assertAssetAccess(req, tenantId, req.params.assetId);
 
     const downloadUrl = await createPresignedDownloadUrl(asset.r2Key, tenantId);
     res.json({ url: downloadUrl });

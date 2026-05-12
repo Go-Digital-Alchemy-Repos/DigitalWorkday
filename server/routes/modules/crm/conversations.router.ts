@@ -214,6 +214,74 @@ function getOrderBy(sort: string | undefined) {
   }
 }
 
+router.get("/crm/service-requests", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (!hasTenantAdminAccess(user.role)) {
+      return sendError(res, AppError.forbidden("Only admins and project managers can view service requests"), req);
+    }
+
+    const rows = await db.select({
+      conversation: clientConversations,
+      creatorName: users.name,
+      clientName: clients.companyName,
+    })
+      .from(clientConversations)
+      .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
+      .leftJoin(clients, eq(clientConversations.clientId, clients.id))
+      .where(and(
+        eq(clientConversations.tenantId, tenantId),
+        eq(clientConversations.type, ConversationType.SERVICE_REQUEST),
+        isNull(clientConversations.mergedIntoId),
+      ))
+      .orderBy(desc(clientConversations.updatedAt))
+      .limit(100);
+
+    const conversationIds = rows.map(row => row.conversation.id);
+    const [messageCounts, lastMessages] = await Promise.all([
+      conversationIds.length
+        ? db.select({ conversationId: clientMessages.conversationId, value: count() })
+            .from(clientMessages)
+            .where(inArray(clientMessages.conversationId, conversationIds))
+            .groupBy(clientMessages.conversationId)
+        : Promise.resolve([]),
+      conversationIds.length
+        ? db.execute(dsql`
+            SELECT DISTINCT ON (cm.conversation_id)
+              cm.conversation_id,
+              cm.body_text,
+              cm.created_at,
+              u.name as author_name
+            FROM client_messages cm
+            LEFT JOIN users u ON cm.author_user_id = u.id
+            WHERE cm.conversation_id IN (${dsql.join(conversationIds.map(id => dsql`${id}`), dsql`, `)})
+            ORDER BY cm.conversation_id, cm.created_at DESC
+          `)
+        : Promise.resolve({ rows: [] }),
+    ]);
+
+    const countMap = new Map((messageCounts as any[]).map(row => [row.conversationId, Number(row.value)]));
+    const lastMessageMap = new Map((lastMessages.rows as any[]).map(row => [row.conversation_id, {
+      bodyText: row.body_text,
+      createdAt: row.created_at,
+      authorName: row.author_name,
+    }]));
+
+    res.json(rows.map(row => ({
+      ...row.conversation,
+      creatorName: row.creatorName || "Client portal user",
+      clientName: row.clientName || "Unknown client",
+      messageCount: countMap.get(row.conversation.id) || 0,
+      lastMessage: lastMessageMap.get(row.conversation.id) || null,
+    })));
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/service-requests", req);
+  }
+});
+
 router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);

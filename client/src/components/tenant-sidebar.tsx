@@ -26,6 +26,7 @@ import {
   Pin,
   GripVertical,
   LifeBuoy,
+  ClipboardList,
 } from "lucide-react";
 import {
   DndContext,
@@ -164,7 +165,8 @@ const mainNavItems = [
   { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
   // { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
-  { title: "Support", url: "/support", icon: LifeBuoy, color: "text-orange-500" },
+  { title: "Support Center", url: "/support", icon: LifeBuoy, color: "text-orange-500" },
+  { title: "Service Requests", url: "/service-requests", icon: ClipboardList, color: "text-lime-600", adminOnly: true },
 ];
 
 export function TenantSidebar() {

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, FolderKanban, CheckSquare, Menu, Moon, Sun } from "lucide-react";
+import { Home, FolderKanban, Menu, MessageSquare, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -13,23 +13,23 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { 
-    title: "Dashboard", 
-    href: "/portal", 
+  {
+    title: "Overview",
+    href: "/portal",
     icon: Home,
     matchPaths: ["/portal"]
   },
-  { 
-    title: "Projects", 
-    href: "/portal/projects", 
+  {
+    title: "Projects",
+    href: "/portal/projects",
     icon: FolderKanban,
     matchPaths: ["/portal/projects"]
   },
-  { 
-    title: "Tasks", 
-    href: "/portal/tasks", 
-    icon: CheckSquare,
-    matchPaths: ["/portal/tasks"]
+  {
+    title: "Messages",
+    href: "/portal/messages",
+    icon: MessageSquare,
+    matchPaths: ["/portal/messages"]
   },
 ];
 

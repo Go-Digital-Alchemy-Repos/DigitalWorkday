@@ -12,6 +12,10 @@ export const assetService = {
     return folderRepo.list(tenantId, clientId);
   },
 
+  async getFolder(tenantId: string, folderId: string) {
+    return folderRepo.getById(folderId, tenantId);
+  },
+
   async createFolder(input: CreateFolderInput) {
     if (input.parentFolderId) {
       const parent = await folderRepo.getById(input.parentFolderId, input.tenantId);
@@ -89,6 +93,12 @@ export const assetService = {
   async updateAssetMeta(tenantId: string, assetId: string, updates: UpdateAssetInput) {
     const asset = await assetRepo.getById(assetId, tenantId);
     if (!asset) throw new Error("Asset not found");
+    if (updates.folderId) {
+      const folder = await folderRepo.getById(updates.folderId, tenantId);
+      if (!folder || folder.clientId !== asset.clientId) {
+        throw new Error("Target folder not found or belongs to different client");
+      }
+    }
     return assetRepo.update(assetId, tenantId, updates);
   },
 

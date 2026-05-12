@@ -14,12 +14,13 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { trackChunkLoad } from "@/lib/perf";
 
 const ClientPortalDashboard = lazy(trackChunkLoad("PortalDashboard", () => import("@/pages/client-portal-dashboard")));
+const ClientPortalContacts = lazy(trackChunkLoad("PortalContacts", () => import("@/pages/client-portal-contacts")));
 const ClientPortalProjects = lazy(trackChunkLoad("PortalProjects", () => import("@/pages/client-portal-projects")));
-const ClientPortalTasks = lazy(trackChunkLoad("PortalTasks", () => import("@/pages/client-portal-tasks")));
 const ClientPortalProjectDetail = lazy(trackChunkLoad("PortalProjectDetail", () => import("@/pages/client-portal-project-detail")));
 const ClientPortalApprovals = lazy(trackChunkLoad("PortalApprovals", () => import("@/pages/client-portal-approvals")));
+const ClientPortalUsers = lazy(trackChunkLoad("PortalUsers", () => import("@/pages/client-portal-users")));
+const ClientPortalAssets = lazy(trackChunkLoad("PortalAssets", () => import("@/pages/client-portal-assets")));
 const ClientPortalMessages = lazy(trackChunkLoad("PortalMessages", () => import("@/pages/client-portal-messages")));
-const ChatPage = lazy(trackChunkLoad("PortalChat", () => import("@/pages/chat")));
 const ClientPortalSupport = lazy(trackChunkLoad("PortalSupport", () => import("@/pages/client-portal-support")));
 const ClientPortalSupportNew = lazy(trackChunkLoad("PortalSupportNew", () => import("@/pages/client-portal-support-new")));
 const ClientPortalSupportDetail = lazy(trackChunkLoad("PortalSupportDetail", () => import("@/pages/client-portal-support-detail")));
@@ -31,23 +32,26 @@ function ClientPortalRouter() {
         <Route path="/portal">
           {() => <ClientPortalRouteGuard component={ClientPortalDashboard} />}
         </Route>
+        <Route path="/portal/contacts">
+          {() => <ClientPortalRouteGuard component={ClientPortalContacts} />}
+        </Route>
         <Route path="/portal/projects">
           {() => <ClientPortalRouteGuard component={ClientPortalProjects} />}
         </Route>
         <Route path="/portal/projects/:id">
           {() => <ClientPortalRouteGuard component={ClientPortalProjectDetail} />}
         </Route>
-        <Route path="/portal/tasks">
-          {() => <ClientPortalRouteGuard component={ClientPortalTasks} />}
-        </Route>
         <Route path="/portal/approvals">
           {() => <ClientPortalRouteGuard component={ClientPortalApprovals} />}
         </Route>
+        <Route path="/portal/users">
+          {() => <ClientPortalRouteGuard component={ClientPortalUsers} />}
+        </Route>
+        <Route path="/portal/assets">
+          {() => <ClientPortalRouteGuard component={ClientPortalAssets} />}
+        </Route>
         <Route path="/portal/messages">
           {() => <ClientPortalRouteGuard component={ClientPortalMessages} />}
-        </Route>
-        <Route path="/portal/chat">
-          {() => <ClientPortalRouteGuard component={ChatPage} />}
         </Route>
         <Route path="/portal/support">
           {() => <ClientPortalRouteGuard component={ClientPortalSupport} />}

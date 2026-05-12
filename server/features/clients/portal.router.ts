@@ -8,6 +8,7 @@ import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
+import { emailOutboxService } from "../../services/emailOutbox";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -23,6 +24,12 @@ function isTenantAdmin(req: Request): boolean {
 
 const router = Router();
 
+const clientAccessLevelSchema = z.enum([
+  ClientAccessLevel.VIEWER,
+  ClientAccessLevel.COLLABORATOR,
+  ClientAccessLevel.PORTAL_ADMIN,
+]);
+
 // Generate secure invite token
 function generateInviteToken(): string {
   return randomBytes(32).toString("hex");
@@ -31,6 +38,83 @@ function generateInviteToken(): string {
 // Hash token for storage (for security, don't store raw token)
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function getPublicAppUrl(req: Request): string {
+  return (process.env.APP_PUBLIC_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+}
+
+function escapeHtml(value: string | null | undefined): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function ensureCanManagePortalUsers(req: Request, clientId: string) {
+  if (isTenantAdmin(req)) return;
+  if (!isClientUser(req) || !req.user?.id) {
+    throw AppError.forbidden("Only admins, project managers, or portal admins can manage portal users");
+  }
+
+  const access = await storage.getClientUserAccessByUserAndClient(req.user.id, clientId);
+  if (!access || access.accessLevel !== ClientAccessLevel.PORTAL_ADMIN) {
+    throw AppError.forbidden("Portal admin access is required");
+  }
+}
+
+async function sendPortalInviteEmail(options: {
+  tenantId: string | null;
+  toEmail: string;
+  recipientName: string;
+  clientName: string;
+  registrationUrl: string;
+  requestId?: string;
+  inviteId: string;
+  clientId: string;
+}) {
+  const recipient = options.recipientName || options.toEmail;
+  const subject = `You're invited to the ${options.clientName} client portal`;
+  const textBody = [
+    `Hi ${recipient},`,
+    "",
+    `You've been invited to access the Digital Workday client portal for ${options.clientName}.`,
+    "Use the link below to set your password and finish setting up your account:",
+    "",
+    options.registrationUrl,
+    "",
+    "If you were not expecting this invitation, you can ignore this email.",
+  ].join("\n");
+  const htmlBody = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937">
+      <h2 style="margin:0 0 16px">You're invited to Digital Workday</h2>
+      <p>Hi ${escapeHtml(recipient)},</p>
+      <p>You've been invited to access the Digital Workday client portal for <strong>${escapeHtml(options.clientName)}</strong>.</p>
+      <p>
+        <a href="${escapeHtml(options.registrationUrl)}" style="display:inline-block;background:#4f9f2f;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:600">
+          Set up your portal account
+        </a>
+      </p>
+      <p style="color:#6b7280;font-size:13px">If the button does not work, copy and paste this link into your browser:<br>${escapeHtml(options.registrationUrl)}</p>
+    </div>
+  `;
+
+  return emailOutboxService.sendEmail({
+    tenantId: options.tenantId,
+    messageType: "invitation",
+    toEmail: options.toEmail,
+    subject,
+    textBody,
+    htmlBody,
+    requestId: options.requestId,
+    metadata: {
+      inviteType: "client_portal",
+      inviteId: options.inviteId,
+      clientId: options.clientId,
+    },
+  });
 }
 
 // =============================================================================
@@ -42,6 +126,7 @@ router.get("/:clientId/users", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId } = req.params;
+    await ensureCanManagePortalUsers(req, clientId);
     
     // Verify client belongs to tenant
     if (tenantId) {
@@ -63,12 +148,19 @@ router.post("/:clientId/users/invite", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId } = req.params;
-    const { contactId, accessLevel = ClientAccessLevel.VIEWER } = req.body;
-    
-    // Validate request
-    if (!contactId) {
-      throw AppError.badRequest("Contact ID is required");
-    }
+    await ensureCanManagePortalUsers(req, clientId);
+
+    const schema = z.object({
+      contactId: z.string().uuid().optional(),
+      email: z.string().email().optional(),
+      firstName: z.string().trim().optional().default(""),
+      lastName: z.string().trim().optional().default(""),
+      accessLevel: clientAccessLevelSchema.default(ClientAccessLevel.VIEWER),
+    }).refine((data) => Boolean(data.contactId || data.email), {
+      message: "Contact ID or email is required",
+    });
+    const data = schema.parse(req.body);
+    const accessLevel = data.accessLevel;
     
     // Verify client belongs to tenant
     const client = tenantId 
@@ -79,20 +171,36 @@ router.post("/:clientId/users/invite", async (req, res) => {
       throw AppError.notFound("Client");
     }
     
-    // Get the contact
-    const contact = await storage.getClientContact(contactId);
-    if (!contact || contact.clientId !== clientId) {
+    let contact = data.contactId ? await storage.getClientContact(data.contactId) : undefined;
+    if (data.contactId && (!contact || contact.clientId !== clientId)) {
       throw AppError.notFound("Contact");
     }
-    
-    if (!contact.email) {
-      throw AppError.badRequest("Contact must have an email address");
+
+    const inviteEmail = (contact?.email || data.email || "").trim().toLowerCase();
+    if (!inviteEmail) {
+      throw AppError.badRequest("An email address is required");
+    }
+
+    if (!contact) {
+      contact = await storage.createClientContact({
+        tenantId: client.tenantId,
+        workspaceId: client.workspaceId,
+        clientId,
+        firstName: data.firstName || null,
+        lastName: data.lastName || null,
+        email: inviteEmail,
+        isPrimary: false,
+      });
     }
     
     // Check if user already exists with this email
-    let existingUser = await storage.getUserByEmail(contact.email);
+    let existingUser = await storage.getUserByEmail(inviteEmail);
     
     if (existingUser) {
+      if (existingUser.role !== UserRole.CLIENT) {
+        throw AppError.conflict("This email belongs to an internal user. Invite a different client portal email.");
+      }
+
       // Check if already has access to this client
       const existingAccess = await storage.getClientUserAccessByUserAndClient(
         existingUser.id, 
@@ -129,8 +237,8 @@ router.post("/:clientId/users/invite", async (req, res) => {
     // Update or create client invite with real token
     const invite = await storage.createClientInvite({
       clientId,
-      contactId,
-      email: contact.email,
+      contactId: contact.id,
+      email: inviteEmail,
       status: "pending",
       tokenPlaceholder: tokenHash,
     });
@@ -140,95 +248,46 @@ router.post("/:clientId/users/invite", async (req, res) => {
       roleHint: accessLevel,
     });
     
-    // Return the invite with token (only time raw token is exposed)
+    const publicUrl = getPublicAppUrl(req);
+    const registrationUrl = `${publicUrl}/client-portal/register?token=${token}&invite=${invite.id}`;
+    const recipientName = `${contact.firstName || ""} ${contact.lastName || ""}`.trim();
+    const emailResult = await sendPortalInviteEmail({
+      tenantId: client.tenantId || tenantId || null,
+      toEmail: inviteEmail,
+      recipientName,
+      clientName: client.displayName || client.companyName,
+      registrationUrl,
+      requestId: req.requestId,
+      inviteId: invite.id,
+      clientId,
+    });
+
     res.status(201).json({
-      message: "Invitation created",
+      message: emailResult.success ? "Invitation sent" : "Invitation created, but email delivery failed",
       invite: {
         id: invite.id,
         email: invite.email,
         status: invite.status,
         createdAt: invite.createdAt,
       },
-      registrationUrl: `/client-portal/register?token=${token}&invite=${invite.id}`,
-      token, // Include token for sending via email
+      registrationUrl,
+      email: {
+        success: emailResult.success,
+        emailId: emailResult.emailId,
+        error: emailResult.error,
+      },
     });
   } catch (error) {
     return handleRouteError(res, error, "POST /:clientId/users/invite", req);
   }
 });
 
-// Create a client portal user directly (with password, no invite flow)
+// Direct password-based portal user creation is intentionally disabled.
 router.post("/:clientId/users/create", async (req, res) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    const { clientId } = req.params;
-
-    const schema = z.object({
-      email: z.string().email("Valid email is required"),
-      firstName: z.string().min(1, "First name is required"),
-      lastName: z.string().optional().default(""),
-      password: z.string().min(8, "Password must be at least 8 characters"),
-      accessLevel: z.enum(["viewer", "collaborator"]).default("viewer"),
-    });
-
-    const data = schema.parse(req.body);
-
-    const client = tenantId
-      ? await storage.getClientByIdAndTenant(clientId, tenantId)
-      : await storage.getClient(clientId);
-
-    if (!client) {
-      throw AppError.notFound("Client");
-    }
-
-    const existingUser = await storage.getUserByEmail(data.email);
-    if (existingUser) {
-      const existingAccess = await storage.getClientUserAccessByUserAndClient(
-        existingUser.id,
-        clientId
-      );
-      if (existingAccess) {
-        throw AppError.conflict("A user with this email already has access to this client");
-      }
-      throw AppError.conflict("A user with this email already exists. Use the invite flow to grant them access.");
-    }
-
-    const passwordHash = await hashPassword(data.password);
-
-    const user = await storage.createUser({
-      tenantId: client.tenantId,
-      email: data.email,
-      name: `${data.firstName} ${data.lastName}`.trim(),
-      firstName: data.firstName,
-      lastName: data.lastName || null,
-      passwordHash,
-      role: UserRole.CLIENT,
-      isActive: true,
-    });
-
-    await storage.addClientUserAccess({
-      workspaceId: client.workspaceId,
-      clientId,
-      userId: user.id,
-      accessLevel: data.accessLevel as "viewer" | "collaborator",
-    });
-
-    res.status(201).json({
-      message: "Portal user created successfully",
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-    });
-  } catch (error: any) {
-    if (error?.code === "23505") {
-      return res.status(409).json({ error: "A user with this email already exists" });
-    }
-    return handleRouteError(res, error, "POST /:clientId/users/create", req);
-  }
+  res.status(410).json({
+    message: "Direct portal user creation has been replaced by the invite flow.",
+    inviteEndpoint: `/api/clients/${req.params.clientId}/users/invite`,
+  });
 });
 
 // Update client user (access level, name, and optionally password)
@@ -238,7 +297,7 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
     const { clientId, userId } = req.params;
 
     const schema = z.object({
-      accessLevel: z.enum(["viewer", "collaborator"]).optional(),
+      accessLevel: clientAccessLevelSchema.optional(),
       firstName: z.string().min(1).optional(),
       lastName: z.string().optional(),
       password: z.string().min(8, "Password must be at least 8 characters").optional(),
@@ -247,6 +306,7 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
     });
 
     const data = schema.parse(req.body);
+    await ensureCanManagePortalUsers(req, clientId);
 
     // Verify client belongs to tenant
     if (tenantId) {
@@ -314,6 +374,7 @@ router.delete("/:clientId/users/:userId", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId, userId } = req.params;
+    await ensureCanManagePortalUsers(req, clientId);
     
     // Verify client belongs to tenant
     if (tenantId) {
@@ -424,9 +485,8 @@ router.post("/register/complete", async (req, res) => {
     });
     
     // Create client user access
-    const accessLevel = (invite.roleHint === "collaborator" 
-      ? ClientAccessLevel.COLLABORATOR 
-      : ClientAccessLevel.VIEWER) as "viewer" | "collaborator";
+    const parsedAccessLevel = clientAccessLevelSchema.safeParse(invite.roleHint);
+    const accessLevel = parsedAccessLevel.success ? parsedAccessLevel.data : ClientAccessLevel.VIEWER;
     
     await storage.addClientUserAccess({
       workspaceId: client.workspaceId,

@@ -46,6 +46,7 @@ import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
 import accessRouter from "./domains/access.router";
 import retentionRouter from "./domains/retention.router";
+import clientPortalPublicRouter from "./domains/clientPortalPublic.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -476,6 +477,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "public",
     domain: "webhooks",
     description: "Stripe webhook routes (signature-verified, no session auth).",
+  },
+  {
+    path: "/api/v1/public/client-portal",
+    router: clientPortalPublicRouter,
+    policy: "public",
+    domain: "client-portal-public",
+    description: "Public client portal invitation validation and password setup.",
   },
 ];
 
