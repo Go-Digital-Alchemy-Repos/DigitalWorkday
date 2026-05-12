@@ -101,7 +101,7 @@ const portalTaskUpdateSchema = z.object({
   description: z.string().optional().nullable(),
   status: z.string().trim().min(1).optional(),
   priority: z.string().trim().min(1).optional(),
-  dueDate: z.string().datetime().optional().nullable().or(z.literal("")),
+  dueDate: z.string().trim().optional().nullable(),
   estimateMinutes: z.number().int().nonnegative().optional().nullable(),
 });
 
@@ -109,7 +109,7 @@ const portalSubtaskCreateSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().optional().nullable(),
   status: z.string().trim().optional(),
-  dueDate: z.string().datetime().optional().nullable().or(z.literal("")),
+  dueDate: z.string().trim().optional().nullable(),
   estimateMinutes: z.number().int().nonnegative().optional().nullable(),
 });
 

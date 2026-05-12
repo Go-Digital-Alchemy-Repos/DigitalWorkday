@@ -1,62 +1,74 @@
 # Client Portal Permissions
 
+**Last Updated:** 2026-05-12
+
 ## Overview
-The client portal provides external client users with restricted access to project data, approvals, and messaging. Access is controlled through role-based permissions and token-based invitations.
 
-## Access Control
+The client portal gives external customer users access to the client-facing areas of their own account. Portal users are always scoped by `client_user_access.client_id`; they must never see data for another client account.
 
-### User Roles
-| Role | Portal Access | Admin Features |
-|------|--------------|----------------|
-| `super_user` | Full internal access | All CRM admin features |
-| `admin` | Full internal access | CRM management, invite clients |
-| `employee` | Internal access (scoped) | Limited CRM features |
-| `client` | Portal access only | View/respond to assigned items |
+The product now uses two customer-facing portal access levels:
 
-### Client Role Capabilities
-Client users can:
-- View dashboard with project/task statistics
-- Browse assigned projects and tasks
-- Review and respond to approval requests (approve or request changes)
-- Send and receive messages in client conversations
-- View client-visible files
+| Access Level | Stored Value | Purpose |
+|--------------|--------------|---------|
+| Customer Portal Admin | `portal_admin` | Full portal use plus portal-user administration and password control |
+| Contributor | `collaborator` | Full portal use except creating, editing, deleting, or resetting other portal users |
 
-Client users cannot:
-- Access internal workspace data
-- Create projects or tasks
-- View internal-only files
-- Access other clients' data
-- Modify approval requests after responding
+Legacy `viewer` records are treated as contributors so older accounts continue to work, but new UI flows should not offer `viewer`.
+
+## Capability Matrix
+
+| Area | Portal Admin | Contributor |
+|------|--------------|-------------|
+| Overview | View and edit account overview | View and edit account overview |
+| Contacts | Full CRUD; contacts also appear in tenant Client Contacts | Full CRUD; contacts also appear in tenant Client Contacts |
+| Projects and tasks | View, update, comment, and participate in visible projects/tasks/subtasks | Same |
+| Task comments | Can see own comments and comments where explicitly mentioned | Same |
+| Internal task comments | Hidden unless explicitly mentioned | Hidden unless explicitly mentioned |
+| Approvals | View and approve assigned approval requests | Same |
+| Portal Users | Create, invite, edit, revoke, and reset passwords | View only |
+| Asset Library | Full CRUD | Full CRUD |
+| Messages | Full client-facing messaging access | Full client-facing messaging access |
+| Support Center | Full client-facing support access | Full client-facing support access |
+| Service Requests | Full client-facing service request access | Full client-facing service request access |
+
+## Internal Data Boundaries
+
+- Portal users have application role `client`.
+- Tenant users remain responsible for internal-only areas: Divisions, Activity, Notes, tenant-only project management controls, and untagged internal comments.
+- A portal user can only load records tied to one of their accessible `client_user_access` records.
+- Task comments are filtered: a portal user sees comments they authored and comments where they are explicitly mentioned in `comment_mentions`.
+- Support tickets and service requests created by customers route to tenant-side processing views without exposing unrelated tenant data.
 
 ## Portal Routes
 
 | Route | Description | Auth Required |
 |-------|-------------|---------------|
-| `/portal` | Dashboard | Client role |
-| `/portal/projects` | Project list | Client role |
-| `/portal/projects/:id` | Project tasks | Client role |
-| `/portal/tasks` | Task list | Client role |
+| `/portal` | Customer account overview | Client role |
+| `/portal/contacts` | Client account contacts | Client role |
+| `/portal/projects` | Client projects | Client role |
+| `/portal/projects/:id` | Project task view | Client role |
 | `/portal/approvals` | Approval requests | Client role |
-| `/portal/messages` | Conversations | Client role |
+| `/portal/users` | Portal users list/admin | Client role; mutation requires `portal_admin` |
+| `/portal/assets` | Asset library | Client role |
+| `/portal/messages` | Client-facing messages | Client role |
+| `/portal/support` | Support Center | Client role |
+| `/portal/profile` | Customer profile and password management | Client role |
 
-## Invitation Flow
-1. Admin navigates to client detail page
-2. Admin creates portal invitation (email + access level)
-3. System generates invitation token
-4. Client receives invitation email with registration link
-5. Client registers and gains portal access
+## Invitation and Provisioning
 
-## Data Scoping
-- All portal queries are scoped to the client's `tenantId` and `clientId`
-- Projects visible only if client is assigned
-- Tasks visible only within assigned projects
-- Conversations visible only if client is a participant
-- Approval requests visible only if addressed to client
+Tenant admins and customer portal admins can create portal users in two ways:
 
-## Onboarding
-First-time portal users (no projects/tasks) see a "Getting Started" guide with:
-- View Projects card (link to `/portal/projects`)
-- Approvals card (link to `/portal/approvals`)
-- Messages card (link to `/portal/messages`)
+1. Send invite: creates a pending invite and emails a setup link.
+2. Direct provision: creates the portal user, assigns access, and sets a password immediately.
 
-Guide cards automatically hide once the client has active projects or tasks.
+Directly provisioned users must also appear in the tenant-side Portal Users view because both sides use the same `users` and `client_user_access` records.
+
+## Staging QA Checklist
+
+- Create a portal admin from a tenant client account and log in without invite email.
+- Confirm overview, contacts, projects, portal users, assets, messages, and support load.
+- Confirm a contributor can view portal users but cannot create, edit, revoke, or reset passwords.
+- Confirm a portal admin can create a contributor and another portal admin.
+- Confirm contacts created in portal appear in tenant Client Contacts.
+- Confirm project task comments remain hidden unless the portal user authored them or was mentioned.
+- Confirm support tickets created by a customer appear once in Support Center and can include rich text plus attachments.
