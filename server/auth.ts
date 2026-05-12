@@ -185,11 +185,23 @@ export function setupAuth(app: Express): void {
         }
         
         try {
-          // Super users don't need workspace access - they manage the platform
+          // Super users don't need workspace access - they manage the platform.
+          // Client portal users are scoped by client_user_access, not workspace_members.
           const isSuperUser = user.role === UserRole.SUPER_USER;
+          const isClientUser = user.role === UserRole.CLIENT;
           
           let workspaceId: string | undefined = undefined;
-          if (!isSuperUser) {
+          if (isClientUser) {
+            const clientAccess = await storage.getClientsForUser(user.id);
+            workspaceId = clientAccess[0]?.client.workspaceId || undefined;
+
+            if (!workspaceId) {
+              req.logout(() => {});
+              return res.status(403).json({
+                error: "No client portal access. Please contact your administrator."
+              });
+            }
+          } else if (!isSuperUser) {
             const workspaces = await storage.getWorkspacesByUser(user.id);
             workspaceId = workspaces.length > 0 ? workspaces[0].id : undefined;
             

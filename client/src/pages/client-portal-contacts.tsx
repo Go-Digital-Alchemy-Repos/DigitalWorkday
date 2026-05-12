@@ -3,13 +3,15 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ContactRound, Loader2, Plus, Trash2 } from "lucide-react";
+import { ContactRound, Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
 
 interface ClientInfo {
   id: string;
@@ -29,17 +31,30 @@ interface ClientContact {
   title: string | null;
   email: string | null;
   phone: string | null;
+  isPrimary: boolean;
+  notes: string | null;
 }
 
 function canEdit(accessLevel?: string) {
   return Boolean(accessLevel);
 }
 
+const emptyContactForm = {
+  firstName: "",
+  lastName: "",
+  title: "",
+  email: "",
+  phone: "",
+  isPrimary: false,
+  notes: "",
+};
+
 export default function ClientPortalContactsPage() {
   const { toast } = useToast();
   const [clientId, setClientId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ firstName: "", lastName: "", title: "", email: "", phone: "" });
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
+  const [form, setForm] = useState(emptyContactForm);
 
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ["/api/client-portal/dashboard"],
@@ -68,10 +83,29 @@ export default function ClientPortalContactsPage() {
       toast({ title: "Contact added" });
       queryClient.invalidateQueries({ queryKey: contactsQueryKey });
       setDialogOpen(false);
-      setForm({ firstName: "", lastName: "", title: "", email: "", phone: "" });
+      setEditingContact(null);
+      setForm(emptyContactForm);
     },
     onError: (error: Error) => {
       toast({ title: "Unable to add contact", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateContact = useMutation({
+    mutationFn: async () => {
+      if (!editingContact) return null;
+      const res = await apiRequest("PATCH", `/api/client-portal/clients/${clientId}/contacts/${editingContact.id}`, form);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Contact updated" });
+      queryClient.invalidateQueries({ queryKey: contactsQueryKey });
+      setDialogOpen(false);
+      setEditingContact(null);
+      setForm(emptyContactForm);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to update contact", description: error.message, variant: "destructive" });
     },
   });
 
@@ -87,6 +121,43 @@ export default function ClientPortalContactsPage() {
       toast({ title: "Unable to delete contact", description: error.message, variant: "destructive" });
     },
   });
+
+  const openCreateDialog = () => {
+    setEditingContact(null);
+    setForm(emptyContactForm);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (contact: ClientContact) => {
+    setEditingContact(contact);
+    setForm({
+      firstName: contact.firstName || "",
+      lastName: contact.lastName || "",
+      title: contact.title || "",
+      email: contact.email || "",
+      phone: contact.phone || "",
+      isPrimary: Boolean(contact.isPrimary),
+      notes: contact.notes || "",
+    });
+    setDialogOpen(true);
+  };
+
+  const closeDialog = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      setEditingContact(null);
+      setForm(emptyContactForm);
+    }
+  };
+
+  const savePending = createContact.isPending || updateContact.isPending;
+  const handleSave = () => {
+    if (editingContact) {
+      updateContact.mutate();
+    } else {
+      createContact.mutate();
+    }
+  };
 
   if (isLoading) {
     return (
@@ -123,7 +194,7 @@ export default function ClientPortalContactsPage() {
             </Select>
           )}
           {canEdit(selectedClient?.accessLevel) && (
-            <Button onClick={() => setDialogOpen(true)}>
+            <Button onClick={openCreateDialog}>
               <Plus className="h-4 w-4 mr-2" />
               Add Contact
             </Button>
@@ -143,22 +214,46 @@ export default function ClientPortalContactsPage() {
               {contacts.map(contact => (
                 <div key={contact.id} className="flex items-center justify-between gap-4 py-4">
                   <div className="min-w-0">
-                    <div className="font-medium">
-                      {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || "Unnamed contact"}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">
+                        {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || "Unnamed contact"}
+                      </span>
+                      {contact.isPrimary && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                          <Star className="h-3 w-3" />
+                          Primary
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground truncate">
                       {[contact.title, contact.email, contact.phone].filter(Boolean).join(" - ")}
                     </div>
+                    {contact.notes && (
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {contact.notes}
+                      </div>
+                    )}
                   </div>
                   {canEdit(selectedClient?.accessLevel) && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteContact.mutate(contact.id)}
-                      disabled={deleteContact.isPending}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(contact)}
+                        aria-label="Edit contact"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteContact.mutate(contact.id)}
+                        disabled={deleteContact.isPending}
+                        aria-label="Delete contact"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -169,11 +264,13 @@ export default function ClientPortalContactsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={closeDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Contact</DialogTitle>
-            <DialogDescription>Add a contact for this client account.</DialogDescription>
+            <DialogTitle>{editingContact ? "Edit Contact" : "Add Contact"}</DialogTitle>
+            <DialogDescription>
+              {editingContact ? "Update this client contact." : "Add a contact for this client account."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -198,12 +295,27 @@ export default function ClientPortalContactsPage() {
               <Label>Phone</Label>
               <Input value={form.phone} onChange={event => setForm(prev => ({ ...prev, phone: event.target.value }))} />
             </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={form.notes}
+                onChange={event => setForm(prev => ({ ...prev, notes: event.target.value }))}
+                rows={3}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={form.isPrimary}
+                onCheckedChange={checked => setForm(prev => ({ ...prev, isPrimary: checked === true }))}
+              />
+              Primary contact
+            </label>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => createContact.mutate()} disabled={createContact.isPending}>
-              {createContact.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Add Contact
+            <Button variant="outline" onClick={() => closeDialog(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={savePending}>
+              {savePending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingContact ? "Save Contact" : "Add Contact"}
             </Button>
           </DialogFooter>
         </DialogContent>

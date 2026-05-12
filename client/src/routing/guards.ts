@@ -95,6 +95,10 @@ export function TenantRouteGuard({ component: Component }: { component: React.Co
     return createElement(Redirect, { to: "/super-admin/dashboard" });
   }
 
+  if (user?.role === "client") {
+    return createElement(Redirect, { to: "/portal" });
+  }
+
   return createElement(Component);
 }
 
@@ -131,6 +135,10 @@ export function TenantAdminRouteGuard({ component: Component }: { component: Rea
       setLastAttemptedTenantUrl(location);
     }
     return createElement(Redirect, { to: "/super-admin/dashboard" });
+  }
+
+  if (user?.role === "client") {
+    return createElement(Redirect, { to: "/portal" });
   }
 
   if (!hasTenantAdminAccess(user?.role)) {

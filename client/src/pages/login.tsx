@@ -201,7 +201,8 @@ export default function LoginPage() {
         description: "You have been logged in successfully",
       });
       const isSuperUser = result.user?.role === UserRole.SUPER_USER;
-      setLocation(isSuperUser ? "/super-admin/dashboard" : "/");
+      const isClientUser = result.user?.role === UserRole.CLIENT;
+      setLocation(isSuperUser ? "/super-admin/dashboard" : isClientUser ? "/portal" : "/");
     } else {
       toast({
         title: "Login failed",
