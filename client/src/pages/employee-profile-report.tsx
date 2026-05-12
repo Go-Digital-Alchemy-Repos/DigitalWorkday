@@ -607,7 +607,7 @@ export default function EmployeeProfileReportPage() {
 
   if (error) {
     return (
-      <div className="container max-w-7xl p-3 sm:p-4 lg:p-6">
+      <div className="w-full p-3 sm:p-4 lg:p-6">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -653,7 +653,7 @@ export default function EmployeeProfileReportPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
-        <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
+        <div className="w-full p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Link href={reportBasePath}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
@@ -713,7 +713,7 @@ export default function EmployeeProfileReportPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="container max-w-7xl space-y-6">
+        <div className="w-full space-y-6">
           {isLoading ? (
             <>
               <Skeleton className="h-[120px] w-full" />
@@ -1173,7 +1173,7 @@ export default function EmployeeProfileReportPage() {
               </div>
             </>
           ) : (
-            <div className="container max-w-7xl p-3 sm:p-4 lg:p-6 text-center">
+            <div className="w-full p-3 sm:p-4 lg:p-6 text-center">
               <p>Employee profile not found.</p>
             </div>
           )}

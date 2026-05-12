@@ -876,12 +876,12 @@ export default function MyTasks() {
       <div className="flex-1 overflow-auto">
         <div className="space-y-6 px-4 py-5 sm:px-5 lg:px-8 md:py-6">
           {isLoading ? (
-            <div className="mx-auto max-w-5xl space-y-4">
+            <div className="w-full space-y-4">
               <LoadingState type="list" rows={6} />
               <LoadingState type="list" rows={4} />
             </div>
           ) : totalTasks > 0 ? (
-            <div className="mx-auto max-w-5xl space-y-5">
+            <div className="w-full space-y-5">
               <SurfacePanel tone="subtle" className="space-y-4">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scheduled Tasks</h2>
                 {leftColumn.map((section) => (

@@ -526,7 +526,7 @@ export default function ReportsPage({ embedded: _embedded }: { embedded?: boolea
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-7xl p-3 sm:p-4 lg:p-6">
+      <div className="w-full p-3 sm:p-4 lg:p-6">
         <div className="mb-4 sm:mb-6">
           <div className="flex items-center gap-3 mb-3 sm:mb-4">
             <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
