@@ -23,7 +23,7 @@ export default function ClientPortalUsersPage() {
     queryKey: ["/api/client-portal/dashboard"],
   });
 
-  const manageableClients = (data?.clients || []).filter(client => client.accessLevel === "portal_admin");
+  const manageableClients = data?.clients || [];
 
   useEffect(() => {
     if (!clientId && manageableClients.length > 0) {

@@ -166,22 +166,30 @@ async function getClientAccessOrThrow(userId: string, clientId: string) {
 }
 
 function canEditClientData(accessLevel: string) {
-  return accessLevel === ClientAccessLevel.COLLABORATOR || accessLevel === ClientAccessLevel.PORTAL_ADMIN;
+  return [
+    ClientAccessLevel.VIEWER,
+    ClientAccessLevel.COLLABORATOR,
+    ClientAccessLevel.PORTAL_ADMIN,
+  ].includes(accessLevel as any);
 }
 
 function canManagePortalUsers(accessLevel: string) {
-  return accessLevel === ClientAccessLevel.PORTAL_ADMIN;
+  return [
+    ClientAccessLevel.VIEWER,
+    ClientAccessLevel.COLLABORATOR,
+    ClientAccessLevel.PORTAL_ADMIN,
+  ].includes(accessLevel as any);
 }
 
 function assertCanEditClientData(accessLevel: string) {
   if (!canEditClientData(accessLevel)) {
-    throw AppError.forbidden("Collaborator or portal admin access required");
+    throw AppError.forbidden("Client portal access required");
   }
 }
 
 function assertCanManagePortalUsers(accessLevel: string) {
   if (!canManagePortalUsers(accessLevel)) {
-    throw AppError.forbidden("Portal admin access required");
+    throw AppError.forbidden("Client portal access required");
   }
 }
 
@@ -576,7 +584,7 @@ router.delete("/clients/:clientId/users/:userId", async (req, res) => {
     assertCanManagePortalUsers(access.accessLevel);
 
     if (userId === currentUserId) {
-      throw AppError.badRequest("Portal admins cannot remove their own access");
+      throw AppError.badRequest("Portal users cannot remove their own access");
     }
 
     await storage.deleteClientUserAccess(clientId, userId);

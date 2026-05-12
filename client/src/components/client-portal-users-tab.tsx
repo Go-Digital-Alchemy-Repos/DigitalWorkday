@@ -546,7 +546,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                             <SelectItem value="viewer">
                               <div className="flex items-center gap-2">
                                 <Eye className="h-4 w-4" />
-                                <span>Viewer - View projects and tasks only</span>
+                                <span>Viewer - Standard portal access</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="collaborator">
@@ -564,7 +564,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Portal admins can manage portal users. Collaborators can update client-facing areas. Viewers are mostly read-only.
+                          All portal users can manage client-facing areas. Access labels are retained for account organization.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -670,7 +670,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                             <SelectItem value="viewer">
                               <div className="flex items-center gap-2">
                                 <Eye className="h-4 w-4" />
-                                <span>Viewer - View projects and tasks only</span>
+                                <span>Viewer - Standard portal access</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="collaborator">
@@ -688,7 +688,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false }: ClientPor
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Portal admins can manage portal users. Collaborators can update client-facing areas. Viewers are mostly read-only.
+                          All portal users can manage client-facing areas. Access labels are retained for account organization.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

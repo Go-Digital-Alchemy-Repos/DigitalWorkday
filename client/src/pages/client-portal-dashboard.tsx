@@ -150,7 +150,7 @@ export default function ClientPortalDashboard() {
   });
   const clients = data?.clients || [];
   const selectedClient = clients.find(client => client.id === selectedClientId);
-  const canEditOverview = selectedClient?.accessLevel === "collaborator" || selectedClient?.accessLevel === "portal_admin";
+  const canEditOverview = Boolean(selectedClient);
 
   useEffect(() => {
     if (!selectedClientId && clients.length > 0) {

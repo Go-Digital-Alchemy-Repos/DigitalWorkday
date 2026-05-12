@@ -32,7 +32,7 @@ interface ClientContact {
 }
 
 function canEdit(accessLevel?: string) {
-  return accessLevel === "collaborator" || accessLevel === "portal_admin";
+  return Boolean(accessLevel);
 }
 
 export default function ClientPortalContactsPage() {
