@@ -164,7 +164,7 @@ export function MobileNavBar() {
       items: [
         { title: "Home", href: "/", icon: Home, color: "text-sky-500" },
         { title: "My Tasks", href: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
-        { title: "Notifications", href: "/notifications", icon: Inbox, color: "text-blue-500" },
+        { title: "Notification Center", href: "/notifications", icon: Inbox, color: "text-blue-500" },
         { title: "Projects", href: "/projects", icon: FolderKanban, color: "text-amber-500" },
         { title: "PM Dashboard", href: "/pm-dashboard", icon: BarChart3, color: "text-cyan-500" },
         { title: "Clients", href: "/clients", icon: Briefcase, color: "text-indigo-500" },

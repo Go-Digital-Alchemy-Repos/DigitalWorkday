@@ -434,7 +434,7 @@ export default function NotificationsInboxPage() {
               <Inbox className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Notification Inbox</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Notification Center</h1>
               <p className="text-sm text-muted-foreground">
                 Review, open, mark read, or clear system notifications.
               </p>
@@ -461,7 +461,7 @@ export default function NotificationsInboxPage() {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <SurfacePanel padding="none" className="overflow-hidden">
             <div className="border-b p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-3">
                 <Tabs value={filterTab} onValueChange={(value) => { setFilterTab(value as FilterTab); setSelectedIds(new Set()); }}>
                   <TabsList className="h-auto flex-wrap justify-start">
                     {FILTER_TABS.map((tab) => (
@@ -471,7 +471,7 @@ export default function NotificationsInboxPage() {
                     ))}
                   </TabsList>
                 </Tabs>
-                <div className="relative w-full lg:max-w-sm">
+                <div className="relative w-full max-w-2xl">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={search}
