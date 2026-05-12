@@ -2423,7 +2423,6 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                   </SelectContent>
                 </Select>
               </div>
-<<<<<<< Updated upstream
               <div className="flex items-center gap-1.5 min-w-[130px]">
                 <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select value={newType} onValueChange={setNewType}>
@@ -2437,8 +2436,6 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                   </SelectContent>
                 </Select>
               </div>
-=======
->>>>>>> Stashed changes
               <div className="flex gap-2 ml-auto">
                 <Button variant="outline" size="sm" onClick={() => setShowNewConvo(false)} data-testid="button-cancel-new-convo">
                   Cancel

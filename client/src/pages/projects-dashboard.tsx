@@ -324,7 +324,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
 
   if (isPmDashboard && !canAccessPmDashboard) {
     return (
-      <PageShell>
+      <PageShell className="max-w-7xl mx-auto">
         <ErrorState
           error={new Error("Project Manager access required")}
           title="Access denied"
@@ -335,7 +335,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
 
   if (projectsLoading) {
     return (
-      <PageShell>
+      <PageShell className="max-w-7xl mx-auto">
         <PageHeader
           title={dashboardTitle}
           subtitle={dashboardSubtitle}
@@ -348,7 +348,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
 
   if (projectsError) {
     return (
-      <PageShell>
+      <PageShell className="max-w-7xl mx-auto">
         <PageHeader
           title={dashboardTitle}
           subtitle={dashboardSubtitle}
@@ -364,7 +364,7 @@ export default function ProjectsDashboard({ variant = "projects" }: ProjectsDash
   }
 
   return (
-    <PageShell>
+    <PageShell className="max-w-7xl mx-auto">
       <PageHeader
         title={dashboardTitle}
         subtitle={dashboardSubtitle}
