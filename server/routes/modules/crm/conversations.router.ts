@@ -17,6 +17,11 @@ import {
   conversationSlaPolicies,
   ConversationPriority,
   ConversationType,
+  SupportTicketAuthorType,
+  SupportTicketCategory,
+  SupportTicketEventType,
+  SupportTicketMessageVisibility,
+  SupportTicketSource,
   tenantSettings,
   DEFAULT_MESSAGE_PERMISSIONS,
   messagePermissionsSchema,
@@ -548,8 +553,52 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
 
     const userId = getCurrentUserId(req);
 
-    let assigneeId = data.assignedToUserId || userId;
-    if (!data.assignedToUserId) {
+    if (data.type === ConversationType.SUPPORT_TICKET) {
+      const ticket = await storage.createSupportTicket({
+        tenantId,
+        clientId,
+        createdByUserId: userId,
+        createdByPortalUserId: null,
+        title: data.subject,
+        description: data.initialMessage,
+        priority: data.priority,
+        category: SupportTicketCategory.SUPPORT,
+        source: SupportTicketSource.TENANT,
+        assignedToUserId: null,
+        metadataJson: {
+          createdFrom: "client_360_messages",
+          projectId: data.projectId || null,
+        },
+      });
+
+      await storage.createSupportTicketMessage({
+        tenantId,
+        ticketId: ticket.id,
+        authorUserId: userId,
+        authorPortalUserId: null,
+        authorType: SupportTicketAuthorType.TENANT_USER,
+        bodyText: data.initialMessage,
+        visibility: SupportTicketMessageVisibility.PUBLIC,
+      });
+
+      await storage.createSupportTicketEvent({
+        tenantId,
+        ticketId: ticket.id,
+        actorType: SupportTicketAuthorType.TENANT_USER,
+        actorUserId: userId,
+        eventType: SupportTicketEventType.CREATED,
+        payloadJson: { title: ticket.title },
+      });
+
+      return res.status(201).json({
+        id: ticket.id,
+        kind: "support_ticket",
+        ticket,
+      });
+    }
+
+    let assigneeId: string | null = data.type === ConversationType.SERVICE_REQUEST ? null : data.assignedToUserId || userId;
+    if (data.type === ConversationType.EVERYDAY && !data.assignedToUserId) {
       const [settings] = await db.select({ defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId })
         .from(tenantSettings)
         .where(eq(tenantSettings.tenantId, tenantId))
@@ -559,7 +608,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       }
     }
 
-    if (assigneeId !== userId) {
+    if (assigneeId && assigneeId !== userId) {
       const [targetUser] = await db.select({ id: users.id, tenantId: users.tenantId, role: users.role })
         .from(users)
         .where(eq(users.id, assigneeId))
@@ -590,7 +639,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       bodyText: data.initialMessage,
     });
 
-    if (assigneeId !== userId) {
+    if (assigneeId && assigneeId !== userId) {
       try {
         const notification = await storage.createNotification({
           tenantId,
@@ -616,7 +665,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       });
     }
 
-    res.status(201).json(conversation);
+    res.status(201).json({ ...conversation, kind: "conversation" });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/crm/clients/:clientId/conversations", req);
   }

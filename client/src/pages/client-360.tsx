@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useRoute, Link } from "wouter";
+import { useLocation, useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1370,6 +1370,7 @@ interface EffectivePermissions {
 
 function MessagesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const { user: authUser } = useAuth();
   const isAdmin = hasTenantAdminAccess(authUser?.role);
 
@@ -1501,10 +1502,14 @@ function MessagesTab({ clientId }: { clientId: string }) {
       setNewAssignee("__self__");
       setNewPriority("normal");
       setNewType("everyday");
-      setSelectedConvoId(convo.id);
+      if (convo.kind === "support_ticket") {
+        navigate(`/support/${convo.id}`);
+      } else {
+        setSelectedConvoId(convo.id);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations", "counts"] });
-      toast({ title: "Conversation started" });
+      toast({ title: convo.kind === "support_ticket" ? "Support ticket created" : newType === "service_request" ? "Service request submitted" : "Conversation started" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -1630,7 +1635,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const handleCreateConvo = () => {
     if (!newSubject.trim() || !newMessage.trim()) return;
     const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority, type: newType };
-    if (newAssignee && newAssignee !== "__self__") {
+    if (newType === "everyday" && newAssignee && newAssignee !== "__self__") {
       payload.assignedToUserId = newAssignee;
     }
     createMutation.mutate(payload);
@@ -2105,6 +2110,38 @@ function MessagesTab({ clientId }: { clientId: string }) {
       {showNewConvo && (
         <Card>
           <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Select value={newType} onValueChange={(value) => {
+                setNewType(value);
+                setNewAssignee("__self__");
+              }}>
+                <SelectTrigger className="flex-1" data-testid="select-new-convo-type">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="everyday">Conversation</SelectItem>
+                  <SelectItem value="service_request">Service Request</SelectItem>
+                  <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {newType === "everyday" && (
+              <div className="flex items-center gap-1.5">
+                <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Select value={newAssignee} onValueChange={setNewAssignee}>
+                  <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
+                    <SelectValue placeholder="Select recipient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__self__">Me</SelectItem>
+                    {staffUsers.map((u: any) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Input
               value={newSubject}
               onChange={(e) => setNewSubject(e.target.value)}
@@ -2119,20 +2156,6 @@ function MessagesTab({ clientId }: { clientId: string }) {
               data-testid="input-new-convo-message"
             />
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 flex-1 min-w-[160px]">
-                <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Select value={newAssignee} onValueChange={setNewAssignee}>
-                  <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
-                    <SelectValue placeholder="Assign to..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__self__">Assign to me</SelectItem>
-                    {staffUsers.map((u: any) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="flex items-center gap-1.5 min-w-[130px]">
                 <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select value={newPriority} onValueChange={setNewPriority}>
@@ -2144,19 +2167,6 @@ function MessagesTab({ clientId }: { clientId: string }) {
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="high">High</SelectItem>
                     <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-1.5 min-w-[130px]">
-                <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Select value={newType} onValueChange={setNewType}>
-                  <SelectTrigger className="flex-1" data-testid="select-new-convo-type">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="everyday">Conversation</SelectItem>
-                    <SelectItem value="service_request">Service Request</SelectItem>
-                    <SelectItem value="support_ticket">Support Ticket</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
