@@ -109,8 +109,8 @@ export default function SupportTickets() {
       <div className="w-full px-4 py-6 space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-semibold" data-testid="text-support-console-title">Support Console</h1>
-            <p className="text-sm text-muted-foreground">Manage client support tickets and work orders</p>
+            <h1 className="text-xl font-semibold" data-testid="text-support-console-title">Support Center</h1>
+            <p className="text-sm text-muted-foreground">Manage client support tickets</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/support/templates">

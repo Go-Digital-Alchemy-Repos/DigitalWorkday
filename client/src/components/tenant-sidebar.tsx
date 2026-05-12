@@ -26,6 +26,10 @@ import {
   Pin,
   GripVertical,
   LifeBuoy,
+<<<<<<< Updated upstream
+=======
+  ClipboardList,
+>>>>>>> Stashed changes
   Inbox,
 } from "lucide-react";
 import {

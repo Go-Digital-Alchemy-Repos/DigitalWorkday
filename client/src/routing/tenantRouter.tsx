@@ -58,6 +58,7 @@ const CalendarPage = lazy(trackChunkLoad("Calendar", () => import("@/pages/calen
 const MyTimePage = lazy(trackChunkLoad("MyTime", () => import("@/pages/my-time")));
 const MyCalendarPage = lazy(trackChunkLoad("MyCalendar", () => import("@/pages/my-calendar")));
 const TeamDetailPage = lazy(trackChunkLoad("TeamDetail", () => import("@/pages/team-detail")));
+const ServiceRequestsPage = lazy(trackChunkLoad("ServiceRequests", () => import("@/pages/service-requests")));
 const SupportTickets = lazy(trackChunkLoad("SupportTickets", () => import("@/pages/support-tickets")));
 const SupportTicketDetail = lazy(trackChunkLoad("SupportTicketDetail", () => import("@/pages/support-ticket-detail")));
 const SupportTemplates = lazy(trackChunkLoad("SupportTemplates", () => import("@/pages/support-templates")));
@@ -155,6 +156,9 @@ function TenantRouter() {
         </Route>
         <Route path="/teams/:id">
           {() => <TenantRouteGuard component={TeamDetailPage} />}
+        </Route>
+        <Route path="/service-requests">
+          {() => <TenantRouteGuard component={ServiceRequestsPage} />}
         </Route>
         <Route path="/support">
           {() => <TenantRouteGuard component={SupportTickets} />}

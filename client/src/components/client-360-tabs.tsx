@@ -1669,8 +1669,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
     queryKey: ["/api/tenant/users"],
   });
 
-  const staffUsers = useMemo(() =>
-    tenantUsers.filter((u: any) => u.role !== "client"),
+  const recipientUsers = useMemo(() =>
+    tenantUsers.filter((u: any) => ["admin", "project_manager", "super_user"].includes(u.role)),
   [tenantUsers]);
 
   const { data: convoResponse, isLoading } = useQuery<{ conversations: any[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>({
@@ -1731,21 +1731,41 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; initialMessage: string; assignedToUserId?: string; priority?: string }) => {
+    mutationFn: async (data: { subject: string; initialMessage: string; assignedToUserId?: string; priority?: string; type?: string }) => {
+      if (data.type === "support_ticket") {
+        const res = await apiRequest("POST", "/api/v1/support/tickets", {
+          clientId,
+          title: data.subject,
+          description: data.initialMessage,
+          priority: data.priority,
+          category: "support",
+        });
+        return { kind: "support_ticket", record: await res.json() };
+      }
+
       const res = await apiRequest("POST", `/api/crm/clients/${clientId}/conversations`, data);
-      return res.json();
+      return { kind: data.type === "service_request" ? "service_request" : "conversation", record: await res.json() };
     },
-    onSuccess: (convo: any) => {
+    onSuccess: (result: any) => {
       setShowNewConvo(false);
       setNewSubject("");
       setNewMessage("");
       setNewAssignee("__self__");
       setNewPriority("normal");
       setNewType("everyday");
-      setSelectedConvoId(convo.id);
+      if (result.kind !== "support_ticket") {
+        setSelectedConvoId(result.record.id);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations", "counts"] });
-      toast({ title: "Conversation started" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets"] });
+      toast({
+        title: result.kind === "support_ticket"
+          ? "Support ticket created"
+          : result.kind === "service_request"
+            ? "Service request submitted"
+            : "Conversation started",
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -1871,7 +1891,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   const handleCreateConvo = () => {
     if (!newSubject.trim() || !newMessage.trim()) return;
     const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority, type: newType };
-    if (newAssignee && newAssignee !== "__self__") {
+    if (newType === "everyday" && newAssignee && newAssignee !== "__self__") {
       payload.assignedToUserId = newAssignee;
     }
     createMutation.mutate(payload);
@@ -1940,7 +1960,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Unassigned</SelectItem>
-                  {staffUsers.map((u: any) => (
+                  {recipientUsers.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2266,7 +2286,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                   <SelectItem value="all">All assignees</SelectItem>
                   <SelectItem value="me">Assigned to me</SelectItem>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {staffUsers.map((u: any) => (
+                  {recipientUsers.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2346,6 +2366,19 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       {showNewConvo && (
         <Card>
           <CardContent className="p-4 space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Message Type</label>
+              <Select value={newType} onValueChange={setNewType}>
+                <SelectTrigger data-testid="select-new-convo-type">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="everyday">Conversation</SelectItem>
+                  <SelectItem value="service_request">Service Request</SelectItem>
+                  <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Input
               value={newSubject}
               onChange={(e) => setNewSubject(e.target.value)}
@@ -2360,20 +2393,22 @@ export function MessagesTab({ clientId }: { clientId: string }) {
               data-testid="input-new-convo-message"
             />
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 flex-1 min-w-[160px]">
-                <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Select value={newAssignee} onValueChange={setNewAssignee}>
-                  <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
-                    <SelectValue placeholder="Assign to..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__self__">Assign to me</SelectItem>
-                    {staffUsers.map((u: any) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {newType === "everyday" && (
+                <div className="flex items-center gap-1.5 flex-1 min-w-[160px]">
+                  <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Select value={newAssignee} onValueChange={setNewAssignee}>
+                    <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
+                      <SelectValue placeholder="Recipient..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__self__">Assign to me</SelectItem>
+                      {recipientUsers.map((u: any) => (
+                        <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-1.5 min-w-[130px]">
                 <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select value={newPriority} onValueChange={setNewPriority}>
@@ -2388,6 +2423,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+<<<<<<< Updated upstream
               <div className="flex items-center gap-1.5 min-w-[130px]">
                 <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select value={newType} onValueChange={setNewType}>
@@ -2401,6 +2437,8 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+=======
+>>>>>>> Stashed changes
               <div className="flex gap-2 ml-auto">
                 <Button variant="outline" size="sm" onClick={() => setShowNewConvo(false)} data-testid="button-cancel-new-convo">
                   Cancel

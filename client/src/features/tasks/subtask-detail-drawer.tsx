@@ -142,6 +142,7 @@ interface SubtaskDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate?: (subtaskId: string, data: any) => void;
+  onCompletionChange?: (subtaskId: string, completed: boolean) => void;
   onBack?: () => void;
   availableUsers?: User[];
 }
@@ -154,6 +155,7 @@ export function SubtaskDetailDrawer({
   open,
   onOpenChange,
   onUpdate,
+  onCompletionChange,
   onBack,
   availableUsers = [],
 }: SubtaskDetailDrawerProps) {
@@ -390,6 +392,9 @@ export function SubtaskDetailDrawer({
         title: completed ? "Subtask completed" : "Subtask reopened",
         description: completed ? "Great work!" : "Subtask is now active again"
       });
+      if (subtask) {
+        onCompletionChange?.(subtask.id, completed);
+      }
       if (completed) {
         onOpenChange(false);
       }

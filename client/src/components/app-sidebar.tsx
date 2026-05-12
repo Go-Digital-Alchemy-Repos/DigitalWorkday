@@ -30,6 +30,7 @@ import {
   CalendarClock,
   Pin,
   Inbox,
+  LifeBuoy,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -69,6 +70,8 @@ const mainNavItems = [
   { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
   { title: "My Time", url: "/my-time", icon: Clock, color: "text-rose-500" },
   { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
+  { title: "Service Requests", url: "/service-requests", icon: Wrench, color: "text-lime-600", adminOnly: true },
+  { title: "Support Center", url: "/support", icon: LifeBuoy, color: "text-orange-500" },
 ];
 
 export function AppSidebar() {

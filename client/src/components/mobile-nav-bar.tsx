@@ -182,7 +182,12 @@ export function MobileNavBar() {
         { title: "Settings", href: "/settings", icon: Settings, matchFn: (loc) => loc.startsWith("/settings") },
         { title: "User Manager", href: "/user-manager", icon: Users },
         { title: "Templates", href: "/templates", icon: LayoutTemplate },
+<<<<<<< Updated upstream
         { title: "Support", href: "/support", icon: Headphones, matchFn: (loc) => loc.startsWith("/support") },
+=======
+        { title: "Service Requests", href: "/service-requests", icon: Wrench, matchFn: (loc) => loc.startsWith("/service-requests") },
+        { title: "Support Center", href: "/support", icon: Headphones, matchFn: (loc) => loc.startsWith("/support") },
+>>>>>>> Stashed changes
       ],
     },
     {

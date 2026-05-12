@@ -452,6 +452,137 @@ router.get("/crm/clients/:clientId/conversations/counts", requireAuth, async (re
   }
 });
 
+router.get("/crm/service-requests", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (!hasTenantAdminAccess(user.role)) {
+      return sendError(res, AppError.forbidden("Only admins and project managers can view service requests"), req);
+    }
+
+    const search = (req.query.search as string || "").trim();
+    const status = req.query.status as string | undefined;
+    const priority = req.query.priority as string | undefined;
+    const assignedFilter = req.query.assigned as string | undefined;
+    const sort = req.query.sort as string | undefined;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+
+    const conditions: any[] = [
+      eq(clientConversations.tenantId, tenantId),
+      eq(clientConversations.type, ConversationType.SERVICE_REQUEST),
+      isNull(clientConversations.mergedIntoId),
+    ];
+
+    if (status === "open") conditions.push(isNull(clientConversations.closedAt));
+    if (status === "closed") conditions.push(isNotNull(clientConversations.closedAt));
+    if (priority && ["low", "normal", "high", "urgent"].includes(priority)) {
+      conditions.push(eq(clientConversations.priority, priority));
+    }
+    if (assignedFilter === "me") {
+      conditions.push(eq(clientConversations.assignedToUserId, user.id));
+    } else if (assignedFilter === "unassigned") {
+      conditions.push(isNull(clientConversations.assignedToUserId));
+    } else if (assignedFilter && assignedFilter !== "all") {
+      conditions.push(eq(clientConversations.assignedToUserId, assignedFilter));
+    }
+    if (search) {
+      const searchCond = buildSearchConditions(search, tenantId);
+      if (searchCond) conditions.push(searchCond);
+    }
+
+    const orderBy = getOrderBy(sort);
+    const [results, totalResult] = await Promise.all([
+      db.select({
+        conversation: clientConversations,
+        creatorName: users.name,
+        creatorEmail: users.email,
+        creatorRole: users.role,
+        clientName: clients.companyName,
+        clientDisplayName: clients.displayName,
+      })
+        .from(clientConversations)
+        .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
+        .leftJoin(clients, eq(clientConversations.clientId, clients.id))
+        .where(and(...conditions))
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset),
+
+      db.select({ value: count() })
+        .from(clientConversations)
+        .where(and(...conditions)),
+    ]);
+
+    const convoIds = results.map(r => r.conversation.id);
+    const [msgCounts, lastMsgs, assigneeRows] = await Promise.all([
+      convoIds.length > 0
+        ? db.select({ conversationId: clientMessages.conversationId, value: count() })
+            .from(clientMessages)
+            .where(inArray(clientMessages.conversationId, convoIds))
+            .groupBy(clientMessages.conversationId)
+        : Promise.resolve([]),
+      convoIds.length > 0
+        ? db.execute(dsql`
+            SELECT DISTINCT ON (cm.conversation_id)
+              cm.conversation_id,
+              cm.body_text,
+              cm.created_at,
+              u.name as author_name
+            FROM client_messages cm
+            LEFT JOIN users u ON cm.author_user_id = u.id
+            WHERE cm.conversation_id IN (${dsql.join(convoIds.map(id => dsql`${id}`), dsql`, `)})
+            ORDER BY cm.conversation_id, cm.created_at DESC
+          `)
+        : Promise.resolve({ rows: [] }),
+      convoIds.length > 0
+        ? (() => {
+            const assigneeUserIds = results
+              .map(r => r.conversation.assignedToUserId)
+              .filter((id): id is string => !!id);
+            if (assigneeUserIds.length === 0) return Promise.resolve([]);
+            return db.select({ id: users.id, name: users.name, email: users.email })
+              .from(users)
+              .where(and(inArray(users.id, assigneeUserIds), eq(users.tenantId, tenantId)));
+          })()
+        : Promise.resolve([]),
+    ]);
+
+    const countMap = new Map((msgCounts as any[]).map(r => [r.conversationId, Number(r.value)]));
+    const lastMsgMap = new Map((lastMsgs.rows as any[]).map(r => [r.conversation_id, {
+      bodyText: r.body_text,
+      createdAt: r.created_at,
+      authorName: r.author_name,
+    }]));
+    const assigneeMap = new Map((assigneeRows as any[]).map(r => [r.id, r]));
+
+    const serviceRequests = results.map((r) => {
+      const assignee = r.conversation.assignedToUserId ? assigneeMap.get(r.conversation.assignedToUserId) : null;
+      return {
+        ...r.conversation,
+        clientName: r.clientDisplayName || r.clientName || "Unknown client",
+        creatorName: r.creatorName || r.creatorEmail || "Unknown",
+        creatorRole: r.creatorRole,
+        assigneeName: assignee?.name || assignee?.email || null,
+        messageCount: countMap.get(r.conversation.id) || 0,
+        lastMessage: lastMsgMap.get(r.conversation.id) || null,
+        href: buildClientConversationHref(r.conversation.clientId, r.conversation.id),
+      };
+    });
+
+    const total = Number(totalResult[0]?.value || 0);
+    res.json({
+      serviceRequests,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/service-requests", req);
+  }
+});
+
 router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRateLimiter, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);

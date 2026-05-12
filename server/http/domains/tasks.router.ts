@@ -441,12 +441,26 @@ async function getOverdueDashboardItems(tenantId: string): Promise<ReviewQueueDa
       LEFT JOIN task_assignees ta ON ta.task_id = t.id
       LEFT JOIN users u ON u.id = ta.user_id
       WHERE p.tenant_id = ${tenantId}
-        AND p.status != 'archived'
+        AND COALESCE(p.status, 'active') NOT IN ('archived', 'completed', 'complete')
         AND t.archived_at IS NULL
         AND t.parent_task_id IS NULL
         AND t.due_date IS NOT NULL
         AND t.due_date < NOW()
-        AND COALESCE(t.status, 'todo') NOT IN ('done', 'completed')
+        AND COALESCE(t.status, 'todo') NOT IN ('done', 'completed', 'complete', 'cancelled', 'archived')
+        AND NOT (
+          EXISTS (
+            SELECT 1
+            FROM subtasks child
+            WHERE child.task_id = t.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM subtasks child
+            WHERE child.task_id = t.id
+              AND child.completed = false
+              AND COALESCE(child.status, 'todo') NOT IN ('done', 'completed', 'complete', 'cancelled', 'archived')
+          )
+        )
       GROUP BY t.id, p.id, c.id
       ORDER BY t.due_date ASC
       LIMIT 20
@@ -484,12 +498,13 @@ async function getOverdueDashboardItems(tenantId: string): Promise<ReviewQueueDa
       LEFT JOIN subtask_assignees sa ON sa.subtask_id = st.id
       LEFT JOIN users u ON u.id = sa.user_id
       WHERE p.tenant_id = ${tenantId}
-        AND p.status != 'archived'
+        AND COALESCE(p.status, 'active') NOT IN ('archived', 'completed', 'complete')
         AND t.archived_at IS NULL
+        AND COALESCE(t.status, 'todo') NOT IN ('done', 'completed', 'complete', 'cancelled', 'archived')
         AND st.due_date IS NOT NULL
         AND st.due_date < NOW()
         AND st.completed = false
-        AND COALESCE(st.status, 'todo') NOT IN ('done', 'completed')
+        AND COALESCE(st.status, 'todo') NOT IN ('done', 'completed', 'complete', 'cancelled', 'archived')
       GROUP BY st.id, t.id, p.id, c.id
       ORDER BY st.due_date ASC
       LIMIT 20
