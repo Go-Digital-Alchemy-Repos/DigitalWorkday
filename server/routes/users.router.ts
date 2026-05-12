@@ -31,6 +31,7 @@ import {
 } from "@shared/schema";
 import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
+import { isAgreementEnforcementEnabled } from "../middleware/agreementEnforcement";
 
 const router = createApiRouter({ policy: "authTenant" });
 
@@ -853,6 +854,16 @@ router.get("/v1/me/agreement/status", requireAuth, async (req, res) => {
   try {
     const user = req.user as any;
     const tenantId = user.tenantId;
+
+    if (!isAgreementEnforcementEnabled()) {
+      return res.json({
+        tenantId: tenantId || null,
+        requiresAcceptance: false,
+        activeAgreement: null,
+        accepted: true,
+        acceptedAt: null,
+      });
+    }
 
     if (!tenantId) {
       return res.json({
