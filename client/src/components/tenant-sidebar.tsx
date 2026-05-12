@@ -26,6 +26,7 @@ import {
   Pin,
   GripVertical,
   LifeBuoy,
+  Inbox,
 } from "lucide-react";
 import {
   DndContext,
@@ -157,6 +158,7 @@ function SortableProjectItem({ project, isActive, clientName, divisionName }: So
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home, color: "text-sky-500" },
   { title: "My Tasks", url: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
+  { title: "Notifications", url: "/notifications", icon: Inbox, color: "text-blue-500" },
   { title: "My Time", url: "/my-time", icon: Clock, color: "text-rose-500" },
   // { title: "My Calendar", url: "/my-calendar", icon: CalendarDays },
   { title: "Projects", url: "/projects", icon: FolderKanban, color: "text-amber-500" },
@@ -177,6 +179,12 @@ export function TenantSidebar() {
     queryKey: ["/api/v1/chat/unread-count"],
     refetchInterval: 30000,
   });
+
+  const { data: notificationUnreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/notifications/unread-count"],
+    refetchInterval: 30000,
+  });
+  const notificationUnreadCount = notificationUnreadData?.count ?? 0;
 
   const PROJECTS_PAGE_SIZE = 10;
   const { user } = useAuth();
@@ -453,6 +461,15 @@ export function TenantSidebar() {
                                 data-testid="badge-chat-unread"
                               >
                                 {unreadCount > 99 ? "99+" : unreadCount}
+                              </Badge>
+                            )}
+                            {item.title === "Notifications" && notificationUnreadCount > 0 && (
+                              <Badge
+                                variant="destructive"
+                                className="h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center rounded-full"
+                                data-testid="badge-notifications-unread"
+                              >
+                                {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
                               </Badge>
                             )}
                           </span>

@@ -4,6 +4,7 @@ import {
   Bell, Check, CheckCheck, Settings, Clock, MessageSquare,
   Users, FolderKanban, X, Headphones, FileText, Hash,
   AlertTriangle, ChevronRight, Loader2, Layers,
+  Inbox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -184,7 +185,7 @@ function getTaskIdFromHref(href: string | null): string | null {
 
   try {
     const url = new URL(href, window.location.origin);
-    return url.searchParams.get("taskId");
+    return url.searchParams.get("taskId") || url.searchParams.get("task");
   } catch {
     return null;
   }
@@ -845,6 +846,19 @@ export function NotificationCenter() {
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="font-semibold text-sm">Notifications</h3>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs"
+                onClick={() => {
+                  setIsOpen(false);
+                  setLocation("/notifications");
+                }}
+                data-testid="button-open-notification-inbox"
+              >
+                <Inbox className="h-3.5 w-3.5" />
+                Inbox
+              </Button>
               <TabsList className="h-8">
                 <TabsTrigger value="notifications" className="h-7 px-2 text-xs" data-testid="tab-notifications">
                   <Bell className="h-3.5 w-3.5" />

@@ -29,6 +29,7 @@ import {
   Columns3,
   CalendarClock,
   Pin,
+  Inbox,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -62,6 +63,7 @@ import { hasProjectManagerDashboardAccess, hasTenantAdminAccess } from "@shared/
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home, color: "text-sky-500" },
   { title: "My Tasks", url: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
+  { title: "Notifications", url: "/notifications", icon: Inbox, color: "text-blue-500" },
   { title: "Projects", url: "/projects", icon: FolderKanban, color: "text-amber-500" },
   { title: "PM Dashboard", url: "/pm-dashboard", icon: BarChart3, color: "text-cyan-500", adminOnly: true },
   { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
