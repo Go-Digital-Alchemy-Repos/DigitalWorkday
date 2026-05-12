@@ -78,9 +78,6 @@ async function assertAssetAccess(req: Request, tenantId: string, assetId: string
   }
 
   await assertClientAssetAccess(req, asset.clientId, tenantId);
-  if (isPortalUser(req) && asset.visibility !== "client_visible") {
-    throw AppError.forbidden("This asset is not visible in the client portal");
-  }
 
   return asset;
 }
@@ -233,15 +230,13 @@ router.get("/assets", async (req: Request, res: Response) => {
     const filters = listAssetsSchema.parse(req.query);
     await assertClientAssetAccess(req, filters.clientId, tenantId);
 
-    const visibility = isPortalUser(req) ? "client_visible" : filters.visibility;
-
     const result = await assetService.listAssets({
       tenantId,
       clientId: filters.clientId,
       folderId: filters.folderId,
       q: filters.q,
       sourceType: filters.sourceType,
-      visibility,
+      visibility: filters.visibility,
       cursor: filters.cursor,
       limit: filters.limit,
     });
@@ -287,9 +282,6 @@ router.patch("/assets/:assetId", async (req: Request, res: Response) => {
       if (!folder || folder.clientId !== existingAsset.clientId) {
         throw AppError.badRequest("Target folder not found or belongs to different client");
       }
-    }
-    if (isPortalUser(req)) {
-      updates.visibility = "client_visible";
     }
     const asset = await assetService.updateAssetMeta(tenantId, req.params.assetId, updates);
     res.json(asset);

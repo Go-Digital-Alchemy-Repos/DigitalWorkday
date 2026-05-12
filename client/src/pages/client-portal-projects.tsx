@@ -13,6 +13,7 @@ import {
   CheckSquare,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { normalizeTaskStatus } from "@shared/taskStatus";
 
 interface ProjectInfo {
   id: string;
@@ -36,8 +37,8 @@ interface DashboardData {
 }
 
 function getStatusColor(status: string) {
-  switch (status) {
-    case "completed":
+  switch (normalizeTaskStatus(status) || status) {
+    case "done":
       return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
     case "in_progress":
     case "active":

@@ -9,6 +9,7 @@ import { handleRouteError, AppError } from "../../lib/errors";
 import { z } from "zod";
 import { createHash, randomBytes } from "crypto";
 import { emailOutboxService } from "../../services/emailOutbox";
+import { isTaskDoneStatus } from "@shared/taskStatus";
 
 const router = Router();
 
@@ -233,6 +234,20 @@ function getAssignmentSummary(task: any) {
   };
 }
 
+function sanitizeSubtaskForPortal(subtask: any) {
+  return {
+    id: subtask.id,
+    title: subtask.title,
+    description: subtask.description,
+    status: subtask.status,
+    completed: subtask.completed,
+    dueDate: subtask.dueDate,
+    estimateMinutes: subtask.estimateMinutes,
+    taskId: subtask.taskId,
+    ...getAssignmentSummary(subtask),
+  };
+}
+
 function sanitizeTaskForPortal(task: any, project?: any) {
   return {
     id: task.id,
@@ -246,7 +261,7 @@ function sanitizeTaskForPortal(task: any, project?: any) {
     projectName: project?.name,
     sectionId: task.sectionId,
     section: task.section,
-    subtasks: task.subtasks,
+    subtasks: Array.isArray(task.subtasks) ? task.subtasks.map(sanitizeSubtaskForPortal) : [],
     tags: task.tags,
     ...getAssignmentSummary(task),
   };
@@ -665,12 +680,12 @@ router.get("/dashboard", async (req, res) => {
       totalProjects: allProjects.length,
       activeProjects: allProjects.filter(p => p.status === "active" || p.status === "in_progress").length,
       totalTasks: allTasks.length,
-      completedTasks: allTasks.filter(t => t.status === "completed").length,
-      pendingTasks: allTasks.filter(t => t.status !== "completed").length,
+      completedTasks: allTasks.filter(t => isTaskDoneStatus(t.status)).length,
+      pendingTasks: allTasks.filter(t => !isTaskDoneStatus(t.status)).length,
       overdueTasks: allTasks.filter(t => 
         t.dueDate && 
         new Date(t.dueDate) < now && 
-        t.status !== "completed"
+        !isTaskDoneStatus(t.status)
       ).length,
     };
     
@@ -703,7 +718,7 @@ router.get("/projects", async (req, res) => {
         const tasks = await storage.getTasksByProject(project.id);
         const visibleTasks = tasks.filter(t => (t as any).visibility !== 'private');
         const taskCount = visibleTasks.length;
-        const completedCount = visibleTasks.filter(t => t.status === "completed").length;
+        const completedCount = visibleTasks.filter(t => isTaskDoneStatus(t.status)).length;
         
         allProjects.push({
           id: project.id,
@@ -762,7 +777,7 @@ router.get("/projects/:projectId", async (req, res) => {
       clientName: client?.companyName,
       tasks: tasksForClient,
       taskCount: tasks.length,
-      completedCount: tasks.filter(t => t.status === "completed").length,
+      completedCount: tasks.filter(t => isTaskDoneStatus(t.status)).length,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /projects/:projectId", req);

@@ -71,11 +71,11 @@ export default function ClientPortalUsersPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Portal admin access required</CardTitle>
-            <CardDescription>Only portal admins can invite or manage client portal users.</CardDescription>
+            <CardTitle>No client accounts available</CardTitle>
+            <CardDescription>You need access to a client account before you can manage portal users.</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Contact your Digital Workday team if you need portal administration access.
+            Contact your Digital Workday team if you need access to this portal.
           </CardContent>
         </Card>
       )}

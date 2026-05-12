@@ -16,6 +16,7 @@ import {
   Clock,
 } from "lucide-react";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
+import { getTaskStatusLabel, isTaskDoneStatus, normalizeTaskStatus } from "@shared/taskStatus";
 
 interface ProjectDetail {
   id: string;
@@ -51,8 +52,8 @@ interface ProjectData {
 }
 
 function getStatusColor(status: string) {
-  switch (status) {
-    case "completed":
+  switch (normalizeTaskStatus(status) || status) {
+    case "done":
       return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
     case "in_progress":
     case "active":
@@ -150,13 +151,13 @@ export default function ClientPortalProjectDetail() {
 
   const project = data;
   const tasks = data.tasks || [];
-  const completedTasks = data.completedCount || tasks.filter((t) => t.status === "completed").length;
+  const completedTasks = data.completedCount || tasks.filter((t) => isTaskDoneStatus(t.status)).length;
   const totalTasks = data.taskCount || tasks.length;
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const todoTasks = tasks.filter((t) => t.status === "todo");
   const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
-  const completedTasksList = tasks.filter((t) => t.status === "completed");
+  const completedTasksList = tasks.filter((t) => isTaskDoneStatus(t.status));
 
   return (
     <div className="p-6 overflow-y-auto h-full">
@@ -295,7 +296,7 @@ function TaskList({ tasks, emptyMessage = "No tasks" }: { tasks: TaskInfo[]; emp
                     {task.priority}
                   </Badge>
                   <Badge variant="outline" className={getStatusColor(task.status)}>
-                    {task.status.replace(/_/g, ' ')}
+                    {getTaskStatusLabel(task.status)}
                   </Badge>
                   <Badge variant="secondary">
                     {task.assignmentStatus || "Unassigned"}

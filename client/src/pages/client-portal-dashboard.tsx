@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, format, isToday, isTomorrow, isPast } from "date-fns";
+import { getTaskStatusLabel, normalizeTaskStatus } from "@shared/taskStatus";
 
 interface ClientInfo {
   id: string;
@@ -80,8 +81,8 @@ interface ClientOverview {
 }
 
 function getStatusColor(status: string) {
-  switch (status) {
-    case "completed":
+  switch (normalizeTaskStatus(status) || status) {
+    case "done":
       return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
     case "in_progress":
     case "active":
@@ -447,7 +448,7 @@ export default function ClientPortalDashboard() {
                           {task.priority}
                         </Badge>
                         <Badge variant="outline" className={getStatusColor(task.status)}>
-                          {task.status.replace(/_/g, ' ')}
+                          {getTaskStatusLabel(task.status)}
                         </Badge>
                       </div>
                     </div>
