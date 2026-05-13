@@ -253,7 +253,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
     }
 
     const schema = z.object({
-      clientId: z.string().uuid(),
+      clientId: z.string().uuid().optional().nullable(),
       subject: z.string().min(1).max(500),
       initialMessage: z.string().min(1).max(5000),
       type: z.enum([
@@ -276,8 +276,21 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
 
     const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
     const clientIds = await getClientUserAccessibleClients(user.id);
+    const selectedClientId = data.clientId || (clientIds.length === 1 ? clientIds[0] : null);
 
-    if (!clientIds.includes(data.clientId)) {
+    if (!selectedClientId) {
+      return sendError(
+        res,
+        AppError.badRequest(
+          clientIds.length > 1
+            ? "Please select a client account before starting this message"
+            : "You do not have access to a client account"
+        ),
+        req
+      );
+    }
+
+    if (!clientIds.includes(selectedClientId)) {
       return sendError(res, AppError.forbidden("You do not have access to this client"), req);
     }
 
@@ -286,7 +299,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
     if (data.type === ConversationType.SUPPORT_TICKET) {
       const ticket = await storage.createSupportTicket({
         tenantId,
-        clientId: data.clientId,
+        clientId: selectedClientId,
         createdByUserId: null,
         createdByPortalUserId: userId,
         title: data.subject,
@@ -358,7 +371,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
 
     const [conversation] = await db.insert(clientConversations).values({
       tenantId,
-      clientId: data.clientId,
+      clientId: selectedClientId,
       subject: data.subject,
       type: data.type,
       priority: data.priority,
@@ -376,7 +389,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
     emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
       conversationId: conversation.id,
       tenantId,
-      clientId: data.clientId,
+      clientId: selectedClientId,
       subject: conversation.subject,
       assignedToUserId: autoAssigneeId,
       authorUserId: userId,
@@ -391,10 +404,10 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
           type: "task_assigned",
           title: "New client conversation assigned",
           message: `A new conversation "${conversation.subject}" has been auto-assigned to you`,
-          payloadJson: { conversationId: conversation.id, clientId: data.clientId } as any,
+          payloadJson: { conversationId: conversation.id, clientId: selectedClientId } as any,
           entityType: "client_thread",
           entityId: conversation.id,
-          href: `/clients/${data.clientId}?tab=messages&conversation=${conversation.id}`,
+          href: `/clients/${selectedClientId}?tab=messages&conversation=${conversation.id}`,
         });
         emitNotificationNew(autoAssigneeId, toNotificationPayload(notification));
       } catch {}
@@ -402,7 +415,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       emitToUser(autoAssigneeId, CLIENT_CONVERSATION_EVENTS.ASSIGNED, {
         conversationId: conversation.id,
         tenantId,
-        clientId: data.clientId,
+        clientId: selectedClientId,
         subject: conversation.subject,
         assignedToUserId: autoAssigneeId,
         assignedByUserId: null,

@@ -111,7 +111,7 @@ function NewRequestDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: {
-      clientId: string;
+      clientId?: string;
       subject: string;
       initialMessage: string;
       type: PortalMessageType;
@@ -162,7 +162,7 @@ function NewRequestDialog({
       toast({ title: "Please fill in the subject and message", variant: "destructive" });
       return;
     }
-    if (!selectedClientId) {
+    if (clients.length > 1 && !selectedClientId) {
       toast({ title: "Please select a client account", variant: "destructive" });
       return;
     }
@@ -171,7 +171,7 @@ function NewRequestDialog({
       return;
     }
     createMutation.mutate({
-      clientId: selectedClientId,
+      clientId: selectedClientId || undefined,
       subject: subject.trim(),
       initialMessage: message.trim(),
       type: messageType,
