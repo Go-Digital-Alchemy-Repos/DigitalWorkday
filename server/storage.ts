@@ -646,6 +646,31 @@ export class DatabaseStorage implements IStorage {
     getProjectsByClient: (clientId) => this.getProjectsByClient(clientId),
   });
 
+  private async resolveClientAccessTenantId(client: Client, access?: ClientUserAccess | null): Promise<string | null> {
+    if (client.tenantId) {
+      return client.tenantId;
+    }
+
+    const workspaceIds = [client.workspaceId, access?.workspaceId]
+      .filter((workspaceId): workspaceId is string => Boolean(workspaceId));
+    const uniqueWorkspaceIds = Array.from(new Set(workspaceIds));
+    if (uniqueWorkspaceIds.length === 0) {
+      return null;
+    }
+
+    for (const workspaceId of uniqueWorkspaceIds) {
+      const [workspace] = await db
+        .select({ tenantId: workspaces.tenantId })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId));
+      if (workspace?.tenantId) {
+        return workspace.tenantId;
+      }
+    }
+
+    return null;
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -2296,34 +2321,35 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
 
+    const clientTenantId = await this.resolveClientAccessTenantId(client, access);
     let effectiveUserTenantId = user.tenantId;
     // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
-    if (user.role === UserRole.CLIENT && client.tenantId && effectiveUserTenantId !== client.tenantId) {
+    if (user.role === UserRole.CLIENT && clientTenantId && effectiveUserTenantId !== clientTenantId) {
       const [updatedUser] = await db.update(users)
-        .set({ tenantId: client.tenantId, updatedAt: new Date() })
+        .set({ tenantId: clientTenantId, updatedAt: new Date() })
         .where(eq(users.id, user.id))
         .returning({ tenantId: users.tenantId });
-      effectiveUserTenantId = updatedUser?.tenantId || client.tenantId;
+      effectiveUserTenantId = updatedUser?.tenantId || clientTenantId;
     }
     
     // Enforce strict tenant isolation for client portal access
     // Both user and client must have tenantId set and they must match
-    if (!effectiveUserTenantId || !client.tenantId) {
+    if (!effectiveUserTenantId || !clientTenantId) {
       console.warn("[storage] getClientUserAccessByUserAndClient: Missing tenantId", {
         userId: user.id,
         userTenantId: effectiveUserTenantId,
         clientId: client.id,
-        clientTenantId: client.tenantId,
+        clientTenantId,
       });
       return undefined;
     }
     
-    if (effectiveUserTenantId !== client.tenantId) {
+    if (effectiveUserTenantId !== clientTenantId) {
       console.warn("[storage] getClientUserAccessByUserAndClient: Tenant mismatch", {
         userId: user.id,
         userTenantId: effectiveUserTenantId,
         clientId: client.id,
-        clientTenantId: client.tenantId,
+        clientTenantId,
       });
       return undefined;
     }
@@ -2369,39 +2395,43 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
+      const clientTenantId = await this.resolveClientAccessTenantId(client, access);
       // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
-      if (user.role === UserRole.CLIENT && client.tenantId && effectiveUserTenantId !== client.tenantId) {
+      if (user.role === UserRole.CLIENT && clientTenantId && effectiveUserTenantId !== clientTenantId) {
         const [updatedUser] = await db.update(users)
-          .set({ tenantId: client.tenantId, updatedAt: new Date() })
+          .set({ tenantId: clientTenantId, updatedAt: new Date() })
           .where(eq(users.id, user.id))
           .returning({ tenantId: users.tenantId });
-        effectiveUserTenantId = updatedUser?.tenantId || client.tenantId;
+        effectiveUserTenantId = updatedUser?.tenantId || clientTenantId;
       }
       
       // Enforce tenant isolation for cross-tenant security
       // Both user and client should have matching tenantIds
       // If either is missing tenantId, this is a data integrity issue - skip for safety
-      if (!effectiveUserTenantId || !client.tenantId) {
+      if (!effectiveUserTenantId || !clientTenantId) {
         console.warn("[storage] getClientsForUser: Missing tenantId", {
           userId: user.id,
           userTenantId: effectiveUserTenantId,
           clientId: client.id,
-          clientTenantId: client.tenantId,
+          clientTenantId,
         });
         continue;
       }
       
-      if (effectiveUserTenantId !== client.tenantId) {
+      if (effectiveUserTenantId !== clientTenantId) {
         console.warn("[storage] getClientsForUser: Tenant mismatch", {
           userId: user.id,
           userTenantId: effectiveUserTenantId,
           clientId: client.id,
-          clientTenantId: client.tenantId,
+          clientTenantId,
         });
         continue;
       }
       
-      result.push({ client, access });
+      result.push({
+        client: client.tenantId ? client : { ...client, tenantId: clientTenantId },
+        access,
+      });
     }
     return result;
   }
