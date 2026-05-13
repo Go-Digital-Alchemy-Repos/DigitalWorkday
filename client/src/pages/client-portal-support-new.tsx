@@ -65,7 +65,7 @@ export default function ClientPortalSupportNew() {
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
 
-  const { data: profileData } = useQuery<PortalProfile>({
+  const { data: profileData, isLoading: isProfileLoading } = useQuery<PortalProfile>({
     queryKey: ["/api/client-portal/profile"],
   });
   const { upload, isUploading } = useS3Upload({ category: "support-ticket-attachment" });
@@ -85,12 +85,11 @@ export default function ClientPortalSupportNew() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const selectedClient = clientId || (clients.length === 1 ? clients[0].id : "");
-      if (!selectedClient) throw new Error("Please select a client");
 
       const metadataJson = dynamicFields.length > 0 ? customFields : null;
 
       return apiRequest("POST", "/api/v1/portal/support/tickets", {
-        clientId: selectedClient,
+        clientId: selectedClient || undefined,
         title,
         description: description || null,
         category,
@@ -126,7 +125,12 @@ export default function ClientPortalSupportNew() {
     setCustomFields((prev) => ({ ...prev, [key]: value }));
   };
 
-  const effectiveClientId = clientId || (clients.length === 1 ? clients[0].id : "");
+  const requiresClientSelection = clients.length > 1;
+  const canSubmit = Boolean(title.trim())
+    && !isProfileLoading
+    && (!requiresClientSelection || Boolean(clientId))
+    && !isUploading
+    && !createMutation.isPending;
 
   const handleAttachmentClick = () => {
     fileInputRef.current?.click();
@@ -406,7 +410,7 @@ export default function ClientPortalSupportNew() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!title.trim() || !effectiveClientId || isUploading || createMutation.isPending}
+                  disabled={!canSubmit}
                   data-testid="button-submit-ticket"
                 >
                   {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}

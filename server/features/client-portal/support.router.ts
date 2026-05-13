@@ -30,7 +30,7 @@ async function getPortalSupportContext(userId: string, sessionTenantId?: string 
 }
 
 const createTicketSchema = z.object({
-  clientId: z.string().min(1),
+  clientId: z.string().min(1).optional().nullable(),
   title: z.string().min(1).max(500),
   description: z.string().optional().nullable(),
   category: z.enum(["support", "work_order", "billing", "bug", "feature_request"]).optional().default("support"),
@@ -124,7 +124,16 @@ router.post("/tickets", async (req, res) => {
 
     const body = createTicketSchema.parse(req.body);
 
-    if (!clientIds.includes(body.clientId)) {
+    const selectedClientId = body.clientId || (clientIds.length === 1 ? clientIds[0] : null);
+    if (!selectedClientId) {
+      throw AppError.badRequest(
+        clientIds.length > 1
+          ? "Please select a client before submitting this ticket"
+          : "You do not have access to a client account"
+      );
+    }
+
+    if (!clientIds.includes(selectedClientId)) {
       throw AppError.forbidden("You do not have access to this client");
     }
 
@@ -147,7 +156,7 @@ router.post("/tickets", async (req, res) => {
 
     const ticket = await storage.createSupportTicket({
       tenantId,
-      clientId: body.clientId,
+      clientId: selectedClientId,
       createdByUserId: null,
       createdByPortalUserId: userId,
       title: body.title,
