@@ -494,6 +494,7 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
       setAddContactOpen(false);
       contactForm.reset();
     },
@@ -636,6 +637,7 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
       setEditContactOpen(false);
       setEditingContact(null);
     },

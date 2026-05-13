@@ -42,6 +42,7 @@ import {
   emitProjectCreated,
   emitProjectClientAssigned,
 } from "../realtime/events";
+import { syncPortalUserFromClientContact } from "../utils/clientPortalIdentitySync";
 
 const router = createApiRouter({ policy: "authTenant" });
 
@@ -284,6 +285,7 @@ router.post("/clients/:clientId/contacts", async (req, res) => {
       workspaceId: client.workspaceId,
     });
     const contact = await storage.createClientContact(data);
+    await syncPortalUserFromClientContact(contact);
 
     emitClientContactCreated(
       {
@@ -315,6 +317,7 @@ router.patch("/clients/:clientId/contacts/:contactId", async (req, res) => {
       req.body,
     );
     if (!contact) throw AppError.notFound("Contact");
+    await syncPortalUserFromClientContact(contact);
 
     emitClientContactUpdated(
       contact.id,

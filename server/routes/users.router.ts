@@ -32,6 +32,7 @@ import {
 import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
 import { isAgreementEnforcementEnabled } from "../middleware/agreementEnforcement";
+import { syncClientContactsFromPortalUser } from "../utils/clientPortalIdentitySync";
 
 const router = createApiRouter({ policy: "authTenant" });
 
@@ -220,6 +221,9 @@ router.patch("/users/me", requireAuth, async (req, res) => {
     }
 
     const updatedUser = await storage.updateUser(user.id, updates);
+    if (updatedUser) {
+      await syncClientContactsFromPortalUser(updatedUser);
+    }
 
     if (updates.avatarUrl !== undefined) {
       console.log("[profile-update] User ID:", user.id);

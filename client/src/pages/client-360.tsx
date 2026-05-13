@@ -458,6 +458,7 @@ function ContactsTab({ clientId }: { clientId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/contacts`] });
       queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/summary`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
       setDrawerOpen(false);
       setEditingContact(null);
       form.reset();
@@ -474,6 +475,7 @@ function ContactsTab({ clientId }: { clientId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/contacts`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
       setDrawerOpen(false);
       setEditingContact(null);
       form.reset();

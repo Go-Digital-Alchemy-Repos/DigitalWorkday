@@ -11,6 +11,7 @@ import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { emailOutboxService } from "../../services/emailOutbox";
 import { eq } from "drizzle-orm";
+import { syncClientContactsFromPortalUser } from "../../utils/clientPortalIdentitySync";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -484,6 +485,7 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
         .returning();
       if (result) updatedUser = result;
     }
+    await syncClientContactsFromPortalUser(updatedUser);
 
     res.json({
       message: "Portal user updated successfully",

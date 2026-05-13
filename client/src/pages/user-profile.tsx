@@ -60,6 +60,8 @@ export default function UserProfilePage() {
     },
     onSuccess: () => {
       refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/client-portal/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       toast({ title: "Profile updated successfully" });
     },
     onError: () => {

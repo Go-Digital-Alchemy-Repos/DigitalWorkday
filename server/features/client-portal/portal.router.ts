@@ -12,6 +12,10 @@ import { emailOutboxService } from "../../services/emailOutbox";
 import { isTaskDoneStatus } from "@shared/taskStatus";
 import { hashPassword } from "../../auth";
 import { extractMentionsFromTipTapJson } from "../../utils/mentionUtils";
+import {
+  syncClientContactsFromPortalUser,
+  syncPortalUserFromClientContact,
+} from "../../utils/clientPortalIdentitySync";
 
 const router = Router();
 
@@ -488,6 +492,7 @@ router.post("/clients/:clientId/contacts", async (req, res) => {
       tenantId: client.tenantId,
       workspaceId: client.workspaceId,
     });
+    await syncPortalUserFromClientContact(contact);
 
     res.status(201).json(contact);
   } catch (error) {
@@ -516,6 +521,7 @@ router.patch("/clients/:clientId/contacts/:contactId", async (req, res) => {
     if (!contact) {
       throw AppError.notFound("Contact");
     }
+    await syncPortalUserFromClientContact(contact);
 
     res.json(contact);
   } catch (error) {
@@ -819,6 +825,9 @@ router.patch("/clients/:clientId/users/:userId", async (req, res) => {
         .where(eq(users.id, userId))
         .returning())[0]
       : targetUser;
+    if (updatedUser) {
+      await syncClientContactsFromPortalUser(updatedUser);
+    }
 
     res.json({
       ...updatedAccess,

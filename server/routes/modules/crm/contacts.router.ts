@@ -10,6 +10,7 @@ import {
   updateClientContactSchema,
 } from "@shared/schema";
 import { verifyClientTenancy } from "./crm.helpers";
+import { syncPortalUserFromClientContact } from "../../../utils/clientPortalIdentitySync";
 
 const router = Router();
 
@@ -67,6 +68,7 @@ router.post("/crm/clients/:clientId/contacts", requireAuth, async (req: Request,
       isPrimary: data.isPrimary ?? false,
       notes: data.notes ?? null,
     }).returning();
+    await syncPortalUserFromClientContact(contact);
 
     res.status(201).json(contact);
   } catch (error) {
@@ -94,6 +96,7 @@ router.patch("/crm/contacts/:id", requireAuth, async (req: Request, res: Respons
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(clientContacts.id, id), eq(clientContacts.tenantId, tenantId)))
       .returning();
+    await syncPortalUserFromClientContact(updated);
 
     res.json(updated);
   } catch (error) {

@@ -235,6 +235,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false, currentAcce
     onSuccess: () => {
       toast({ title: "Portal invitation sent" });
       queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      queryClient.invalidateQueries({ queryKey: contactsQueryKey });
       handleCloseAddUser();
     },
     onError: (error: Error) => {
@@ -265,6 +266,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false, currentAcce
     onSuccess: () => {
       toast({ title: "Portal user created" });
       queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      queryClient.invalidateQueries({ queryKey: contactsQueryKey });
       handleCloseAddUser();
     },
     onError: (error: Error) => {
@@ -289,6 +291,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false, currentAcce
     onSuccess: () => {
       toast({ title: "Portal user updated successfully" });
       queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      queryClient.invalidateQueries({ queryKey: contactsQueryKey });
       handleCloseEditUser();
     },
     onError: (error: Error) => {
@@ -307,6 +310,7 @@ export function ClientPortalUsersTab({ clientId, portalMode = false, currentAcce
     onSuccess: () => {
       toast({ title: "Access revoked" });
       queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      queryClient.invalidateQueries({ queryKey: contactsQueryKey });
       setUserToRevoke(null);
     },
     onError: (error: Error) => {

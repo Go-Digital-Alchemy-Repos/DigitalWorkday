@@ -20,6 +20,7 @@ import {
   emitClientInviteSent,
   emitClientInviteRevoked,
 } from "../../realtime/events";
+import { syncPortalUserFromClientContact } from "../../utils/clientPortalIdentitySync";
 import { UserRole } from "@shared/schema";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
@@ -315,6 +316,7 @@ router.post("/:clientId/contacts", async (req, res) => {
       workspaceId: client.workspaceId,
     });
     const contact = await storage.createClientContact(data);
+    await syncPortalUserFromClientContact(contact);
 
     emitClientContactCreated(
       {
@@ -353,6 +355,7 @@ router.patch("/:clientId/contacts/:contactId", async (req, res) => {
     if (!contact) {
       throw AppError.notFound("Contact");
     }
+    await syncPortalUserFromClientContact(contact);
 
     emitClientContactUpdated(
       contact.id,

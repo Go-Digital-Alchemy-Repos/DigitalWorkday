@@ -69,6 +69,7 @@ export default function ClientPortalContactsPage() {
   }, [clientId, clients]);
 
   const contactsQueryKey = ["/api/client-portal/clients", clientId, "contacts"];
+  const usersQueryKey = ["/api/client-portal/clients", clientId, "users"];
   const { data: contacts = [], isLoading: contactsLoading } = useQuery<ClientContact[]>({
     queryKey: contactsQueryKey,
     enabled: Boolean(clientId),
@@ -82,6 +83,7 @@ export default function ClientPortalContactsPage() {
     onSuccess: () => {
       toast({ title: "Contact added" });
       queryClient.invalidateQueries({ queryKey: contactsQueryKey });
+      queryClient.invalidateQueries({ queryKey: usersQueryKey });
       setDialogOpen(false);
       setEditingContact(null);
       setForm(emptyContactForm);
@@ -100,6 +102,7 @@ export default function ClientPortalContactsPage() {
     onSuccess: () => {
       toast({ title: "Contact updated" });
       queryClient.invalidateQueries({ queryKey: contactsQueryKey });
+      queryClient.invalidateQueries({ queryKey: usersQueryKey });
       setDialogOpen(false);
       setEditingContact(null);
       setForm(emptyContactForm);
