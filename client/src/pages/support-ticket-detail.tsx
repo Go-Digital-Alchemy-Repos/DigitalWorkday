@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { RichTextRenderer } from "@/components/richtext";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface TicketMessage {
   id: string;
@@ -153,7 +154,7 @@ function eventDescription(event: TicketEvent): string {
 
 export default function SupportTicketDetail() {
   const params = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/support");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -290,7 +291,7 @@ export default function SupportTicketDetail() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/support")} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={goBack} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1 min-w-0">

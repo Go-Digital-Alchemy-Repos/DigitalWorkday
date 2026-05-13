@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, MessageSquareText, Zap, Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useLocation } from "wouter";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface CannedReply {
   id: string;
@@ -208,7 +208,7 @@ function MacroForm({ macro, onClose, onSaved }: { macro?: Macro; onClose: () => 
 }
 
 export default function SupportTemplates() {
-  const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/support");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("replies");
@@ -259,7 +259,7 @@ export default function SupportTemplates() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/support")} data-testid="button-back-to-support">
+          <Button variant="ghost" size="icon" onClick={goBack} data-testid="button-back-to-support">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>

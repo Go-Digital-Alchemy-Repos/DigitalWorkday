@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
+import { useParams } from "wouter";
 import { RichTextRenderer, getPreviewText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
 import { getTaskStatusLabel, isTaskDoneStatus, normalizeTaskStatus } from "@shared/taskStatus";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface ProjectDetail {
   id: string;
@@ -124,6 +125,7 @@ function formatAssignees(task: TaskInfo) {
 
 export default function ClientPortalProjectDetail() {
   const { id } = useParams<{ id: string }>();
+  const goBack = useBackNavigation("/portal/projects");
 
   const { data, isLoading, error } = useQuery<ProjectData>({
     queryKey: ["/api/client-portal/projects", id],
@@ -160,11 +162,9 @@ export default function ClientPortalProjectDetail() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" asChild>
-              <Link href="/portal/projects">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Projects
-              </Link>
+            <Button variant="outline" onClick={goBack}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Projects
             </Button>
           </CardContent>
         </Card>
@@ -185,11 +185,9 @@ export default function ClientPortalProjectDetail() {
   return (
     <div className="p-6 overflow-y-auto h-full">
       <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-2">
-          <Link href="/portal/projects" data-testid="link-back-to-projects">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Projects
-          </Link>
+        <Button variant="ghost" size="sm" onClick={goBack} className="mb-2" data-testid="link-back-to-projects">
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to Projects
         </Button>
         <div className="flex items-start justify-between gap-4">
           <div>

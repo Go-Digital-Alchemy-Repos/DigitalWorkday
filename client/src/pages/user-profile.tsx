@@ -12,12 +12,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
 import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Palette, Check } from "lucide-react";
-import { useLocation } from "wouter";
 import { useTheme } from "@/lib/theme-provider";
 import { type ThemePack } from "@/theme/themePacks";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { getUserRoleLabel } from "@shared/roles";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 function getRoleLabel(role: string) {
   return getUserRoleLabel(role);
@@ -38,7 +38,8 @@ function getRoleIcon(role: string) {
 
 export default function UserProfilePage() {
   const { user, refetch } = useAuth();
-  const [, setLocation] = useLocation();
+  const fallbackPath = user?.role === "super_user" ? "/super-admin/dashboard" : user?.role === "client" ? "/portal" : "/";
+  const goBack = useBackNavigation(fallbackPath);
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: user?.name || "",
@@ -143,16 +144,6 @@ export default function UserProfilePage() {
     ? `${user.firstName[0]}${user.lastName[0]}`
     : user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const handleBack = () => {
-    if (user.role === "super_user") {
-      setLocation("/super-admin/dashboard");
-    } else if (user.role === "client") {
-      setLocation("/portal");
-    } else {
-      setLocation("/");
-    }
-  };
-
   return (
     <ScrollArea className="h-full">
       <div className="container max-w-3xl p-3 sm:p-4 lg:p-6">
@@ -160,7 +151,7 @@ export default function UserProfilePage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleBack}
+            onClick={goBack}
             className="mb-4 -ml-2"
             data-testid="button-back"
           >

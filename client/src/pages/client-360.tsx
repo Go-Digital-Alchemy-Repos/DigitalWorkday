@@ -100,6 +100,7 @@ import {
 import { ClientReportsTab } from "@/components/client-reports-tab";
 import { useAuth } from "@/lib/auth";
 import { hasTenantAdminAccess } from "@shared/roles";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface CrmSummary {
   client: {
@@ -2442,6 +2443,7 @@ export default function Client360Page() {
   const clientId = params?.id;
   const crmFlags = useCrmFlags();
   const [activeTab, setActiveTab] = useState("overview");
+  const goBack = useBackNavigation("/clients");
 
   const { data: summary, isLoading, refetch } = useQuery<CrmSummary>({
     queryKey: [`/api/crm/clients/${clientId}/summary`],
@@ -2456,12 +2458,10 @@ export default function Client360Page() {
           title="Client 360 is not enabled"
           description="This feature is currently disabled. Contact your administrator to enable it."
           action={
-            <Link href="/clients">
-              <Button variant="outline" data-testid="button-back-to-clients">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Clients
-              </Button>
-            </Link>
+            <Button variant="outline" onClick={goBack} data-testid="button-back-to-clients">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Clients
+            </Button>
           }
         />
       </PageShell>

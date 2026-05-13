@@ -1,4 +1,4 @@
-import { useParams, useLocation, Link } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
@@ -62,6 +62,7 @@ import { formatMetricValue } from "@/components/reports/report-shared";
 import { fetchReport as fetch } from "@/components/reports/report-fetch";
 import { DataPointLabel } from "@/components/data-point-help";
 import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface ClientProfileData {
   client: {
@@ -225,6 +226,7 @@ export default function ClientProfileReportPage() {
   const range = typeof reportRange === "number" ? `${reportRange}d` : "custom";
   const section = searchParams.get("section");
   const reportBasePath = getReportBasePath(location);
+  const goBack = useBackNavigation(reportBasePath);
   const initialCustom = dateInputsForReportRange(reportRange);
   const [customStart, setCustomStart] = useState(initialCustom.startDate);
   const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
@@ -338,12 +340,10 @@ export default function ClientProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href={reportBasePath}>
-              <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
-                <ChevronLeft className="h-4 w-4" />
-                Back
-              </Button>
-            </Link>
+            <Button variant="ghost" size="sm" onClick={goBack} className="gap-1" data-testid="button-back-to-reports">
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </Button>
             <h1 className="text-xl font-bold hidden sm:block">Client Intelligence Profile</h1>
           </div>
 

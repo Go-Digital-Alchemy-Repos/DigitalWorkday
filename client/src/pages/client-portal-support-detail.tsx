@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextRenderer } from "@/components/richtext";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface TicketMessage {
   id: string;
@@ -89,7 +90,7 @@ function formatFileSize(bytes?: number | null) {
 
 export default function ClientPortalSupportDetail() {
   const params = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/portal/support");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [replyText, setReplyText] = useState("");
@@ -152,7 +153,7 @@ export default function ClientPortalSupportDetail() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/portal/support")} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={goBack} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1 min-w-0">

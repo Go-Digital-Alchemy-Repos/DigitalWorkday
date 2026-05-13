@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, ArrowLeft, Loader2, FileText, GripVertical, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useLocation } from "wouter";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface FormField {
   key: string;
@@ -236,7 +236,7 @@ function FormSchemaEditor({ schema, onClose, onSaved }: { schema?: TicketFormSch
 }
 
 export default function SupportFormSchemas() {
-  const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/support");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingSchema, setEditingSchema] = useState<TicketFormSchema | undefined>();
@@ -270,7 +270,7 @@ export default function SupportFormSchemas() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/support")} data-testid="button-back-support">
+        <Button variant="ghost" size="icon" onClick={goBack} data-testid="button-back-support">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">

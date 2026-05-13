@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 import { ProjectClientBadge } from "@/components/project-client-badge";
 import { TeamDrawer } from "@/features/teams";
 import {
@@ -53,6 +54,7 @@ interface TeamMemberWithUser extends TeamMember {
 export default function TeamDetailPage() {
   const { id: teamId } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/settings/teams");
   const { toast } = useToast();
   const [editTeamOpen, setEditTeamOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -162,7 +164,7 @@ export default function TeamDetailPage() {
         <Card>
           <CardContent className="p-6">
             <p className="text-muted-foreground" data-testid="text-team-not-found">Team not found</p>
-            <Button variant="outline" className="mt-4" onClick={() => navigate("/settings/teams")} data-testid="button-back-to-teams-notfound">
+            <Button variant="outline" className="mt-4" onClick={goBack} data-testid="button-back-to-teams-notfound">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Teams
             </Button>
@@ -175,7 +177,7 @@ export default function TeamDetailPage() {
   return (
     <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 md:py-6 max-w-4xl">
       <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
-        <Button variant="ghost" size="icon" aria-label="Go back" onClick={() => navigate("/settings/teams")} data-testid="button-back-teams">
+        <Button variant="ghost" size="icon" aria-label="Go back" onClick={goBack} data-testid="button-back-teams">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">

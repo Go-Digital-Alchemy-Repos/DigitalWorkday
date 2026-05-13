@@ -89,6 +89,7 @@ import { useAuth } from "@/lib/auth";
 import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 import { Link } from "wouter";
 import { usePromptDialog } from "@/components/prompt-dialog";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -141,6 +142,7 @@ export default function ProjectPage() {
   const projectId = params?.id;
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/");
 
   const { user: currentUser } = useAuth();
   const isAdmin = hasTenantAdminAccess(currentUser?.role);
@@ -903,12 +905,10 @@ export default function ProjectPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <h2 className="text-lg font-medium mb-2">Project not found</h2>
-        <Link href="/">
-          <Button variant="outline">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Home
-          </Button>
-        </Link>
+        <Button variant="outline" onClick={goBack}>
+          <ChevronLeft className="mr-2 h-4 w-4" />
+          Back to Home
+        </Button>
       </div>
     );
   }

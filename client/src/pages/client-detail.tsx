@@ -109,6 +109,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "@/features/clients";
 import { ProjectSettingsSheet } from "@/features/projects";
@@ -384,6 +385,7 @@ function EditContactForm({
 export default function ClientDetailPage() {
   const [, params] = useRoute("/clients/:id");
   const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/clients");
   const clientId = params?.id;
   const { toast } = useToast();
   const [addContactOpen, setAddContactOpen] = useState(false);
@@ -957,12 +959,10 @@ export default function ClientDetailPage() {
       <div className="flex flex-col items-center justify-center h-full">
         <Building2 className="h-16 w-16 text-muted-foreground/50 mb-4" />
         <h3 className="text-lg font-medium mb-2">Client not found</h3>
-        <Link href="/clients">
-          <Button variant="outline">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </Link>
+        <Button variant="outline" onClick={goBack}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
       </div>
     );
   }
@@ -993,11 +993,9 @@ export default function ClientDetailPage() {
       )}
       <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-4">
-          <Link href={client.parentClientId ? `/clients/${client.parentClientId}` : "/clients"}>
-            <Button variant="ghost" size="icon" aria-label="Go back" data-testid="button-back-to-clients">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" aria-label="Go back" onClick={goBack} data-testid="button-back-to-clients">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
               <AvatarFallback className="bg-primary/10 text-primary">

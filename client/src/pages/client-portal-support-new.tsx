@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RichTextEditor } from "@/components/richtext";
 import { useS3Upload } from "@/hooks/useS3Upload";
+import { useBackNavigation } from "@/hooks/use-back-navigation";
 
 interface ClientInfo {
   id: string;
@@ -51,6 +52,7 @@ interface FormSchemaData {
 
 export default function ClientPortalSupportNew() {
   const [, navigate] = useLocation();
+  const goBack = useBackNavigation("/portal/support");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -173,7 +175,7 @@ export default function ClientPortalSupportNew() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/portal/support")} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={goBack} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-semibold" data-testid="text-new-ticket-title">New Support Ticket</h1>
