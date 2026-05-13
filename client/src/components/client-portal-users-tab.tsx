@@ -76,6 +76,11 @@ interface ClientUser {
   };
 }
 
+interface RawClientUserAccess {
+  user: ClientUser["user"];
+  access: Omit<ClientUser, "user">;
+}
+
 interface ClientContact {
   id: string;
   firstName: string;
@@ -88,6 +93,17 @@ type PortalAccessLevel = "collaborator" | "portal_admin";
 
 function normalizePortalAccessLevel(level: string | null | undefined): PortalAccessLevel {
   return level === "portal_admin" ? "portal_admin" : "collaborator";
+}
+
+function normalizeClientUser(entry: ClientUser | RawClientUserAccess): ClientUser {
+  if ("access" in entry && entry.access) {
+    return {
+      ...entry.access,
+      user: entry.user,
+    };
+  }
+
+  return entry as ClientUser;
 }
 
 const createUserSchema = z.object({
@@ -193,10 +209,11 @@ export function ClientPortalUsersTab({ clientId, portalMode = false, currentAcce
     },
   });
 
-  const { data: portalUsers = [], isLoading: usersLoading } = useQuery<ClientUser[]>({
+  const { data: portalUsersResponse = [], isLoading: usersLoading } = useQuery<Array<ClientUser | RawClientUserAccess>>({
     queryKey: usersQueryKey,
     enabled: !!clientId,
   });
+  const portalUsers = portalUsersResponse.map(normalizeClientUser);
 
   const { data: contacts = [] } = useQuery<ClientContact[]>({
     queryKey: contactsQueryKey,

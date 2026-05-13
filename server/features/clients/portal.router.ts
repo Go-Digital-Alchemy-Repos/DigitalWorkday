@@ -119,6 +119,20 @@ async function sendPortalInviteEmail(options: {
   });
 }
 
+function formatClientUserAccess(entry: { user: any; access: any }) {
+  return {
+    ...entry.access,
+    user: {
+      id: entry.user.id,
+      email: entry.user.email,
+      name: entry.user.name,
+      firstName: entry.user.firstName,
+      lastName: entry.user.lastName,
+      avatarUrl: entry.user.avatarUrl,
+    },
+  };
+}
+
 // =============================================================================
 // CLIENT USER MANAGEMENT ROUTES (for tenant admins/employees)
 // =============================================================================
@@ -139,7 +153,7 @@ router.get("/:clientId/users", async (req, res) => {
     }
     
     const clientUsers = await storage.getClientUsers(clientId);
-    res.json(clientUsers);
+    res.json(clientUsers.map(formatClientUserAccess));
   } catch (error) {
     return handleRouteError(res, error, "GET /:clientId/users", req);
   }
