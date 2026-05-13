@@ -672,6 +672,43 @@ export class DatabaseStorage implements IStorage {
     return null;
   }
 
+  private async repairClientPortalAccessSafe(user: User, context: string): Promise<{ tenantId: string | null; createdAccessCount: number }> {
+    if (user.role !== UserRole.CLIENT) {
+      return { tenantId: user.tenantId || null, createdAccessCount: 0 };
+    }
+
+    try {
+      return await ensureClientPortalAccess(user);
+    } catch (error) {
+      console.warn(`[storage] ${context}: Client portal access repair failed; using existing access rows`, {
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { tenantId: user.tenantId || null, createdAccessCount: 0 };
+    }
+  }
+
+  private async resolveClientAccessTenantIdWithFallback(
+    client: Client,
+    access: ClientUserAccess,
+    fallbackTenantId: string | null | undefined,
+  ): Promise<string | null> {
+    const resolvedTenantId = await this.resolveClientAccessTenantId(client, access);
+    if (resolvedTenantId) {
+      return resolvedTenantId;
+    }
+
+    if (!fallbackTenantId) {
+      return null;
+    }
+
+    await db.update(clients)
+      .set({ tenantId: fallbackTenantId, updatedAt: new Date() })
+      .where(and(eq(clients.id, client.id), isNull(clients.tenantId)));
+
+    return fallbackTenantId;
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -2320,7 +2357,7 @@ export class DatabaseStorage implements IStorage {
       ));
 
     if (!access && user.role === UserRole.CLIENT) {
-      await ensureClientPortalAccess(user);
+      await this.repairClientPortalAccessSafe(user, "getClientUserAccessByUserAndClient");
       [access] = await db.select()
         .from(clientUserAccess)
         .where(and(
@@ -2333,8 +2370,8 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
 
-    const clientTenantId = await this.resolveClientAccessTenantId(client, access);
     let effectiveUserTenantId = user.tenantId;
+    let clientTenantId = await this.resolveClientAccessTenantIdWithFallback(client, access, effectiveUserTenantId);
     // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
     if (user.role === UserRole.CLIENT && clientTenantId && effectiveUserTenantId !== clientTenantId) {
       const [updatedUser] = await db.update(users)
@@ -2394,7 +2431,7 @@ export class DatabaseStorage implements IStorage {
     if (!user) {
       return [];
     }
-    const repairedAccess = await ensureClientPortalAccess(user);
+    const repairedAccess = await this.repairClientPortalAccessSafe(user, "getClientsForUser");
     let effectiveUserTenantId = repairedAccess.tenantId || user.tenantId;
     
     const accessRecords = await db.select()
@@ -2408,7 +2445,7 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
-      const clientTenantId = await this.resolveClientAccessTenantId(client, access);
+      const clientTenantId = await this.resolveClientAccessTenantIdWithFallback(client, access, effectiveUserTenantId);
       // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
       if (user.role === UserRole.CLIENT && clientTenantId && effectiveUserTenantId !== clientTenantId) {
         const [updatedUser] = await db.update(users)

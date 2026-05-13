@@ -46,41 +46,55 @@ function resolvedContactTenantId(row: ContactMatchRow): string | null {
   return row.clientTenantId || row.contactTenantId || row.workspaceTenantId || null;
 }
 
+async function resolveWorkspaceTenantId(...workspaceIds: Array<string | null | undefined>): Promise<string | null> {
+  const uniqueWorkspaceIds = unique(workspaceIds.filter((workspaceId): workspaceId is string => Boolean(workspaceId)));
+  for (const workspaceId of uniqueWorkspaceIds) {
+    const [workspace] = await db
+      .select({ tenantId: workspaces.tenantId })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+    if (workspace?.tenantId) {
+      return workspace.tenantId;
+    }
+  }
+  return null;
+}
+
 async function getExistingAccessTenantRows(userId: string): Promise<AccessTenantRow[]> {
-  return db
+  const rows = await db
     .select({
       clientId: clientUserAccess.clientId,
       accessWorkspaceId: clientUserAccess.workspaceId,
       clientWorkspaceId: clients.workspaceId,
       clientTenantId: clients.tenantId,
-      workspaceTenantId: sql<string | null>`COALESCE(
-        (SELECT tenant_id FROM workspaces WHERE id = ${clients.workspaceId}),
-        ${workspaces.tenantId}
-      )`,
     })
     .from(clientUserAccess)
     .innerJoin(clients, eq(clientUserAccess.clientId, clients.id))
-    .leftJoin(workspaces, eq(clientUserAccess.workspaceId, workspaces.id))
     .where(eq(clientUserAccess.userId, userId));
+
+  return Promise.all(rows.map(async row => ({
+    ...row,
+    workspaceTenantId: await resolveWorkspaceTenantId(row.clientWorkspaceId, row.accessWorkspaceId),
+  })));
 }
 
 async function getContactMatches(email: string): Promise<ContactMatchRow[]> {
-  return db
+  const rows = await db
     .select({
       clientId: clientContacts.clientId,
       contactWorkspaceId: clientContacts.workspaceId,
       clientWorkspaceId: clients.workspaceId,
       clientTenantId: clients.tenantId,
       contactTenantId: clientContacts.tenantId,
-      workspaceTenantId: sql<string | null>`COALESCE(
-        (SELECT tenant_id FROM workspaces WHERE id = ${clients.workspaceId}),
-        ${workspaces.tenantId}
-      )`,
     })
     .from(clientContacts)
     .innerJoin(clients, eq(clientContacts.clientId, clients.id))
-    .leftJoin(workspaces, eq(clientContacts.workspaceId, workspaces.id))
     .where(sql`lower(${clientContacts.email}) = ${email}`);
+
+  return Promise.all(rows.map(async row => ({
+    ...row,
+    workspaceTenantId: await resolveWorkspaceTenantId(row.clientWorkspaceId, row.contactWorkspaceId),
+  })));
 }
 
 async function setClientTenantIdIfMissing(clientId: string, tenantId: string | null): Promise<void> {

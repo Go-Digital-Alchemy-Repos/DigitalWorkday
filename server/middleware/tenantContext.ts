@@ -90,10 +90,18 @@ export async function tenantContextMiddleware(req: Request, res: Response, next:
     let tenantId = user.tenantId || null;
 
     if (user.role === UserRole.CLIENT) {
-      const repairedAccess = await ensureClientPortalAccess(user);
-      if (repairedAccess.tenantId) {
-        tenantId = repairedAccess.tenantId;
-        (req.user as any).tenantId = repairedAccess.tenantId;
+      try {
+        const repairedAccess = await ensureClientPortalAccess(user);
+        if (repairedAccess.tenantId) {
+          tenantId = repairedAccess.tenantId;
+          (req.user as any).tenantId = repairedAccess.tenantId;
+        }
+      } catch (error) {
+        console.warn("[tenantContext] Client portal access repair failed; continuing with existing tenant context", {
+          userId: user.id,
+          path: req.path,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
