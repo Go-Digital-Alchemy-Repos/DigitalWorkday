@@ -14,6 +14,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { trackChunkLoad } from "@/lib/perf";
 
 const ClientPortalDashboard = lazy(trackChunkLoad("PortalDashboard", () => import("@/pages/client-portal-dashboard")));
+const ClientPortalActivity = lazy(trackChunkLoad("PortalActivity", () => import("@/pages/client-portal-activity")));
 const ClientPortalContacts = lazy(trackChunkLoad("PortalContacts", () => import("@/pages/client-portal-contacts")));
 const ClientPortalProjects = lazy(trackChunkLoad("PortalProjects", () => import("@/pages/client-portal-projects")));
 const ClientPortalProjectDetail = lazy(trackChunkLoad("PortalProjectDetail", () => import("@/pages/client-portal-project-detail")));
@@ -35,6 +36,9 @@ function ClientPortalRouter() {
         </Route>
         <Route path="/portal/contacts">
           {() => <ClientPortalRouteGuard component={ClientPortalContacts} />}
+        </Route>
+        <Route path="/portal/activity">
+          {() => <ClientPortalRouteGuard component={ClientPortalActivity} />}
         </Route>
         <Route path="/portal/projects">
           {() => <ClientPortalRouteGuard component={ClientPortalProjects} />}

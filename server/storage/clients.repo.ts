@@ -10,6 +10,7 @@ import {
   type ClientWithContacts,
   clients, clientContacts, clientInvites, clientUserAccess,
   clientDivisions, divisionMembers, projects, users,
+  UserRole,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, inArray, isNull, sql } from "drizzle-orm";
@@ -207,15 +208,29 @@ export class ClientsRepository {
     const [client] = await db.select().from(clients).where(eq(clients.id, clientId));
     
     if (!user || !client) return undefined;
-    if (user.tenantId !== client.tenantId) return undefined;
-    
+
     const [access] = await db.select()
       .from(clientUserAccess)
       .where(and(
         eq(clientUserAccess.userId, userId),
         eq(clientUserAccess.clientId, clientId)
       ));
-    return access || undefined;
+    if (!access) return undefined;
+
+    let effectiveUserTenantId = user.tenantId;
+    // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
+    if (user.role === UserRole.CLIENT && client.tenantId && effectiveUserTenantId !== client.tenantId) {
+      const [updatedUser] = await db.update(users)
+        .set({ tenantId: client.tenantId, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+        .returning({ tenantId: users.tenantId });
+      effectiveUserTenantId = updatedUser?.tenantId || client.tenantId;
+    }
+
+    if (!effectiveUserTenantId || !client.tenantId) return undefined;
+    if (effectiveUserTenantId !== client.tenantId) return undefined;
+
+    return access;
   }
 
   async updateClientUserAccess(clientId: string, userId: string, updates: Partial<InsertClientUserAccess>): Promise<ClientUserAccess | undefined> {
@@ -238,6 +253,10 @@ export class ClientsRepository {
   }
 
   async getClientsForUser(userId: string): Promise<Array<{ client: Client; access: ClientUserAccess }>> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) return [];
+    let effectiveUserTenantId = user.tenantId;
+
     const accessRecords = await db.select()
       .from(clientUserAccess)
       .where(eq(clientUserAccess.userId, userId));
@@ -245,9 +264,28 @@ export class ClientsRepository {
     const result: Array<{ client: Client; access: ClientUserAccess }> = [];
     for (const access of accessRecords) {
       const client = await this.getClient(access.clientId);
-      if (client) {
-        result.push({ client, access });
+      if (!client) {
+        continue;
       }
+
+      // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
+      if (user.role === UserRole.CLIENT && client.tenantId && effectiveUserTenantId !== client.tenantId) {
+        const [updatedUser] = await db.update(users)
+          .set({ tenantId: client.tenantId, updatedAt: new Date() })
+          .where(eq(users.id, user.id))
+          .returning({ tenantId: users.tenantId });
+        effectiveUserTenantId = updatedUser?.tenantId || client.tenantId;
+      }
+
+      if (!effectiveUserTenantId || !client.tenantId) {
+        continue;
+      }
+
+      if (effectiveUserTenantId !== client.tenantId) {
+        continue;
+      }
+
+      result.push({ client, access });
     }
     return result;
   }

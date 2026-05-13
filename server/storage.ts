@@ -2285,36 +2285,50 @@ export class DatabaseStorage implements IStorage {
     if (!client) {
       return undefined;
     }
-    
-    // Enforce strict tenant isolation for client portal access
-    // Both user and client must have tenantId set and they must match
-    if (!user.tenantId || !client.tenantId) {
-      console.warn("[storage] getClientUserAccessByUserAndClient: Missing tenantId", {
-        userId: user.id,
-        userTenantId: user.tenantId,
-        clientId: client.id,
-        clientTenantId: client.tenantId,
-      });
-      return undefined;
-    }
-    
-    if (user.tenantId !== client.tenantId) {
-      console.warn("[storage] getClientUserAccessByUserAndClient: Tenant mismatch", {
-        userId: user.id,
-        userTenantId: user.tenantId,
-        clientId: client.id,
-        clientTenantId: client.tenantId,
-      });
-      return undefined;
-    }
-    
+
     const [access] = await db.select()
       .from(clientUserAccess)
       .where(and(
         eq(clientUserAccess.userId, userId),
         eq(clientUserAccess.clientId, clientId)
       ));
-    return access || undefined;
+    if (!access) {
+      return undefined;
+    }
+
+    let effectiveUserTenantId = user.tenantId;
+    // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
+    if (user.role === UserRole.CLIENT && client.tenantId && effectiveUserTenantId !== client.tenantId) {
+      const [updatedUser] = await db.update(users)
+        .set({ tenantId: client.tenantId, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+        .returning({ tenantId: users.tenantId });
+      effectiveUserTenantId = updatedUser?.tenantId || client.tenantId;
+    }
+    
+    // Enforce strict tenant isolation for client portal access
+    // Both user and client must have tenantId set and they must match
+    if (!effectiveUserTenantId || !client.tenantId) {
+      console.warn("[storage] getClientUserAccessByUserAndClient: Missing tenantId", {
+        userId: user.id,
+        userTenantId: effectiveUserTenantId,
+        clientId: client.id,
+        clientTenantId: client.tenantId,
+      });
+      return undefined;
+    }
+    
+    if (effectiveUserTenantId !== client.tenantId) {
+      console.warn("[storage] getClientUserAccessByUserAndClient: Tenant mismatch", {
+        userId: user.id,
+        userTenantId: effectiveUserTenantId,
+        clientId: client.id,
+        clientTenantId: client.tenantId,
+      });
+      return undefined;
+    }
+    
+    return access;
   }
 
   async updateClientUserAccess(clientId: string, userId: string, updates: Partial<InsertClientUserAccess>): Promise<ClientUserAccess | undefined> {
@@ -2342,6 +2356,7 @@ export class DatabaseStorage implements IStorage {
     if (!user) {
       return [];
     }
+    let effectiveUserTenantId = user.tenantId;
     
     const accessRecords = await db.select()
       .from(clientUserAccess)
@@ -2353,24 +2368,33 @@ export class DatabaseStorage implements IStorage {
       if (!client) {
         continue;
       }
+
+      // Portal access is granted by client_user_access; repair stale client-user tenant ids from older provisioning flows.
+      if (user.role === UserRole.CLIENT && client.tenantId && effectiveUserTenantId !== client.tenantId) {
+        const [updatedUser] = await db.update(users)
+          .set({ tenantId: client.tenantId, updatedAt: new Date() })
+          .where(eq(users.id, user.id))
+          .returning({ tenantId: users.tenantId });
+        effectiveUserTenantId = updatedUser?.tenantId || client.tenantId;
+      }
       
       // Enforce tenant isolation for cross-tenant security
       // Both user and client should have matching tenantIds
       // If either is missing tenantId, this is a data integrity issue - skip for safety
-      if (!user.tenantId || !client.tenantId) {
+      if (!effectiveUserTenantId || !client.tenantId) {
         console.warn("[storage] getClientsForUser: Missing tenantId", {
           userId: user.id,
-          userTenantId: user.tenantId,
+          userTenantId: effectiveUserTenantId,
           clientId: client.id,
           clientTenantId: client.tenantId,
         });
         continue;
       }
       
-      if (user.tenantId !== client.tenantId) {
+      if (effectiveUserTenantId !== client.tenantId) {
         console.warn("[storage] getClientsForUser: Tenant mismatch", {
           userId: user.id,
-          userTenantId: user.tenantId,
+          userTenantId: effectiveUserTenantId,
           clientId: client.id,
           clientTenantId: client.tenantId,
         });

@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { ClientAccessLevel, commentMentions, insertCommentSchema, UserRole, users } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { ClientAccessLevel, clientConversations, commentMentions, insertCommentSchema, UserRole, users } from "@shared/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { getClientUserAccessibleClients } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
@@ -590,10 +590,18 @@ router.post("/clients/:clientId/users/invite", async (req, res) => {
       });
     }
 
-    const existingUser = await storage.getUserByEmail(inviteEmail);
+    let existingUser = await storage.getUserByEmail(inviteEmail);
     if (existingUser) {
       if (existingUser.role !== UserRole.CLIENT) {
         throw AppError.conflict("This email belongs to an internal user. Invite a different client portal email.");
+      }
+
+      if (!existingUser.tenantId && client.tenantId) {
+        const [updated] = await db.update(users)
+          .set({ tenantId: client.tenantId, updatedAt: new Date() })
+          .where(eq(users.id, existingUser.id))
+          .returning();
+        existingUser = updated || existingUser;
       }
 
       const existingAccess = await storage.getClientUserAccessByUserAndClient(existingUser.id, clientId);
@@ -712,6 +720,7 @@ router.post("/clients/:clientId/users/create", async (req, res) => {
 
       const [updated] = await db.update(users)
         .set({
+          tenantId: user.tenantId || client.tenantId,
           firstName: firstName || user.firstName,
           lastName: lastName || user.lastName,
           name,
@@ -1193,6 +1202,129 @@ router.patch("/subtasks/:subtaskId", async (req, res) => {
     res.json(sanitizeSubtaskForPortal(subtask));
   } catch (error) {
     return handleRouteError(res, error, "PATCH /subtasks/:subtaskId", req);
+  }
+});
+
+router.get("/activity", async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+      : 50;
+    const clientsAccess = await storage.getClientsForUser(userId);
+    const activityItems: any[] = [];
+
+    for (const { client } of clientsAccess) {
+      const clientName = client.displayName || client.companyName;
+      const tenantId = client.tenantId || req.user!.tenantId || null;
+      const projects = await storage.getProjectsByClient(client.id);
+
+      for (const project of projects) {
+        if ((project as any).visibility === "private") continue;
+
+        const projectActivity = await storage.getProjectActivity(project.id, tenantId, 20);
+        for (const item of projectActivity) {
+          activityItems.push({
+            id: `project-${item.id}`,
+            source: "project",
+            type: item.type,
+            timestamp: item.timestamp,
+            actor: {
+              id: item.actorId,
+              name: item.actorName,
+              email: item.actorEmail,
+              avatarUrl: item.actorAvatarUrl,
+            },
+            title: item.entityTitle,
+            description: project.name,
+            clientId: client.id,
+            clientName,
+            projectId: project.id,
+            projectName: project.name,
+            entityId: item.entityId,
+            metadata: item.metadata || {},
+          });
+        }
+      }
+
+      if (!tenantId) continue;
+
+      const conversations = await db.select({
+        id: clientConversations.id,
+        subject: clientConversations.subject,
+        type: clientConversations.type,
+        priority: clientConversations.priority,
+        createdAt: clientConversations.createdAt,
+        updatedAt: clientConversations.updatedAt,
+        creatorId: users.id,
+        creatorName: users.name,
+        creatorEmail: users.email,
+        creatorAvatarUrl: users.avatarUrl,
+      })
+        .from(clientConversations)
+        .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
+        .where(and(
+          eq(clientConversations.tenantId, tenantId),
+          eq(clientConversations.clientId, client.id),
+        ))
+        .orderBy(desc(clientConversations.updatedAt))
+        .limit(15);
+
+      for (const conversation of conversations) {
+        activityItems.push({
+          id: `conversation-${conversation.id}`,
+          source: "message",
+          type: conversation.type === "service_request" ? "service_request_updated" : "conversation_updated",
+          timestamp: conversation.updatedAt || conversation.createdAt,
+          actor: {
+            id: conversation.creatorId,
+            name: conversation.creatorName,
+            email: conversation.creatorEmail,
+            avatarUrl: conversation.creatorAvatarUrl,
+          },
+          title: conversation.subject,
+          description: conversation.type === "service_request" ? "Service request" : "Client message",
+          clientId: client.id,
+          clientName,
+          entityId: conversation.id,
+          metadata: {
+            priority: conversation.priority,
+            conversationType: conversation.type,
+          },
+        });
+      }
+
+      const { tickets } = await storage.getSupportTicketsByClient(tenantId, client.id, {
+        limit: 15,
+        offset: 0,
+      });
+
+      for (const ticket of tickets) {
+        activityItems.push({
+          id: `support-${ticket.id}`,
+          source: "support",
+          type: "support_ticket_updated",
+          timestamp: ticket.lastActivityAt || ticket.updatedAt || ticket.createdAt,
+          actor: null,
+          title: ticket.title,
+          description: "Support ticket",
+          clientId: client.id,
+          clientName,
+          entityId: ticket.id,
+          metadata: {
+            status: ticket.status,
+            priority: ticket.priority,
+            category: ticket.category,
+          },
+        });
+      }
+    }
+
+    activityItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    res.json(activityItems.slice(0, limit));
+  } catch (error) {
+    return handleRouteError(res, error, "GET /activity", req);
   }
 });
 

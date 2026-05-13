@@ -203,6 +203,14 @@ router.post("/:clientId/users/invite", async (req, res) => {
         throw AppError.conflict("This email belongs to an internal user. Invite a different client portal email.");
       }
 
+      if (!existingUser.tenantId && client.tenantId) {
+        const [updated] = await db.update(users)
+          .set({ tenantId: client.tenantId, updatedAt: new Date() })
+          .where(eq(users.id, existingUser.id))
+          .returning();
+        existingUser = updated || existingUser;
+      }
+
       // Check if already has access to this client
       const existingAccess = await storage.getClientUserAccessByUserAndClient(
         existingUser.id, 
@@ -344,6 +352,7 @@ router.post("/:clientId/users/create", async (req, res) => {
 
       const [updated] = await db.update(users)
         .set({
+          tenantId: user.tenantId || client.tenantId,
           firstName: firstName || user.firstName,
           lastName: lastName || user.lastName,
           name,

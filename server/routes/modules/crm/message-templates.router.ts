@@ -49,6 +49,17 @@ function toNotificationPayload(notification: Notification): NotificationPayload 
   };
 }
 
+async function getPortalTenantId(req: Request): Promise<string | null> {
+  const sessionTenantId = getEffectiveTenantId(req);
+  if (sessionTenantId) return sessionTenantId;
+
+  const user = req.user;
+  if (!user || user.role !== UserRole.CLIENT) return null;
+
+  const clientsAccess = await storage.getClientsForUser(user.id);
+  return clientsAccess.find(({ client }) => client.tenantId)?.client.tenantId || null;
+}
+
 const createTemplateSchema = z.object({
   name: z.string().min(1).max(200),
   subject: z.string().min(1).max(500),
@@ -172,7 +183,7 @@ router.delete("/crm/message-templates/:templateId", requireAdmin, async (req: Re
 
 router.get("/crm/portal/message-templates", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const tenantId = await getPortalTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
@@ -203,7 +214,7 @@ router.get("/crm/portal/message-templates", requireAuth, async (req: Request, re
 
 router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const tenantId = await getPortalTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
@@ -233,7 +244,7 @@ router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Reque
 
 router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const tenantId = await getPortalTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;

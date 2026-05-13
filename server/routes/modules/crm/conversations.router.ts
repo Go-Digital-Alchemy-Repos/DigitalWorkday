@@ -544,6 +544,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       projectId: z.string().optional(),
       initialMessage: z.string().min(1),
       assignedToUserId: z.string().optional(),
+      recipientUserId: z.string().optional(),
       priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
       type: z.enum(["everyday", "service_request", "support_ticket"]).optional().default("everyday"),
     });
@@ -556,6 +557,23 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
     }
 
     const userId = getCurrentUserId(req);
+
+    if (data.recipientUserId) {
+      const [recipient] = await db.select({ id: users.id, role: users.role, tenantId: users.tenantId, isActive: users.isActive })
+        .from(users)
+        .where(eq(users.id, data.recipientUserId))
+        .limit(1);
+      const recipientAccess = recipient
+        ? await storage.getClientUserAccessByUserAndClient(recipient.id, clientId)
+        : undefined;
+
+      if (!recipient || recipient.role !== UserRole.CLIENT || !recipient.isActive || !recipientAccess) {
+        return sendError(res, AppError.badRequest("Invalid client portal recipient"), req);
+      }
+      if (recipient.tenantId && recipient.tenantId !== tenantId) {
+        return sendError(res, AppError.badRequest("Invalid client portal recipient"), req);
+      }
+    }
 
     let assigneeId: string | null = data.assignedToUserId || userId;
     if (!data.assignedToUserId) {
@@ -1164,16 +1182,16 @@ router.get("/crm/clients/:clientId/conversations/merge-candidates", requireAuth,
 
 router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
     const user = req.user!;
     if (user.role !== UserRole.CLIENT) {
       return sendError(res, AppError.forbidden("Portal access only"), req);
     }
 
-    const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
-    const clientIds = await getClientUserAccessibleClients(user.id);
+    const clientsAccess = await storage.getClientsForUser(user.id);
+    const tenantId = getEffectiveTenantId(req) || clientsAccess.find(({ client }) => client.tenantId)?.client.tenantId || null;
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const clientIds = clientsAccess.map(({ client }) => client.id);
 
     if (clientIds.length === 0) return res.json([]);
 

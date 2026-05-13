@@ -3,7 +3,6 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { UserRole, SupportTicketSource, SupportTicketAuthorType, SupportTicketEventType, SupportTicketStatus } from "@shared/schema";
 import type { Request, Response, NextFunction } from "express";
-import { getClientUserAccessibleClients } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
 
 const router = Router();
@@ -16,6 +15,19 @@ function requireClientRole(req: Request, res: Response, next: NextFunction) {
 }
 
 router.use(requireClientRole);
+
+async function getPortalSupportContext(userId: string, sessionTenantId?: string | null) {
+  const clientsAccess = await storage.getClientsForUser(userId);
+  const tenantId = sessionTenantId || clientsAccess.find(({ client }) => client.tenantId)?.client.tenantId || null;
+  if (!tenantId) {
+    throw AppError.forbidden("Tenant context required");
+  }
+
+  return {
+    tenantId,
+    clientIds: clientsAccess.map(({ client }) => client.id),
+  };
+}
 
 const createTicketSchema = z.object({
   clientId: z.string().min(1),
@@ -40,10 +52,7 @@ const addReplySchema = z.object({
 router.get("/tickets", async (req, res) => {
   try {
     const userId = req.user!.id;
-    const tenantId = req.user!.tenantId;
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
-
-    const clientIds = await getClientUserAccessibleClients(userId);
+    const { tenantId, clientIds } = await getPortalSupportContext(userId, req.user!.tenantId);
     if (clientIds.length === 0) {
       return res.json({ tickets: [], total: 0 });
     }
@@ -77,15 +86,13 @@ router.get("/tickets", async (req, res) => {
 router.get("/tickets/:id", async (req, res) => {
   try {
     const userId = req.user!.id;
-    const tenantId = req.user!.tenantId;
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, clientIds } = await getPortalSupportContext(userId, req.user!.tenantId);
 
     const ticket = await storage.getSupportTicket(req.params.id);
     if (!ticket || ticket.tenantId !== tenantId) {
       throw AppError.notFound("Support ticket");
     }
 
-    const clientIds = await getClientUserAccessibleClients(userId);
     if (!ticket.clientId || !clientIds.includes(ticket.clientId)) {
       throw AppError.forbidden("You do not have access to this ticket");
     }
@@ -113,12 +120,10 @@ router.get("/tickets/:id", async (req, res) => {
 router.post("/tickets", async (req, res) => {
   try {
     const userId = req.user!.id;
-    const tenantId = req.user!.tenantId;
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, clientIds } = await getPortalSupportContext(userId, req.user!.tenantId);
 
     const body = createTicketSchema.parse(req.body);
 
-    const clientIds = await getClientUserAccessibleClients(userId);
     if (!clientIds.includes(body.clientId)) {
       throw AppError.forbidden("You do not have access to this client");
     }
@@ -185,15 +190,13 @@ router.post("/tickets", async (req, res) => {
 router.post("/tickets/:id/messages", async (req, res) => {
   try {
     const userId = req.user!.id;
-    const tenantId = req.user!.tenantId;
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, clientIds } = await getPortalSupportContext(userId, req.user!.tenantId);
 
     const ticket = await storage.getSupportTicket(req.params.id);
     if (!ticket || ticket.tenantId !== tenantId) {
       throw AppError.notFound("Support ticket");
     }
 
-    const clientIds = await getClientUserAccessibleClients(userId);
     if (!ticket.clientId || !clientIds.includes(ticket.clientId)) {
       throw AppError.forbidden("You do not have access to this ticket");
     }
@@ -229,8 +232,7 @@ router.post("/tickets/:id/messages", async (req, res) => {
 // Portal: get form schema for a category (so portal can render dynamic fields)
 router.get("/form-schemas/:category", async (req, res) => {
   try {
-    const tenantId = req.user!.tenantId;
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId } = await getPortalSupportContext(req.user!.id, req.user!.tenantId);
     const schema = await storage.getTicketFormSchema(tenantId, req.params.category);
     res.json(schema || null);
   } catch (error) {

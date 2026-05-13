@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useTenantTheme } from "@/lib/tenant-theme-loader";
 import {
   Home,
+  Activity,
   FolderKanban,
   ContactRound,
   Library,
@@ -41,6 +42,7 @@ interface DashboardData {
 
 const mainNavItems = [
   { title: "Overview", url: "/portal", icon: Home },
+  { title: "Account Activity", url: "/portal/activity", icon: Activity },
   { title: "Contacts", url: "/portal/contacts", icon: ContactRound },
   { title: "Projects", url: "/portal/projects", icon: FolderKanban },
   { title: "Approvals", url: "/portal/approvals", icon: ClipboardCheck },
@@ -77,7 +79,7 @@ export function ClientPortalSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-border h-16 justify-center px-4 py-3">
+      <SidebarHeader className="border-b border-border h-16 justify-start px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <img src={iconUrl || logoUrl || appLogo} alt={displayName} className="h-7 w-7 shrink-0 rounded-sm object-contain" />
           <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">

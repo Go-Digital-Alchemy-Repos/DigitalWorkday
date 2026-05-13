@@ -1618,7 +1618,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newMessage, setNewMessage] = useState("");
-  const [newAssignee, setNewAssignee] = useState<string>("__self__");
+  const [newRecipient, setNewRecipient] = useState<string>("");
   const [newPriority, setNewPriority] = useState<string>("normal");
   const [newType, setNewType] = useState<string>("everyday");
   const [replyText, setReplyText] = useState("");
@@ -1673,6 +1673,21 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   const staffUsers = useMemo(() =>
     tenantUsers.filter((u: any) => u.role !== "client"),
   [tenantUsers]);
+
+  const { data: clientPortalUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/clients", clientId, "users"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/clients/${clientId}/users`);
+      return res.json();
+    },
+    enabled: Boolean(clientId),
+  });
+
+  const customerRecipients = useMemo(() =>
+    clientPortalUsers
+      .map((entry: any) => entry.user || entry)
+      .filter((u: any) => u?.id && u?.email),
+  [clientPortalUsers]);
 
   const { data: convoResponse, isLoading } = useQuery<{ conversations: any[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>({
     queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter, debouncedSearch, statusFilter, priorityFilter, typeFilter, sortBy, dateFrom, dateTo, page],
@@ -1732,7 +1747,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; initialMessage: string; assignedToUserId?: string; priority?: string }) => {
+    mutationFn: async (data: { subject: string; initialMessage: string; recipientUserId?: string; assignedToUserId?: string; priority?: string }) => {
       const res = await apiRequest("POST", `/api/crm/clients/${clientId}/conversations`, data);
       return res.json();
     },
@@ -1740,7 +1755,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
       setShowNewConvo(false);
       setNewSubject("");
       setNewMessage("");
-      setNewAssignee("__self__");
+      setNewRecipient("");
       setNewPriority("normal");
       setNewType("everyday");
       if (convo.kind === "support_ticket") {
@@ -1874,11 +1889,9 @@ export function MessagesTab({ clientId }: { clientId: string }) {
   };
 
   const handleCreateConvo = () => {
-    if (!newSubject.trim() || !newMessage.trim()) return;
+    if (!newSubject.trim() || !newMessage.trim() || !newRecipient) return;
     const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority, type: "everyday" };
-    if (newAssignee && newAssignee !== "__self__") {
-      payload.assignedToUserId = newAssignee;
-    }
+    payload.recipientUserId = newRecipient;
     createMutation.mutate(payload);
   };
 
@@ -2353,13 +2366,12 @@ export function MessagesTab({ clientId }: { clientId: string }) {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-1.5">
               <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Select value={newAssignee} onValueChange={setNewAssignee}>
+              <Select value={newRecipient} onValueChange={setNewRecipient}>
                 <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
-                  <SelectValue placeholder="Select recipient" />
+                  <SelectValue placeholder="Select customer recipient" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__self__">Me</SelectItem>
-                  {staffUsers.map((u: any) => (
+                  {customerRecipients.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2400,7 +2412,7 @@ export function MessagesTab({ clientId }: { clientId: string }) {
                 <Button
                   size="sm"
                   onClick={handleCreateConvo}
-                  disabled={!newSubject.trim() || !newMessage.trim() || createMutation.isPending}
+                  disabled={!newSubject.trim() || !newMessage.trim() || !newRecipient || createMutation.isPending}
                   data-testid="button-send-new-convo"
                 >
                   <Send className="h-4 w-4 mr-1" />

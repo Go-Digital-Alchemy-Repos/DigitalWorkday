@@ -2,9 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { createHash } from "crypto";
 import { storage } from "../../storage";
+import { db } from "../../db";
 import { hashPassword } from "../../auth";
 import { AppError, handleRouteError } from "../../lib/errors";
-import { ClientAccessLevel, UserRole } from "@shared/schema";
+import { ClientAccessLevel, UserRole, users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -82,10 +84,18 @@ router.post("/invites/accept", async (req, res) => {
     const client = await storage.getClient(invite.clientId);
     if (!client) throw AppError.notFound("Client");
 
-    const existingUser = await storage.getUserByEmail(invite.email);
+    let existingUser = await storage.getUserByEmail(invite.email);
     if (existingUser) {
       if (existingUser.role !== UserRole.CLIENT) {
         throw AppError.conflict("This invitation email belongs to an internal user");
+      }
+
+      if (!existingUser.tenantId && client.tenantId) {
+        const [updated] = await db.update(users)
+          .set({ tenantId: client.tenantId, updatedAt: new Date() })
+          .where(eq(users.id, existingUser.id))
+          .returning();
+        existingUser = updated || existingUser;
       }
 
       const existingAccess = await storage.getClientUserAccessByUserAndClient(existingUser.id, invite.clientId);
