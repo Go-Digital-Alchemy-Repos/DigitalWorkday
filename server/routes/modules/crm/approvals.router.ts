@@ -1,10 +1,11 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull, or } from "drizzle-orm";
 import { AppError, handleRouteError, sendError } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth } from "../../../auth";
+import { storage } from "../../../storage";
 import {
   approvalRequests,
   clients,
@@ -19,10 +20,11 @@ const router = Router();
 
 const approvalCreateSchema = z.object({
   title: z.string().min(1).max(200),
-  instructions: z.string().optional(),
-  projectId: z.string().uuid().optional(),
-  taskId: z.string().uuid().optional(),
-  dueAt: z.string().optional(),
+  instructions: z.string().nullable().optional(),
+  projectId: z.string().uuid().nullable().optional(),
+  taskId: z.string().uuid().nullable().optional(),
+  targetPortalUserId: z.string().uuid().nullable().optional(),
+  dueAt: z.string().nullable().optional(),
 });
 
 router.post("/crm/clients/:clientId/approvals", requireAuth, async (req: Request, res: Response) => {
@@ -40,6 +42,19 @@ router.post("/crm/clients/:clientId/approvals", requireAuth, async (req: Request
 
     const body = approvalCreateSchema.parse(req.body);
     const userId = getCurrentUserId(req);
+    const targetPortalUserId = body.targetPortalUserId || null;
+
+    if (targetPortalUserId) {
+      const targetUser = await storage.getUser(targetPortalUserId);
+      if (!targetUser || targetUser.role !== UserRole.CLIENT) {
+        return sendError(res, AppError.badRequest("Selected approval recipient is not a client portal user"), req);
+      }
+
+      const targetAccess = await storage.getClientUserAccessByUserAndClient(targetPortalUserId, clientId);
+      if (!targetAccess) {
+        return sendError(res, AppError.badRequest("Selected approval recipient does not have access to this client"), req);
+      }
+    }
 
     const [approval] = await db.insert(approvalRequests).values({
       tenantId,
@@ -47,6 +62,7 @@ router.post("/crm/clients/:clientId/approvals", requireAuth, async (req: Request
       projectId: body.projectId || null,
       taskId: body.taskId || null,
       requestedByUserId: userId,
+      targetPortalUserId,
       title: body.title,
       instructions: body.instructions || null,
       dueAt: body.dueAt ? new Date(body.dueAt) : null,
@@ -131,6 +147,9 @@ router.patch("/crm/approvals/:id", requireAuth, async (req: Request, res: Respon
       if (!accessibleClients.includes(existing.clientId)) {
         return sendError(res, AppError.forbidden("Access denied"), req);
       }
+      if (existing.targetPortalUserId && existing.targetPortalUserId !== user.id) {
+        return sendError(res, AppError.forbidden("This approval request is assigned to another portal user"), req);
+      }
     } else {
       return sendError(res, AppError.forbidden("Only clients can respond to approval requests"), req);
     }
@@ -203,7 +222,11 @@ router.get("/crm/portal/approvals", requireAuth, async (req: Request, res: Respo
       .where(
         and(
           eq(approvalRequests.tenantId, tenantId),
-          inArray(approvalRequests.clientId, clientIds)
+          inArray(approvalRequests.clientId, clientIds),
+          or(
+            isNull(approvalRequests.targetPortalUserId),
+            eq(approvalRequests.targetPortalUserId, user.id)
+          )
         )
       )
       .orderBy(desc(approvalRequests.createdAt));

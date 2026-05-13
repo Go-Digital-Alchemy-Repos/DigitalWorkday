@@ -71,6 +71,13 @@
       "when": 1778007600000,
       "tag": "0047_archive_project_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778697418000,
+      "tag": "0048_approval_target_portal_user",
+      "breakpoints": true
     }
   ]
 }

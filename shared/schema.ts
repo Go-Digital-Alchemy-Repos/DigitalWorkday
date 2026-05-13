@@ -3609,6 +3609,7 @@ export const approvalRequests = pgTable("approval_requests", {
   projectId: varchar("project_id").references(() => projects.id),
   taskId: varchar("task_id").references(() => tasks.id),
   requestedByUserId: varchar("requested_by_user_id").references(() => users.id).notNull(),
+  targetPortalUserId: varchar("target_portal_user_id").references(() => users.id),
   title: text("title").notNull(),
   instructions: text("instructions"),
   status: text("status").notNull().default("pending"),
@@ -3622,6 +3623,7 @@ export const approvalRequests = pgTable("approval_requests", {
   index("approval_requests_tenant_idx").on(table.tenantId),
   index("approval_requests_client_idx").on(table.clientId),
   index("approval_requests_status_idx").on(table.status),
+  index("approval_requests_target_portal_user_idx").on(table.targetPortalUserId),
 ]);
 
 export const insertApprovalRequestSchema = createInsertSchema(approvalRequests).omit({

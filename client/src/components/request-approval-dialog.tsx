@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -21,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RichTextEditor } from "@/components/richtext";
 import { ClipboardCheck, Loader2 } from "lucide-react";
 
 interface RequestApprovalDialogProps {
@@ -37,6 +37,27 @@ interface ClientOption {
   companyName: string;
 }
 
+interface PortalUserAccess {
+  id: string;
+  userId: string;
+  accessLevel: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  };
+}
+
+const ANY_AVAILABLE_CLIENT = "__any_available_client__";
+
+function getPortalUserLabel(entry: PortalUserAccess): string {
+  const user = entry.user;
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim();
+  return fullName || user?.name || user?.email || "Portal user";
+}
+
 export function RequestApprovalDialog({
   open,
   onOpenChange,
@@ -49,12 +70,24 @@ export function RequestApprovalDialog({
   const [title, setTitle] = useState(defaultTitle);
   const [instructions, setInstructions] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [targetPortalUserId, setTargetPortalUserId] = useState(ANY_AVAILABLE_CLIENT);
+
+  const { data: portalUsers = [] } = useQuery<PortalUserAccess[]>({
+    queryKey: ["/api/clients", clientId, "users"],
+    enabled: open && Boolean(clientId),
+  });
+
+  const portalUserOptions = useMemo(
+    () => portalUsers.filter((entry) => entry.user?.id && entry.user?.email),
+    [portalUsers]
+  );
 
   const createMutation = useMutation({
     mutationFn: async (data: {
       clientId: string;
       projectId?: string | null;
       taskId?: string | null;
+      targetPortalUserId?: string | null;
       title: string;
       instructions: string | null;
       dueAt: string | null;
@@ -69,6 +102,7 @@ export function RequestApprovalDialog({
       setTitle("");
       setInstructions("");
       setDueAt("");
+      setTargetPortalUserId(ANY_AVAILABLE_CLIENT);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -85,6 +119,7 @@ export function RequestApprovalDialog({
       clientId,
       projectId: projectId || null,
       taskId: taskId || null,
+      targetPortalUserId: targetPortalUserId === ANY_AVAILABLE_CLIENT ? null : targetPortalUserId,
       title: title.trim(),
       instructions: instructions.trim() || null,
       dueAt: dueAt || null,
@@ -117,14 +152,30 @@ export function RequestApprovalDialog({
           </div>
 
           <div className="space-y-2">
+            <Label>Send To</Label>
+            <Select value={targetPortalUserId} onValueChange={setTargetPortalUserId}>
+              <SelectTrigger data-testid="select-approval-recipient">
+                <SelectValue placeholder="Select a portal recipient" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY_AVAILABLE_CLIENT}>Any Available Client</SelectItem>
+                {portalUserOptions.map((entry) => (
+                  <SelectItem key={entry.user!.id} value={entry.user!.id}>
+                    {getPortalUserLabel(entry)}
+                    {entry.user?.email ? ` - ${entry.user.email}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="approval-instructions">Instructions (optional)</Label>
-            <Textarea
-              id="approval-instructions"
+            <RichTextEditor
               placeholder="Provide details, context, or what to review..."
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              rows={4}
-              className="resize-none"
+              onChange={setInstructions}
+              minHeight="120px"
               data-testid="input-approval-instructions"
             />
           </div>
@@ -175,6 +226,7 @@ export function RequestApprovalFromClientDialog({
   const [title, setTitle] = useState(defaultTitle);
   const [instructions, setInstructions] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [targetPortalUserId, setTargetPortalUserId] = useState(ANY_AVAILABLE_CLIENT);
 
   const { data: clients = [] } = useQuery<ClientOption[]>({
     queryKey: ["/api/clients"],
@@ -186,11 +238,22 @@ export function RequestApprovalFromClientDialog({
     },
   });
 
+  const { data: portalUsers = [] } = useQuery<PortalUserAccess[]>({
+    queryKey: ["/api/clients", selectedClientId, "users"],
+    enabled: open && Boolean(selectedClientId),
+  });
+
+  const portalUserOptions = useMemo(
+    () => portalUsers.filter((entry) => entry.user?.id && entry.user?.email),
+    [portalUsers]
+  );
+
   const createMutation = useMutation({
     mutationFn: async (data: {
       clientId: string;
       projectId?: string | null;
       taskId?: string | null;
+      targetPortalUserId?: string | null;
       title: string;
       instructions: string | null;
       dueAt: string | null;
@@ -206,6 +269,7 @@ export function RequestApprovalFromClientDialog({
       setInstructions("");
       setDueAt("");
       setSelectedClientId("");
+      setTargetPortalUserId(ANY_AVAILABLE_CLIENT);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -226,6 +290,7 @@ export function RequestApprovalFromClientDialog({
       clientId: selectedClientId,
       projectId: projectId || null,
       taskId: taskId || null,
+      targetPortalUserId: targetPortalUserId === ANY_AVAILABLE_CLIENT ? null : targetPortalUserId,
       title: title.trim(),
       instructions: instructions.trim() || null,
       dueAt: dueAt || null,
@@ -248,7 +313,13 @@ export function RequestApprovalFromClientDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Client</Label>
-            <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+            <Select
+              value={selectedClientId}
+              onValueChange={(value) => {
+                setSelectedClientId(value);
+                setTargetPortalUserId(ANY_AVAILABLE_CLIENT);
+              }}
+            >
               <SelectTrigger data-testid="select-approval-client">
                 <SelectValue placeholder="Select a client" />
               </SelectTrigger>
@@ -256,6 +327,28 @@ export function RequestApprovalFromClientDialog({
                 {clients.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.companyName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Send To</Label>
+            <Select
+              value={targetPortalUserId}
+              onValueChange={setTargetPortalUserId}
+              disabled={!selectedClientId}
+            >
+              <SelectTrigger data-testid="select-approval-recipient">
+                <SelectValue placeholder="Select a portal recipient" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY_AVAILABLE_CLIENT}>Any Available Client</SelectItem>
+                {portalUserOptions.map((entry) => (
+                  <SelectItem key={entry.user!.id} value={entry.user!.id}>
+                    {getPortalUserLabel(entry)}
+                    {entry.user?.email ? ` - ${entry.user.email}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -275,13 +368,11 @@ export function RequestApprovalFromClientDialog({
 
           <div className="space-y-2">
             <Label htmlFor="approval-instructions-2">Instructions (optional)</Label>
-            <Textarea
-              id="approval-instructions-2"
+            <RichTextEditor
               placeholder="Provide details, context, or what to review..."
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              rows={4}
-              className="resize-none"
+              onChange={setInstructions}
+              minHeight="120px"
               data-testid="input-approval-instructions"
             />
           </div>

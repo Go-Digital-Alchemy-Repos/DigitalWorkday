@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RichTextRenderer } from "@/components/richtext";
 
 interface ApprovalRequest {
   id: string;
@@ -28,6 +29,7 @@ interface ApprovalRequest {
   projectId: string | null;
   taskId: string | null;
   requestedByUserId: string;
+  targetPortalUserId: string | null;
   title: string;
   instructions: string | null;
   status: string;
@@ -112,9 +114,11 @@ function ApprovalCard({
                   <FileText className="h-3 w-3" />
                   Instructions
                 </div>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid={`approval-instructions-${approval.id}`}>
-                  {approval.instructions}
-                </p>
+                <RichTextRenderer
+                  value={approval.instructions}
+                  className="text-sm text-muted-foreground"
+                  data-testid={`approval-instructions-${approval.id}`}
+                />
               </div>
             )}
 
