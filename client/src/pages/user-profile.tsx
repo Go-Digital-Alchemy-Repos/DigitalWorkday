@@ -60,12 +60,15 @@ export default function UserProfilePage() {
     },
     onSuccess: () => {
       refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/client-portal/profile"] });
       queryClient.invalidateQueries({ queryKey: ["/api/client-portal/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       toast({ title: "Profile updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to update profile", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Failed to update profile", description: error.message, variant: "destructive" });
     },
   });
 
@@ -77,11 +80,12 @@ export default function UserProfilePage() {
     },
     onSuccess: async () => {
       await refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/client-portal/profile"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     },
-    onError: () => {
-      toast({ title: "Failed to update avatar", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Failed to update avatar", description: error.message, variant: "destructive" });
     },
     onSettled: () => {
       setPendingAvatarUrl(undefined);

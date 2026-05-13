@@ -95,6 +95,7 @@ import {
 import crypto from "crypto";
 import { db } from "./db";
 import { assertInsertHasTenantId } from "./lib/errors";
+import { ensureClientPortalAccess } from "./utils/clientPortalAccessRepair";
 
 // Calendar Task - Lightweight DTO for calendar display (no heavy relations)
 export type CalendarTask = {
@@ -2311,12 +2312,23 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
 
-    const [access] = await db.select()
+    let [access] = await db.select()
       .from(clientUserAccess)
       .where(and(
         eq(clientUserAccess.userId, userId),
         eq(clientUserAccess.clientId, clientId)
       ));
+
+    if (!access && user.role === UserRole.CLIENT) {
+      await ensureClientPortalAccess(user);
+      [access] = await db.select()
+        .from(clientUserAccess)
+        .where(and(
+          eq(clientUserAccess.userId, userId),
+          eq(clientUserAccess.clientId, clientId)
+        ));
+    }
+
     if (!access) {
       return undefined;
     }
@@ -2382,7 +2394,8 @@ export class DatabaseStorage implements IStorage {
     if (!user) {
       return [];
     }
-    let effectiveUserTenantId = user.tenantId;
+    const repairedAccess = await ensureClientPortalAccess(user);
+    let effectiveUserTenantId = repairedAccess.tenantId || user.tenantId;
     
     const accessRecords = await db.select()
       .from(clientUserAccess)

@@ -34,7 +34,14 @@ import { cleanupUserReferences } from "../utils/userDeletion";
 import { isAgreementEnforcementEnabled } from "../middleware/agreementEnforcement";
 import { syncClientContactsFromPortalUser } from "../utils/clientPortalIdentitySync";
 
-const router = createApiRouter({ policy: "authTenant" });
+const router = createApiRouter({
+  policy: "authTenant",
+  allowlist: [
+    "/users/me",
+    "/users/me/change-password",
+    "/users/me/ui-preferences",
+  ],
+});
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),

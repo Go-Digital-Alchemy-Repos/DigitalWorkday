@@ -19,6 +19,7 @@ import { tenants } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { AppError } from "../lib/errors";
 import { warmWorkspaceCache } from "../lib/workspaceCache";
+import { ensureClientPortalAccess } from "../utils/clientPortalAccessRepair";
 
 const TENANT_DEBUG = process.env.TENANT_CONTEXT_DEBUG === "true";
 
@@ -86,14 +87,24 @@ export async function tenantContextMiddleware(req: Request, res: Response, next:
       source: headerTenantId ? "header" : impersonatedTenantId ? "impersonation" : actingAsTenantId ? "acting" : "none"
     });
   } else {
+    let tenantId = user.tenantId || null;
+
+    if (user.role === UserRole.CLIENT) {
+      const repairedAccess = await ensureClientPortalAccess(user);
+      if (repairedAccess.tenantId) {
+        tenantId = repairedAccess.tenantId;
+        (req.user as any).tenantId = repairedAccess.tenantId;
+      }
+    }
+
     req.tenant = {
-      tenantId: user.tenantId || null,
-      effectiveTenantId: user.tenantId || null,
+      tenantId,
+      effectiveTenantId: tenantId,
       isSuperUser: false,
     };
     debugLog("Regular user tenant context", {
       userId: user.id,
-      tenantId: user.tenantId
+      tenantId
     });
   }
 
