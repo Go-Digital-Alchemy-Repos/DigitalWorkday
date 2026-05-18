@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { RichTextEditor } from "@/components/richtext";
+import { RichTextEditor, toPlainText } from "@/components/richtext";
 import { useS3Upload } from "@/hooks/useS3Upload";
 import { useBackNavigation } from "@/hooks/use-back-navigation";
 
@@ -116,11 +116,12 @@ export default function ClientPortalSupportNew() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const metadataJson = dynamicFields.length > 0 ? customFields : null;
+      const plainDescription = toPlainText(description).trim();
 
       return apiRequest("POST", "/api/v1/portal/support/tickets", {
         clientId: selectedClientId || undefined,
         title,
-        description: description || null,
+        description: plainDescription ? description : null,
         category,
         priority,
         metadataJson,
@@ -140,7 +141,7 @@ export default function ClientPortalSupportNew() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !toPlainText(description).trim()) return;
     for (const field of dynamicFields) {
       if (field.required && (customFields[field.key] === undefined || customFields[field.key] === null || customFields[field.key] === "")) {
         toast({ title: "Missing required field", description: `Please fill in "${field.label}"`, variant: "destructive" });
@@ -155,6 +156,8 @@ export default function ClientPortalSupportNew() {
   };
 
   const canSubmit = Boolean(title.trim())
+    && Boolean(toPlainText(description).trim())
+    && Boolean(selectedClientId)
     && !isUploading
     && !createMutation.isPending;
 
