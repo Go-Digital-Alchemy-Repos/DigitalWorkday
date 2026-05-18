@@ -51,14 +51,15 @@ function toNotificationPayload(notification: Notification): NotificationPayload 
 }
 
 async function getPortalTenantId(req: Request): Promise<string | null> {
-  const sessionTenantId = getEffectiveTenantId(req);
-  if (sessionTenantId) return sessionTenantId;
-
   const user = req.user;
-  if (!user || user.role !== UserRole.CLIENT) return null;
+  if (!user) return null;
 
-  const { tenantId } = await getClientPortalContext(req);
-  return tenantId;
+  if (user.role === UserRole.CLIENT) {
+    const { tenantId } = await getClientPortalContext(req);
+    return tenantId;
+  }
+
+  return getEffectiveTenantId(req);
 }
 
 const createTemplateSchema = z.object({
