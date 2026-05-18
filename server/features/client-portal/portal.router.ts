@@ -1348,10 +1348,11 @@ router.get("/profile", async (req, res) => {
       throw AppError.notFound("User");
     }
     
-    const clientsAccess = await storage.getClientsForUser(userId);
+    const { tenantId, clientsAccess } = await getClientPortalContext(req);
     
     res.json({
       id: user.id,
+      tenantId,
       email: user.email,
       name: user.name,
       firstName: user.firstName,

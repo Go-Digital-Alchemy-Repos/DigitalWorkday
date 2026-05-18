@@ -9,6 +9,10 @@ export interface ClientPortalContext {
   clientIds: string[];
 }
 
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+}
+
 export async function getClientPortalContext(req: Request): Promise<ClientPortalContext> {
   const user = req.user;
   if (!user || user.role !== UserRole.CLIENT) {
@@ -16,10 +20,16 @@ export async function getClientPortalContext(req: Request): Promise<ClientPortal
   }
 
   const clientsAccess = await storage.getClientsForUser(user.id);
-  const tenantId = getEffectiveTenantId(req)
-    || user.tenantId
-    || clientsAccess.find(({ client }) => client.tenantId)?.client.tenantId
-    || null;
+  const accessTenantIds = uniqueStrings(clientsAccess.map(({ client }) => client.tenantId));
+  const contextualTenantId = getEffectiveTenantId(req);
+
+  const tenantId = accessTenantIds.length === 1
+    ? accessTenantIds[0]
+    : user.tenantId && (accessTenantIds.length === 0 || accessTenantIds.includes(user.tenantId))
+      ? user.tenantId
+      : contextualTenantId && (accessTenantIds.length === 0 || accessTenantIds.includes(contextualTenantId))
+        ? contextualTenantId
+        : accessTenantIds[0] || user.tenantId || contextualTenantId || null;
 
   return {
     tenantId,
