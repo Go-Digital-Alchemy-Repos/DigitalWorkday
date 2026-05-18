@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -53,6 +53,14 @@ export default function UserProfilePage() {
   });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+
+  useEffect(() => {
+    setFormData({
+      name: user?.name || "",
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+    });
+  }, [user?.firstName, user?.lastName, user?.name]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { name?: string; firstName?: string; lastName?: string }) => {
