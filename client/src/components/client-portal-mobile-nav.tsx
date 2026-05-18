@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, FolderKanban, Menu, MessageSquare, Moon, Sun } from "lucide-react";
+import { ClipboardList, Home, FolderKanban, Menu, MessageSquare, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,12 @@ const navItems: NavItem[] = [
     href: "/portal/messages",
     icon: MessageSquare,
     matchPaths: ["/portal/messages"]
+  },
+  {
+    title: "Requests",
+    href: "/portal/service-requests",
+    icon: ClipboardList,
+    matchPaths: ["/portal/service-requests"]
   },
 ];
 

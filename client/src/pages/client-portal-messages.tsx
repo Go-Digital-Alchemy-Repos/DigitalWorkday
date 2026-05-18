@@ -357,6 +357,7 @@ interface ConversationSummary {
   id: string;
   tenantId: string;
   clientId: string;
+  type?: string;
   projectId: string | null;
   subject: string;
   createdByUserId: string;
@@ -646,13 +647,25 @@ export default function ClientPortalMessages() {
     },
   });
 
+  useEffect(() => {
+    const conversationId = new URLSearchParams(window.location.search).get("conversation");
+    if (conversationId) {
+      setSelectedConversationId(conversationId);
+    }
+  }, []);
+
   if (selectedConversationId && currentUser) {
     return (
       <div className="p-6 h-full flex flex-col">
         <ConversationThread
           conversationId={selectedConversationId}
           currentUserId={currentUser.id}
-          onBack={() => setSelectedConversationId(null)}
+          onBack={() => {
+            setSelectedConversationId(null);
+            if (window.location.search.includes("conversation=")) {
+              navigate("/portal/messages", { replace: true });
+            }
+          }}
         />
       </div>
     );
@@ -680,7 +693,10 @@ export default function ClientPortalMessages() {
       ) : (
         <ConversationList
           conversations={conversations}
-          onSelect={setSelectedConversationId}
+          onSelect={(id) => {
+            setSelectedConversationId(id);
+            navigate(`/portal/messages?conversation=${id}`, { replace: true });
+          }}
         />
       )}
 

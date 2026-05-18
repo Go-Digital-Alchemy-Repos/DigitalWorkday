@@ -8,6 +8,7 @@ import {
   ContactRound,
   Library,
   MessageSquare,
+  ClipboardList,
   Building2,
   ClipboardCheck,
   LifeBuoy,
@@ -49,6 +50,7 @@ const mainNavItems = [
   { title: "Portal Users", url: "/portal/users", icon: Users },
   { title: "Asset Library", url: "/portal/assets", icon: Library },
   { title: "Messages", url: "/portal/messages", icon: MessageSquare },
+  { title: "Service Requests", url: "/portal/service-requests", icon: ClipboardList },
   { title: "Support Center", url: "/portal/support", icon: LifeBuoy },
 ];
 
