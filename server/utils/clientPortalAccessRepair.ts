@@ -6,6 +6,7 @@ import {
   clientContacts,
   clientUserAccess,
   clients,
+  userClientAccess,
   users,
   workspaces,
   type User,
@@ -30,6 +31,14 @@ type ContactMatchRow = {
   workspaceTenantId: string | null;
 };
 
+type LegacyAccessRow = {
+  clientId: string;
+  legacyTenantId: string;
+  clientWorkspaceId: string;
+  clientTenantId: string | null;
+  workspaceTenantId: string | null;
+};
+
 function normalizeEmail(email: string | null | undefined): string {
   return email?.trim().toLowerCase() || "";
 }
@@ -44,6 +53,10 @@ function resolvedTenantId(row: Pick<AccessTenantRow, "clientTenantId" | "workspa
 
 function resolvedContactTenantId(row: ContactMatchRow): string | null {
   return row.clientTenantId || row.contactTenantId || row.workspaceTenantId || null;
+}
+
+function resolvedLegacyTenantId(row: LegacyAccessRow): string | null {
+  return row.clientTenantId || row.legacyTenantId || row.workspaceTenantId || null;
 }
 
 async function resolveWorkspaceTenantId(...workspaceIds: Array<string | null | undefined>): Promise<string | null> {
@@ -94,6 +107,24 @@ async function getContactMatches(email: string): Promise<ContactMatchRow[]> {
   return Promise.all(rows.map(async row => ({
     ...row,
     workspaceTenantId: await resolveWorkspaceTenantId(row.clientWorkspaceId, row.contactWorkspaceId),
+  })));
+}
+
+async function getLegacyAccessRows(userId: string): Promise<LegacyAccessRow[]> {
+  const rows = await db
+    .select({
+      clientId: userClientAccess.clientId,
+      legacyTenantId: userClientAccess.tenantId,
+      clientWorkspaceId: clients.workspaceId,
+      clientTenantId: clients.tenantId,
+    })
+    .from(userClientAccess)
+    .innerJoin(clients, eq(userClientAccess.clientId, clients.id))
+    .where(eq(userClientAccess.userId, userId));
+
+  return Promise.all(rows.map(async row => ({
+    ...row,
+    workspaceTenantId: await resolveWorkspaceTenantId(row.clientWorkspaceId),
   })));
 }
 
@@ -224,6 +255,53 @@ async function bootstrapAccessFromMatchingContacts(user: ClientPortalIdentity): 
   return { tenantId, createdAccessCount };
 }
 
+async function bootstrapAccessFromLegacyClientAccess(user: ClientPortalIdentity): Promise<{ tenantId: string | null; createdAccessCount: number }> {
+  const legacyRows = await getLegacyAccessRows(user.id);
+  if (legacyRows.length === 0) {
+    return { tenantId: user.tenantId || null, createdAccessCount: 0 };
+  }
+
+  const tenantIds = unique(legacyRows.map(resolvedLegacyTenantId).filter(Boolean));
+  const tenantId = tenantIds.length === 1
+    ? tenantIds[0]
+    : user.tenantId && tenantIds.includes(user.tenantId)
+      ? user.tenantId
+      : user.tenantId || tenantIds[0] || null;
+
+  if (tenantIds.length > 1 && !user.tenantId) {
+    console.warn("[clientPortalAccessRepair] Legacy client access spans multiple tenants; using the first tenant for repair", {
+      userId: user.id,
+      tenantIds,
+    });
+  }
+
+  if (tenantId && user.tenantId !== tenantId) {
+    await setUserTenantId(user.id, tenantId);
+  }
+
+  let createdAccessCount = 0;
+  for (const row of legacyRows) {
+    const rowTenantId = resolvedLegacyTenantId(row);
+    await setClientTenantIdIfMissing(row.clientId, rowTenantId);
+
+    const accessLevel = await getDefaultAccessLevelForClient(row.clientId);
+    const inserted = await db
+      .insert(clientUserAccess)
+      .values({
+        workspaceId: row.clientWorkspaceId,
+        clientId: row.clientId,
+        userId: user.id,
+        accessLevel,
+      })
+      .onConflictDoNothing()
+      .returning({ id: clientUserAccess.id });
+
+    createdAccessCount += inserted.length;
+  }
+
+  return { tenantId, createdAccessCount };
+}
+
 export async function ensureClientPortalAccess(user: ClientPortalIdentity): Promise<{ tenantId: string | null; createdAccessCount: number }> {
   if (user.role !== UserRole.CLIENT) {
     return { tenantId: user.tenantId || null, createdAccessCount: 0 };
@@ -232,6 +310,11 @@ export async function ensureClientPortalAccess(user: ClientPortalIdentity): Prom
   const tenantIdFromAccess = await inferTenantFromExistingAccess(user);
   if (tenantIdFromAccess) {
     return { tenantId: tenantIdFromAccess, createdAccessCount: 0 };
+  }
+
+  const legacyAccess = await bootstrapAccessFromLegacyClientAccess(user);
+  if (legacyAccess.tenantId || legacyAccess.createdAccessCount > 0) {
+    return legacyAccess;
   }
 
   return bootstrapAccessFromMatchingContacts(user);
