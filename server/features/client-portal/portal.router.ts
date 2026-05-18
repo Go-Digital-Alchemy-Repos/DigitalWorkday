@@ -4,7 +4,6 @@ import { db } from "../../db";
 import { ClientAccessLevel, clientConversations, commentMentions, insertCommentSchema, UserRole, users } from "@shared/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
-import { getClientUserAccessibleClients } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { z } from "zod";
 import { createHash, randomBytes } from "crypto";
@@ -870,8 +869,8 @@ router.delete("/clients/:clientId/users/:userId", async (req, res) => {
 // Get dashboard summary for client user
 router.get("/dashboard", async (req, res) => {
   try {
-    const userId = req.user!.id;
-    const clientIds = await getClientUserAccessibleClients(userId);
+    const { clientsAccess } = await getClientPortalContext(req);
+    const clientIds = clientsAccess.map(({ client }) => client.id);
     
     if (clientIds.length === 0) {
       return res.json({
@@ -883,20 +882,18 @@ router.get("/dashboard", async (req, res) => {
       });
     }
     
-    // Get all accessible clients
-    const clientsData = await storage.getClientsForUser(userId);
-    const clients = clientsData.map(cd => ({
-      id: cd.client.id,
-      companyName: cd.client.companyName,
-      displayName: cd.client.displayName,
-      accessLevel: cd.access.accessLevel,
+    const clients = clientsAccess.map(({ client, access }) => ({
+      id: client.id,
+      companyName: client.companyName,
+      displayName: client.displayName,
+      accessLevel: access.accessLevel,
     }));
     
     const allProjects: any[] = [];
     const allTasks: any[] = [];
     
-    for (const clientId of clientIds) {
-      const projects = await storage.getProjectsByClient(clientId);
+    for (const { client } of clientsAccess) {
+      const projects = await storage.getProjectsByClient(client.id);
       
       for (const project of projects) {
         if ((project as any).visibility === 'private') continue;
@@ -958,14 +955,12 @@ router.get("/dashboard", async (req, res) => {
 // Get projects for client user
 router.get("/projects", async (req, res) => {
   try {
-    const userId = req.user!.id;
-    const clientIds = await getClientUserAccessibleClients(userId);
+    const { clientsAccess } = await getClientPortalContext(req);
     
     const allProjects: any[] = [];
     
-    for (const clientId of clientIds) {
-      const client = await storage.getClient(clientId);
-      const projects = await storage.getProjectsByClient(clientId);
+    for (const { client } of clientsAccess) {
+      const projects = await storage.getProjectsByClient(client.id);
       
       for (const project of projects) {
         if ((project as any).visibility === 'private') continue;
@@ -1041,14 +1036,13 @@ router.get("/projects/:projectId", async (req, res) => {
 // Get tasks for client user across all accessible projects
 router.get("/tasks", async (req, res) => {
   try {
-    const userId = req.user!.id;
-    const clientIds = await getClientUserAccessibleClients(userId);
+    const { clientsAccess } = await getClientPortalContext(req);
     const { status, projectId } = req.query;
     
     const allTasks: any[] = [];
     
-    for (const clientId of clientIds) {
-      const projects = await storage.getProjectsByClient(clientId);
+    for (const { client } of clientsAccess) {
+      const projects = await storage.getProjectsByClient(client.id);
       
       for (const project of projects) {
         if ((project as any).visibility === 'private') continue;
