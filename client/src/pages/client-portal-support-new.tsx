@@ -127,7 +127,6 @@ export default function ClientPortalSupportNew() {
 
   const requiresClientSelection = clients.length > 1;
   const canSubmit = Boolean(title.trim())
-    && !isProfileLoading
     && (!requiresClientSelection || Boolean(clientId))
     && !isUploading
     && !createMutation.isPending;
