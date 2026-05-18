@@ -121,6 +121,13 @@ const portalSubtaskUpdateSchema = portalSubtaskCreateSchema.partial().extend({
   completed: z.boolean().optional(),
 });
 
+const portalProfileUpdateSchema = z.object({
+  firstName: z.string().trim().max(100).optional(),
+  lastName: z.string().trim().max(100).optional(),
+  name: z.string().trim().max(200).optional(),
+  avatarUrl: z.string().trim().max(2000).nullable().optional(),
+}).strict();
+
 function generateInviteToken(): string {
   return randomBytes(32).toString("hex");
 }
@@ -1381,6 +1388,70 @@ router.get("/profile", async (req, res) => {
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /profile", req);
+  }
+});
+
+router.patch("/profile", async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const data = portalProfileUpdateSchema.parse(req.body);
+
+    const currentUser = await storage.getUser(userId);
+    if (!currentUser || currentUser.role !== UserRole.CLIENT) {
+      throw AppError.notFound("User");
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (data.firstName !== undefined) updates.firstName = data.firstName || null;
+    if (data.lastName !== undefined) updates.lastName = data.lastName || null;
+    if (data.avatarUrl !== undefined) updates.avatarUrl = data.avatarUrl || null;
+
+    if (data.name !== undefined) {
+      updates.name = data.name || currentUser.email;
+    } else if (data.firstName !== undefined || data.lastName !== undefined) {
+      const nextFirstName = data.firstName !== undefined ? data.firstName : currentUser.firstName;
+      const nextLastName = data.lastName !== undefined ? data.lastName : currentUser.lastName;
+      updates.name = `${nextFirstName || ""} ${nextLastName || ""}`.trim() || currentUser.email;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      throw AppError.badRequest("No valid fields to update");
+    }
+
+    const [updatedUser] = await db.update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw AppError.notFound("User");
+    }
+
+    await syncClientContactsFromPortalUser(updatedUser);
+
+    if (req.user) {
+      Object.assign(req.user, updatedUser);
+    }
+
+    const { tenantId, clientsAccess } = await getClientPortalContext(req);
+
+    res.json({
+      id: updatedUser.id,
+      tenantId,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      avatarUrl: updatedUser.avatarUrl,
+      clients: clientsAccess.map(ca => ({
+        id: ca.client.id,
+        companyName: ca.client.companyName,
+        displayName: ca.client.displayName,
+        accessLevel: ca.access.accessLevel,
+      })),
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /profile", req);
   }
 });
 

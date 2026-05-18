@@ -56,7 +56,8 @@ export default function UserProfilePage() {
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { name?: string; firstName?: string; lastName?: string }) => {
-      return apiRequest("PATCH", "/api/users/me", data);
+      const url = user?.role === "client" ? "/api/client-portal/profile" : "/api/users/me";
+      return apiRequest("PATCH", url, data);
     },
     onSuccess: () => {
       refetch();
@@ -76,7 +77,8 @@ export default function UserProfilePage() {
 
   const updateAvatarMutation = useMutation({
     mutationFn: async (avatarUrl: string | null) => {
-      return apiRequest("PATCH", "/api/users/me", { avatarUrl });
+      const url = user?.role === "client" ? "/api/client-portal/profile" : "/api/users/me";
+      return apiRequest("PATCH", url, { avatarUrl });
     },
     onSuccess: async () => {
       await refetch();
