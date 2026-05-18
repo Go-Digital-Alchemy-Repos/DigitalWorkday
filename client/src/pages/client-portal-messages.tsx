@@ -82,10 +82,12 @@ function NewRequestDialog({
   open,
   onOpenChange,
   onCreated,
+  initialType = "everyday",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (id: string, kind?: "conversation" | "support_ticket") => void;
+  initialType?: PortalMessageType;
 }) {
   const { toast } = useToast();
   const [step, setStep] = useState<"templates" | "compose">("templates");
@@ -93,7 +95,7 @@ function NewRequestDialog({
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [messageType, setMessageType] = useState<PortalMessageType>("everyday");
+  const [messageType, setMessageType] = useState<PortalMessageType>(initialType);
   const [recipientUserId, setRecipientUserId] = useState("");
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<PortalTemplate[]>({
@@ -117,6 +119,14 @@ function NewRequestDialog({
       setSelectedClientId(clients[0].id);
     }
   }, [clients, selectedClientId]);
+
+  useEffect(() => {
+    if (!open) return;
+    setMessageType(initialType);
+    if (initialType !== "everyday") {
+      setStep("compose");
+    }
+  }, [initialType, open]);
 
   const createMutation = useMutation({
     mutationFn: async (data: {
@@ -143,12 +153,12 @@ function NewRequestDialog({
   });
 
   const resetState = () => {
-    setStep("templates");
+    setStep(initialType === "everyday" ? "templates" : "compose");
     setSelectedTemplate(null);
     setSubject("");
     setMessage("");
     setSelectedClientId(clients.length === 1 ? clients[0]?.id || "" : "");
-    setMessageType("everyday");
+    setMessageType(initialType);
     setRecipientUserId("");
   };
 
@@ -628,6 +638,7 @@ export default function ClientPortalMessages() {
   const [, navigate] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
+  const [newRequestInitialType, setNewRequestInitialType] = useState<PortalMessageType>("everyday");
 
   const { data: conversations = [], isLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/crm/portal/conversations"],
@@ -648,9 +659,15 @@ export default function ClientPortalMessages() {
   });
 
   useEffect(() => {
-    const conversationId = new URLSearchParams(window.location.search).get("conversation");
+    const params = new URLSearchParams(window.location.search);
+    const conversationId = params.get("conversation");
     if (conversationId) {
       setSelectedConversationId(conversationId);
+    }
+    const newType = params.get("newType");
+    if (newType === "service_request" || newType === "support_ticket" || newType === "everyday") {
+      setNewRequestInitialType(newType);
+      setNewRequestOpen(true);
     }
   }, []);
 
@@ -702,13 +719,21 @@ export default function ClientPortalMessages() {
 
       <NewRequestDialog
         open={newRequestOpen}
-        onOpenChange={setNewRequestOpen}
+        initialType={newRequestInitialType}
+        onOpenChange={(open) => {
+          setNewRequestOpen(open);
+          if (!open && window.location.search.includes("newType=")) {
+            setNewRequestInitialType("everyday");
+            navigate("/portal/messages", { replace: true });
+          }
+        }}
         onCreated={(id, kind) => {
           if (kind === "support_ticket") {
             navigate(`/portal/support/${id}`);
             return;
           }
           setSelectedConversationId(id);
+          navigate(`/portal/messages?conversation=${id}`, { replace: true });
         }}
       />
     </div>

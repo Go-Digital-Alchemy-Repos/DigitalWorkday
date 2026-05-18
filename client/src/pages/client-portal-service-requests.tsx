@@ -47,7 +47,7 @@ export default function ClientPortalServiceRequests() {
           <p className="text-muted-foreground">Track requests your team has sent to Digital Workday.</p>
         </div>
         <Button asChild data-testid="button-new-service-request">
-          <Link href="/portal/messages">
+          <Link href="/portal/messages?newType=service_request">
             <Plus className="h-4 w-4 mr-1" />
             New Request
           </Link>
