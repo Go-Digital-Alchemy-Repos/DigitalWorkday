@@ -11,7 +11,10 @@ import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { emailOutboxService } from "../../services/emailOutbox";
 import { and, eq } from "drizzle-orm";
-import { syncClientContactsFromPortalUser } from "../../utils/clientPortalIdentitySync";
+import {
+  syncClientContactsFromPortalUser,
+  syncPortalUsersFromClientContacts,
+} from "../../utils/clientPortalIdentitySync";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -171,6 +174,7 @@ router.get("/:clientId/users", async (req, res) => {
       }
     }
     
+    await syncPortalUsersFromClientContacts(clientId);
     const clientUsers = await storage.getClientUsers(clientId);
     res.json(clientUsers.map(formatClientUserAccess));
   } catch (error) {

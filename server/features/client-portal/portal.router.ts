@@ -14,6 +14,7 @@ import { extractMentionsFromTipTapJson } from "../../utils/mentionUtils";
 import {
   syncClientContactsFromPortalUser,
   syncPortalUserFromClientContact,
+  syncPortalUsersFromClientContacts,
 } from "../../utils/clientPortalIdentitySync";
 import { getClientPortalContext } from "../../utils/clientPortalContext";
 
@@ -579,6 +580,7 @@ router.get("/clients/:clientId/users", async (req, res) => {
     const { clientId } = req.params;
     await getClientAccessOrThrow(userId, clientId);
 
+    await syncPortalUsersFromClientContacts(clientId);
     const clientUsers = await storage.getClientUsers(clientId);
     res.json(clientUsers.map(formatClientUserAccess));
   } catch (error) {

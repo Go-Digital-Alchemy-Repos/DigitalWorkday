@@ -46,6 +46,17 @@ export async function syncPortalUserFromClientContact(contact: ClientContact) {
     .where(eq(users.id, user.id));
 }
 
+export async function syncPortalUsersFromClientContacts(clientId: string) {
+  const contacts = await db
+    .select()
+    .from(clientContacts)
+    .where(eq(clientContacts.clientId, clientId));
+
+  for (const contact of contacts) {
+    await syncPortalUserFromClientContact(contact);
+  }
+}
+
 export async function syncClientContactsFromPortalUser(user: Pick<User, "id" | "email" | "role" | "firstName" | "lastName">) {
   const email = normalizedEmail(user.email);
   if (!email || user.role !== UserRole.CLIENT) return;
