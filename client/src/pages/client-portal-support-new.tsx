@@ -112,6 +112,7 @@ export default function ClientPortalSupportNew() {
   const clients = profileData?.clients || [];
   const dynamicFields = useMemo(() => normalizeFormFields(formSchema?.schemaJson), [formSchema?.schemaJson]);
   const selectedClientId = clientId || (clients.length === 1 ? clients[0]?.id || "" : "");
+  const requiresClientSelection = clients.length > 1;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -157,7 +158,7 @@ export default function ClientPortalSupportNew() {
 
   const canSubmit = Boolean(title.trim())
     && Boolean(toPlainText(description).trim())
-    && Boolean(selectedClientId)
+    && (!requiresClientSelection || Boolean(selectedClientId))
     && !isUploading
     && !createMutation.isPending;
 
