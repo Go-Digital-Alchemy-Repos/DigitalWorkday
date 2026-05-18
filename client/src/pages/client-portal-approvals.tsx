@@ -18,9 +18,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RichTextRenderer } from "@/components/richtext";
+import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
 
 interface ApprovalRequest {
   id: string;
@@ -128,9 +127,11 @@ function ApprovalCard({
                   <MessageSquare className="h-3 w-3" />
                   Response from {approval.respondedByName}
                 </div>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {approval.responseComment}
-                </p>
+                <RichTextRenderer
+                  value={approval.responseComment}
+                  className="text-sm text-muted-foreground"
+                  data-testid={`approval-response-comment-${approval.id}`}
+                />
                 {approval.respondedAt && (
                   <p className="text-xs text-muted-foreground mt-1">
                     {format(new Date(approval.respondedAt), "MMM d, yyyy 'at' h:mm a")}
@@ -141,12 +142,11 @@ function ApprovalCard({
 
             {approval.status === "pending" && (
               <div className="space-y-3 border-t pt-3">
-                <Textarea
+                <RichTextEditor
                   placeholder="Add a comment (optional for approval, recommended for change requests)..."
                   value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  className="resize-none"
-                  rows={3}
+                  onChange={setComment}
+                  minHeight="96px"
                   data-testid={`input-comment-${approval.id}`}
                 />
                 <div className="flex items-center gap-2 flex-wrap">
