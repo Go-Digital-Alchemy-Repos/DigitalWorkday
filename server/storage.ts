@@ -2381,8 +2381,9 @@ export class DatabaseStorage implements IStorage {
       effectiveUserTenantId = updatedUser?.tenantId || clientTenantId;
     }
     
-    // Enforce strict tenant isolation for client portal access
-    // Both user and client must have tenantId set and they must match
+    // Client portal access is explicitly granted by client_user_access. Older
+    // staging rows can be missing tenant ids, so do not hide a granted client
+    // portal relationship solely because tenant repair has not completed yet.
     if (!effectiveUserTenantId || !clientTenantId) {
       console.warn("[storage] getClientUserAccessByUserAndClient: Missing tenantId", {
         userId: user.id,
@@ -2390,6 +2391,9 @@ export class DatabaseStorage implements IStorage {
         clientId: client.id,
         clientTenantId,
       });
+      if (user.role === UserRole.CLIENT) {
+        return access;
+      }
       return undefined;
     }
     
@@ -2455,9 +2459,6 @@ export class DatabaseStorage implements IStorage {
         effectiveUserTenantId = updatedUser?.tenantId || clientTenantId;
       }
       
-      // Enforce tenant isolation for cross-tenant security
-      // Both user and client should have matching tenantIds
-      // If either is missing tenantId, this is a data integrity issue - skip for safety
       if (!effectiveUserTenantId || !clientTenantId) {
         console.warn("[storage] getClientsForUser: Missing tenantId", {
           userId: user.id,
@@ -2465,6 +2466,12 @@ export class DatabaseStorage implements IStorage {
           clientId: client.id,
           clientTenantId,
         });
+        if (user.role === UserRole.CLIENT) {
+          result.push({
+            client: clientTenantId ? { ...client, tenantId: clientTenantId } : client,
+            access,
+          });
+        }
         continue;
       }
       
