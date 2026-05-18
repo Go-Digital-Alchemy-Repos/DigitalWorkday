@@ -27,6 +27,7 @@ import { emitNotificationNew } from "../../../realtime/events";
 import { storage } from "../../../storage";
 import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 import type { NotificationPayload } from "@shared/events";
+import { getClientPortalContext } from "../../../utils/clientPortalContext";
 
 const router = Router();
 
@@ -56,8 +57,8 @@ async function getPortalTenantId(req: Request): Promise<string | null> {
   const user = req.user;
   if (!user || user.role !== UserRole.CLIENT) return null;
 
-  const clientsAccess = await storage.getClientsForUser(user.id);
-  return clientsAccess.find(({ client }) => client.tenantId)?.client.tenantId || null;
+  const { tenantId } = await getClientPortalContext(req);
+  return tenantId;
 }
 
 const createTemplateSchema = z.object({
@@ -274,8 +275,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
     const data = validateBody(req.body, schema, res);
     if (!data) return;
 
-    const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
-    const clientIds = await getClientUserAccessibleClients(user.id);
+    const { clientIds } = await getClientPortalContext(req);
     const selectedClientId = data.clientId || (clientIds.length === 1 ? clientIds[0] : null);
 
     if (!selectedClientId) {

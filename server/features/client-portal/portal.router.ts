@@ -16,6 +16,7 @@ import {
   syncClientContactsFromPortalUser,
   syncPortalUserFromClientContact,
 } from "../../utils/clientPortalIdentitySync";
+import { getClientPortalContext } from "../../utils/clientPortalContext";
 
 const router = Router();
 
@@ -1216,21 +1217,21 @@ router.patch("/subtasks/:subtaskId", async (req, res) => {
 
 router.get("/activity", async (req, res) => {
   try {
-    const userId = req.user!.id;
     const requestedLimit = Number(req.query.limit);
     const limit = Number.isFinite(requestedLimit)
       ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
       : 50;
-    const clientsAccess = await storage.getClientsForUser(userId);
+    const { tenantId: portalTenantId, clientsAccess } = await getClientPortalContext(req);
     const activityItems: any[] = [];
 
     for (const { client } of clientsAccess) {
       const clientName = client.displayName || client.companyName;
-      const tenantId = client.tenantId || req.user!.tenantId || null;
+      const tenantId = client.tenantId || portalTenantId || null;
       const projects = await storage.getProjectsByClient(client.id);
 
       for (const project of projects) {
         if ((project as any).visibility === "private") continue;
+        if (!tenantId) continue;
 
         const projectActivity = await storage.getProjectActivity(project.id, tenantId, 20);
         for (const item of projectActivity) {

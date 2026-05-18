@@ -36,6 +36,7 @@ import { emitNotificationNew } from "../../../realtime/events";
 import { storage } from "../../../storage";
 import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 import type { NotificationPayload } from "@shared/events";
+import { getClientPortalContext } from "../../../utils/clientPortalContext";
 
 const router = Router();
 
@@ -743,7 +744,9 @@ router.patch("/crm/conversations/:conversationId/assign", requireAuth, async (re
 
 router.get("/crm/conversations/:conversationId/messages", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const user = req.user!;
+    const portalContext = user.role === UserRole.CLIENT ? await getClientPortalContext(req) : null;
+    const tenantId = portalContext?.tenantId || getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const { conversationId } = req.params;
@@ -755,10 +758,8 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
 
     if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
 
-    const user = req.user!;
     if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
+      const accessibleClients = portalContext?.clientIds || [];
       if (!accessibleClients.includes(conversation.clientId)) {
         return sendError(res, AppError.forbidden("Access denied"), req);
       }
@@ -818,7 +819,9 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
 
 router.post("/crm/conversations/:conversationId/read", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const user = req.user!;
+    const portalContext = user.role === UserRole.CLIENT ? await getClientPortalContext(req) : null;
+    const tenantId = portalContext?.tenantId || getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const { conversationId } = req.params;
@@ -859,7 +862,9 @@ router.post("/crm/conversations/:conversationId/read", requireAuth, async (req: 
 
 router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMessageRateLimiter, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const user = req.user!;
+    const portalContext = user.role === UserRole.CLIENT ? await getClientPortalContext(req) : null;
+    const tenantId = portalContext?.tenantId || getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const { conversationId } = req.params;
@@ -875,10 +880,8 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
       return sendError(res, AppError.badRequest("This conversation is closed"), req);
     }
 
-    const user = req.user!;
     if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
+      const accessibleClients = portalContext?.clientIds || [];
       if (!accessibleClients.includes(conversation.clientId)) {
         return sendError(res, AppError.forbidden("Access denied"), req);
       }
@@ -1187,11 +1190,8 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
       return sendError(res, AppError.forbidden("Portal access only"), req);
     }
 
-    const clientsAccess = await storage.getClientsForUser(user.id);
-    const tenantId = getEffectiveTenantId(req) || clientsAccess.find(({ client }) => client.tenantId)?.client.tenantId || null;
+    const { tenantId, clientIds } = await getClientPortalContext(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const clientIds = clientsAccess.map(({ client }) => client.id);
 
     if (clientIds.length === 0) return res.json([]);
 

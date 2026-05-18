@@ -15,6 +15,7 @@ import {
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
 import { isAdminOrSuper, verifyClientTenancy } from "./crm.helpers";
+import { getClientPortalContext } from "../../../utils/clientPortalContext";
 
 const router = Router();
 
@@ -127,7 +128,9 @@ router.get("/crm/clients/:clientId/approvals", requireAuth, async (req: Request,
 
 router.patch("/crm/approvals/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
+    const user = req.user!;
+    const portalContext = user.role === UserRole.CLIENT ? await getClientPortalContext(req) : null;
+    const tenantId = portalContext?.tenantId || getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const { id } = req.params;
@@ -139,11 +142,8 @@ router.patch("/crm/approvals/:id", requireAuth, async (req: Request, res: Respon
 
     if (!existing) return sendError(res, AppError.notFound("Approval request"), req);
 
-    const user = req.user!;
-
     if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
+      const accessibleClients = portalContext?.clientIds || [];
       if (!accessibleClients.includes(existing.clientId)) {
         return sendError(res, AppError.forbidden("Access denied"), req);
       }
@@ -196,16 +196,13 @@ router.patch("/crm/approvals/:id", requireAuth, async (req: Request, res: Respon
 
 router.get("/crm/portal/approvals", requireAuth, async (req: Request, res: Response) => {
   try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
     const user = req.user!;
     if (user.role !== UserRole.CLIENT) {
       return sendError(res, AppError.forbidden("Portal access only"), req);
     }
 
-    const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
-    const clientIds = await getClientUserAccessibleClients(user.id);
+    const { tenantId, clientIds } = await getClientPortalContext(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     if (clientIds.length === 0) {
       return res.json([]);

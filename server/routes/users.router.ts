@@ -288,7 +288,9 @@ router.post("/users/me/change-password", requireAuth, async (req, res) => {
 
     const passwordHash = await hashPassword(newPassword);
 
-    await storage.updateUser(user.id, { passwordHash });
+    await db.update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
 
     console.log(`[routes] User ${user.email} changed their own password`);
 

@@ -37,6 +37,7 @@ import {
   getStorageStatus 
 } from "../storage/getStorageProvider";
 import { uploadRateLimiter } from "../middleware/rateLimit";
+import { getClientPortalContext } from "../utils/clientPortalContext";
 
 const router = Router();
 
@@ -144,7 +145,10 @@ router.post("/presign", uploadRateLimiter, requireAuth, async (req: Request, res
       });
     }
 
-    const tenantId = req.tenant?.effectiveTenantId || user.tenantId;
+    let tenantId = req.tenant?.effectiveTenantId || user.tenantId;
+    if (!tenantId && user.role === UserRole.CLIENT && categoryTyped === "support-ticket-attachment") {
+      tenantId = (await getClientPortalContext(req)).tenantId;
+    }
 
     if (config.requiresTenantAdmin) {
       const isSuperUser = user.role === UserRole.SUPER_USER;
@@ -344,7 +348,10 @@ router.post("/upload", uploadRateLimiter, requireAuth, upload.single("file"), as
       });
     }
 
-    const tenantId = req.tenant?.effectiveTenantId || user.tenantId;
+    let tenantId = req.tenant?.effectiveTenantId || user.tenantId;
+    if (!tenantId && user.role === UserRole.CLIENT && categoryTyped === "support-ticket-attachment") {
+      tenantId = (await getClientPortalContext(req)).tenantId;
+    }
 
     if (config.requiresTenantAdmin) {
       const isSuperUser = user.role === UserRole.SUPER_USER;
