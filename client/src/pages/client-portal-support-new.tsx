@@ -95,7 +95,7 @@ export default function ClientPortalSupportNew() {
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
 
-  const { data: profileData, isLoading: isProfileLoading } = useQuery<PortalProfile>({
+  const { data: profileData } = useQuery<PortalProfile>({
     queryKey: ["/api/client-portal/profile"],
   });
   const { upload, isUploading } = useS3Upload({ category: "support-ticket-attachment" });
@@ -154,10 +154,7 @@ export default function ClientPortalSupportNew() {
     setCustomFields((prev) => ({ ...prev, [key]: value }));
   };
 
-  const requiresClientSelection = clients.length > 1;
   const canSubmit = Boolean(title.trim())
-    && Boolean(selectedClientId)
-    && !isProfileLoading
     && !isUploading
     && !createMutation.isPending;
 
