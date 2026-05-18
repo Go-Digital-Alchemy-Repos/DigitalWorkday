@@ -239,10 +239,23 @@ function invalidateCachesForMutation(method: string, url: string): void {
     pathname === "/api/crm/clients" ||
     pathname.startsWith("/api/crm/clients/");
 
-  if (!taskRelatedMutation && !projectOrClientMutation) return;
+  const clientPortalMutation =
+    pathname === "/api/client-portal" ||
+    pathname.startsWith("/api/client-portal/") ||
+    pathname === "/api/v1/portal/support" ||
+    pathname.startsWith("/api/v1/portal/support/") ||
+    pathname === "/api/crm/portal/conversations" ||
+    pathname.startsWith("/api/crm/portal/conversations/") ||
+    pathname === "/api/crm/approvals" ||
+    pathname.startsWith("/api/crm/approvals/") ||
+    /^\/api\/crm\/conversations\/[^/]+\/messages(?:\/|$)/.test(pathname);
+
+  if (!taskRelatedMutation && !projectOrClientMutation && !clientPortalMutation) return;
   globalThis.setTimeout(() => {
     if (taskRelatedMutation) {
       invalidateTaskRelatedQueries();
+    } else if (clientPortalMutation) {
+      invalidateClientPortalQueries();
     } else {
       invalidateProjectClientRelatedQueries();
     }
@@ -393,6 +406,14 @@ const PROJECT_CLIENT_RELATED_QUERY_PREFIXES = [
   "/api/v1/super/reports",
 ] as const;
 
+const CLIENT_PORTAL_QUERY_PREFIXES = [
+  "/api/client-portal",
+  "/api/crm/portal",
+  "/api/v1/portal/support",
+  "/api/crm/conversations",
+  "/api/auth/me",
+] as const;
+
 type TaskRelatedInvalidationOptions = {
   taskId?: string | null;
   projectId?: string | null;
@@ -449,6 +470,10 @@ export function invalidateProjectClientRelatedQueries(): void {
   invalidateQueriesByFirstSegmentPrefix(PROJECT_CLIENT_RELATED_QUERY_PREFIXES);
 }
 
+export function invalidateClientPortalQueries(): void {
+  invalidateQueriesByFirstSegmentPrefix(CLIENT_PORTAL_QUERY_PREFIXES);
+}
+
 /**
  * Tenant-scoped query key prefixes.
  * These queries contain tenant-specific data and must be cleared on mode transitions.
@@ -486,6 +511,9 @@ export const TENANT_SCOPED_QUERY_PREFIXES = [
   "/api/tags",
   "/api/sections",
   "/api/attachments",
+  "/api/client-portal",
+  "/api/crm/portal",
+  "/api/v1/portal/support",
 ] as const;
 
 /**
