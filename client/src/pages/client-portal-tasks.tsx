@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getPreviewText, toPlainText } from "@/components/richtext";
 
 interface TaskInfo {
   id: string;
@@ -94,12 +95,14 @@ export default function ClientPortalTasks() {
 
   const filteredTasks = useMemo(() => {
     if (!data?.tasks) return [];
+    const query = searchQuery.trim().toLowerCase();
     
     return data.tasks.filter((task) => {
-      const matchesSearch = !searchQuery.trim() ||
-        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.projectName.toLowerCase().includes(searchQuery.toLowerCase());
+      const descriptionText = toPlainText(task.description);
+      const matchesSearch = !query ||
+        task.title.toLowerCase().includes(query) ||
+        descriptionText.toLowerCase().includes(query) ||
+        task.projectName.toLowerCase().includes(query);
       
       const matchesStatus = statusFilter === "all" || task.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
@@ -236,7 +239,7 @@ export default function ClientPortalTasks() {
                         <div className="font-medium">{task.title}</div>
                         {task.description && (
                           <div className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
-                            {task.description}
+                            {getPreviewText(task.description)}
                           </div>
                         )}
                         <div className="flex flex-wrap items-center gap-2 mt-2">

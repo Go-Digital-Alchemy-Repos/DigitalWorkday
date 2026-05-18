@@ -630,8 +630,7 @@ export default function ClientPortalMessages() {
   const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) throw new Error("Not authenticated");
+      const res = await apiRequest("GET", "/api/auth/me");
       const data = await res.json() as AuthMeResponse;
       const user = data.user || data;
       if (!user.id) {
