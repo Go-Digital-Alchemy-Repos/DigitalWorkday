@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ interface TicketAttachment {
 
 interface FormField {
   key: string;
+  name?: string;
   label: string;
   type: "text" | "textarea" | "select" | "number" | "date" | "checkbox";
   required?: boolean;
@@ -47,7 +48,36 @@ interface FormField {
 interface FormSchemaData {
   id: string;
   category: string;
-  schemaJson: FormField[];
+  schemaJson: unknown;
+}
+
+const supportedFieldTypes = new Set(["text", "textarea", "select", "number", "date", "checkbox"]);
+
+function normalizeFormFields(schemaJson: unknown): FormField[] {
+  const rawFields: unknown[] = Array.isArray(schemaJson)
+    ? schemaJson
+    : Array.isArray((schemaJson as any)?.fields)
+      ? (schemaJson as any).fields
+      : [];
+
+  return rawFields
+    .map((field: unknown): FormField | null => {
+      const rawField = field as Record<string, unknown>;
+      const key = String(rawField.key || rawField.name || "").trim();
+      if (!key) return null;
+
+      const type = supportedFieldTypes.has(String(rawField.type)) ? String(rawField.type) as FormField["type"] : "text";
+      return {
+        key,
+        name: typeof rawField.name === "string" ? rawField.name : undefined,
+        label: String(rawField.label || rawField.name || rawField.key || "Field"),
+        type,
+        required: Boolean(rawField.required),
+        options: Array.isArray(rawField.options) ? rawField.options.map(String) : undefined,
+        placeholder: typeof rawField.placeholder === "string" ? rawField.placeholder : undefined,
+      } satisfies FormField;
+    })
+    .filter((field): field is FormField => Boolean(field));
 }
 
 export default function ClientPortalSupportNew() {
@@ -80,16 +110,15 @@ export default function ClientPortalSupportNew() {
   }, [category]);
 
   const clients = profileData?.clients || [];
-  const dynamicFields: FormField[] = formSchema?.schemaJson || [];
+  const dynamicFields = useMemo(() => normalizeFormFields(formSchema?.schemaJson), [formSchema?.schemaJson]);
+  const selectedClientId = clientId || (clients.length === 1 ? clients[0]?.id || "" : "");
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const selectedClient = clientId || (clients.length === 1 ? clients[0].id : "");
-
       const metadataJson = dynamicFields.length > 0 ? customFields : null;
 
       return apiRequest("POST", "/api/v1/portal/support/tickets", {
-        clientId: selectedClient || undefined,
+        clientId: selectedClientId || undefined,
         title,
         description: description || null,
         category,
@@ -127,7 +156,8 @@ export default function ClientPortalSupportNew() {
 
   const requiresClientSelection = clients.length > 1;
   const canSubmit = Boolean(title.trim())
-    && (!requiresClientSelection || Boolean(clientId))
+    && Boolean(selectedClientId)
+    && !isProfileLoading
     && !isUploading
     && !createMutation.isPending;
 

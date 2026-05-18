@@ -81,6 +81,35 @@ function getTicketAttachments(metadataJson: Record<string, unknown> | null | und
   }) : [];
 }
 
+function extractTipTapText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const record = node as { text?: unknown; content?: unknown };
+  const ownText = typeof record.text === "string" ? record.text : "";
+  const childText = Array.isArray(record.content)
+    ? record.content.map(extractTipTapText).join(" ")
+    : "";
+  return `${ownText} ${childText}`.trim();
+}
+
+function normalizeMessageBody(value: string | null | undefined): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const parsed = JSON.parse(raw);
+    const tipTapText = extractTipTapText(parsed);
+    if (tipTapText) return tipTapText.replace(/\s+/g, " ").trim();
+  } catch {
+    // Plain text and HTML bodies are normalized below.
+  }
+
+  return raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function formatFileSize(bytes?: number | null) {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -148,6 +177,10 @@ export default function ClientPortalSupportDetail() {
 
   const isClosed = ticket.status === "closed";
   const attachments = getTicketAttachments(ticket.metadataJson);
+  const descriptionText = normalizeMessageBody(ticket.description);
+  const visibleMessages = ticket.messages.filter((msg, index) => (
+    !(index === 0 && descriptionText && normalizeMessageBody(msg.bodyText) === descriptionText)
+  ));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -207,10 +240,10 @@ export default function ClientPortalSupportDetail() {
 
         <div className="space-y-3">
           <h2 className="text-sm font-medium text-muted-foreground">Messages</h2>
-          {ticket.messages.length === 0 ? (
+          {visibleMessages.length === 0 ? (
             <p className="text-sm text-muted-foreground">No messages yet</p>
           ) : (
-            ticket.messages.map((msg) => {
+            visibleMessages.map((msg) => {
               const isStaff = msg.authorType === "tenant_user";
               return (
                 <Card key={msg.id} data-testid={`card-message-${msg.id}`}>
