@@ -28,11 +28,13 @@ import {
   taskAssignees,
   comments,
   workspaceMembers,
+  UserRole,
 } from "@shared/schema";
 import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
 import { isAgreementEnforcementEnabled } from "../middleware/agreementEnforcement";
 import { syncClientContactsFromPortalUser } from "../utils/clientPortalIdentitySync";
+import { getClientPortalContext } from "../utils/clientPortalContext";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -185,6 +187,15 @@ const updateProfileSchema = z.object({
   avatarUrl: z.string().url().nullable().optional(),
 }).strict();
 
+async function getSelfServiceTenantId(req: Request, user: any): Promise<string | null> {
+  if (user?.role === UserRole.CLIENT) {
+    const { tenantId } = await getClientPortalContext(req);
+    return tenantId || user?.tenantId || req.tenant?.effectiveTenantId || null;
+  }
+
+  return req.tenant?.effectiveTenantId || user?.tenantId || null;
+}
+
 router.patch("/users/me", requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
@@ -216,7 +227,7 @@ router.patch("/users/me", requireAuth, async (req, res) => {
     }
 
     if (avatarUrl !== undefined) {
-      const tenantId = req.tenant?.effectiveTenantId || user?.tenantId || null;
+      const tenantId = await getSelfServiceTenantId(req, user);
       const freshUser = await storage.getUser(user.id);
       const currentAvatarUrl = freshUser?.avatarUrl;
       if (currentAvatarUrl && currentAvatarUrl !== avatarUrl) {
@@ -260,7 +271,6 @@ const changePasswordSchema = z.object({
 router.post("/users/me/change-password", requireAuth, async (req, res) => {
   try {
     const user = req.user as any;
-    const tenantId = req.tenant?.effectiveTenantId || user?.tenantId;
 
     const parseResult = changePasswordSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -268,13 +278,7 @@ router.post("/users/me/change-password", requireAuth, async (req, res) => {
     }
 
     const { currentPassword, newPassword } = parseResult.data;
-
-    let fullUser;
-    if (tenantId) {
-      fullUser = await storage.getUserByIdAndTenant(user.id, tenantId);
-    } else {
-      fullUser = await storage.getUser(user.id);
-    }
+    const fullUser = await storage.getUser(user.id);
 
     if (!fullUser || !fullUser.passwordHash) {
       throw AppError.badRequest("Cannot verify current password");

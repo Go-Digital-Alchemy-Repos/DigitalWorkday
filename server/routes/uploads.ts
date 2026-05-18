@@ -77,6 +77,15 @@ async function validateTaskAccess(
   return !!task;
 }
 
+async function getUploadTenantId(req: Request, user: any): Promise<string | null> {
+  if (user?.role === UserRole.CLIENT) {
+    const { tenantId } = await getClientPortalContext(req);
+    return tenantId || req.tenant?.effectiveTenantId || user.tenantId || null;
+  }
+
+  return req.tenant?.effectiveTenantId || user?.tenantId || null;
+}
+
 /**
  * POST /api/v1/uploads/presign
  * 
@@ -145,10 +154,7 @@ router.post("/presign", uploadRateLimiter, requireAuth, async (req: Request, res
       });
     }
 
-    let tenantId = req.tenant?.effectiveTenantId || user.tenantId;
-    if (!tenantId && user.role === UserRole.CLIENT && categoryTyped === "support-ticket-attachment") {
-      tenantId = (await getClientPortalContext(req)).tenantId;
-    }
+    const tenantId = await getUploadTenantId(req, user);
 
     if (config.requiresTenantAdmin) {
       const isSuperUser = user.role === UserRole.SUPER_USER;
@@ -180,6 +186,14 @@ router.post("/presign", uploadRateLimiter, requireAuth, async (req: Request, res
     }
 
     if (config.requiresTaskContext) {
+      if (!tenantId) {
+        return res.status(400).json({
+          error: { code: "TENANT_REQUIRED", message: "Tenant context required for task attachments" },
+          code: "TENANT_REQUIRED",
+          message: "Tenant context required for task attachments",
+        });
+      }
+
       if (!context?.projectId || !context?.taskId) {
         return res.status(400).json({
           error: { code: "TASK_CONTEXT_REQUIRED", message: "projectId and taskId required for task attachments" },
@@ -348,10 +362,7 @@ router.post("/upload", uploadRateLimiter, requireAuth, upload.single("file"), as
       });
     }
 
-    let tenantId = req.tenant?.effectiveTenantId || user.tenantId;
-    if (!tenantId && user.role === UserRole.CLIENT && categoryTyped === "support-ticket-attachment") {
-      tenantId = (await getClientPortalContext(req)).tenantId;
-    }
+    const tenantId = await getUploadTenantId(req, user);
 
     if (config.requiresTenantAdmin) {
       const isSuperUser = user.role === UserRole.SUPER_USER;
@@ -383,6 +394,14 @@ router.post("/upload", uploadRateLimiter, requireAuth, upload.single("file"), as
     }
 
     if (config.requiresTaskContext) {
+      if (!tenantId) {
+        return res.status(400).json({
+          error: { code: "TENANT_REQUIRED", message: "Tenant context required for task attachments" },
+          code: "TENANT_REQUIRED",
+          message: "Tenant context required for task attachments",
+        });
+      }
+
       if (!context?.projectId || !context?.taskId) {
         return res.status(400).json({
           error: { code: "TASK_CONTEXT_REQUIRED", message: "projectId and taskId required for task attachments" },
