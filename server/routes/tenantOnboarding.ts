@@ -32,6 +32,7 @@ import { validateBrandAsset, generateBrandAssetKey, uploadToS3, isS3Configured, 
 import { getStorageStatus } from "../storage/getStorageProvider";
 import { AppError, handleRouteError } from "../lib/errors";
 import { hasTenantAdminAccess } from "@shared/roles";
+import { getClientPortalContext } from "../utils/clientPortalContext";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -341,7 +342,8 @@ router.get("/branding", requireAuth, async (req, res) => {
   try {
     // Derive tenantId without hard-blocking super admins who have no tenant context
     const user = req.user as any;
-    const tenantId: string | null = getEffectiveTenantId(req) || user?.tenantId || null;
+    const portalContext = user?.role === UserRole.CLIENT ? await getClientPortalContext(req) : null;
+    const tenantId: string | null = portalContext?.tenantId || getEffectiveTenantId(req) || user?.tenantId || null;
 
     const [[sys], settings, tenant] = await Promise.all([
       db.select().from(systemSettings).limit(1),
