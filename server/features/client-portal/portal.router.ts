@@ -1255,7 +1255,20 @@ router.get("/activity", async (req, res) => {
         if (!tenantId) continue;
 
         const projectActivity = await storage.getProjectActivity(project.id, tenantId, 20);
+        const commentActivityItems = projectActivity.filter(item => item.type === "comment_added");
+        const commentIds = commentActivityItems
+          .map(item => String(item.id).replace(/^comment-/, ""))
+          .filter(Boolean);
+        const mentionedCommentIds = await getMentionedCommentIdsForUser(req.user!.id, commentIds);
+
         for (const item of projectActivity) {
+          if (item.type === "comment_added") {
+            const commentId = String(item.id).replace(/^comment-/, "");
+            if (!mentionedCommentIds.has(commentId)) {
+              continue;
+            }
+          }
+
           activityItems.push({
             id: `project-${item.id}`,
             source: "project",
@@ -1274,7 +1287,9 @@ router.get("/activity", async (req, res) => {
             projectId: project.id,
             projectName: project.name,
             entityId: item.entityId,
-            metadata: item.metadata || {},
+            metadata: item.type === "comment_added"
+              ? { commentVisibleBecauseMentioned: true }
+              : item.metadata || {},
           });
         }
       }
