@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ContactRound, Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { AlertCircle, ContactRound, Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
 
 interface ClientInfo {
   id: string;
@@ -56,7 +56,7 @@ export default function ClientPortalContactsPage() {
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [form, setForm] = useState(emptyContactForm);
 
-  const { data, isLoading } = useQuery<PortalProfileData>({
+  const { data, isLoading, error, refetch } = useQuery<PortalProfileData>({
     queryKey: ["/api/client-portal/profile"],
   });
   const clients = data?.clients || [];
@@ -167,6 +167,29 @@ export default function ClientPortalContactsPage() {
       <div className="p-6 space-y-4 overflow-y-auto h-full">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 overflow-y-auto h-full">
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Error Loading Contacts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              There was a problem loading your client account access. Please try again.
+            </p>
+            <Button variant="outline" onClick={() => refetch()} data-testid="button-retry-contacts">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

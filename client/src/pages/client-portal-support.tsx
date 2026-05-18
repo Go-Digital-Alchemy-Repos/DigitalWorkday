@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, LifeBuoy, Clock } from "lucide-react";
+import { AlertCircle, Plus, LifeBuoy, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -69,7 +69,7 @@ export default function ClientPortalSupport() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [, navigate] = useLocation();
 
-  const { data, isLoading } = useQuery<{ tickets: SupportTicket[]; total: number }>({
+  const { data, isLoading, error, refetch } = useQuery<{ tickets: SupportTicket[]; total: number }>({
     queryKey: ["/api/v1/portal/support/tickets", { status: statusFilter !== "all" ? statusFilter : undefined }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -117,7 +117,24 @@ export default function ClientPortalSupport() {
           )}
         </div>
 
-        {isLoading ? (
+        {error ? (
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                Error Loading Support Tickets
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                There was a problem loading your support tickets. Please try again.
+              </p>
+              <Button variant="outline" onClick={() => refetch()} data-testid="button-retry-support-tickets">
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-20 w-full rounded-md" />

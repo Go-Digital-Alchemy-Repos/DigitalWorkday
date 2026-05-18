@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users } from "lucide-react";
+import { AlertCircle, Users } from "lucide-react";
 
 interface ClientInfo {
   id: string;
@@ -19,7 +20,7 @@ interface PortalProfileData {
 
 export default function ClientPortalUsersPage() {
   const [clientId, setClientId] = useState("");
-  const { data, isLoading } = useQuery<PortalProfileData>({
+  const { data, isLoading, error, refetch } = useQuery<PortalProfileData>({
     queryKey: ["/api/client-portal/profile"],
   });
 
@@ -37,6 +38,34 @@ export default function ClientPortalUsersPage() {
       <div className="p-6 space-y-4 overflow-y-auto h-full">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 overflow-y-auto h-full">
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Error Loading Portal Users
+            </CardTitle>
+            <CardDescription>
+              There was a problem loading your client account access. Please try again.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => refetch()}
+              data-testid="button-retry-portal-users"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
