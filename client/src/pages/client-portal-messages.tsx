@@ -92,7 +92,7 @@ function NewRequestDialog({
     enabled: open,
   });
 
-  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery<PortalProfile>({
+  const { data: profile, isLoading: profileLoading } = useQuery<PortalProfile>({
     queryKey: ["/api/client-portal/profile"],
     enabled: open,
   });
@@ -203,11 +203,7 @@ function NewRequestDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {profileError ? (
-          <div className="py-8 text-center">
-            <p className="text-sm text-destructive">Failed to load account data. Please try again.</p>
-          </div>
-        ) : step === "templates" ? (
+        {step === "templates" ? (
           <div className="space-y-2 py-2 max-h-[400px] overflow-y-auto">
             {isDataLoading ? (
               <div className="space-y-2">
