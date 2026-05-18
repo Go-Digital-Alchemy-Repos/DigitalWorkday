@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { ClientAccessLevel, clientConversations, commentMentions, insertCommentSchema, UserRole, users } from "@shared/schema";
+import { ClientAccessLevel, clientConversations, clientUserAccess, commentMentions, insertCommentSchema, UserRole, users } from "@shared/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
@@ -226,6 +226,24 @@ function assertCanManagePortalUsers(accessLevel: string) {
   if (!canManagePortalUsers(accessLevel)) {
     throw AppError.forbidden("Portal admin access is required");
   }
+}
+
+async function resolvePortalUserIdForClient(clientId: string, userOrAccessId: string): Promise<string> {
+  const directUser = await storage.getUser(userOrAccessId);
+  if (directUser) {
+    return userOrAccessId;
+  }
+
+  const [access] = await db
+    .select({ userId: clientUserAccess.userId })
+    .from(clientUserAccess)
+    .where(and(
+      eq(clientUserAccess.id, userOrAccessId),
+      eq(clientUserAccess.clientId, clientId),
+    ))
+    .limit(1);
+
+  return access?.userId || userOrAccessId;
 }
 
 function sanitizeClientOverview(client: any) {
@@ -780,7 +798,8 @@ router.post("/clients/:clientId/users/create", async (req, res) => {
 router.patch("/clients/:clientId/users/:userId", async (req, res) => {
   try {
     const currentUserId = req.user!.id;
-    const { clientId, userId } = req.params;
+    const { clientId } = req.params;
+    const userId = await resolvePortalUserIdForClient(clientId, req.params.userId);
     const access = await getClientAccessOrThrow(currentUserId, clientId);
     assertCanManagePortalUsers(access.accessLevel);
 
@@ -847,7 +866,8 @@ router.patch("/clients/:clientId/users/:userId", async (req, res) => {
 router.delete("/clients/:clientId/users/:userId", async (req, res) => {
   try {
     const currentUserId = req.user!.id;
-    const { clientId, userId } = req.params;
+    const { clientId } = req.params;
+    const userId = await resolvePortalUserIdForClient(clientId, req.params.userId);
     const access = await getClientAccessOrThrow(currentUserId, clientId);
     assertCanManagePortalUsers(access.accessLevel);
 

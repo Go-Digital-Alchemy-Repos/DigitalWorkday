@@ -3,14 +3,14 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { UserRole, ClientAccessLevel, users } from "@shared/schema";
+import { UserRole, ClientAccessLevel, clientUserAccess, users } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { emailOutboxService } from "../../services/emailOutbox";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { syncClientContactsFromPortalUser } from "../../utils/clientPortalIdentitySync";
 
 function getCurrentUserId(req: Request): string {
@@ -66,6 +66,24 @@ async function ensureCanManagePortalUsers(req: Request, clientId: string) {
   if (!access || access.accessLevel !== ClientAccessLevel.PORTAL_ADMIN) {
     throw AppError.forbidden("Portal admin access is required");
   }
+}
+
+async function resolvePortalUserIdForClient(clientId: string, userOrAccessId: string): Promise<string> {
+  const directUser = await storage.getUser(userOrAccessId);
+  if (directUser) {
+    return userOrAccessId;
+  }
+
+  const [access] = await db
+    .select({ userId: clientUserAccess.userId })
+    .from(clientUserAccess)
+    .where(and(
+      eq(clientUserAccess.id, userOrAccessId),
+      eq(clientUserAccess.clientId, clientId),
+    ))
+    .limit(1);
+
+  return access?.userId || userOrAccessId;
 }
 
 async function sendPortalInviteEmail(options: {
@@ -423,7 +441,8 @@ router.post("/:clientId/users/create", async (req, res) => {
 router.patch("/:clientId/users/:userId", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    const { clientId, userId } = req.params;
+    const { clientId } = req.params;
+    const userId = await resolvePortalUserIdForClient(clientId, req.params.userId);
 
     const schema = z.object({
       accessLevel: clientAccessLevelSchema.optional(),
@@ -506,7 +525,8 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
 router.delete("/:clientId/users/:userId", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    const { clientId, userId } = req.params;
+    const { clientId } = req.params;
+    const userId = await resolvePortalUserIdForClient(clientId, req.params.userId);
     await ensureCanManagePortalUsers(req, clientId);
     
     // Verify client belongs to tenant
