@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -10,9 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RichTextEditor, RichTextRenderer, toPlainText } from "@/components/richtext";
 import {
   Dialog,
   DialogContent,
@@ -133,6 +132,7 @@ function NewRequestDialog({
       clientId?: string;
       subject: string;
       initialMessage: string;
+      bodyRich?: string;
       type: PortalMessageType;
       recipientUserId?: string;
       templateId?: string;
@@ -177,7 +177,8 @@ function NewRequestDialog({
   };
 
   const handleSubmit = () => {
-    if (!subject.trim() || !message.trim()) {
+    const plainMessage = toPlainText(message).trim();
+    if (!subject.trim() || !plainMessage) {
       toast({ title: "Please fill in the subject and message", variant: "destructive" });
       return;
     }
@@ -192,7 +193,8 @@ function NewRequestDialog({
     createMutation.mutate({
       clientId: selectedClientId || undefined,
       subject: subject.trim(),
-      initialMessage: message.trim(),
+      initialMessage: plainMessage,
+      bodyRich: message,
       type: messageType,
       recipientUserId: messageType === "everyday" ? recipientUserId : undefined,
       templateId: selectedTemplate?.id,
@@ -334,11 +336,11 @@ function NewRequestDialog({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Message</label>
-              <Textarea
+              <RichTextEditor
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={setMessage}
                 placeholder="Describe your request..."
-                className="min-h-[120px] resize-none"
+                minHeight="120px"
                 data-testid="input-new-request-message"
               />
             </div>
@@ -481,8 +483,6 @@ function ConversationThread({
   const { toast } = useToast();
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data, isLoading } = useQuery<ConversationDetail>({
     queryKey: ["/api/crm/conversations", conversationId, "messages"],
@@ -495,8 +495,9 @@ function ConversationThread({
   });
 
   const sendMutation = useMutation({
-    mutationFn: async (bodyText: string) => {
-      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/messages`, { bodyText });
+    mutationFn: async (bodyRich: string) => {
+      const bodyText = toPlainText(bodyRich).trim();
+      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/messages`, { bodyText, bodyRich });
       return res.json();
     },
     onSuccess: () => {
@@ -507,24 +508,12 @@ function ConversationThread({
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
-    onSettled: () => {
-      requestAnimationFrame(() => {
-        textareaRef.current?.focus();
-      });
-    },
   });
 
   const handleSend = () => {
-    const trimmed = replyText.trim();
+    const trimmed = toPlainText(replyText).trim();
     if (!trimmed) return;
-    sendMutation.mutate(trimmed);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isSendKey(e)) {
-      e.preventDefault();
-      handleSend();
-    }
+    sendMutation.mutate(replyText);
   };
 
   useEffect(() => {
@@ -589,9 +578,7 @@ function ConversationThread({
                   </div>
                   <Card className={isOwn ? "bg-primary/5" : ""}>
                     <CardContent className="p-3">
-                      <p className="text-sm whitespace-pre-wrap" data-testid={`message-text-${msg.id}`}>
-                        {msg.bodyText}
-                      </p>
+                      <RichTextRenderer value={msg.bodyRich || msg.bodyText} className="text-sm" data-testid={`message-text-${msg.id}`} />
                     </CardContent>
                   </Card>
                 </div>
@@ -604,19 +591,16 @@ function ConversationThread({
 
       {!isClosed && (
         <div className="flex gap-2 items-end border-t pt-3">
-          <Textarea
-            ref={textareaRef}
+          <RichTextEditor
             value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            {...compositionHandlers}
+            onChange={setReplyText}
             placeholder="Type your reply..."
-            className="resize-none min-h-[60px]"
+            minHeight="80px"
             data-testid="input-reply-message"
           />
           <Button
             onClick={handleSend}
-            disabled={!replyText.trim() || sendMutation.isPending}
+            disabled={!toPlainText(replyText).trim() || sendMutation.isPending}
             size="icon"
             aria-label="Send message"
             data-testid="button-send-reply"

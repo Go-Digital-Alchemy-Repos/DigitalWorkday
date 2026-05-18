@@ -258,6 +258,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       clientId: z.string().uuid().optional().nullable(),
       subject: z.string().min(1).max(500),
       initialMessage: z.string().min(1).max(5000),
+      bodyRich: z.string().max(15000).optional(),
       type: z.enum([
         ConversationType.EVERYDAY,
         ConversationType.SERVICE_REQUEST,
@@ -385,6 +386,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       conversationId: conversation.id,
       authorUserId: userId,
       bodyText: data.initialMessage,
+      bodyRich: data.bodyRich || null,
     }).returning();
 
     emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
