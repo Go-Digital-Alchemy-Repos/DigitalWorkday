@@ -69,6 +69,15 @@ interface ConversationRecipient {
   role: string;
 }
 
+interface CurrentUser {
+  id: string;
+}
+
+interface AuthMeResponse {
+  user?: CurrentUser;
+  id?: string;
+}
+
 function NewRequestDialog({
   open,
   onOpenChange,
@@ -623,12 +632,17 @@ export default function ClientPortalMessages() {
     queryKey: ["/api/crm/portal/conversations"],
   });
 
-  const { data: currentUser } = useQuery<{ id: string }>({
+  const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (!res.ok) throw new Error("Not authenticated");
-      return res.json();
+      const data = await res.json() as AuthMeResponse;
+      const user = data.user || data;
+      if (!user.id) {
+        throw new Error("Authenticated user is missing an id");
+      }
+      return { id: user.id };
     },
   });
 

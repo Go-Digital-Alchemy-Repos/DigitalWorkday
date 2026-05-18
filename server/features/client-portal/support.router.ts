@@ -49,6 +49,34 @@ const addReplySchema = z.object({
   bodyText: z.string().min(1),
 });
 
+interface SupportFormField {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
+function normalizeSupportFormFields(schemaJson: unknown): SupportFormField[] {
+  const rawFields: unknown[] = Array.isArray(schemaJson)
+    ? schemaJson
+    : Array.isArray((schemaJson as { fields?: unknown[] } | null | undefined)?.fields)
+      ? (schemaJson as { fields: unknown[] }).fields
+      : [];
+
+  return rawFields
+    .map((field): SupportFormField | null => {
+      const rawField = field as Record<string, unknown>;
+      const key = String(rawField.key || rawField.name || "").trim();
+      if (!key) return null;
+
+      return {
+        key,
+        label: String(rawField.label || rawField.name || rawField.key || "Field"),
+        required: Boolean(rawField.required),
+      };
+    })
+    .filter((field): field is SupportFormField => Boolean(field));
+}
+
 router.get("/tickets", async (req, res) => {
   try {
     const { tenantId, clientIds } = await getPortalSupportContext(req);
@@ -135,13 +163,14 @@ router.post("/tickets", async (req, res) => {
       throw AppError.forbidden("You do not have access to this client");
     }
 
-    if (body.metadataJson && body.category) {
+    if (body.category) {
       const formSchema = await storage.getTicketFormSchema(tenantId, body.category);
       if (formSchema) {
-        const fields = (formSchema.schemaJson as any)?.fields || [];
+        const fields = normalizeSupportFormFields(formSchema.schemaJson);
+        const metadata = body.metadataJson && typeof body.metadataJson === "object" ? body.metadataJson : {};
         for (const field of fields) {
-          if (field.required && (body.metadataJson[field.name] === undefined || body.metadataJson[field.name] === null || body.metadataJson[field.name] === "")) {
-            throw AppError.badRequest(`Field "${field.label || field.name}" is required`);
+          if (field.required && (metadata[field.key] === undefined || metadata[field.key] === null || metadata[field.key] === "")) {
+            throw AppError.badRequest(`Field "${field.label}" is required`);
           }
         }
       }
