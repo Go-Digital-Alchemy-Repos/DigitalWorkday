@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, LifeBuoy, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Plus, LifeBuoy, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiRequest } from "@/lib/queryClient";
 
 interface SupportTicket {
   id: string;
@@ -73,8 +74,8 @@ export default function ClientPortalSupport() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
-      const res = await fetch(`/api/v1/portal/support/tickets?${params.toString()}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch tickets");
+      const query = params.toString();
+      const res = await apiRequest("GET", `/api/v1/portal/support/tickets${query ? `?${query}` : ""}`);
       return res.json();
     },
   });

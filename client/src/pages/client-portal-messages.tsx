@@ -487,8 +487,7 @@ function ConversationThread({
   const { data, isLoading } = useQuery<ConversationDetail>({
     queryKey: ["/api/crm/conversations", conversationId, "messages"],
     queryFn: async () => {
-      const res = await fetch(`/api/crm/conversations/${conversationId}/messages`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load messages");
+      const res = await apiRequest("GET", `/api/crm/conversations/${conversationId}/messages`);
       return res.json();
     },
     refetchInterval: 10000,

@@ -126,8 +126,7 @@ export default function ClientPortalSupportDetail() {
   const { data: ticket, isLoading } = useQuery<TicketDetail>({
     queryKey: ["/api/v1/portal/support/tickets", params.id],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/portal/support/tickets/${params.id}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch ticket");
+      const res = await apiRequest("GET", `/api/v1/portal/support/tickets/${params.id}`);
       return res.json();
     },
   });
