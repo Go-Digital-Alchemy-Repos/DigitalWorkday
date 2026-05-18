@@ -279,6 +279,7 @@ export default function ClientPortalDashboard() {
     ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
     : 0;
 
+  const hasProfileLoadIssue = Boolean(profileError);
   const hasActivityLoadIssue = Boolean(projectsError || tasksError);
 
   if (isLoading) {
@@ -289,24 +290,6 @@ export default function ClientPortalDashboard() {
           <p className="text-muted-foreground">Welcome to your client portal</p>
         </div>
         <DashboardSkeleton />
-      </div>
-    );
-  }
-
-  if (profileError) {
-    return (
-      <div className="p-6 flex items-center justify-center h-full">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              Error Loading Dashboard
-            </CardTitle>
-            <CardDescription>
-              There was a problem loading your dashboard data. Please try again.
-            </CardDescription>
-          </CardHeader>
-        </Card>
       </div>
     );
   }
@@ -337,6 +320,20 @@ export default function ClientPortalDashboard() {
           )}
         </div>
       </div>
+
+      {hasProfileLoadIssue && (
+        <Card className="mb-6 border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              Account Profile Could Not Load
+            </CardTitle>
+            <CardDescription>
+              Project and task activity is still available, but account profile details could not be refreshed.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       {overview && (
         <Card className="mb-6">
