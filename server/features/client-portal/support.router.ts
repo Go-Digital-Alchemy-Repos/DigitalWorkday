@@ -205,18 +205,6 @@ router.post("/tickets", async (req, res) => {
       payloadJson: { title: ticket.title },
     });
 
-    if (body.description) {
-      await storage.createSupportTicketMessage({
-        tenantId,
-        ticketId: ticket.id,
-        authorType: SupportTicketAuthorType.PORTAL_USER,
-        authorUserId: null,
-        authorPortalUserId: userId,
-        bodyText: body.description,
-        visibility: "public",
-      });
-    }
-
     res.status(201).json(ticket);
   } catch (error) {
     return handleRouteError(res, error, "POST /api/v1/portal/support/tickets", req);
