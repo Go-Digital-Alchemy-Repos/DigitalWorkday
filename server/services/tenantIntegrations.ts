@@ -5,7 +5,7 @@ import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryp
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana";
+export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana" | "quickbooks";
 
 interface MailgunPublicConfig {
   domain: string;
@@ -77,14 +77,33 @@ export interface AsanaSecretConfig {
   personalAccessToken: string;
 }
 
-type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | OpenAIPublicConfig | AsanaPublicConfig;
-type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | OpenAISecretConfig | AsanaSecretConfig;
+export interface QuickBooksPublicConfig {
+  enabled: boolean;
+  environment: "sandbox" | "production";
+  clientId?: string;
+  realmId?: string | null;
+  companyName?: string | null;
+  connectedAt?: string | null;
+  accessTokenExpiresAt?: string | null;
+  refreshTokenExpiresAt?: string | null;
+  scope?: string | null;
+}
+
+export interface QuickBooksSecretConfig {
+  clientSecret?: string;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
+type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | OpenAIPublicConfig | AsanaPublicConfig | QuickBooksPublicConfig;
+type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | OpenAISecretConfig | AsanaSecretConfig | QuickBooksSecretConfig;
 
 interface SecretMaskedInfo {
   apiKeyMasked?: string | null;
   accessKeyIdMasked?: string | null;
   secretAccessKeyMasked?: string | null;
   clientSecretMasked?: string | null;
+  refreshTokenMasked?: string | null;
 }
 
 export interface IntegrationResponse {
@@ -109,6 +128,46 @@ function debugLog(message: string, data?: Record<string, any>) {
 function maskSecret(secret: string | undefined | null): string | null {
   if (!secret || secret.length < 4) return null;
   return "••••" + secret.slice(-4);
+}
+
+interface QuickBooksTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+  x_refresh_token_expires_in?: number;
+  token_type?: string;
+}
+
+function getQuickBooksApiBaseUrl(environment: QuickBooksPublicConfig["environment"] | undefined): string {
+  return environment === "production"
+    ? "https://quickbooks.api.intuit.com"
+    : "https://sandbox-quickbooks.api.intuit.com";
+}
+
+async function refreshQuickBooksToken(
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string,
+): Promise<QuickBooksTokenResponse> {
+  const response = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`QuickBooks token refresh failed (${response.status}): ${text.slice(0, 180)}`);
+  }
+
+  return JSON.parse(text) as QuickBooksTokenResponse;
 }
 
 export interface IntegrationUpdateInput {
@@ -177,6 +236,12 @@ export class TenantIntegrationService {
           secretMasked = {
             apiKeyMasked: maskSecret(asanaSecrets.personalAccessToken),
           };
+        } else if (provider === "quickbooks") {
+          const qbSecrets = secrets as QuickBooksSecretConfig;
+          secretMasked = {
+            clientSecretMasked: maskSecret(qbSecrets.clientSecret),
+            refreshTokenMasked: maskSecret(qbSecrets.refreshToken),
+          };
         }
       } catch (err) {
         debugLog("getIntegration - failed to decrypt secrets for masking", { tenantId, provider });
@@ -218,7 +283,7 @@ export class TenantIntegrationService {
       if (message.includes("does not exist") || message.includes("column")) {
         console.warn("[TenantIntegrations] listIntegrations table/column issue:", message);
         // Return empty list with not_configured status for all providers
-        return ["mailgun", "s3", "r2", "openai"].map(p => ({
+        return ["mailgun", "s3", "r2", "openai", "quickbooks"].map(p => ({
           provider: p,
           status: IntegrationStatus.NOT_CONFIGURED,
           publicConfig: null,
@@ -229,7 +294,7 @@ export class TenantIntegrationService {
       throw dbError;
     }
 
-    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai"];
+    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai", "quickbooks"];
     const result: IntegrationResponse[] = [];
 
     for (const provider of providers) {
@@ -251,6 +316,12 @@ export class TenantIntegrationService {
             } else if (provider === "openai") {
               const aiSecrets = secrets as OpenAISecretConfig;
               secretMasked = { apiKeyMasked: maskSecret(aiSecrets.apiKey) };
+            } else if (provider === "quickbooks") {
+              const qbSecrets = secrets as QuickBooksSecretConfig;
+              secretMasked = {
+                clientSecretMasked: maskSecret(qbSecrets.clientSecret),
+                refreshTokenMasked: maskSecret(qbSecrets.refreshToken),
+              };
             }
           } catch {
             debugLog("listIntegrations - failed to decrypt secrets for masking", { tenantId, provider });
@@ -465,6 +536,9 @@ export class TenantIntegrationService {
         case "openai":
           testResult = await this.testOpenAI(tenantId);
           break;
+        case "quickbooks":
+          testResult = await this.testQuickBooks(tenantId);
+          break;
         default:
           testResult = { success: false, message: `Unknown provider: ${provider}` };
       }
@@ -654,9 +728,93 @@ export class TenantIntegrationService {
         }
         break;
       }
+      case "openai": {
+        const config = publicConfig as OpenAIPublicConfig;
+        if (config.enabled && hasSecret) {
+          return IntegrationStatus.CONFIGURED;
+        }
+        break;
+      }
+      case "quickbooks": {
+        const config = publicConfig as QuickBooksPublicConfig;
+        if (config.enabled && config.clientId && config.realmId && config.connectedAt && hasSecret) {
+          return IntegrationStatus.CONFIGURED;
+        }
+        break;
+      }
     }
 
     return IntegrationStatus.NOT_CONFIGURED;
+  }
+
+  private async testQuickBooks(tenantId: string | null): Promise<{ success: boolean; message: string }> {
+    const integration = await this.getIntegration(tenantId, "quickbooks");
+    const secrets = await this.getDecryptedSecrets(tenantId, "quickbooks") as QuickBooksSecretConfig | null;
+
+    if (!integration?.publicConfig) {
+      return { success: false, message: "QuickBooks is not configured" };
+    }
+
+    const config = integration.publicConfig as QuickBooksPublicConfig;
+    if (!config.enabled) {
+      return { success: false, message: "QuickBooks integration is disabled" };
+    }
+    if (!config.clientId || !secrets?.clientSecret) {
+      return { success: false, message: "QuickBooks client ID and client secret are required" };
+    }
+    if (!config.realmId || !secrets?.refreshToken) {
+      return { success: false, message: "QuickBooks is not connected yet" };
+    }
+
+    const tokenResult = await refreshQuickBooksToken(config.clientId, secrets.clientSecret, secrets.refreshToken);
+    const accessToken = tokenResult.access_token;
+    const refreshToken = tokenResult.refresh_token || secrets.refreshToken;
+    const now = Date.now();
+
+    await this.upsertIntegration(tenantId, "quickbooks", {
+      publicConfig: {
+        accessTokenExpiresAt: new Date(now + (tokenResult.expires_in || 3600) * 1000).toISOString(),
+        refreshTokenExpiresAt: tokenResult.x_refresh_token_expires_in
+          ? new Date(now + tokenResult.x_refresh_token_expires_in * 1000).toISOString()
+          : config.refreshTokenExpiresAt,
+      },
+      secretConfig: {
+        accessToken,
+        refreshToken,
+      },
+    });
+
+    const baseUrl = getQuickBooksApiBaseUrl(config.environment);
+    const companyResponse = await fetch(
+      `${baseUrl}/v3/company/${encodeURIComponent(config.realmId)}/companyinfo/${encodeURIComponent(config.realmId)}?minorversion=75`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+      },
+    );
+
+    if (!companyResponse.ok) {
+      const body = await companyResponse.text();
+      return {
+        success: false,
+        message: `QuickBooks token refreshed, but company check failed (${companyResponse.status}): ${body.slice(0, 160)}`,
+      };
+    }
+
+    let companyName = "connected company";
+    try {
+      const body = await companyResponse.json();
+      companyName = body?.CompanyInfo?.CompanyName || companyName;
+      await this.upsertIntegration(tenantId, "quickbooks", {
+        publicConfig: { companyName },
+      });
+    } catch {
+      // The successful status is enough for a connection test.
+    }
+
+    return { success: true, message: `QuickBooks connection successful (${companyName})` };
   }
 
   private async testOpenAI(tenantId: string | null): Promise<{ success: boolean; message: string }> {

@@ -31,6 +31,7 @@ import multer from "multer";
 import { validateBrandAsset, generateBrandAssetKey, uploadToS3, isS3Configured, getMimeType } from "../s3";
 import { getStorageStatus } from "../storage/getStorageProvider";
 import { AppError, handleRouteError } from "../lib/errors";
+import { buildAppUrl } from "../lib/appLinks";
 import { hasTenantAdminAccess } from "@shared/roles";
 
 const upload = multer({ 
@@ -422,7 +423,7 @@ router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
 // INTEGRATION ENDPOINTS
 // =============================================================================
 
-const validProviders: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai"];
+const validProviders: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai", "quickbooks"];
 
 function isValidProvider(provider: string): provider is IntegrationProvider {
   return validProviders.includes(provider as IntegrationProvider);
@@ -497,6 +498,58 @@ const openaiUpdateSchema = z.object({
   apiKey: z.string().optional(),
 });
 
+const quickBooksUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  environment: z.enum(["sandbox", "production"]).optional(),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+});
+
+function getQuickBooksRedirectUri(req: Request): string {
+  return buildAppUrl("/api/v1/tenant/integrations/quickbooks/callback", req);
+}
+
+function getQuickBooksSettingsRedirect(status: "connected" | "error" | "denied", message?: string): string {
+  const params = new URLSearchParams({ quickbooks: status });
+  if (message) {
+    params.set("message", message.slice(0, 160));
+  }
+  return `/settings/integrations?${params.toString()}`;
+}
+
+async function exchangeQuickBooksCode(input: {
+  clientId: string;
+  clientSecret: string;
+  code: string;
+  redirectUri: string;
+}) {
+  const response = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${input.clientId}:${input.clientSecret}`).toString("base64")}`,
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: input.code,
+      redirect_uri: input.redirectUri,
+    }),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`QuickBooks token exchange failed (${response.status}): ${text.slice(0, 180)}`);
+  }
+  return JSON.parse(text) as {
+    access_token: string;
+    refresh_token: string;
+    expires_in?: number;
+    x_refresh_token_expires_in?: number;
+    token_type?: string;
+  };
+}
+
 router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
     const tenantId = getRequiredTenantId(req);
@@ -561,6 +614,16 @@ router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (re
       if (data.apiKey) {
         secretConfig = { apiKey: data.apiKey };
       }
+    } else if (provider === "quickbooks") {
+      const data = quickBooksUpdateSchema.parse(req.body);
+      publicConfig = {
+        enabled: data.enabled ?? true,
+        environment: data.environment ?? "sandbox",
+        clientId: data.clientId,
+      };
+      if (data.clientSecret) {
+        secretConfig = { clientSecret: data.clientSecret };
+      }
     }
 
     const result = await tenantIntegrationService.upsertIntegration(tenantId, provider, {
@@ -594,6 +657,152 @@ router.post("/integrations/:provider/test", requireAuth, requireTenantAdmin, asy
     res.json(result);
   } catch (error) {
     handleRouteError(res, error, "tenantOnboarding.testIntegration", req);
+  }
+});
+
+router.get("/integrations/quickbooks/connect", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const tenantId = getRequiredTenantId(req);
+    const integration = await tenantIntegrationService.getIntegrationWithSecrets(tenantId, "quickbooks");
+    const publicConfig = integration?.publicConfig as {
+      enabled?: boolean;
+      clientId?: string;
+    } | null;
+    const secretConfig = integration?.secretConfig as {
+      clientSecret?: string;
+    } | null;
+
+    if (publicConfig?.enabled === false) {
+      throw AppError.badRequest("QuickBooks integration is disabled");
+    }
+    if (!publicConfig?.clientId || !secretConfig?.clientSecret) {
+      throw AppError.badRequest("Save QuickBooks client ID and client secret before connecting");
+    }
+
+    const state = crypto.randomBytes(32).toString("hex");
+    (req.session as any).quickBooksOAuth = {
+      state,
+      tenantId,
+      createdAt: Date.now(),
+    };
+
+    const authorizeUrl = new URL("https://appcenter.intuit.com/connect/oauth2");
+    authorizeUrl.searchParams.set("client_id", publicConfig.clientId);
+    authorizeUrl.searchParams.set("response_type", "code");
+    authorizeUrl.searchParams.set("scope", "com.intuit.quickbooks.accounting");
+    authorizeUrl.searchParams.set("redirect_uri", getQuickBooksRedirectUri(req));
+    authorizeUrl.searchParams.set("state", state);
+
+    req.session.save((error) => {
+      if (error) {
+        console.error("[quickbooks] Failed to save OAuth state:", error);
+        return res.redirect(getQuickBooksSettingsRedirect("error", "Failed to start QuickBooks connection"));
+      }
+      res.redirect(authorizeUrl.toString());
+    });
+  } catch (error) {
+    handleRouteError(res, error, "tenantOnboarding.connectQuickBooks", req);
+  }
+});
+
+router.get("/integrations/quickbooks/callback", requireAuth, async (req, res) => {
+  const redirectWithError = (message: string) => {
+    res.redirect(getQuickBooksSettingsRedirect("error", message));
+  };
+
+  try {
+    const { code, state, realmId, error } = req.query;
+    if (error) {
+      return res.redirect(getQuickBooksSettingsRedirect("denied", String(error)));
+    }
+    if (typeof code !== "string" || typeof state !== "string" || typeof realmId !== "string") {
+      return redirectWithError("QuickBooks callback was missing required parameters");
+    }
+
+    const oauthState = (req.session as any).quickBooksOAuth;
+    delete (req.session as any).quickBooksOAuth;
+
+    if (!oauthState?.state || oauthState.state !== state || !oauthState.tenantId) {
+      return redirectWithError("QuickBooks state check failed");
+    }
+    if (Date.now() - Number(oauthState.createdAt || 0) > 10 * 60 * 1000) {
+      return redirectWithError("QuickBooks connection expired; please try again");
+    }
+
+    const tenantId = oauthState.tenantId as string;
+    const integration = await tenantIntegrationService.getIntegrationWithSecrets(tenantId, "quickbooks");
+    const publicConfig = integration?.publicConfig as {
+      enabled?: boolean;
+      environment?: "sandbox" | "production";
+      clientId?: string;
+    } | null;
+    const secretConfig = integration?.secretConfig as {
+      clientSecret?: string;
+    } | null;
+
+    if (!publicConfig?.clientId || !secretConfig?.clientSecret) {
+      return redirectWithError("QuickBooks credentials were not found");
+    }
+
+    const tokenResponse = await exchangeQuickBooksCode({
+      clientId: publicConfig.clientId,
+      clientSecret: secretConfig.clientSecret,
+      code,
+      redirectUri: getQuickBooksRedirectUri(req),
+    });
+
+    const now = Date.now();
+    await tenantIntegrationService.upsertIntegration(tenantId, "quickbooks", {
+      publicConfig: {
+        enabled: publicConfig.enabled ?? true,
+        environment: publicConfig.environment ?? "sandbox",
+        clientId: publicConfig.clientId,
+        realmId,
+        connectedAt: new Date(now).toISOString(),
+        accessTokenExpiresAt: new Date(now + (tokenResponse.expires_in || 3600) * 1000).toISOString(),
+        refreshTokenExpiresAt: tokenResponse.x_refresh_token_expires_in
+          ? new Date(now + tokenResponse.x_refresh_token_expires_in * 1000).toISOString()
+          : null,
+        scope: "com.intuit.quickbooks.accounting",
+      },
+      secretConfig: {
+        accessToken: tokenResponse.access_token,
+        refreshToken: tokenResponse.refresh_token,
+      },
+    });
+
+    req.session.save(() => {
+      res.redirect(getQuickBooksSettingsRedirect("connected"));
+    });
+  } catch (callbackError: any) {
+    console.error("[quickbooks] OAuth callback failed:", callbackError?.message || callbackError);
+    redirectWithError(callbackError?.message || "QuickBooks connection failed");
+  }
+});
+
+router.post("/integrations/quickbooks/disconnect", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const tenantId = getRequiredTenantId(req);
+    const integration = await tenantIntegrationService.getIntegration(tenantId, "quickbooks");
+    const existingConfig = integration?.publicConfig || {};
+
+    await tenantIntegrationService.clearSecret(tenantId, "quickbooks", "accessToken");
+    await tenantIntegrationService.clearSecret(tenantId, "quickbooks", "refreshToken");
+    await tenantIntegrationService.upsertIntegration(tenantId, "quickbooks", {
+      publicConfig: {
+        ...existingConfig,
+        realmId: null,
+        companyName: null,
+        connectedAt: null,
+        accessTokenExpiresAt: null,
+        refreshTokenExpiresAt: null,
+        scope: null,
+      },
+    });
+
+    res.json({ success: true, message: "QuickBooks disconnected" });
+  } catch (error) {
+    handleRouteError(res, error, "tenantOnboarding.disconnectQuickBooks", req);
   }
 });
 

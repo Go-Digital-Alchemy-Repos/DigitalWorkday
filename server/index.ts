@@ -7,6 +7,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocketIO } from "./realtime/socket";
 import { setupAuth, setupBootstrapEndpoints, setupPlatformInviteEndpoints, setupTenantInviteEndpoints, setupPasswordResetEndpoints } from "./auth";
+import publicQuickBooksRouter from "./routes/publicQuickBooks";
 import { bootstrapAdminUser } from "./bootstrap";
 import { runProductionParityCheck } from "./scripts/production-parity-check";
 import { tenantContextMiddleware } from "./middleware/tenantContext";
@@ -183,6 +184,9 @@ setupTenantInviteEndpoints(app);
 
 // Setup password reset endpoints (public, no auth required)
 setupPasswordResetEndpoints(app);
+
+// Public QuickBooks app URLs required by Intuit app settings.
+app.use("/quickbooks", publicQuickBooksRouter);
 
 // Public file serving proxy (before auth middleware, no auth required)
 import fileServeRouter from "./http/domains/fileServe.router";
