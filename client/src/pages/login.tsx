@@ -63,6 +63,7 @@ export default function LoginPage() {
   const [showBootstrap, setShowBootstrap] = useState(false);
   const [bootstrapRequired, setBootstrapRequired] = useState(false);
   const [isCheckingBootstrap, setIsCheckingBootstrap] = useState(true);
+  const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
   const [branding, setBranding] = useState<LoginBranding>({ appName: null, loginMessage: null, logoUrl: null, iconUrl: null, faviconUrl: null, primaryColor: null });
   const { login } = useAuth();
   const { toast } = useToast();
@@ -112,6 +113,23 @@ export default function LoginPage() {
       }
     }
     checkBootstrapStatus();
+  }, []);
+
+  useEffect(() => {
+    async function checkGoogleStatus() {
+      try {
+        const response = await fetch("/api/v1/auth/google/status", {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setGoogleSignInEnabled(data.enabled === true);
+        }
+      } catch (error) {
+        console.error("Failed to check Google sign-in status:", error);
+      }
+    }
+    checkGoogleStatus();
   }, []);
 
   useEffect(() => {
@@ -278,6 +296,10 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleSignIn = () => {
+    window.location.href = "/api/v1/auth/google";
+  };
+
   if (isCheckingBootstrap) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -383,7 +405,6 @@ export default function LoginPage() {
                   </Button>
                 </div>
               </div>
-              
               <Button
                 type="submit"
                 className="w-full"
@@ -473,6 +494,32 @@ export default function LoginPage() {
                   {isSubmitting ? "Signing in..." : "Sign in"}
                 </Button>
               </form>
+
+              {googleSignInEnabled && (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Or</span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleGoogleSignIn}
+                    disabled={isSubmitting}
+                    data-testid="button-google-login"
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold">
+                      G
+                    </span>
+                    Sign in with Google
+                  </Button>
+                </>
+              )}
               
               {bootstrapRequired && (
                 <div className="pt-4 border-t">

@@ -15,6 +15,7 @@
  */
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy, type Profile as GoogleProfile } from "passport-google-oauth20";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -25,9 +26,10 @@ import { getWorkspaceMembershipRoleForUserRole } from "@shared/roles";
 import { eq, sql, and, desc } from "drizzle-orm";
 import { createHash } from "crypto";
 import type { User } from "@shared/schema";
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler, Response } from "express";
 import connectPgSimple from "connect-pg-simple";
 import { Pool } from "pg";
+import { isGoogleEmailAllowed } from "./auth/googleDomain";
 import { 
   loginRateLimiter, 
   bootstrapRateLimiter, 
@@ -37,6 +39,7 @@ import {
 } from "./middleware/rateLimit";
 
 const scryptAsync = promisify(scrypt);
+const GOOGLE_CALLBACK_PATH = "/api/v1/auth/google/callback";
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
@@ -49,6 +52,87 @@ export async function comparePasswords(supplied: string, stored: string): Promis
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+function isGoogleOAuthConfigured(): boolean {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
+
+function getGoogleOAuthCallbackUrl(req?: Request): string {
+  if (process.env.GOOGLE_OAUTH_REDIRECT_URL) {
+    return process.env.GOOGLE_OAUTH_REDIRECT_URL;
+  }
+
+  const configuredBaseUrl = process.env.APP_PUBLIC_URL?.replace(/\/$/, "");
+  if (configuredBaseUrl) {
+    return `${configuredBaseUrl}${GOOGLE_CALLBACK_PATH}`;
+  }
+
+  if (req) {
+    return `${req.protocol}://${req.get("host")}${GOOGLE_CALLBACK_PATH}`;
+  }
+
+  return `http://localhost:${process.env.PORT || "5000"}${GOOGLE_CALLBACK_PATH}`;
+}
+
+function redirectToLoginWithError(res: Response, message: string): void {
+  res.redirect(`/login?error=${encodeURIComponent(message)}`);
+}
+
+async function resolveWorkspaceIdForLogin(user: Express.User): Promise<string | undefined> {
+  const isSuperUser = user.role === UserRole.SUPER_USER;
+  const userWorkspaces = await storage.getWorkspacesByUser(user.id);
+  const workspaceId = userWorkspaces.length > 0 ? userWorkspaces[0].id : undefined;
+
+  if (!isSuperUser && !workspaceId) {
+    throw new Error("No workspace access. Please contact your administrator.");
+  }
+
+  return workspaceId;
+}
+
+async function finishLogin(req: Request, res: Response, user: Express.User): Promise<void> {
+  const workspaceId = await resolveWorkspaceIdForLogin(user);
+  req.session.workspaceId = workspaceId;
+
+  req.session.save((saveErr) => {
+    if (saveErr) {
+      console.error("Session save error:", saveErr);
+    }
+    return res.json({ user, workspaceId });
+  });
+}
+
+async function finishGoogleLogin(req: Request, res: Response, user: Express.User): Promise<void> {
+  const workspaceId = await resolveWorkspaceIdForLogin(user);
+  req.session.workspaceId = workspaceId;
+
+  req.session.save((saveErr) => {
+    if (saveErr) {
+      console.error("[auth] Google OAuth session save error:", saveErr);
+    }
+    const destination = user.role === UserRole.SUPER_USER ? "/super-admin/dashboard" : "/";
+    res.redirect(destination);
+  });
+}
+
+function extractVerifiedGoogleProfile(profile: GoogleProfile): {
+  email: string;
+  verified: boolean;
+  avatarUrl: string | null;
+} {
+  const primaryEmail = profile.emails?.[0];
+  const raw = profile._json as { email?: string; email_verified?: boolean; verified_email?: boolean; picture?: string };
+  const email = (primaryEmail?.value || raw.email || "").toLowerCase().trim();
+  const verified =
+    primaryEmail?.verified === true ||
+    raw.email_verified === true ||
+    raw.verified_email === true;
+  const avatarUrl = typeof raw.picture === "string" && raw.picture.trim()
+    ? raw.picture.trim()
+    : profile.photos?.[0]?.value || null;
+
+  return { email, verified, avatarUrl };
 }
 
 declare global {
@@ -154,6 +238,67 @@ export function setupAuth(app: Express): void {
     )
   );
 
+  if (isGoogleOAuthConfigured()) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID!,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          callbackURL: getGoogleOAuthCallbackUrl(),
+        },
+        async (_accessToken, _refreshToken, profile, done) => {
+          try {
+            const { email, verified, avatarUrl } = extractVerifiedGoogleProfile(profile);
+
+            if (!email) {
+              return done(null, false, { message: "Could not get email from Google" });
+            }
+
+            if (!verified) {
+              return done(null, false, { message: "Google account email is not verified" });
+            }
+
+            if (!isGoogleEmailAllowed(email)) {
+              return done(null, false, { message: "This Google account is not allowed for this app" });
+            }
+
+            const [linkedUser] = await db.select().from(users).where(eq(users.googleId, profile.id)).limit(1);
+            let user = linkedUser || await storage.getUserByEmail(email);
+
+            if (!user) {
+              return done(null, false, { message: "No DigitalWorkday account found. Please ask an administrator for an invite." });
+            }
+
+            if (!user.isActive) {
+              return done(null, false, { message: "Account is deactivated" });
+            }
+
+            if (user.googleId && user.googleId !== profile.id) {
+              return done(null, false, { message: "This email is already linked to another Google account" });
+            }
+
+            if (!user.googleId || (!user.avatarUrl && avatarUrl)) {
+              const [updatedUser] = await db.update(users)
+                .set({
+                  googleId: user.googleId || profile.id,
+                  avatarUrl: user.avatarUrl || avatarUrl,
+                  updatedAt: new Date(),
+                })
+                .where(eq(users.id, user.id))
+                .returning();
+              user = updatedUser;
+            }
+
+            const { passwordHash, ...userWithoutPassword } = user;
+            return done(null, userWithoutPassword);
+          } catch (error) {
+            return done(error as Error);
+          }
+        }
+      )
+    );
+  }
+
   passport.serializeUser((user, done) => {
     done(null, user.id);
   });
@@ -185,38 +330,63 @@ export function setupAuth(app: Express): void {
         }
         
         try {
-          // Super users don't need workspace access - they manage the platform
-          const isSuperUser = user.role === UserRole.SUPER_USER;
-          
-          let workspaceId: string | undefined = undefined;
-          if (!isSuperUser) {
-            const workspaces = await storage.getWorkspacesByUser(user.id);
-            workspaceId = workspaces.length > 0 ? workspaces[0].id : undefined;
-            
-            if (!workspaceId) {
-              req.logout(() => {});
-              return res.status(403).json({ 
-                error: "No workspace access. Please contact your administrator." 
-              });
-            }
-          } else {
-            // Super users can optionally have a workspace from impersonation
-            const workspaces = await storage.getWorkspacesByUser(user.id);
-            workspaceId = workspaces.length > 0 ? workspaces[0].id : undefined;
-          }
-          
-          req.session.workspaceId = workspaceId;
-          
-          req.session.save((saveErr) => {
-            if (saveErr) {
-              console.error("Session save error:", saveErr);
-            }
-            return res.json({ user, workspaceId });
-          });
+          await finishLogin(req, res, user);
         } catch (workspaceErr) {
           console.error("Workspace lookup error:", workspaceErr);
           req.logout(() => {});
-          return res.status(500).json({ error: "Failed to resolve workspace" });
+          const message = workspaceErr instanceof Error ? workspaceErr.message : "Failed to resolve workspace";
+          const status = message.startsWith("No workspace access") ? 403 : 500;
+          return res.status(status).json({ error: message });
+        }
+      });
+    })(req, res, next);
+  });
+
+  app.get("/api/v1/auth/google/status", (_req, res) => {
+    res.json({ enabled: isGoogleOAuthConfigured() });
+  });
+
+  app.get("/api/v1/auth/google", loginRateLimiter, (req, res, next) => {
+    if (!isGoogleOAuthConfigured()) {
+      return redirectToLoginWithError(res, "Google authentication is not configured");
+    }
+
+    passport.authenticate("google", {
+      scope: ["profile", "email"],
+      prompt: "select_account",
+    })(req, res, next);
+  });
+
+  app.get("/api/v1/auth/google/callback", (req, res, next) => {
+    if (!isGoogleOAuthConfigured()) {
+      return redirectToLoginWithError(res, "Google authentication is not configured");
+    }
+
+    passport.authenticate("google", {
+      session: false,
+    }, (err: Error | null, user: Express.User | false, info: { message?: string }) => {
+      if (err) {
+        console.error("[auth] Google OAuth callback error:", err);
+        return redirectToLoginWithError(res, "Google authentication failed");
+      }
+
+      if (!user) {
+        return redirectToLoginWithError(res, info?.message || "Google authentication failed");
+      }
+
+      req.logIn(user, async (loginErr) => {
+        if (loginErr) {
+          console.error("[auth] Google OAuth login error:", loginErr);
+          return redirectToLoginWithError(res, "Login failed");
+        }
+
+        try {
+          await finishGoogleLogin(req, res, user);
+        } catch (workspaceErr) {
+          console.error("[auth] Google OAuth workspace lookup error:", workspaceErr);
+          req.logout(() => {});
+          const message = workspaceErr instanceof Error ? workspaceErr.message : "Failed to resolve workspace";
+          return redirectToLoginWithError(res, message);
         }
       });
     })(req, res, next);

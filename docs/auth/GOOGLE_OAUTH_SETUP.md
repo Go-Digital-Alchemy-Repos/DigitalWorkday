@@ -7,7 +7,7 @@ This document describes how to set up Google OAuth authentication for MyWorkDay.
 Google OAuth has been integrated as an additional authentication method alongside the existing email/password login. Users can sign in with their Google account, and the system will:
 
 - Link Google accounts to existing users by matching verified email addresses
-- Create new super admin accounts (first user only) via Google
+- Require users to already exist in DigitalWorkday so tenant/workspace access remains explicit
 - Respect existing invitation policies for new users
 
 ## Environment Variables
@@ -20,6 +20,7 @@ The following environment variables must be configured:
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth 2.0 Client Secret |
 | `GOOGLE_OAUTH_REDIRECT_URL` | No | Callback URL (defaults to `{APP_PUBLIC_URL}/api/v1/auth/google/callback`) |
 | `APP_PUBLIC_URL` | No | Public URL of your application (e.g., `https://myworkday.example.com`) |
+| `GOOGLE_ALLOWED_DOMAIN` | No | Comma-separated Google email domain allowlist. For internal deployments set this to your Workspace domain. |
 
 ## Google Cloud Console Setup
 
@@ -40,10 +41,11 @@ When deploying to Railway:
 1. Set the environment variables in Railway dashboard:
    - `GOOGLE_CLIENT_ID`: Your OAuth client ID
    - `GOOGLE_CLIENT_SECRET`: Your OAuth client secret
-   - `APP_PUBLIC_URL`: Your Railway app URL (e.g., `https://myapp.railway.app`)
+   - `APP_PUBLIC_URL`: Your public app URL (for production, `https://digitalworkday.ai`)
+   - `GOOGLE_ALLOWED_DOMAIN`: Your internal Google Workspace domain
 
 2. Update the redirect URI in Google Cloud Console to match your Railway URL:
-   - `https://myapp.railway.app/api/v1/auth/google/callback`
+   - `https://digitalworkday.ai/api/v1/auth/google/callback`
 
 3. Ensure cookies are configured correctly:
    - The app already sets `trust proxy = 1` for Railway's reverse proxy
@@ -65,8 +67,8 @@ When deploying to Railway:
    - If user already linked to a different Google ID → block with error
 
 2. **New user (no matching email)**:
-   - If no users exist (bootstrap) → create as Super Admin
-   - Otherwise → block with "No account found" message (invite required)
+   - Block with "No account found" message
+   - Provision the user through the existing platform or tenant invite flow first
 
 3. **Tenant context**:
    - Tenant IDs are never guessed from email domains
@@ -77,6 +79,7 @@ When deploying to Railway:
 - Google access tokens are NOT stored client-side
 - Google refresh tokens are NOT stored (we only use the OAuth flow for authentication)
 - Email verification is required for auto-linking to existing accounts
+- `GOOGLE_ALLOWED_DOMAIN` is enforced server-side after Google returns the verified email
 - Session cookies use `httpOnly`, `secure` (in production), and `sameSite: "lax"`
 
 ## Testing Checklist
@@ -88,9 +91,9 @@ Before deploying to production:
 - [ ] Logout works (clears session)
 - [ ] Switching between Google and password login works
 - [ ] Error messages display correctly on failed auth
-- [ ] First user bootstrap via Google creates Super Admin
 - [ ] Existing user linking by email works
 - [ ] Blocked attempts (no invite) show proper error
+- [ ] Non-allowed Google domains are rejected when `GOOGLE_ALLOWED_DOMAIN` is set
 
 ## Troubleshooting
 
