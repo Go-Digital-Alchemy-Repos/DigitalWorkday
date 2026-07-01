@@ -53,6 +53,7 @@ import {
   buildStopTimerPayload,
   buildTaskQuickStartTimerPayload,
 } from "./timer-payloads";
+import { isProjectCompleteAfterTaskCompletion } from "@/features/projects/project-completion";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
 import {
   Select,
@@ -217,6 +218,7 @@ function TaskDetailDrawerContent({
   const [timeEntryScope, setTimeEntryScope] = useState<"in_scope" | "out_of_scope">("in_scope");
   const [showStopTimerDialog, setShowStopTimerDialog] = useState(false);
   const [stopTimerDescription, setStopTimerDescription] = useState("");
+  const [completedProjectCandidate, setCompletedProjectCandidate] = useState<ProjectContext | null>(null);
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -666,33 +668,122 @@ function TaskDetailDrawerContent({
     },
     onMutate: async (newStatus: string) => {
       await queryClient.cancelQueries({ queryKey: ["/api/tasks/my"] });
+      if (task?.id) {
+        await queryClient.cancelQueries({ queryKey: ["/api/tasks", task.id] });
+      }
       const previousMyTasks = queryClient.getQueryData(["/api/tasks/my"]);
+      const taskDetailKey = task?.id ? ["/api/tasks", task.id] : null;
+      const previousTaskDetail = taskDetailKey
+        ? queryClient.getQueryData(taskDetailKey)
+        : undefined;
       queryClient.setQueryData<any[]>(["/api/tasks/my"], (old) =>
         old?.map((t: any) => (t.id === task?.id ? { ...t, status: newStatus } : t))
       );
+      if (taskDetailKey) {
+        queryClient.setQueryData<any>(taskDetailKey, (old: any) =>
+          old ? { ...old, status: newStatus } : old,
+        );
+      }
       if (task?.projectId) {
         const projectTasksKey = ["/api/projects", task.projectId, "tasks"];
+        const projectSectionsKey = ["/api/projects", task.projectId, "sections"];
         await queryClient.cancelQueries({ queryKey: projectTasksKey });
+        await queryClient.cancelQueries({ queryKey: projectSectionsKey });
         const previousProjectTasks = queryClient.getQueryData(projectTasksKey);
+        const previousProjectSections = queryClient.getQueryData(projectSectionsKey);
         queryClient.setQueryData<any[]>(projectTasksKey, (old) =>
           old?.map((t: any) => (t.id === task?.id ? { ...t, status: newStatus } : t))
         );
-        return { previousMyTasks, previousProjectTasks, projectTasksKey };
+        queryClient.setQueryData<any[]>(projectSectionsKey, (old) =>
+          old?.map((section: any) => ({
+            ...section,
+            tasks: section.tasks?.map((t: any) =>
+              t.id === task?.id ? { ...t, status: newStatus } : t,
+            ),
+          })),
+        );
+        return {
+          previousMyTasks,
+          previousTaskDetail,
+          taskDetailKey,
+          previousProjectTasks,
+          projectTasksKey,
+          previousProjectSections,
+          projectSectionsKey,
+        };
       }
-      return { previousMyTasks };
+      return { previousMyTasks, previousTaskDetail, taskDetailKey };
     },
     onError: (_err, _status, context: any) => {
       if (context?.previousMyTasks) {
         queryClient.setQueryData(["/api/tasks/my"], context.previousMyTasks);
       }
+      if (context?.taskDetailKey) {
+        queryClient.setQueryData(context.taskDetailKey, context.previousTaskDetail);
+      }
       if (context?.previousProjectTasks && context?.projectTasksKey) {
         queryClient.setQueryData(context.projectTasksKey, context.previousProjectTasks);
+      }
+      if (context?.previousProjectSections && context?.projectSectionsKey) {
+        queryClient.setQueryData(context.projectSectionsKey, context.previousProjectSections);
       }
     },
     onSettled: () => {
       invalidateTaskQueries();
     },
   });
+
+  const archiveCompletedProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      return apiRequest("PATCH", `/api/projects/${projectId}`, { status: "archived" });
+    },
+    onSuccess: (_data, projectId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      setCompletedProjectCandidate(null);
+      onOpenChange(false);
+      toast({
+        title: "Project archived",
+        description: "Completed project work has been removed from active project lists.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to archive project", variant: "destructive" });
+    },
+  });
+
+  const maybePromptToArchiveCompletedProject = useCallback(async () => {
+    if (!task?.id || !task.projectId || projectContext?.status === "archived") return false;
+
+    try {
+      const projectTasksKey = ["/api/projects", task.projectId, "tasks"] as const;
+      let projectTasks = queryClient.getQueryData<TaskWithRelations[]>(projectTasksKey);
+
+      if (!projectTasks) {
+        const response = await fetch(`/api/projects/${task.projectId}/tasks`, { credentials: "include" });
+        if (response.ok) {
+          projectTasks = await response.json();
+        }
+      }
+
+      const tasksForCheck = [...(projectTasks || [])];
+      if (!tasksForCheck.some((projectTask) => projectTask.id === task.id)) {
+        tasksForCheck.push({ ...task, status: "done" } as TaskWithRelations);
+      }
+
+      if (isProjectCompleteAfterTaskCompletion(tasksForCheck, task.id)) {
+        setCompletedProjectCandidate(projectContext || ({ id: task.projectId, name: "this project" } as ProjectContext));
+        return true;
+      }
+    } catch (error) {
+      console.warn("[TaskDetailDrawer] Failed to evaluate project completion", error);
+    }
+
+    return false;
+  }, [task, projectContext]);
 
   const handleMarkAsComplete = () => {
     if (task?.status === "done" || timeEntriesLoading) return;
@@ -710,7 +801,10 @@ function TaskDetailDrawerContent({
       await updateTaskStatusMutation.mutateAsync("done");
       toast({ title: "Task completed", description: `"${task?.title}" marked as done` });
       resetCompletionState();
-      onOpenChange(false);
+      const promptedForArchive = await maybePromptToArchiveCompletedProject();
+      if (!promptedForArchive) {
+        onOpenChange(false);
+      }
     } catch (error) {
       toast({ title: "Failed to complete task", variant: "destructive" });
     } finally {
@@ -805,7 +899,10 @@ function TaskDetailDrawerContent({
         description: `Logged ${completionTimeHours}h ${completionTimeMinutes}m for "${task?.title}"` 
       });
       resetCompletionState();
-      onOpenChange(false);
+      const promptedForArchive = await maybePromptToArchiveCompletedProject();
+      if (!promptedForArchive) {
+        onOpenChange(false);
+      }
     } catch (error) {
       toast({ title: "Failed to complete task", variant: "destructive" });
     } finally {
@@ -821,17 +918,29 @@ function TaskDetailDrawerContent({
     setCompletionTimeDescription("");
   };
 
-  const handleStatusChange = (newStatus: string) => {
+  const handleStatusChange = async (newStatus: string) => {
+    if (!task || newStatus === task.status) return;
+
     if (newStatus === "done" && task?.status !== "done") {
       if (timeEntriesLoading) return;
       
       if (timeEntries.length === 0) {
         setShowTimeTrackingPrompt(true);
       } else {
-        onUpdate?.(task!.id, { status: newStatus });
+        completeTaskDirectly();
       }
-    } else {
-      onUpdate?.(task!.id, { status: newStatus });
+      return;
+    }
+
+    if (onUpdate) {
+      onUpdate(task.id, { status: newStatus });
+      return;
+    }
+
+    try {
+      await updateTaskStatusMutation.mutateAsync(newStatus);
+    } catch (error) {
+      toast({ title: "Failed to update task status", variant: "destructive" });
     }
   };
 
@@ -1816,6 +1925,51 @@ function TaskDetailDrawerContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={!!completedProjectCandidate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCompletedProjectCandidate(null);
+            onOpenChange(false);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive completed project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Closing this task means all active work in{" "}
+              <span className="font-medium text-foreground">
+                {completedProjectCandidate?.name || "this project"}
+              </span>{" "}
+              appears to be complete. Archive the project now? Archived projects are removed from
+              the sidebar and active Projects page, but the project history, tasks, and time data stay available.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setCompletedProjectCandidate(null);
+                onOpenChange(false);
+              }}
+              data-testid="button-keep-completed-project-active"
+            >
+              Keep active
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (completedProjectCandidate?.id) {
+                  archiveCompletedProjectMutation.mutate(completedProjectCandidate.id);
+                }
+              }}
+              disabled={archiveCompletedProjectMutation.isPending}
+              data-testid="button-archive-completed-project"
+            >
+              {archiveCompletedProjectMutation.isPending ? "Archiving..." : "Archive project"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={!!editingTimeEntry} onOpenChange={(open) => !open && setEditingTimeEntry(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

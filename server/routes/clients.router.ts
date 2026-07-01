@@ -46,6 +46,16 @@ import { syncPortalUserFromClientContact } from "../utils/clientPortalIdentitySy
 
 const router = createApiRouter({ policy: "authTenant" });
 
+function canUseClientDivisionAdmin(role: string | null | undefined): boolean {
+  return (
+    hasTenantAdminAccess(role) ||
+    role === "super_admin" ||
+    role === "employee" ||
+    role === "tenant_admin" ||
+    role === "tenant_employee"
+  );
+}
+
 // =============================================================================
 // PROJECT CLIENT ASSIGNMENT
 // =============================================================================
@@ -579,7 +589,7 @@ router.get("/v1/clients/:clientId/divisions", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canSeeAll = user?.role === 'super_user' || user?.role === 'admin' || user?.role === 'employee';
+    const canSeeAll = canUseClientDivisionAdmin(user?.role);
     
     let divisions = await storage.getClientDivisionsByClient(clientId, tenantId);
     
@@ -616,7 +626,7 @@ router.post("/v1/clients/:clientId/divisions", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canCreate = user?.role === 'super_user' || user?.role === 'admin' || user?.role === 'employee';
+    const canCreate = canUseClientDivisionAdmin(user?.role);
     
     if (!canCreate) throw AppError.forbidden("You do not have permission to create divisions");
     
@@ -642,7 +652,7 @@ router.patch("/v1/divisions/:divisionId", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canUpdate = user?.role === 'super_user' || user?.role === 'admin' || user?.role === 'employee';
+    const canUpdate = canUseClientDivisionAdmin(user?.role);
     
     if (!canUpdate) throw AppError.forbidden("You do not have permission to update divisions");
     
@@ -699,7 +709,7 @@ router.post("/v1/divisions/:divisionId/members", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canManage = user?.role === 'super_user' || user?.role === 'admin' || user?.role === 'employee';
+    const canManage = canUseClientDivisionAdmin(user?.role);
     
     if (!canManage) throw AppError.forbidden("You do not have permission to manage division members");
     
@@ -729,7 +739,7 @@ router.delete("/v1/divisions/:divisionId/members/:userId", async (req, res) => {
     
     const currentUserId = getCurrentUserId(req);
     const user = await storage.getUser(currentUserId);
-    const canManage = user?.role === 'super_user' || user?.role === 'admin' || user?.role === 'employee';
+    const canManage = canUseClientDivisionAdmin(user?.role);
     
     if (!canManage) throw AppError.forbidden("You do not have permission to remove division members");
     

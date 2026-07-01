@@ -86,6 +86,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { fetchTaskDetail } from "@/lib/task-detail";
 import { useProjectSocket, useWorkspaceRealtime } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth";
+import { isProjectCompleteAfterTaskCompletion } from "@/features/projects/project-completion";
 import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 import { Link } from "wouter";
 import { usePromptDialog } from "@/components/prompt-dialog";
@@ -174,6 +175,7 @@ export default function ProjectPage() {
 
   const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+  const [showArchiveCompletedProjectDialog, setShowArchiveCompletedProjectDialog] = useState(false);
   const [templatePopoverOpen, setTemplatePopoverOpen] = useState(false);
 
   const { prompt: promptSectionName, PromptDialogComponent: SectionNameDialog } = usePromptDialog({
@@ -423,6 +425,27 @@ export default function ProjectPage() {
     },
     onError: () => {
       toast({ title: "Failed to restore project", variant: "destructive" });
+    },
+  });
+
+  const archiveCompletedProjectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/projects/${projectId}`, { status: "archived" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      setShowArchiveCompletedProjectDialog(false);
+      toast({
+        title: "Project archived",
+        description: "Completed project work has been removed from active project lists.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to archive project", variant: "destructive" });
     },
   });
 
@@ -784,19 +807,33 @@ export default function ProjectPage() {
     }
   };
 
-  const completeTaskDirectly = (taskId: string) => {
-    updateTaskMutation.mutate({
-      taskId,
-      data: { status: "done" },
-    });
+  const maybePromptToArchiveCompletedProject = useCallback((taskId: string) => {
+    if (!projectId || project?.status === "archived") return;
+
+    const projectTasks = orderedSections.flatMap((section) => section.tasks || []);
+    if (isProjectCompleteAfterTaskCompletion(projectTasks, taskId)) {
+      setShowArchiveCompletedProjectDialog(true);
+    }
+  }, [orderedSections, project?.status, projectId]);
+
+  const completeTaskDirectly = async (taskId: string) => {
     const pendingTask = orderedSections.flatMap(s => s.tasks || []).find(t => t.id === taskId);
-    toast({ title: "Task completed", description: `"${pendingTask?.title}" marked as done` });
-    resetCompletionState();
+    try {
+      await updateTaskMutation.mutateAsync({
+        taskId,
+        data: { status: "done" },
+      });
+      toast({ title: "Task completed", description: `"${pendingTask?.title}" marked as done` });
+      maybePromptToArchiveCompletedProject(taskId);
+      resetCompletionState();
+    } catch {
+      // updateTaskMutation owns the user-facing error toast and rollback.
+    }
   };
 
-  const handleTimeTrackingNo = () => {
+  const handleTimeTrackingNo = async () => {
     if (pendingCompletionTaskId) {
-      completeTaskDirectly(pendingCompletionTaskId);
+      await completeTaskDirectly(pendingCompletionTaskId);
     }
     setShowTimeTrackingPrompt(false);
   };
@@ -839,7 +876,7 @@ export default function ProjectPage() {
         clientId: project?.clientId || null,
       });
       
-      updateTaskMutation.mutate({
+      await updateTaskMutation.mutateAsync({
         taskId: pendingCompletionTaskId,
         data: { status: "done" },
       });
@@ -848,6 +885,7 @@ export default function ProjectPage() {
         title: "Task completed with time logged", 
         description: `Logged ${completionTimeHours}h ${completionTimeMinutes}m for "${pendingTask?.title}"` 
       });
+      maybePromptToArchiveCompletedProject(pendingCompletionTaskId);
       resetCompletionState();
     } catch (error) {
       toast({ title: "Failed to complete task", variant: "destructive" });
@@ -1541,6 +1579,34 @@ export default function ProjectPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={showArchiveCompletedProjectDialog}
+        onOpenChange={setShowArchiveCompletedProjectDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive completed project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Closing this task means all active work in{" "}
+              <span className="font-medium text-foreground">{project?.name || "this project"}</span>{" "}
+              appears to be complete. Archive the project now? Archived projects are removed from
+              the sidebar and active Projects page, but the project history, tasks, and time data stay available.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-keep-project-active">
+              Keep active
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => archiveCompletedProjectMutation.mutate()}
+              disabled={archiveCompletedProjectMutation.isPending}
+              data-testid="button-archive-project-complete"
+            >
+              {archiveCompletedProjectMutation.isPending ? "Archiving..." : "Archive project"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={deleteSectionDialogOpen} onOpenChange={setDeleteSectionDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

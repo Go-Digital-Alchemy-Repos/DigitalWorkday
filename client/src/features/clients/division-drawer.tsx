@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getPreviewText } from "@/components/richtext";
 import { richTextToPreview } from "@/lib/richtext/richText";
+import { formatErrorForToast } from "@/lib/parseApiError";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import {
@@ -173,8 +174,13 @@ export function DivisionDrawer({
       toast({ title: "Division created successfully" });
       handleClose();
     },
-    onError: () => {
-      toast({ title: "Failed to create division", variant: "destructive" });
+    onError: (error) => {
+      const { description } = formatErrorForToast(error);
+      toast({
+        title: "Failed to create division",
+        description,
+        variant: "destructive",
+      });
     },
   });
 
@@ -186,8 +192,13 @@ export function DivisionDrawer({
       queryClient.invalidateQueries({ queryKey: ["/api/v1/clients", clientId, "divisions"] });
       toast({ title: "Division updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to update division", variant: "destructive" });
+    onError: (error) => {
+      const { description } = formatErrorForToast(error);
+      toast({
+        title: "Failed to update division",
+        description,
+        variant: "destructive",
+      });
     },
   });
 
@@ -199,8 +210,13 @@ export function DivisionDrawer({
       queryClient.invalidateQueries({ queryKey: ["/api/v1/divisions", division?.id, "members"] });
       toast({ title: "Members updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to update members", variant: "destructive" });
+    onError: (error) => {
+      const { description } = formatErrorForToast(error);
+      toast({
+        title: "Failed to update members",
+        description,
+        variant: "destructive",
+      });
     },
   });
 

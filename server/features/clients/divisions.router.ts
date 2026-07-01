@@ -3,6 +3,7 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { insertClientDivisionSchema } from "@shared/schema";
+import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
 
@@ -11,6 +12,16 @@ function getCurrentUserId(req: Request): string {
 }
 
 const router = Router();
+
+function canUseClientDivisionAdmin(role: string | null | undefined): boolean {
+  return (
+    hasTenantAdminAccess(role) ||
+    role === "super_admin" ||
+    role === "employee" ||
+    role === "tenant_admin" ||
+    role === "tenant_employee"
+  );
+}
 
 // =============================================================================
 // CLIENT DIVISIONS
@@ -25,7 +36,7 @@ router.get("/divisions/all", async (req, res) => {
 
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canSeeAll = canUseClientDivisionAdmin(user?.role);
 
     let divisions = await storage.getClientDivisionsByTenant(tenantId);
 
@@ -58,7 +69,7 @@ router.get("/clients/:clientId/divisions", async (req, res) => {
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
     // Allow super users, tenant admins, and tenant employees to see all divisions
-    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canSeeAll = canUseClientDivisionAdmin(user?.role);
     
     let divisions = await storage.getClientDivisionsByClient(clientId, tenantId);
     
@@ -100,7 +111,7 @@ router.post("/clients/:clientId/divisions", async (req, res) => {
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
     // Allow super users, tenant admins, and tenant employees to create divisions
-    const canCreate = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canCreate = canUseClientDivisionAdmin(user?.role);
     
     if (!canCreate) {
       throw AppError.forbidden("You do not have permission to create divisions");
@@ -116,7 +127,7 @@ router.post("/clients/:clientId/divisions", async (req, res) => {
     res.status(201).json(division);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw AppError.badRequest("Validation failed", error.errors);
+      return handleRouteError(res, AppError.badRequest("Validation failed", error.errors), "POST /clients/:clientId/divisions", req);
     }
     return handleRouteError(res, error, "POST /clients/:clientId/divisions", req);
   }
@@ -134,7 +145,7 @@ router.patch("/divisions/:divisionId", async (req, res) => {
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
     // Allow super users, tenant admins, and tenant employees to update divisions
-    const canUpdate = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canUpdate = canUseClientDivisionAdmin(user?.role);
     
     if (!canUpdate) {
       throw AppError.forbidden("You do not have permission to update divisions");
@@ -154,7 +165,7 @@ router.patch("/divisions/:divisionId", async (req, res) => {
     res.json(division);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw AppError.badRequest("Validation failed", error.errors);
+      return handleRouteError(res, AppError.badRequest("Validation failed", error.errors), "PATCH /divisions/:divisionId", req);
     }
     return handleRouteError(res, error, "PATCH /divisions/:divisionId", req);
   }
@@ -177,7 +188,7 @@ router.get("/divisions/:divisionId/members", async (req, res) => {
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
     // Allow super users, tenant admins, and tenant employees to view division members
-    const isPrivileged = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const isPrivileged = canUseClientDivisionAdmin(user?.role);
     
     if (!isPrivileged) {
       const isMember = await storage.isDivisionMember(divisionId, userId);
@@ -210,7 +221,7 @@ router.post("/divisions/:divisionId/members", async (req, res) => {
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
     // Allow super users, tenant admins, and tenant employees to manage division members
-    const canManage = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canManage = canUseClientDivisionAdmin(user?.role);
     
     if (!canManage) {
       throw AppError.forbidden("You do not have permission to manage division members");
@@ -249,7 +260,7 @@ router.delete("/divisions/:divisionId/members/:userId", async (req, res) => {
     const currentUserId = getCurrentUserId(req);
     const user = await storage.getUser(currentUserId);
     // Allow super users, tenant admins, and tenant employees to remove division members
-    const canManage = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canManage = canUseClientDivisionAdmin(user?.role);
     
     if (!canManage) {
       throw AppError.forbidden("You do not have permission to remove division members");
@@ -284,7 +295,7 @@ router.get("/divisions/:divisionId/projects", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canView = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canView = canUseClientDivisionAdmin(user?.role);
     
     if (!canView) {
       const isMember = await storage.isDivisionMember(divisionId, userId);
@@ -320,7 +331,7 @@ router.get("/divisions/:divisionId/tasks", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canView = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canView = canUseClientDivisionAdmin(user?.role);
     
     if (!canView) {
       const isMember = await storage.isDivisionMember(divisionId, userId);
