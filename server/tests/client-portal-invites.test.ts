@@ -14,11 +14,13 @@ const storageMocks = {
   createClientInvite: vi.fn(),
   getTenant: vi.fn(),
   getClientUsers: vi.fn(),
+  createUser: vi.fn(),
 };
 
 const sendEmailMock = vi.fn();
 const renderByKeyMock = vi.fn();
 const getClientDescendantIdsMock = vi.fn();
+const getPortalAccessOptionsMock = vi.fn();
 const getPortalAccessMatrixMock = vi.fn();
 const replacePortalAccessScopeMock = vi.fn();
 
@@ -40,6 +42,7 @@ vi.mock("../services/emailTemplates", () => ({
 
 vi.mock("../services/customerAccessPermissions", () => ({
   getClientDescendantIds: getClientDescendantIdsMock,
+  getPortalAccessOptions: getPortalAccessOptionsMock,
   getPortalAccessMatrix: getPortalAccessMatrixMock,
   replacePortalAccessScope: replacePortalAccessScopeMock,
 }));
@@ -108,6 +111,15 @@ describe("client portal invitations", () => {
       status: InvitationStatus.PENDING,
       createdAt: new Date("2026-07-20T12:00:00.000Z"),
     });
+    storageMocks.createUser.mockResolvedValue({
+      id: "portal-user-1",
+      tenantId: "tenant-1",
+      email: "newportal@example.com",
+      name: "New Portal",
+      firstName: "New",
+      lastName: "Portal",
+      role: UserRole.CLIENT,
+    });
     storageMocks.getTenant.mockResolvedValue({ id: "tenant-1", name: "Digital Workday" });
     renderByKeyMock.mockResolvedValue({
       subject: "Portal invite",
@@ -116,8 +128,82 @@ describe("client portal invitations", () => {
     });
     sendEmailMock.mockResolvedValue({ success: true, emailId: "email-1" });
     getClientDescendantIdsMock.mockResolvedValue([]);
+    getPortalAccessOptionsMock.mockResolvedValue([]);
     getPortalAccessMatrixMock.mockResolvedValue([]);
     replacePortalAccessScopeMock.mockResolvedValue([]);
+  });
+
+  it("returns portal users in the flattened shape used by the management UI", async () => {
+    storageMocks.getClientUsers.mockResolvedValue([
+      {
+        user: {
+          id: "portal-user-1",
+          email: "portal@example.com",
+          name: "Portal User",
+          firstName: "Portal",
+          lastName: "User",
+          avatarUrl: null,
+        },
+        access: {
+          id: "access-1",
+          clientId: "client-1",
+          userId: "portal-user-1",
+          accessLevel: ClientAccessLevel.COLLABORATOR,
+          createdAt: new Date("2026-07-20T12:00:00.000Z"),
+        },
+      },
+    ]);
+
+    const response = await request(createApp()).get("/api/clients/client-1/users");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({
+        id: "access-1",
+        clientId: "client-1",
+        userId: "portal-user-1",
+        accessLevel: ClientAccessLevel.COLLABORATOR,
+        user: expect.objectContaining({
+          id: "portal-user-1",
+          email: "portal@example.com",
+          firstName: "Portal",
+          lastName: "User",
+        }),
+      }),
+    ]);
+  });
+
+  it("returns account access options before creating a portal user", async () => {
+    getPortalAccessOptionsMock.mockResolvedValue([
+      {
+        client: { ...client, parentClientId: null },
+        relationship: "current",
+      },
+      {
+        client: {
+          id: "child-1",
+          tenantId: "tenant-1",
+          workspaceId: "workspace-1",
+          companyName: "Acme Child",
+          parentClientId: "client-1",
+        },
+        relationship: "child",
+      },
+    ]);
+
+    const response = await request(createApp()).get("/api/clients/client-1/access-scope-options");
+
+    expect(response.status).toBe(200);
+    expect(response.body.entries).toEqual([
+      expect.objectContaining({
+        client: expect.objectContaining({ id: "client-1" }),
+        relationship: "current",
+      }),
+      expect.objectContaining({
+        client: expect.objectContaining({ id: "child-1" }),
+        relationship: "child",
+      }),
+    ]);
   });
 
   it("requires tenant admin access to invite portal users", async () => {
@@ -219,5 +305,54 @@ describe("client portal invitations", () => {
     expect(storageMocks.createClientInvite).toHaveBeenCalledWith(expect.objectContaining({
       accessClientIds: ["client-1", "child-1"],
     }));
+  });
+
+  it("preserves selected child account access when creating a portal user directly", async () => {
+    getClientDescendantIdsMock.mockResolvedValue(["child-1", "child-2"]);
+    replacePortalAccessScopeMock.mockResolvedValue([
+      {
+        client,
+        access: {
+          clientId: "client-1",
+          userId: "portal-user-1",
+          accessLevel: ClientAccessLevel.COLLABORATOR,
+        },
+        relationship: "current",
+      },
+      {
+        client: { id: "child-1", companyName: "Acme Child" },
+        access: {
+          clientId: "child-1",
+          userId: "portal-user-1",
+          accessLevel: ClientAccessLevel.COLLABORATOR,
+        },
+        relationship: "child",
+      },
+    ]);
+
+    const response = await request(createApp())
+      .post("/api/clients/client-1/users/create")
+      .send({
+        email: "newportal@example.com",
+        firstName: "New",
+        lastName: "Portal",
+        password: "password123",
+        accessLevel: ClientAccessLevel.COLLABORATOR,
+        accessClientIds: ["client-1", "child-1", "not-a-child"],
+      });
+
+    expect(response.status).toBe(201);
+    expect(replacePortalAccessScopeMock).toHaveBeenCalledWith(
+      "tenant-1",
+      "workspace-1",
+      "client-1",
+      "portal-user-1",
+      {
+        entries: [
+          { clientId: "client-1", accessLevel: ClientAccessLevel.COLLABORATOR },
+          { clientId: "child-1", accessLevel: ClientAccessLevel.COLLABORATOR },
+        ],
+      },
+    );
   });
 });

@@ -21,6 +21,8 @@ export type PortalAccessMatrixEntry = {
   relationship: "current" | "child" | "descendant" | "other";
 };
 
+export type PortalAccessOption = Omit<PortalAccessMatrixEntry, "access">;
+
 export type PortalAccessScopeInput = {
   entries: Array<{
     clientId: string;
@@ -81,6 +83,33 @@ export async function getPortalAccessMatrix(
   return clientRows.map((client) => ({
     client,
     access: accessByClient.get(client.id) || null,
+    relationship: client.id === rootClientId ? "current" : client.parentClientId === rootClientId ? "child" : "descendant",
+  }));
+}
+
+export async function getPortalAccessOptions(
+  tenantId: string,
+  rootClientId: string,
+): Promise<PortalAccessOption[]> {
+  const [rootClient] = await db
+    .select()
+    .from(clients)
+    .where(and(eq(clients.id, rootClientId), eq(clients.tenantId, tenantId)));
+
+  if (!rootClient) {
+    return [];
+  }
+
+  const descendantIds = await getClientDescendantIds(rootClientId, tenantId);
+  const visibleClientIds = unique([rootClientId, ...descendantIds]);
+  const clientRows = await db
+    .select()
+    .from(clients)
+    .where(and(eq(clients.tenantId, tenantId), inArray(clients.id, visibleClientIds)))
+    .orderBy(asc(clients.companyName));
+
+  return clientRows.map((client) => ({
+    client,
     relationship: client.id === rootClientId ? "current" : client.parentClientId === rootClientId ? "child" : "descendant",
   }));
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,15 @@ interface PortalAccessScopeEntry {
   relationship: "current" | "child" | "descendant" | "other";
 }
 
+interface PortalAccessScopeOption {
+  client: {
+    id: string;
+    companyName: string;
+    parentClientId?: string | null;
+  };
+  relationship: "current" | "child" | "descendant" | "other";
+}
+
 const createUserSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1, "First name is required"),
@@ -152,6 +161,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [accessScopeDraft, setAccessScopeDraft] = useState<Record<string, "viewer" | "collaborator" | null>>({});
+  const [createAccessClientIds, setCreateAccessClientIds] = useState<string[]>([clientId]);
 
   const createForm = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -196,10 +206,24 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     enabled: !!clientId && !!editingUser?.userId,
   });
 
+  const { data: accessScopeOptionsData, isLoading: accessScopeOptionsLoading } = useQuery<{ entries: PortalAccessScopeOption[] }>({
+    queryKey: ["/api/clients", clientId, "access-scope-options"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/access-scope-options`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load client account access options");
+      return res.json();
+    },
+    enabled: !!clientId && addUserOpen,
+  });
+
   const createUserMutation = useMutation({
     mutationFn: async (data: CreateUserFormData) => {
       const { confirmPassword, ...payload } = data;
-      const res = await apiRequest("POST", `/api/clients/${clientId}/users/create`, payload);
+      const accessClientIds = createAccessClientIds.length > 0 ? createAccessClientIds : [clientId];
+      const res = await apiRequest("POST", `/api/clients/${clientId}/users/create`, {
+        ...payload,
+        accessClientIds,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -289,6 +313,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const handleCloseAddUser = () => {
     setAddUserOpen(false);
     setShowPassword(false);
+    setCreateAccessClientIds([clientId]);
     createForm.reset();
   };
 
@@ -302,6 +327,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       accessLevel: "viewer",
     });
     setShowPassword(false);
+    setCreateAccessClientIds([clientId]);
     setAddUserOpen(true);
   };
 
@@ -315,6 +341,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       accessLevel: "viewer",
     });
     setShowPassword(false);
+    setCreateAccessClientIds([clientId]);
     setAddUserOpen(true);
   };
 
@@ -339,6 +366,14 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   };
 
   const accessScopeEntries = accessScopeData?.entries || [];
+  const accessScopeOptions = accessScopeOptionsData?.entries || [];
+
+  useEffect(() => {
+    if (!addUserOpen) return;
+    const currentClientId = accessScopeOptions.find((entry) => entry.relationship === "current")?.client.id || clientId;
+    setCreateAccessClientIds((current) => (current.length > 0 ? current : [currentClientId]));
+  }, [addUserOpen, accessScopeOptions, clientId]);
+
   const resolvedAccessScopeDraft = accessScopeEntries.reduce<Record<string, "viewer" | "collaborator" | null>>((acc, entry) => {
     acc[entry.client.id] = Object.prototype.hasOwnProperty.call(accessScopeDraft, entry.client.id)
       ? accessScopeDraft[entry.client.id]
@@ -358,6 +393,14 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       ...current,
       [entry.client.id]: accessLevel,
     }));
+  };
+
+  const toggleCreateScopeClient = (entry: PortalAccessScopeOption, checked: boolean) => {
+    if (entry.relationship === "current") return;
+    setCreateAccessClientIds((current) => {
+      if (checked) return Array.from(new Set([...current, entry.client.id]));
+      return current.filter((id) => id !== entry.client.id);
+    });
   };
 
   const getInitials = (name: string | null, email: string) => {
@@ -692,6 +735,58 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="border-t pt-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <Label className="font-medium">Client Account Access</Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Choose which related client accounts this portal user can see. The selected access level applies to each selected account.
+                  </p>
+                  {accessScopeOptionsLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : accessScopeOptions.length > 0 ? (
+                    <div className="space-y-2">
+                      {accessScopeOptions.map((entry) => {
+                        const isCurrentClient = entry.relationship === "current";
+                        const isSelected = isCurrentClient || createAccessClientIds.includes(entry.client.id);
+                        return (
+                          <div
+                            key={entry.client.id}
+                            className="flex items-center justify-between gap-3 rounded-md border p-3"
+                            data-testid={`create-portal-scope-client-${entry.client.id}`}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                disabled={isCurrentClient}
+                                onCheckedChange={(checked) => toggleCreateScopeClient(entry, checked === true)}
+                                data-testid={`checkbox-create-portal-scope-${entry.client.id}`}
+                              />
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">{entry.client.companyName}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {isCurrentClient ? "Current client" : entry.relationship === "child" ? "Child account" : "Descendant account"}
+                                </div>
+                              </div>
+                            </div>
+                            <Badge variant={isSelected ? "secondary" : "outline"}>
+                              {isSelected ? "Included" : "Excluded"}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="rounded-md border p-3 text-sm text-muted-foreground">
+                      This portal user will be added to the current client account.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t">

@@ -11,6 +11,7 @@ import { handleRouteError, AppError } from "../../lib/errors";
 import { buildAppUrl } from "../../lib/appLinks";
 import {
   getClientDescendantIds,
+  getPortalAccessOptions,
   getPortalAccessMatrix,
   filterCommentsForPortalUser,
   replacePortalAccessScope,
@@ -75,9 +76,39 @@ router.get("/:clientId/users", requireTenantAdminAccess, async (req, res) => {
     }
     
     const clientUsers = await storage.getClientUsers(clientId);
-    res.json(clientUsers);
+    res.json(clientUsers.map(({ user, access }) => ({
+      id: access.id,
+      userId: access.userId,
+      clientId: access.clientId,
+      accessLevel: access.accessLevel,
+      createdAt: access.createdAt,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatarUrl: user.avatarUrl,
+      },
+    })));
   } catch (error) {
     return handleRouteError(res, error, "GET /:clientId/users", req);
+  }
+});
+
+router.get("/:clientId/access-scope-options", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { clientId } = req.params;
+    if (!tenantId) throw AppError.tenantRequired();
+
+    const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+
+    const entries = await getPortalAccessOptions(tenantId, clientId);
+    res.json({ entries });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /:clientId/access-scope-options", req);
   }
 });
 
