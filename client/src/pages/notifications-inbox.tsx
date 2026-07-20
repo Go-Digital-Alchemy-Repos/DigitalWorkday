@@ -564,7 +564,12 @@ export default function NotificationsInboxPage() {
                         isUnread && "bg-primary/5",
                         isActive && "bg-muted",
                       )}
-                      onClick={() => setActiveNotificationId(notification.id)}
+                      onClick={() => {
+                        setActiveNotificationId(notification.id);
+                        if (!notification.readAt) {
+                          markReadMutation.mutate([notification.id]);
+                        }
+                      }}
                       data-testid={`inbox-notification-${notification.id}`}
                     >
                       <Checkbox

@@ -383,7 +383,12 @@ function NotificationGroupRow({
           "px-3 py-2.5 hover:bg-muted/50 cursor-pointer relative notif-row-hover group",
           group.isUnread && "bg-primary/5"
         )}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          setExpanded(!expanded);
+          if (group.isUnread) {
+            onGroupRead(group.dedupeKey);
+          }
+        }}
       >
         <div className="flex gap-2.5">
           <div className={cn(
