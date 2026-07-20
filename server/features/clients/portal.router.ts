@@ -40,6 +40,19 @@ const portalAccessScopeSchema = z.object({
   entries: z.array(portalAccessEntrySchema),
 });
 
+const portalUserSetupSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().optional().default(""),
+  password: z.string().optional().default(""),
+  setupMethod: z.enum(["invite_email", "invite_link", "create_now"]).default("invite_email"),
+  accessLevel: z.enum([ClientAccessLevel.VIEWER, ClientAccessLevel.COLLABORATOR]).default(ClientAccessLevel.VIEWER),
+  accessClientIds: z.array(z.string()).optional(),
+}).refine((data) => data.setupMethod !== "create_now" || data.password.length >= 8, {
+  message: "Password must be at least 8 characters when creating the account now",
+  path: ["password"],
+});
+
 function requireTenantAdminAccess(req: Request, _res: Response, next: NextFunction) {
   if (!isTenantAdmin(req)) {
     throw AppError.forbidden("Tenant admin access is required to manage client portal users");
@@ -55,6 +68,40 @@ function generateInviteToken(): string {
 // Hash token for storage (for security, don't store raw token)
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+async function resolvePortalAccessClientIds(clientId: string, tenantId: string | null | undefined, requestedIds?: string[]) {
+  const allowedAccessClientIds: string[] = tenantId ? [clientId, ...(await getClientDescendantIds(clientId, tenantId))] : [clientId];
+  const accessClientIds: string[] = [...new Set<string>(requestedIds?.length ? requestedIds : [clientId])]
+    .filter((id) => allowedAccessClientIds.includes(id));
+  if (!accessClientIds.includes(clientId)) accessClientIds.unshift(clientId);
+  return accessClientIds;
+}
+
+async function findOrCreatePortalContact(params: {
+  tenantId: string | null;
+  workspaceId: string;
+  clientId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}) {
+  const contacts = await storage.getContactsByClient(params.clientId);
+  const existing = contacts.find((contact) => contact.email?.toLowerCase() === params.email.toLowerCase());
+  if (existing) return existing;
+
+  return storage.createClientContact({
+    tenantId: params.tenantId,
+    workspaceId: params.workspaceId,
+    clientId: params.clientId,
+    firstName: params.firstName,
+    lastName: params.lastName || null,
+    email: params.email,
+    title: null,
+    phone: null,
+    isPrimary: false,
+    notes: "Created from portal user setup",
+  });
 }
 
 // =============================================================================
@@ -289,6 +336,182 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
     });
   } catch (error) {
     return handleRouteError(res, error, "POST /:clientId/users/invite", req);
+  }
+});
+
+router.post("/:clientId/users/setup", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { clientId } = req.params;
+    const data = portalUserSetupSchema.parse(req.body);
+
+    const client = tenantId
+      ? await storage.getClientByIdAndTenant(clientId, tenantId)
+      : await storage.getClient(clientId);
+    if (!client) {
+      throw AppError.notFound("Client");
+    }
+
+    const accessClientIds = await resolvePortalAccessClientIds(clientId, tenantId, data.accessClientIds);
+    const existingUser = await storage.getUserByEmail(data.email);
+    if (existingUser) {
+      if (existingUser.role !== UserRole.CLIENT) {
+        throw AppError.conflict("This email belongs to an internal account and cannot be granted client portal access");
+      }
+
+      if (existingUser.tenantId && existingUser.tenantId !== client.tenantId) {
+        throw AppError.conflict("This email belongs to a client user in another organization");
+      }
+
+      const accessScope = tenantId
+        ? await replacePortalAccessScope(tenantId, client.workspaceId, clientId, existingUser.id, {
+            entries: accessClientIds.map((accessClientId) => ({
+              clientId: accessClientId,
+              accessLevel: data.accessLevel,
+            })),
+          })
+        : [];
+
+      return res.status(200).json({
+        message: "Access scope updated for existing portal user",
+        setupMethod: "existing_user",
+        accessScope,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+        },
+      });
+    }
+
+    if (data.setupMethod === "create_now") {
+      const passwordHash = await hashPassword(data.password);
+      const user = await storage.createUser({
+        tenantId: client.tenantId,
+        email: data.email,
+        name: `${data.firstName} ${data.lastName}`.trim(),
+        firstName: data.firstName,
+        lastName: data.lastName || null,
+        passwordHash,
+        role: UserRole.CLIENT,
+        isActive: true,
+      });
+
+      const accessScope = tenantId
+        ? await replacePortalAccessScope(tenantId, client.workspaceId, clientId, user.id, {
+            entries: accessClientIds.map((accessClientId) => ({
+              clientId: accessClientId,
+              accessLevel: data.accessLevel,
+            })),
+          })
+        : [];
+
+      return res.status(201).json({
+        message: "Portal user created successfully",
+        setupMethod: data.setupMethod,
+        accessScope,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        },
+      });
+    }
+
+    const contact = await findOrCreatePortalContact({
+      tenantId: client.tenantId,
+      workspaceId: client.workspaceId,
+      clientId,
+      email: data.email,
+      firstName: data.firstName,
+      lastName: data.lastName,
+    });
+    const token = generateInviteToken();
+    const tokenHash = hashToken(token);
+
+    const invitation = await storage.createInvitation({
+      tenantId: client.tenantId,
+      workspaceId: client.workspaceId,
+      email: data.email,
+      role: UserRole.CLIENT,
+      clientId,
+      tokenHash,
+      status: InvitationStatus.PENDING,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      createdByUserId: getCurrentUserId(req),
+    });
+
+    const invite = await storage.createClientInvite({
+      clientId,
+      contactId: contact.id,
+      email: data.email,
+      roleHint: data.accessLevel,
+      status: InvitationStatus.PENDING,
+      tokenPlaceholder: tokenHash,
+      accessClientIds,
+    });
+
+    const registrationUrl = buildAppUrl(`/accept-invite/${token}`, req);
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    if (data.setupMethod === "invite_email") {
+      try {
+        const invitedBy = req.user?.name || req.user?.email || "Your administrator";
+        const tenant = client.tenantId ? await storage.getTenant(client.tenantId) : null;
+        const organizationName = tenant?.name || client.companyName;
+        const { emailOutboxService } = await import("../../services/emailOutbox");
+        const { emailTemplateService } = await import("../../services/emailTemplates");
+        const templateVars: Record<string, string> = {
+          userName: `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.email,
+          invitedByName: invitedBy,
+          tenantName: organizationName,
+          inviteUrl: registrationUrl,
+          role: "Client Portal User",
+          expiryDays: "7",
+          appName: "MyWorkDay",
+          actionUrl: registrationUrl,
+          actionLabel: "Accept Invitation",
+        };
+
+        const rendered = await emailTemplateService.renderByKey(client.tenantId, "invitation", templateVars);
+        const result = await emailOutboxService.sendEmail({
+          tenantId: client.tenantId,
+          messageType: "invitation",
+          toEmail: data.email,
+          subject: rendered?.subject || `You've been invited to ${organizationName}`,
+          textBody: rendered?.textBody || `You've been invited to access the ${client.companyName} client portal for ${organizationName}.\n\nAccept your invitation: ${registrationUrl}`,
+          htmlBody: rendered?.htmlBody || `<p>You've been invited to access the <strong>${client.companyName}</strong> client portal for <strong>${organizationName}</strong>.</p><p><a href="${registrationUrl}">Accept Invitation</a></p>`,
+          actionUrl: registrationUrl,
+          actionLabel: "Accept Invitation",
+        });
+
+        emailSent = result.success;
+        emailError = result.error || null;
+      } catch (error: any) {
+        emailError = error?.message || "Email delivery failed";
+      }
+    }
+
+    return res.status(201).json({
+      message: emailSent ? "Portal invitation sent" : "Portal invitation link created",
+      setupMethod: data.setupMethod,
+      invitationId: invitation.id,
+      clientInviteId: invite.id,
+      registrationUrl,
+      emailSent,
+      emailError,
+      email: data.email,
+    });
+  } catch (error: any) {
+    if (error?.code === "23505") {
+      return res.status(409).json({ error: "A user with this email already exists" });
+    }
+    return handleRouteError(res, error, "POST /:clientId/users/setup", req);
   }
 });
 

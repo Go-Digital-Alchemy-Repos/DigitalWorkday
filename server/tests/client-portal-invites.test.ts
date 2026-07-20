@@ -15,6 +15,8 @@ const storageMocks = {
   getTenant: vi.fn(),
   getClientUsers: vi.fn(),
   createUser: vi.fn(),
+  getContactsByClient: vi.fn(),
+  createClientContact: vi.fn(),
 };
 
 const sendEmailMock = vi.fn();
@@ -98,6 +100,8 @@ describe("client portal invitations", () => {
     storageMocks.getClientByIdAndTenant.mockResolvedValue(client);
     storageMocks.getClient.mockResolvedValue(client);
     storageMocks.getClientContact.mockResolvedValue(contact);
+    storageMocks.getContactsByClient.mockResolvedValue([contact]);
+    storageMocks.createClientContact.mockResolvedValue(contact);
     storageMocks.getUserByEmail.mockResolvedValue(undefined);
     storageMocks.createInvitation.mockResolvedValue({
       id: "invite-1",
@@ -354,5 +358,107 @@ describe("client portal invitations", () => {
         ],
       },
     );
+  });
+
+  it("creates a portal invite link from initial email setup without sending email", async () => {
+    getClientDescendantIdsMock.mockResolvedValue(["child-1"]);
+
+    const response = await request(createApp())
+      .post("/api/clients/client-1/users/setup")
+      .set("Host", "app.test")
+      .set("X-Forwarded-Proto", "https")
+      .send({
+        email: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        setupMethod: "invite_link",
+        accessLevel: ClientAccessLevel.COLLABORATOR,
+        accessClientIds: ["client-1", "child-1"],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.registrationUrl).toMatch(/^https:\/\/app\.test\/accept-invite\//);
+    expect(response.body.emailSent).toBe(false);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(storageMocks.createInvitation).toHaveBeenCalledWith(expect.objectContaining({
+      email: contact.email,
+      role: UserRole.CLIENT,
+      clientId: "client-1",
+      status: InvitationStatus.PENDING,
+    }));
+    expect(storageMocks.createClientInvite).toHaveBeenCalledWith(expect.objectContaining({
+      clientId: "client-1",
+      contactId: contact.id,
+      email: contact.email,
+      roleHint: ClientAccessLevel.COLLABORATOR,
+      accessClientIds: ["client-1", "child-1"],
+    }));
+  });
+
+  it("creates a contact when initial portal invite setup uses a new email", async () => {
+    storageMocks.getContactsByClient.mockResolvedValue([]);
+    storageMocks.createClientContact.mockResolvedValue({
+      ...contact,
+      id: "contact-created",
+      email: "new-contact@example.com",
+    });
+
+    const response = await request(createApp())
+      .post("/api/clients/client-1/users/setup")
+      .set("Host", "app.test")
+      .set("X-Forwarded-Proto", "https")
+      .send({
+        email: "new-contact@example.com",
+        firstName: "New",
+        lastName: "Contact",
+        setupMethod: "invite_link",
+        accessLevel: ClientAccessLevel.VIEWER,
+      });
+
+    expect(response.status).toBe(201);
+    expect(storageMocks.createClientContact).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: "tenant-1",
+      workspaceId: "workspace-1",
+      clientId: "client-1",
+      firstName: "New",
+      lastName: "Contact",
+      email: "new-contact@example.com",
+    }));
+    expect(storageMocks.createClientInvite).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: "contact-created",
+      email: "new-contact@example.com",
+    }));
+  });
+
+  it("creates a portal account now from initial setup when a password is supplied", async () => {
+    const response = await request(createApp())
+      .post("/api/clients/client-1/users/setup")
+      .send({
+        email: "newportal@example.com",
+        firstName: "New",
+        lastName: "Portal",
+        setupMethod: "create_now",
+        password: "password123",
+        accessLevel: ClientAccessLevel.VIEWER,
+      });
+
+    expect(response.status).toBe(201);
+    expect(storageMocks.createUser).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: "tenant-1",
+      email: "newportal@example.com",
+      firstName: "New",
+      lastName: "Portal",
+      role: UserRole.CLIENT,
+      isActive: true,
+    }));
+    expect(replacePortalAccessScopeMock).toHaveBeenCalledWith(
+      "tenant-1",
+      "workspace-1",
+      "client-1",
+      "portal-user-1",
+      { entries: [{ clientId: "client-1", accessLevel: ClientAccessLevel.VIEWER }] },
+    );
+    expect(storageMocks.createInvitation).not.toHaveBeenCalled();
+    expect(storageMocks.createClientInvite).not.toHaveBeenCalled();
   });
 });

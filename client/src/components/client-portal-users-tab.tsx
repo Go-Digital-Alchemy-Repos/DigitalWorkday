@@ -61,6 +61,10 @@ import {
   EyeOff,
   ArrowLeft,
   Building2,
+  Copy,
+  Link,
+  Mail,
+  MessageSquare,
 } from "lucide-react";
 
 interface ClientUser {
@@ -113,12 +117,16 @@ const createUserSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().optional().default(""),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(1, "Please confirm the password"),
+  setupMethod: z.enum(["invite_email", "invite_link", "create_now"]),
+  password: z.string().optional().default(""),
+  confirmPassword: z.string().optional().default(""),
   accessLevel: z.enum(["viewer", "collaborator"]),
-}).refine((data) => data.password === data.confirmPassword, {
+}).refine((data) => data.setupMethod !== "create_now" || data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
+}).refine((data) => data.setupMethod !== "create_now" || data.password.length >= 8, {
+  message: "Password must be at least 8 characters",
+  path: ["password"],
 });
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
@@ -162,6 +170,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [accessScopeDraft, setAccessScopeDraft] = useState<Record<string, "viewer" | "collaborator" | null>>({});
   const [createAccessClientIds, setCreateAccessClientIds] = useState<string[]>([clientId]);
+  const [lastInviteLink, setLastInviteLink] = useState<{ email: string; registrationUrl: string; emailSent: boolean; emailError?: string | null } | null>(null);
 
   const createForm = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -169,6 +178,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       email: "",
       firstName: "",
       lastName: "",
+      setupMethod: "invite_email",
       password: "",
       confirmPassword: "",
       accessLevel: "viewer",
@@ -216,19 +226,34 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     enabled: !!clientId && addUserOpen,
   });
 
+  const createSetupMethod = createForm.watch("setupMethod");
+
   const createUserMutation = useMutation({
     mutationFn: async (data: CreateUserFormData) => {
       const { confirmPassword, ...payload } = data;
       const accessClientIds = createAccessClientIds.length > 0 ? createAccessClientIds : [clientId];
-      const res = await apiRequest("POST", `/api/clients/${clientId}/users/create`, {
+      const res = await apiRequest("POST", `/api/clients/${clientId}/users/setup`, {
         ...payload,
         accessClientIds,
       });
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Portal user created successfully" });
+    onSuccess: (data) => {
+      if (data.registrationUrl) {
+        setLastInviteLink({
+          email: data.email || createForm.getValues("email"),
+          registrationUrl: data.registrationUrl,
+          emailSent: !!data.emailSent,
+          emailError: data.emailError,
+        });
+      }
+      toast({
+        title: data.emailSent ? "Portal invitation sent" : data.registrationUrl ? "Portal invitation link created" : "Portal user created successfully",
+        description: data.emailError || undefined,
+        variant: data.emailError ? "destructive" : "default",
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "contacts"] });
       handleCloseAddUser();
     },
     onError: (error: Error) => {
@@ -322,6 +347,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       email: "",
       firstName: "",
       lastName: "",
+      setupMethod: "invite_email",
       password: "",
       confirmPassword: "",
       accessLevel: "viewer",
@@ -336,6 +362,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       email: contact.email || "",
       firstName: contact.firstName,
       lastName: contact.lastName || "",
+      setupMethod: "invite_email",
       password: "",
       confirmPassword: "",
       accessLevel: "viewer",
@@ -401,6 +428,12 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       if (checked) return Array.from(new Set([...current, entry.client.id]));
       return current.filter((id) => id !== entry.client.id);
     });
+  };
+
+  const copyInviteLink = async () => {
+    if (!lastInviteLink?.registrationUrl) return;
+    await navigator.clipboard.writeText(lastInviteLink.registrationUrl);
+    toast({ title: "Invite link copied" });
   };
 
   const getInitials = (name: string | null, email: string) => {
@@ -595,7 +628,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
           <SheetHeader>
             <SheetTitle>Add Portal User</SheetTitle>
             <SheetDescription>
-              Create a new client portal account with login credentials and access permissions.
+              Invite a client contact or create their portal login now with access permissions.
             </SheetDescription>
           </SheetHeader>
           <div className="py-6">
@@ -644,59 +677,125 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                 </div>
 
                 <div className="border-t pt-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <KeyRound className="h-4 w-4 text-muted-foreground" />
-                    <Label className="font-medium">Login Credentials</Label>
-                  </div>
-                  <div className="space-y-4">
-                    <FormField
-                      control={createForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
+                  <FormField
+                    control={createForm.control}
+                    name="setupMethod"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Setup Method</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <div className="relative">
+                            <SelectTrigger data-testid="select-create-setup-method">
+                              <SelectValue placeholder="Select setup method" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="invite_email">
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                <span>Send invite email</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="invite_link">
+                              <div className="flex items-center gap-2">
+                                <Link className="h-4 w-4" />
+                                <span>Create invite link only</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="create_now">
+                              <div className="flex items-center gap-2">
+                                <KeyRound className="h-4 w-4" />
+                                <span>Create account now</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Invite users to set their own password, or create credentials now when you are ready to share them directly.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {createSetupMethod === "create_now" && (
+                  <div className="border-t pt-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <KeyRound className="h-4 w-4 text-muted-foreground" />
+                      <Label className="font-medium">Login Credentials</Label>
+                    </div>
+                    <div className="space-y-4">
+                      <FormField
+                        control={createForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? "text" : "password"}
+                                  placeholder="Minimum 8 characters"
+                                  {...field}
+                                  data-testid="input-create-password"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  data-testid="button-toggle-password-visibility"
+                                >
+                                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </Button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={createForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm Password</FormLabel>
+                            <FormControl>
                               <Input
                                 type={showPassword ? "text" : "password"}
-                                placeholder="Minimum 8 characters"
+                                placeholder="Re-enter password"
                                 {...field}
-                                data-testid="input-create-password"
+                                data-testid="input-create-confirmPassword"
                               />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1/2 -translate-y-1/2"
-                                onClick={() => setShowPassword(!showPassword)}
-                                data-testid="button-toggle-password-visibility"
-                              >
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </Button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={createForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Confirm Password</FormLabel>
-                          <FormControl>
-                            <Input
-                              type={showPassword ? "text" : "password"}
-                              placeholder="Re-enter password"
-                              {...field}
-                              data-testid="input-create-confirmPassword"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="border-t pt-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    <Label className="font-medium">Comment Visibility</Label>
+                  </div>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex gap-2">
+                      <EyeOff className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Internal team comments stay hidden from portal users by default.</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Eye className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Comments marked client-visible can be seen in the portal.</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Edit3 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Portal collaborators can add client-visible comments. Mentioned portal users can participate in that specific internal thread.</span>
+                    </div>
                   </div>
                 </div>
 
@@ -798,10 +897,18 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                   >
                     {createUserMutation.isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : createSetupMethod === "invite_email" ? (
+                      <Mail className="h-4 w-4 mr-2" />
+                    ) : createSetupMethod === "invite_link" ? (
+                      <Link className="h-4 w-4 mr-2" />
                     ) : (
                       <UserPlus className="h-4 w-4 mr-2" />
                     )}
-                    Create Portal User
+                    {createSetupMethod === "invite_email"
+                      ? "Send Invite"
+                      : createSetupMethod === "invite_link"
+                        ? "Create Invite Link"
+                        : "Create Portal User"}
                   </Button>
                   <Button type="button" variant="outline" onClick={handleCloseAddUser}>
                     Cancel
@@ -1095,6 +1202,35 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
               Revoke Access
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!lastInviteLink} onOpenChange={(open) => !open && setLastInviteLink(null)}>
+        <AlertDialogContent data-testid="dialog-created-portal-invite-link">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{lastInviteLink?.emailSent ? "Invitation Sent" : "Invitation Link Created"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {lastInviteLink?.emailSent
+                ? `An invite email was sent to ${lastInviteLink.email}.`
+                : `Share this invite link with ${lastInviteLink?.email || "the portal user"} when you are ready.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {lastInviteLink?.registrationUrl && (
+            <div className="flex gap-2">
+              <Input readOnly value={lastInviteLink.registrationUrl} data-testid="input-created-portal-invite-url" />
+              <Button type="button" variant="outline" size="icon" onClick={copyInviteLink} data-testid="button-copy-created-portal-invite-url">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {lastInviteLink?.emailError && (
+            <p className="text-sm text-destructive">{lastInviteLink.emailError}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setLastInviteLink(null)} data-testid="button-close-created-portal-invite-link">
+              Done
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
