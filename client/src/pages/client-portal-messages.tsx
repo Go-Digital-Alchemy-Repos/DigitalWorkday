@@ -87,7 +87,7 @@ function NewRequestDialog({
   });
 
   const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<PortalDashboard>({
-    queryKey: ["/api/portal/dashboard"],
+    queryKey: ["/api/client-portal/dashboard"],
     enabled: open,
   });
 

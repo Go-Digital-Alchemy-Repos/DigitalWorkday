@@ -5,10 +5,8 @@ import {
   LayoutDashboard,
   FolderKanban,
   CheckSquare,
-  Settings,
   MessageCircle,
   Building2,
-  FileBox,
   ClipboardCheck,
   LifeBuoy,
 } from "lucide-react";
@@ -46,7 +44,6 @@ const mainNavItems = [
   { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
   { title: "Projects", url: "/portal/projects", icon: FolderKanban },
   { title: "Tasks", url: "/portal/tasks", icon: CheckSquare },
-  { title: "Chat", url: "/portal/chat", icon: MessageCircle },
 ];
 
 export function ClientPortalSidebar() {
@@ -103,19 +100,6 @@ export function ClientPortalSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {crmFlags.portal && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActiveRoute("/portal/files")}
-                  >
-                    <Link href="/portal/files" data-testid="nav-portal-files">
-                      <FileBox className="h-4 w-4" />
-                      <span>Files</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
               {crmFlags.approvals && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -179,16 +163,6 @@ export function ClientPortalSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-border">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={location === "/portal/settings"}>
-              <Link href="/portal/settings" data-testid="nav-settings">
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <div className="flex items-center gap-2 px-2 py-2 group-data-[collapsible=icon]:hidden">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="text-xs bg-primary/10">
