@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { UserRole, ClientAccessLevel } from "@shared/schema";
+import { InvitationStatus, UserRole, ClientAccessLevel } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
@@ -126,30 +126,39 @@ router.post("/:clientId/users/invite", async (req, res) => {
     const token = generateInviteToken();
     const tokenHash = hashToken(token);
     
-    // Update or create client invite with real token
+    const invitation = await storage.createInvitation({
+      tenantId: client.tenantId,
+      workspaceId: client.workspaceId,
+      email: contact.email,
+      role: UserRole.CLIENT,
+      clientId,
+      tokenHash,
+      status: InvitationStatus.PENDING,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      createdByUserId: getCurrentUserId(req),
+    });
+
+    // Keep the client invite audit trail in sync while the portal invite UI is being completed.
     const invite = await storage.createClientInvite({
       clientId,
       contactId,
       email: contact.email,
-      status: "pending",
+      roleHint: accessLevel,
+      status: InvitationStatus.PENDING,
       tokenPlaceholder: tokenHash,
     });
-    
-    // Store additional invite metadata for user creation
-    await storage.updateClientInvite(invite.id, {
-      roleHint: accessLevel,
-    });
-    
+
     // Return the invite with token (only time raw token is exposed)
     res.status(201).json({
       message: "Invitation created",
       invite: {
-        id: invite.id,
+        id: invitation.id,
+        legacyClientInviteId: invite.id,
         email: invite.email,
-        status: invite.status,
-        createdAt: invite.createdAt,
+        status: invitation.status,
+        createdAt: invitation.createdAt,
       },
-      registrationUrl: `/client-portal/register?token=${token}&invite=${invite.id}`,
+      registrationUrl: `/accept-invite/${token}`,
       token, // Include token for sending via email
     });
   } catch (error) {

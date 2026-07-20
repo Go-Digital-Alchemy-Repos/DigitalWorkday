@@ -17,6 +17,7 @@ const AUTH_PATHS = [
   "/tenant-onboarding",
   "/accept-terms",
   "/auth/platform-invite",
+  "/accept-invite",
   "/accept-invite/",
   "/auth/forgot-password",
   "/auth/reset-password",
@@ -38,6 +39,7 @@ export function AuthRouter() {
           {() => <ProtectedRoute component={AcceptTermsPage} />}
         </Route>
         <Route path="/auth/platform-invite" component={PlatformInvitePage} />
+        <Route path="/accept-invite" component={AcceptInvitePage} />
         <Route path="/accept-invite/:token" component={AcceptInvitePage} />
         <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
         <Route path="/auth/reset-password" component={ResetPasswordPage} />

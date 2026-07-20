@@ -21,7 +21,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users, UserRole, platformInvitations, platformAuditEvents, invitations, tenants, tenantSettings, systemSettings, workspaces, passwordResetTokens } from "@shared/schema";
+import { users, UserRole, ClientAccessLevel, platformInvitations, platformAuditEvents, invitations, clientInvites, tenants, tenantSettings, systemSettings, workspaces, passwordResetTokens } from "@shared/schema";
 import { getWorkspaceMembershipRoleForUserRole } from "@shared/roles";
 import { eq, sql, and, desc } from "drizzle-orm";
 import { createHash } from "crypto";
@@ -1055,6 +1055,7 @@ export function setupTenantInviteEndpoints(app: Express): void {
         usedAt: invitations.usedAt,
         tenantId: invitations.tenantId,
         workspaceId: invitations.workspaceId,
+        clientId: invitations.clientId,
       })
         .from(invitations)
         .where(eq(invitations.tokenHash, tokenHash))
@@ -1222,17 +1223,47 @@ export function setupTenantInviteEndpoints(app: Express): void {
       
       // Hash the password
       const passwordHash = await hashPassword(password);
+      const isClientInvite = invite.role === UserRole.CLIENT;
+      const [clientInviteAudit] = isClientInvite
+        ? await db.select()
+          .from(clientInvites)
+          .where(and(
+            eq(clientInvites.tokenPlaceholder, tokenHash),
+            eq(clientInvites.email, invite.email),
+          ))
+          .orderBy(desc(clientInvites.createdAt))
+          .limit(1)
+        : [];
       
       // Check if user with this email already exists
       let user = await storage.getUserByEmail(invite.email);
       
       if (user) {
+        if (isClientInvite && user.role !== UserRole.CLIENT) {
+          return res.status(409).json({
+            ok: false,
+            error: { code: "EMAIL_ALREADY_IN_USE", message: "This email belongs to an internal account and cannot accept a client portal invite." },
+            code: "EMAIL_ALREADY_IN_USE",
+            message: "This email belongs to an internal account and cannot accept a client portal invite."
+          });
+        }
+
+        if (isClientInvite && user.tenantId && user.tenantId !== invite.tenantId) {
+          return res.status(409).json({
+            ok: false,
+            error: { code: "TENANT_MISMATCH", message: "This invite belongs to a different organization than the existing user account." },
+            code: "TENANT_MISMATCH",
+            message: "This invite belongs to a different organization than the existing user account."
+          });
+        }
+
         // Update existing user with password and activate
         const [updatedUser] = await db.update(users)
           .set({
             passwordHash,
             firstName: firstName || user.firstName,
             lastName: lastName || user.lastName,
+            tenantId: user.tenantId || invite.tenantId,
             isActive: true,
             mustChangePasswordOnNextLogin: false,
             updatedAt: new Date(),
@@ -1254,7 +1285,9 @@ export function setupTenantInviteEndpoints(app: Express): void {
               ? UserRole.ADMIN
               : invite.role === UserRole.PROJECT_MANAGER
                 ? UserRole.PROJECT_MANAGER
-                : UserRole.EMPLOYEE,
+                : invite.role === UserRole.CLIENT
+                  ? UserRole.CLIENT
+                  : UserRole.EMPLOYEE,
             tenantId: invite.tenantId,
             isActive: true,
             mustChangePasswordOnNextLogin: false,
@@ -1268,6 +1301,35 @@ export function setupTenantInviteEndpoints(app: Express): void {
           workspaceId: invite.workspaceId,
           role: getWorkspaceMembershipRoleForUserRole(invite.role),
         });
+      }
+
+      if (isClientInvite) {
+        if (!invite.clientId) {
+          return res.status(400).json({
+            ok: false,
+            error: { code: "INVALID_INVITE", message: "Client portal invite is missing client access details." },
+            code: "INVALID_INVITE",
+            message: "Client portal invite is missing client access details."
+          });
+        }
+
+        const existingAccess = await storage.getClientUserAccessByUserAndClient(user.id, invite.clientId);
+        if (!existingAccess) {
+          await storage.addClientUserAccess({
+            workspaceId: invite.workspaceId,
+            clientId: invite.clientId,
+            userId: user.id,
+            accessLevel: clientInviteAudit?.roleHint === ClientAccessLevel.COLLABORATOR
+              ? ClientAccessLevel.COLLABORATOR
+              : ClientAccessLevel.VIEWER,
+          });
+        }
+
+        if (clientInviteAudit) {
+          await storage.updateClientInvite(clientInviteAudit.id, {
+            status: "accepted",
+          });
+        }
       }
       
       // Mark invite as accepted

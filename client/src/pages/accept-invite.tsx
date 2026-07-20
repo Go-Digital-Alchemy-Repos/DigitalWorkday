@@ -47,7 +47,8 @@ export default function AcceptInvitePage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
-    const tokenFromUrl = params.token || null;
+    const queryToken = new URLSearchParams(window.location.search).get("token");
+    const tokenFromUrl = params.token || queryToken || null;
     setToken(tokenFromUrl);
   }, [params.token]);
 
@@ -198,7 +199,7 @@ export default function AcceptInvitePage() {
           </div>
           <CardTitle>You've Been Invited</CardTitle>
           <CardDescription>
-            Join {inviteData?.tenantName} as {inviteData?.role === "admin" ? "an Administrator" : "a Team Member"}
+            Join {inviteData?.tenantName} as {inviteData?.role === "client" ? "a Client Portal User" : inviteData?.role === "admin" ? "an Administrator" : "a Team Member"}
           </CardDescription>
         </CardHeader>
         <CardContent>
