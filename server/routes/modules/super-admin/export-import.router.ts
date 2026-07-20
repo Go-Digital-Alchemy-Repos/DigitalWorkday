@@ -6,7 +6,7 @@ import { db } from '../../../db';
 import { clients, users, timeEntries, projects, tasks } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 import { parseCsv } from '../../../imports/csvParser';
 import { createJob, getJob, getJobsForTenant, updateJob, jobToDTO } from '../../../imports/jobStore';
 import { validateJob, executeJob } from '../../../imports/importEngine';

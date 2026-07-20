@@ -4,7 +4,7 @@ import multer from "multer";
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { AppError, handleRouteError } from "../../lib/errors";
-import { getCurrentUserId, getCurrentWorkspaceId } from "../../routes/helpers";
+import { getCurrentUserId, getCurrentWorkspaceId } from "../helpers";
 import { logEntityActivity } from "../../lib/taskActivity";
 import {
   isS3Configured,

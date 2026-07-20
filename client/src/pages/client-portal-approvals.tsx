@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow, isPast } from "date-fns";
 import {
@@ -179,7 +180,7 @@ export default function ClientPortalApprovals() {
   const [filter, setFilter] = useState<string>("all");
 
   const { data: approvals = [], isLoading } = useQuery<ApprovalRequest[]>({
-    queryKey: ["/api/crm/portal/approvals"],
+    queryKey: queryKeys.portal.approvals,
   });
 
   const respondMutation = useMutation({
@@ -188,7 +189,7 @@ export default function ClientPortalApprovals() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/portal/approvals"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.portal.approvals });
       toast({ title: "Response submitted", description: "Your response has been recorded." });
     },
     onError: (error: Error) => {

@@ -6,7 +6,7 @@ import { invitations, users, workspaceMembers } from '@shared/schema';
 import { getWorkspaceMembershipRoleForUserRole } from '@shared/roles';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const tenantInvitationsRouter = Router();
 

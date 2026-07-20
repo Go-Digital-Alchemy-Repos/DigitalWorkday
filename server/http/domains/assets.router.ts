@@ -4,7 +4,7 @@ import multer from "multer";
 import { createApiRouter } from "../routerFactory";
 import { assetService } from "../../features/assetLibrary/asset.service";
 import { AppError, handleRouteError } from "../../lib/errors";
-import { getCurrentUserId } from "../../routes/helpers";
+import { getCurrentUserId } from "../helpers";
 import {
   isS3Configured,
   validateFile,

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText, toPlainText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +56,7 @@ export default function ClientPortalProjects() {
   const [searchQuery, setSearchQuery] = useState("");
   
   const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+    queryKey: queryKeys.portal.dashboard,
   });
 
   const filteredProjects = useMemo(() => {

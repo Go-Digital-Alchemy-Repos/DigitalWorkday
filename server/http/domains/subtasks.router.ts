@@ -3,7 +3,7 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { getCurrentUserId, isSuperUser } from "../../routes/helpers";
+import { getCurrentUserId, isSuperUser } from "../helpers";
 import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "../../utils/mentionUtils";
 import {
   insertSubtaskSchema,

@@ -8,6 +8,7 @@ import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
+import { buildAppUrl } from "../../lib/appLinks";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -22,6 +23,13 @@ function isTenantAdmin(req: Request): boolean {
 }
 
 const router = Router();
+
+function requireTenantAdminAccess(req: Request, _res: Response, next: NextFunction) {
+  if (!isTenantAdmin(req)) {
+    throw AppError.forbidden("Tenant admin access is required to manage client portal users");
+  }
+  next();
+}
 
 // Generate secure invite token
 function generateInviteToken(): string {
@@ -38,7 +46,7 @@ function hashToken(token: string): string {
 // =============================================================================
 
 // Get all client users for a specific client
-router.get("/:clientId/users", async (req, res) => {
+router.get("/:clientId/users", requireTenantAdminAccess, async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId } = req.params;
@@ -59,11 +67,11 @@ router.get("/:clientId/users", async (req, res) => {
 });
 
 // Invite a contact to become a client portal user
-router.post("/:clientId/users/invite", async (req, res) => {
+router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId } = req.params;
-    const { contactId, accessLevel = ClientAccessLevel.VIEWER } = req.body;
+    const { contactId, accessLevel = ClientAccessLevel.VIEWER, sendEmail = true } = req.body;
     
     // Validate request
     if (!contactId) {
@@ -93,6 +101,14 @@ router.post("/:clientId/users/invite", async (req, res) => {
     let existingUser = await storage.getUserByEmail(contact.email);
     
     if (existingUser) {
+      if (existingUser.role !== UserRole.CLIENT) {
+        throw AppError.conflict("This email belongs to an internal account and cannot be granted client portal access");
+      }
+
+      if (existingUser.tenantId && existingUser.tenantId !== client.tenantId) {
+        throw AppError.conflict("This email belongs to a client user in another organization");
+      }
+
       // Check if already has access to this client
       const existingAccess = await storage.getClientUserAccessByUserAndClient(
         existingUser.id, 
@@ -148,9 +164,64 @@ router.post("/:clientId/users/invite", async (req, res) => {
       tokenPlaceholder: tokenHash,
     });
 
-    // Return the invite with token (only time raw token is exposed)
+    const registrationUrl = buildAppUrl(`/accept-invite/${token}`, req);
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    if (sendEmail) {
+      try {
+        const invitedBy = req.user?.name || req.user?.email || "Your administrator";
+        const tenant = client.tenantId ? await storage.getTenant(client.tenantId) : null;
+        const organizationName = tenant?.name || client.companyName;
+        const { emailOutboxService } = await import("../../services/emailOutbox");
+        const { emailTemplateService } = await import("../../services/emailTemplates");
+        const templateVars: Record<string, string> = {
+          userName: `${contact.firstName || ""} ${contact.lastName || ""}`.trim() || contact.email,
+          invitedByName: invitedBy,
+          tenantName: organizationName,
+          inviteUrl: registrationUrl,
+          role: "Client Portal User",
+          expiryDays: "7",
+          appName: "MyWorkDay",
+          actionUrl: registrationUrl,
+          actionLabel: "Accept Invitation",
+        };
+
+        const rendered = await emailTemplateService.renderByKey(client.tenantId, "invitation", templateVars);
+        const result = await emailOutboxService.sendEmail({
+          tenantId: client.tenantId,
+          messageType: "invitation",
+          toEmail: contact.email,
+          subject: rendered?.subject || `You've been invited to ${organizationName}`,
+          textBody: rendered?.textBody || `You've been invited to access the ${client.companyName} client portal for ${organizationName}.\n\nAccept your invitation: ${registrationUrl}`,
+          htmlBody: rendered?.htmlBody || `<p>You've been invited to access the <strong>${client.companyName}</strong> client portal for <strong>${organizationName}</strong>.</p><p><a href="${registrationUrl}">Accept Invitation</a></p>`,
+          actionUrl: registrationUrl,
+          actionLabel: "Accept Invitation",
+          requestId: req.requestId,
+          metadata: {
+            invitationId: invitation.id,
+            clientInviteId: invite.id,
+            clientId,
+            contactId,
+            accessLevel,
+          },
+        });
+
+        emailSent = result.success;
+        if (!result.success) {
+          emailError = result.error || "Email provider did not accept the invite email.";
+        }
+      } catch (error: any) {
+        emailError = error?.message || "Failed to send invite email.";
+        console.error("[client-portal] Failed to send portal invitation email:", error);
+      }
+    }
+
+    // Return the invite with token/link (only time raw token is exposed)
     res.status(201).json({
-      message: "Invitation created",
+      message: emailSent
+        ? "Invitation created and email sent"
+        : "Invitation created; copy the invite link to send manually",
       invite: {
         id: invitation.id,
         legacyClientInviteId: invite.id,
@@ -158,8 +229,10 @@ router.post("/:clientId/users/invite", async (req, res) => {
         status: invitation.status,
         createdAt: invitation.createdAt,
       },
-      registrationUrl: `/accept-invite/${token}`,
+      registrationUrl,
       token, // Include token for sending via email
+      emailSent,
+      emailError,
     });
   } catch (error) {
     return handleRouteError(res, error, "POST /:clientId/users/invite", req);
@@ -167,7 +240,7 @@ router.post("/:clientId/users/invite", async (req, res) => {
 });
 
 // Create a client portal user directly (with password, no invite flow)
-router.post("/:clientId/users/create", async (req, res) => {
+router.post("/:clientId/users/create", requireTenantAdminAccess, async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId } = req.params;
@@ -241,7 +314,7 @@ router.post("/:clientId/users/create", async (req, res) => {
 });
 
 // Update client user (access level, name, and optionally password)
-router.patch("/:clientId/users/:userId", async (req, res) => {
+router.patch("/:clientId/users/:userId", requireTenantAdminAccess, async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId, userId } = req.params;
@@ -319,7 +392,7 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
 });
 
 // Remove client user access
-router.delete("/:clientId/users/:userId", async (req, res) => {
+router.delete("/:clientId/users/:userId", requireTenantAdminAccess, async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId, userId } = req.params;

@@ -1,7 +1,7 @@
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { handleRouteError } from "../../lib/errors";
-import { getCurrentUserId } from "../../routes/helpers";
+import { getCurrentUserId } from "../helpers";
 import { insertActivityLogSchema, tasks, subtasks, comments, timeEntries, users } from "@shared/schema";
 import { db } from "../../db";
 import { and, desc, eq, inArray } from "drizzle-orm";

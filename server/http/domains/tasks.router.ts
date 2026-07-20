@@ -51,7 +51,7 @@ import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import { captureError } from "../../middleware/errorLogging";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../../routes/helpers";
+import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../helpers";
 import { config } from "../../config";
 import { getTasksByUserBatched } from "../services/taskBatchHydrator";
 import {

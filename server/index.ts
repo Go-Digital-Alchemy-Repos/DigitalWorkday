@@ -21,6 +21,7 @@ import { requestPerfMiddleware } from "./middleware/perfTelemetry";
 import { instrumentPool } from "./middleware/queryTelemetry";
 import { perfLoggerMiddleware, getPerfStats } from "./lib/perfLogger";
 import { csrfProtection } from "./middleware/csrf";
+import { requireObservabilityAccess } from "./middleware/observabilityAccess";
 import { payloadGuardMiddleware } from "./middleware/payloadGuard";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
@@ -242,7 +243,7 @@ app.post("/api/v1/system/perf", (req, res) => {
 });
 
 // Perf stats endpoint (super-admin or dev only)
-app.get("/api/v1/system/perf/stats", (req, res) => {
+app.get("/api/v1/system/perf/stats", requireObservabilityAccess, (req, res) => {
   if (process.env.PERF_TELEMETRY !== "1") {
     return res.json({ enabled: false });
   }
@@ -258,7 +259,7 @@ app.get("/api/v1/system/perf/stats", (req, res) => {
 });
 
 // Observability stats endpoint (dev/admin only) — pool metrics + perf stats + budgets
-app.get("/api/v1/system/observability", async (req: any, res) => {
+app.get("/api/v1/system/observability", requireObservabilityAccess, async (req: any, res) => {
   if (!config.features.enableObservability) {
     return res.status(404).json({ error: "Observability not enabled" });
   }

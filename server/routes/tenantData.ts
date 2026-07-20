@@ -16,7 +16,7 @@ import { ENTITY_FIELD_MAP, suggestMappings, type EntityType, type ColumnMapping 
 import { tenantIntegrationService } from "../services/tenantIntegrations";
 import { AsanaClient } from "../services/asana/asanaClient";
 import { AsanaImportPipeline, type AsanaImportOptions } from "../services/asana/importPipeline";
-import { recordTenantAuditEvent } from "./superAdmin";
+import { recordTenantAuditEvent } from "./modules/super-admin/audit";
 
 const largeJsonParser = express.json({ limit: "200mb" });
 

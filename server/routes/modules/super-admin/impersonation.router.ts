@@ -4,7 +4,7 @@ import { db } from '../../../db';
 import { tenants, tenantAuditEvents } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const impersonationRouter = Router();
 

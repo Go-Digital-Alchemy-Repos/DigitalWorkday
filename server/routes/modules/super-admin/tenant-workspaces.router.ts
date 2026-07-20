@@ -5,7 +5,7 @@ import { db } from '../../../db';
 import { workspaces } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 import { deleteWorkspaceCascade } from '../../../utils/workspaceDeletion';
 
 export const tenantWorkspacesRouter = Router();

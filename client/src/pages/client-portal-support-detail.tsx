@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Send, Clock, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface TicketMessage {
@@ -71,7 +72,7 @@ export default function ClientPortalSupportDetail() {
   const [replyText, setReplyText] = useState("");
 
   const { data: ticket, isLoading } = useQuery<TicketDetail>({
-    queryKey: ["/api/v1/portal/support/tickets", params.id],
+    queryKey: queryKeys.portal.supportTicket(params.id),
     queryFn: async () => {
       const res = await fetch(`/api/v1/portal/support/tickets/${params.id}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch ticket");
@@ -87,7 +88,7 @@ export default function ClientPortalSupportDetail() {
     },
     onSuccess: () => {
       setReplyText("");
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/portal/support/tickets", params.id] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.portal.supportTicket(params.id) });
       toast({ title: "Reply sent" });
     },
     onError: (error) => {

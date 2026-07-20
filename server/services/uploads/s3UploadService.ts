@@ -23,18 +23,9 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "crypto";
 import { getStorageProvider, getStorageStatus, createS3ClientFromConfig, StorageNotConfiguredError, type S3Config } from "../../storage/getStorageProvider";
 import { processImage, isImageMimeType } from "./imageProcessor";
+import type { AssetType, UploadCategory } from "./uploadTypes";
 
-export type UploadCategory =
-  | "global-branding-logo"
-  | "global-branding-icon"
-  | "global-branding-favicon"
-  | "tenant-branding-logo"
-  | "tenant-branding-icon"
-  | "tenant-branding-favicon"
-  | "user-avatar"
-  | "task-attachment";
-
-export type AssetType = "logo" | "icon" | "favicon";
+export type { AssetType, UploadCategory } from "./uploadTypes";
 
 interface CategoryConfig {
   allowedMimeTypes: string[];

@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction } from "express";
 import { createApiRouter } from "../routerFactory";
 import { tenantDefaultDocsRepo } from "../../features/tenantDefaultDocs/tenantDefaultDocs.repo";
 import { AppError, handleRouteError } from "../../lib/errors";
-import { getCurrentUserId } from "../../routes/helpers";
+import { getCurrentUserId } from "../helpers";
 import {
   isS3Configured,
   uploadToS3,

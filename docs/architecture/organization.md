@@ -94,12 +94,12 @@ Repository (repo.ts) [optional]
 ## Route Architecture
 
 ### Factory Pattern (Preferred)
-New routes use `createApiRouter()` from `server/http/routerFactory.ts`:
+New routes use `createApiRouter()` from `server/http/routerFactory.ts` with an explicit policy:
 
 ```typescript
 import { createApiRouter } from "../routerFactory";
 
-const router = createApiRouter();
+const router = createApiRouter({ policy: "authTenant" });
 // Define routes...
 export default router;
 ```
@@ -128,7 +128,9 @@ See `docs/architecture/routes.md` for the complete route registry and migration 
 
 **Migrated domains:** tags, comments, activity, attachments, projects, tasks, subtasks, time, uploads, chat, presence, ai, systemIntegrations, flags
 
-**Legacy domains:** workspaces, teams, users, crm, clients, search, features, superAdmin, tenantOnboarding, tenantBilling, projectsDashboard, workloadReports, emailOutbox, chatRetention, tenancyHealth
+**Legacy physical locations still mounted through the registry:** users, crm, clients, search, features, superAdmin, tenantOnboarding, tenantBilling, projectsDashboard, emailOutbox, chatRetention, tenancyHealth.
+
+The route registry is the source of truth for runtime policy. The `legacy` concept in older notes refers to physical file location, not exemption from registry policy.
 
 ## Socket.IO Policy Convention
 

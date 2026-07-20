@@ -55,6 +55,22 @@ export const queryKeys = {
     all: ["/api/notifications"] as const,
   },
 
+  portal: {
+    dashboard: ["/api/client-portal/dashboard"] as const,
+    projects: ["/api/client-portal/projects"] as const,
+    projectDetail: (id: string) => ["/api/client-portal/projects", id] as const,
+    tasks: ["/api/client-portal/tasks"] as const,
+    supportTicketsAll: ["/api/v1/portal/support/tickets"] as const,
+    supportTickets: (status?: string) =>
+      ["/api/v1/portal/support/tickets", { status: status !== "all" ? status : undefined }] as const,
+    supportTicket: (id: string) => ["/api/v1/portal/support/tickets", id] as const,
+    supportFormSchema: (category: string) => ["/api/v1/portal/support/form-schemas", category] as const,
+    approvals: ["/api/crm/portal/approvals"] as const,
+    messageTemplates: ["/api/crm/portal/message-templates"] as const,
+    conversations: ["/api/crm/portal/conversations"] as const,
+    conversationMessages: (id: string) => ["/api/crm/conversations", id, "messages"] as const,
+  },
+
   activities: {
     all: ["/api/activities"] as const,
   },

@@ -1,7 +1,7 @@
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
-import { getCurrentUserId, getCurrentWorkspaceId } from "../../routes/helpers";
+import { getCurrentUserId, getCurrentWorkspaceId } from "../helpers";
 import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "../../utils/mentionUtils";
 import { insertCommentSchema, updateCommentSchema } from "@shared/schema";
 import { logEntityActivity } from "../../lib/taskActivity";

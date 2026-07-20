@@ -78,7 +78,7 @@ import {
   getCurrentUserId,
   getCurrentWorkspaceId,
   isSuperUser,
-} from "../../routes/helpers";
+} from "../helpers";
 import { projectVisibilityFilter, canViewProject, getAccessiblePrivateProjectIds } from "../../lib/privateVisibility";
 import {
   emitProjectCreated,

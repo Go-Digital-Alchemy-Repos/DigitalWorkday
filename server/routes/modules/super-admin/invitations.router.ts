@@ -7,7 +7,7 @@ import { getWorkspaceMembershipRoleForUserRole } from '@shared/roles';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { hashPassword } from '../../../auth';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const superInvitationsRouter = Router();
 

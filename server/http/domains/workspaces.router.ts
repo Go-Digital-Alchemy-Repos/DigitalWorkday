@@ -2,7 +2,7 @@ import { createApiRouter } from "../routerFactory";
 import { z } from "zod";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
-import { getCurrentUserId, getCurrentWorkspaceIdAsync, getCurrentWorkspaceId } from "../../routes/helpers";
+import { getCurrentUserId, getCurrentWorkspaceIdAsync, getCurrentWorkspaceId } from "../helpers";
 import {
   insertWorkspaceSchema,
   insertWorkspaceMemberSchema,

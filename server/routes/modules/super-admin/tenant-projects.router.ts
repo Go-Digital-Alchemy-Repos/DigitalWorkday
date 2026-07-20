@@ -5,7 +5,7 @@ import { db } from '../../../db';
 import { clients, projects, workspaces } from '@shared/schema';
 import { eq, and, ilike, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const tenantProjectsRouter = Router();
 

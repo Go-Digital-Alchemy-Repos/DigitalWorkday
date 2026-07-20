@@ -399,6 +399,12 @@ export default function ClientDetailPage() {
   const [divisionMode, setDivisionMode] = useState<"create" | "edit">("create");
   const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
   const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
+  const [lastPortalInvite, setLastPortalInvite] = useState<{
+    email: string;
+    registrationUrl: string;
+    emailSent: boolean;
+    emailError?: string | null;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") return "overview";
     return new URLSearchParams(window.location.search).get("tab") || "overview";
@@ -674,10 +680,29 @@ export default function ClientDetailPage() {
         contactId: contact.id,
         accessLevel: "viewer",
       });
-      return res.json();
+      return res.json() as Promise<{
+        message?: string;
+        registrationUrl?: string;
+        emailSent?: boolean;
+        emailError?: string | null;
+      }>;
     },
-    onSuccess: () => {
-      toast({ title: "Portal invitation sent", description: "The contact has been invited to the client portal." });
+    onSuccess: (data, contact) => {
+      if (data.registrationUrl) {
+        setLastPortalInvite({
+          email: contact.email || "",
+          registrationUrl: data.registrationUrl,
+          emailSent: !!data.emailSent,
+          emailError: data.emailError,
+        });
+      }
+      toast({
+        title: data.emailSent ? "Portal invitation sent" : "Portal invitation link created",
+        description: data.emailSent
+          ? "The contact has been emailed a link to set up their portal account."
+          : "Email was not sent. Copy and send the invite link manually.",
+        variant: data.emailSent ? "default" : "destructive",
+      });
       setPortalInviteContact(null);
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
     },
@@ -740,6 +765,12 @@ export default function ClientDetailPage() {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const copyPortalInviteLink = async () => {
+    if (!lastPortalInvite?.registrationUrl) return;
+    await navigator.clipboard.writeText(lastPortalInvite.registrationUrl);
+    toast({ title: "Invite link copied", description: "You can now send this link to the customer." });
   };
 
   const contactForm = useForm<CreateContactForm>({
@@ -2294,6 +2325,46 @@ export default function ClientDetailPage() {
                 )}
               </DialogContent>
             </Dialog>
+
+            {lastPortalInvite && (
+              <Dialog open={!!lastPortalInvite} onOpenChange={(open) => { if (!open) setLastPortalInvite(null); }}>
+                <DialogContent className="sm:max-w-lg" data-testid="dialog-portal-invite-link">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      {lastPortalInvite.emailSent ? (
+                        <Check className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                      )}
+                      {lastPortalInvite.emailSent ? "Portal Invitation Sent" : "Portal Invite Link Created"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {lastPortalInvite.emailSent
+                        ? `An invite email was sent to ${lastPortalInvite.email}.`
+                        : `Email delivery did not complete for ${lastPortalInvite.email}. Copy the link below and send it manually.`}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    {lastPortalInvite.emailError && !lastPortalInvite.emailSent && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                        {lastPortalInvite.emailError}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Input readOnly value={lastPortalInvite.registrationUrl} data-testid="input-portal-invite-url" />
+                      <Button type="button" variant="outline" size="icon" onClick={copyPortalInviteLink} data-testid="button-copy-portal-invite-url">
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" onClick={() => setLastPortalInvite(null)} data-testid="button-close-portal-invite-link">
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
             <Dialog 
               open={editContactOpen} 

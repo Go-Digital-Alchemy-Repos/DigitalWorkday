@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createApiRouter } from "../routerFactory";
 import { AppError, handleRouteError, sendError } from "../../lib/errors";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { getCurrentUserId } from "../../routes/helpers";
+import { getCurrentUserId } from "../helpers";
 import { db } from "../../db";
 import { taskAccess, projectAccess, tasks, projects, users } from "@shared/schema";
 import { eq, and } from "drizzle-orm";

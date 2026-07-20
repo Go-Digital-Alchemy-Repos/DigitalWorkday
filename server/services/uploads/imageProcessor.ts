@@ -37,7 +37,7 @@
  */
 
 import sharp from "sharp";
-import type { UploadCategory } from "./s3UploadService";
+import type { UploadCategory } from "./uploadTypes";
 
 export interface ImageProcessingConfig {
   maxWidth: number;

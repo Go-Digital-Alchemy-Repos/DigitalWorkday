@@ -3,7 +3,7 @@ import { z } from "zod";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { getCurrentWorkspaceIdAsync, isSuperUser } from "../../routes/helpers";
+import { getCurrentWorkspaceIdAsync, isSuperUser } from "../helpers";
 import {
   insertTeamSchema,
   insertTeamMemberSchema,

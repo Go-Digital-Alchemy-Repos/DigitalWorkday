@@ -5,7 +5,7 @@ import { db } from '../../../db';
 import * as schema from '@shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const bulkOperationsRouter = Router();
 

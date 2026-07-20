@@ -28,7 +28,7 @@ import { cleanupUserReferences } from '../../../utils/userDeletion';
 import { tenantIntegrationService } from '../../../services/tenantIntegrations';
 import Mailgun from 'mailgun.js';
 import FormData from 'form-data';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const tenantUsersRouter = Router();
 

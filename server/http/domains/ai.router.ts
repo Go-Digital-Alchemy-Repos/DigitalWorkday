@@ -8,7 +8,7 @@ import {
   generateTaskDescription,
 } from "../../services/ai/aiService";
 import { storage } from "../../storage";
-import { getCurrentUserId, isSuperUser } from "../../routes/helpers";
+import { getCurrentUserId, isSuperUser } from "../helpers";
 import { AppError, sendError } from "../../lib/errors";
 import { config } from "../../config";
 import { db } from "../../db";

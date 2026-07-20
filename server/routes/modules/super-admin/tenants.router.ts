@@ -105,7 +105,7 @@ import {
   supportTicketFormSchemas,
   conversationSlaPolicies,
 } from '@shared/schema';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 import { tenantIntegrationService } from '../../../services/tenantIntegrations';
 
 export const tenantsRouter = Router();

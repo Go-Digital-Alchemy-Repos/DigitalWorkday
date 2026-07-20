@@ -227,7 +227,7 @@ export const config = {
     mode: (() => {
       const envVal = process.env.TENANCY_ENFORCEMENT;
       if (envVal) return envVal.toLowerCase() as "off" | "soft" | "strict";
-      return isProduction ? "off" : "strict";
+      return "strict";
     })(),
   },
 

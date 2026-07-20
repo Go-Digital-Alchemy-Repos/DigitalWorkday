@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, LifeBuoy, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface SupportTicket {
   id: string;
@@ -69,7 +70,7 @@ export default function ClientPortalSupport() {
   const [, navigate] = useLocation();
 
   const { data, isLoading } = useQuery<{ tickets: SupportTicket[]; total: number }>({
-    queryKey: ["/api/v1/portal/support/tickets", { status: statusFilter !== "all" ? statusFilter : undefined }],
+    queryKey: queryKeys.portal.supportTickets(statusFilter),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);

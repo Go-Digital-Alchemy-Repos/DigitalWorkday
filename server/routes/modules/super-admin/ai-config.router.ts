@@ -5,7 +5,7 @@ import { systemSettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { encryptApiKey, testAIConnection, getAIConfigStatus } from '../../../services/ai/aiService';
-import { recordTenantAuditEvent } from '../../superAdmin';
+import { recordTenantAuditEvent } from './audit';
 
 export const aiConfigRouter = Router();
 

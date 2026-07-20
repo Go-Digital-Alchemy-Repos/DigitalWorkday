@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface ClientInfo {
   id: string;
@@ -55,11 +56,11 @@ export default function ClientPortalSupportNew() {
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
 
   const { data: dashboardData } = useQuery<DashboardData>({
-    queryKey: ["/api/client-portal/dashboard"],
+    queryKey: queryKeys.portal.dashboard,
   });
 
   const { data: formSchema } = useQuery<FormSchemaData | null>({
-    queryKey: ["/api/v1/portal/support/form-schemas", category],
+    queryKey: queryKeys.portal.supportFormSchema(category),
     enabled: !!category,
   });
 
@@ -88,7 +89,7 @@ export default function ClientPortalSupportNew() {
     },
     onSuccess: async (res) => {
       const ticket = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/portal/support/tickets"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.portal.supportTicketsAll });
       toast({ title: "Ticket created", description: "Your support ticket has been submitted." });
       navigate(`/portal/support/${ticket.id}`);
     },
