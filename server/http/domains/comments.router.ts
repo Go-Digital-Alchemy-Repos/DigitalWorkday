@@ -214,7 +214,11 @@ router.patch("/comments/:id", async (req, res) => {
       return sendError(res, AppError.forbidden("You can only edit your own comments"), req);
     }
 
-    const comment = await storage.updateComment(req.params.id, { body: data.content });
+    const updates: Record<string, unknown> = {};
+    if (data.body !== undefined || data.content !== undefined) updates.body = data.body ?? data.content;
+    if (data.visibility !== undefined) updates.visibility = data.visibility;
+
+    const comment = await storage.updateComment(req.params.id, updates);
     res.json(comment);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/comments/:id", req);

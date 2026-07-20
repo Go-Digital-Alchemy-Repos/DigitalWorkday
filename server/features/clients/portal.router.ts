@@ -2,13 +2,19 @@ import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { InvitationStatus, UserRole, ClientAccessLevel } from "@shared/schema";
+import { InvitationStatus, UserRole, ClientAccessLevel, CommentVisibility } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../../auth";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { buildAppUrl } from "../../lib/appLinks";
+import {
+  getClientDescendantIds,
+  getPortalAccessMatrix,
+  filterCommentsForPortalUser,
+  replacePortalAccessScope,
+} from "../../services/customerAccessPermissions";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -23,6 +29,15 @@ function isTenantAdmin(req: Request): boolean {
 }
 
 const router = Router();
+
+const portalAccessEntrySchema = z.object({
+  clientId: z.string().min(1),
+  accessLevel: z.enum([ClientAccessLevel.VIEWER, ClientAccessLevel.COLLABORATOR]).default(ClientAccessLevel.VIEWER),
+});
+
+const portalAccessScopeSchema = z.object({
+  entries: z.array(portalAccessEntrySchema),
+});
 
 function requireTenantAdminAccess(req: Request, _res: Response, next: NextFunction) {
   if (!isTenantAdmin(req)) {
@@ -86,6 +101,14 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
     if (!client) {
       throw AppError.notFound("Client");
     }
+
+    const requestedAccessClientIds: string[] = Array.isArray(req.body.accessClientIds)
+      ? req.body.accessClientIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+      : [clientId];
+    const allowedAccessClientIds: string[] = tenantId ? [clientId, ...(await getClientDescendantIds(clientId, tenantId))] : [clientId];
+    const accessClientIds: string[] = [...new Set<string>(requestedAccessClientIds.length > 0 ? requestedAccessClientIds : [clientId])]
+      .filter((id) => allowedAccessClientIds.includes(id));
+    if (!accessClientIds.includes(clientId)) accessClientIds.unshift(clientId);
     
     // Get the contact
     const contact = await storage.getClientContact(contactId);
@@ -114,22 +137,19 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
         existingUser.id, 
         clientId
       );
-      
-      if (existingAccess) {
-        throw AppError.conflict("User already has access to this client");
-      }
-      
-      // Grant access to existing user
-      const access = await storage.addClientUserAccess({
-        workspaceId: client.workspaceId,
-        clientId,
-        userId: existingUser.id,
-        accessLevel,
-      });
+
+      const accessScope = tenantId
+        ? await replacePortalAccessScope(tenantId, client.workspaceId, clientId, existingUser.id, {
+            entries: accessClientIds.map((accessClientId) => ({
+              clientId: accessClientId,
+              accessLevel,
+            })),
+          })
+        : [];
       
       return res.status(201).json({
-        message: "Access granted to existing user",
-        access,
+        message: existingAccess ? "Access scope updated for existing user" : "Access granted to existing user",
+        accessScope,
         user: {
           id: existingUser.id,
           email: existingUser.email,
@@ -162,6 +182,7 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
       roleHint: accessLevel,
       status: InvitationStatus.PENDING,
       tokenPlaceholder: tokenHash,
+      accessClientIds,
     });
 
     const registrationUrl = buildAppUrl(`/accept-invite/${token}`, req);
@@ -204,6 +225,7 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
             clientId,
             contactId,
             accessLevel,
+            accessClientIds,
           },
         });
 
@@ -251,6 +273,7 @@ router.post("/:clientId/users/create", requireTenantAdminAccess, async (req, res
       lastName: z.string().optional().default(""),
       password: z.string().min(8, "Password must be at least 8 characters"),
       accessLevel: z.enum(["viewer", "collaborator"]).default("viewer"),
+      accessClientIds: z.array(z.string()).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -288,15 +311,23 @@ router.post("/:clientId/users/create", requireTenantAdminAccess, async (req, res
       isActive: true,
     });
 
-    await storage.addClientUserAccess({
-      workspaceId: client.workspaceId,
-      clientId,
-      userId: user.id,
-      accessLevel: data.accessLevel as "viewer" | "collaborator",
-    });
+    const allowedAccessClientIds: string[] = tenantId ? [clientId, ...(await getClientDescendantIds(clientId, tenantId))] : [clientId];
+    const accessClientIds: string[] = [...new Set<string>(data.accessClientIds?.length ? data.accessClientIds : [clientId])]
+      .filter((id) => allowedAccessClientIds.includes(id));
+    if (!accessClientIds.includes(clientId)) accessClientIds.unshift(clientId);
+
+    const accessScope = tenantId
+      ? await replacePortalAccessScope(tenantId, client.workspaceId, clientId, user.id, {
+          entries: accessClientIds.map((accessClientId) => ({
+            clientId: accessClientId,
+            accessLevel: data.accessLevel,
+          })),
+        })
+      : [];
 
     res.status(201).json({
       message: "Portal user created successfully",
+      accessScope,
       user: {
         id: user.id,
         email: user.email,
@@ -310,6 +341,44 @@ router.post("/:clientId/users/create", requireTenantAdminAccess, async (req, res
       return res.status(409).json({ error: "A user with this email already exists" });
     }
     return handleRouteError(res, error, "POST /:clientId/users/create", req);
+  }
+});
+
+router.get("/:clientId/users/:userId/access-scope", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { clientId, userId } = req.params;
+    if (!tenantId) throw AppError.tenantRequired();
+
+    const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+
+    const user = await storage.getUser(userId);
+    if (!user || user.role !== UserRole.CLIENT || user.tenantId !== tenantId) {
+      throw AppError.notFound("Portal user");
+    }
+
+    const matrix = await getPortalAccessMatrix(tenantId, clientId, userId);
+    res.json({ entries: matrix });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /:clientId/users/:userId/access-scope", req);
+  }
+});
+
+router.patch("/:clientId/users/:userId/access-scope", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { clientId, userId } = req.params;
+    if (!tenantId) throw AppError.tenantRequired();
+
+    const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+
+    const data = portalAccessScopeSchema.parse(req.body);
+    const matrix = await replacePortalAccessScope(tenantId, client.workspaceId, clientId, userId, data);
+    res.json({ entries: matrix });
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /:clientId/users/:userId/access-scope", req);
   }
 });
 
@@ -510,12 +579,24 @@ router.post("/register/complete", async (req, res) => {
       ? ClientAccessLevel.COLLABORATOR 
       : ClientAccessLevel.VIEWER) as "viewer" | "collaborator";
     
-    await storage.addClientUserAccess({
-      workspaceId: client.workspaceId,
-      clientId: invite.clientId,
-      userId: user.id,
-      accessLevel,
-    });
+    const inviteAccessClientIds: string[] = Array.isArray(invite.accessClientIds) && invite.accessClientIds.length > 0
+      ? invite.accessClientIds
+      : [invite.clientId];
+    const allowedAccessClientIds: string[] = client.tenantId
+      ? [invite.clientId, ...(await getClientDescendantIds(invite.clientId, client.tenantId))]
+      : [invite.clientId];
+    const scopedClientIds: string[] = [...new Set<string>(inviteAccessClientIds)]
+      .filter((id) => allowedAccessClientIds.includes(id));
+    if (!scopedClientIds.includes(invite.clientId)) scopedClientIds.unshift(invite.clientId);
+
+    for (const scopedClientId of scopedClientIds) {
+      await storage.addClientUserAccess({
+        workspaceId: client.workspaceId,
+        clientId: scopedClientId,
+        userId: user.id,
+        accessLevel,
+      });
+    }
     
     // Update invite status
     await storage.updateClientInvite(invite.id, {

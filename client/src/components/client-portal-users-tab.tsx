@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -59,6 +60,7 @@ import {
   Save,
   EyeOff,
   ArrowLeft,
+  Building2,
 } from "lucide-react";
 
 interface ClientUser {
@@ -82,6 +84,20 @@ interface ClientContact {
   lastName: string | null;
   email: string | null;
   title: string | null;
+}
+
+interface PortalAccessScopeEntry {
+  client: {
+    id: string;
+    companyName: string;
+    parentClientId?: string | null;
+  };
+  access: {
+    clientId: string;
+    userId: string;
+    accessLevel: "viewer" | "collaborator";
+  } | null;
+  relationship: "current" | "child" | "descendant" | "other";
 }
 
 const createUserSchema = z.object({
@@ -135,6 +151,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const [userToRevoke, setUserToRevoke] = useState<ClientUser | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
+  const [accessScopeDraft, setAccessScopeDraft] = useState<Record<string, "viewer" | "collaborator" | null>>({});
 
   const createForm = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -167,6 +184,16 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const { data: contacts = [] } = useQuery<ClientContact[]>({
     queryKey: ["/api/clients", clientId, "contacts"],
     enabled: !!clientId,
+  });
+
+  const { data: accessScopeData, isLoading: accessScopeLoading } = useQuery<{ entries: PortalAccessScopeEntry[] }>({
+    queryKey: ["/api/clients", clientId, "users", editingUser?.userId, "access-scope"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/users/${editingUser!.userId}/access-scope`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load portal access scope");
+      return res.json();
+    },
+    enabled: !!clientId && !!editingUser?.userId,
   });
 
   const createUserMutation = useMutation({
@@ -207,6 +234,34 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     onError: (error: Error) => {
       toast({
         title: "Failed to update user",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateAccessScopeMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingUser) return null;
+      const entries = Object.entries(accessScopeDraft)
+        .filter(([, accessLevel]) => !!accessLevel)
+        .map(([entryClientId, accessLevel]) => ({
+          clientId: entryClientId,
+          accessLevel,
+        }));
+      const res = await apiRequest("PATCH", `/api/clients/${clientId}/users/${editingUser.userId}/access-scope`, { entries });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Portal access scope updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      if (editingUser?.userId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users", editingUser.userId, "access-scope"] });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update access scope",
         description: error.message,
         variant: "destructive",
       });
@@ -265,6 +320,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const handleOpenEditUser = (portalUser: ClientUser) => {
     setEditingUser(portalUser);
+    setAccessScopeDraft({});
     setShowEditPassword(false);
     editForm.reset({
       firstName: portalUser.user.firstName || portalUser.user.name?.split(" ")[0] || "",
@@ -277,8 +333,31 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const handleCloseEditUser = () => {
     setEditingUser(null);
+    setAccessScopeDraft({});
     setShowEditPassword(false);
     editForm.reset();
+  };
+
+  const accessScopeEntries = accessScopeData?.entries || [];
+  const resolvedAccessScopeDraft = accessScopeEntries.reduce<Record<string, "viewer" | "collaborator" | null>>((acc, entry) => {
+    acc[entry.client.id] = Object.prototype.hasOwnProperty.call(accessScopeDraft, entry.client.id)
+      ? accessScopeDraft[entry.client.id]
+      : entry.access?.accessLevel || null;
+    return acc;
+  }, {});
+
+  const toggleScopeClient = (entry: PortalAccessScopeEntry, checked: boolean) => {
+    setAccessScopeDraft((current) => ({
+      ...current,
+      [entry.client.id]: checked ? entry.access?.accessLevel || "viewer" : null,
+    }));
+  };
+
+  const updateScopeAccessLevel = (entry: PortalAccessScopeEntry, accessLevel: "viewer" | "collaborator") => {
+    setAccessScopeDraft((current) => ({
+      ...current,
+      [entry.client.id]: accessLevel,
+    }));
   };
 
   const getInitials = (name: string | null, email: string) => {
@@ -731,6 +810,83 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                       </FormItem>
                     )}
                   />
+
+                  <div className="border-t pt-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <Label className="font-medium">Client Account Access</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Choose which related client accounts this portal user can see.
+                    </p>
+                    {accessScopeLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                      </div>
+                    ) : accessScopeEntries.length > 0 ? (
+                      <div className="space-y-2">
+                        {accessScopeEntries.map((entry) => {
+                          const selectedAccess = resolvedAccessScopeDraft[entry.client.id];
+                          const isCurrentClient = entry.relationship === "current";
+                          return (
+                            <div
+                              key={entry.client.id}
+                              className="flex items-center justify-between gap-3 rounded-md border p-3"
+                              data-testid={`portal-scope-client-${entry.client.id}`}
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
+                                <Checkbox
+                                  checked={!!selectedAccess}
+                                  disabled={isCurrentClient}
+                                  onCheckedChange={(checked) => toggleScopeClient(entry, checked === true)}
+                                  data-testid={`checkbox-portal-scope-${entry.client.id}`}
+                                />
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium">{entry.client.companyName}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {isCurrentClient ? "Current client" : entry.relationship === "child" ? "Child account" : "Descendant account"}
+                                  </div>
+                                </div>
+                              </div>
+                              <Select
+                                value={selectedAccess || "viewer"}
+                                disabled={!selectedAccess}
+                                onValueChange={(value) => updateScopeAccessLevel(entry, value as "viewer" | "collaborator")}
+                              >
+                                <SelectTrigger className="h-8 w-36" data-testid={`select-portal-scope-level-${entry.client.id}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="viewer">Viewer</SelectItem>
+                                  <SelectItem value="collaborator">Collaborator</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => updateAccessScopeMutation.mutate()}
+                          disabled={updateAccessScopeMutation.isPending}
+                          className="w-full"
+                          data-testid="button-save-portal-access-scope"
+                        >
+                          {updateAccessScopeMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Save Account Access
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="rounded-md border p-3 text-sm text-muted-foreground">
+                        No related client accounts were found.
+                      </p>
+                    )}
+                  </div>
 
                   <div className="border-t pt-5">
                     <div className="flex items-center gap-2 mb-4">

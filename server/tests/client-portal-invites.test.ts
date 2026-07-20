@@ -18,6 +18,9 @@ const storageMocks = {
 
 const sendEmailMock = vi.fn();
 const renderByKeyMock = vi.fn();
+const getClientDescendantIdsMock = vi.fn();
+const getPortalAccessMatrixMock = vi.fn();
+const replacePortalAccessScopeMock = vi.fn();
 
 vi.mock("../storage", () => ({
   storage: storageMocks,
@@ -33,6 +36,12 @@ vi.mock("../services/emailTemplates", () => ({
   emailTemplateService: {
     renderByKey: renderByKeyMock,
   },
+}));
+
+vi.mock("../services/customerAccessPermissions", () => ({
+  getClientDescendantIds: getClientDescendantIdsMock,
+  getPortalAccessMatrix: getPortalAccessMatrixMock,
+  replacePortalAccessScope: replacePortalAccessScopeMock,
 }));
 
 const { errorHandler } = await import("../middleware/errorHandler");
@@ -106,6 +115,9 @@ describe("client portal invitations", () => {
       htmlBody: "<p>Invite</p>",
     });
     sendEmailMock.mockResolvedValue({ success: true, emailId: "email-1" });
+    getClientDescendantIdsMock.mockResolvedValue([]);
+    getPortalAccessMatrixMock.mockResolvedValue([]);
+    replacePortalAccessScopeMock.mockResolvedValue([]);
   });
 
   it("requires tenant admin access to invite portal users", async () => {
@@ -142,6 +154,7 @@ describe("client portal invitations", () => {
       contactId: contact.id,
       roleHint: ClientAccessLevel.COLLABORATOR,
       status: InvitationStatus.PENDING,
+      accessClientIds: ["client-1"],
     }));
     expect(sendEmailMock).toHaveBeenCalledWith(expect.objectContaining({
       tenantId: "tenant-1",
@@ -187,5 +200,24 @@ describe("client portal invitations", () => {
     expect(response.body.emailSent).toBe(false);
     expect(response.body.emailError).toBe("Mailgun not configured");
     expect(response.body.registrationUrl).toMatch(/^https:\/\/app\.test\/accept-invite\//);
+  });
+
+  it("preserves selected child account access on an invite", async () => {
+    getClientDescendantIdsMock.mockResolvedValue(["child-1", "child-2"]);
+
+    const response = await request(createApp())
+      .post("/api/clients/client-1/users/invite")
+      .set("Host", "app.test")
+      .set("X-Forwarded-Proto", "https")
+      .send({
+        contactId: contact.id,
+        accessLevel: ClientAccessLevel.VIEWER,
+        accessClientIds: ["client-1", "child-1", "not-a-child"],
+      });
+
+    expect(response.status).toBe(201);
+    expect(storageMocks.createClientInvite).toHaveBeenCalledWith(expect.objectContaining({
+      accessClientIds: ["client-1", "child-1"],
+    }));
   });
 });

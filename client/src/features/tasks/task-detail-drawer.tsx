@@ -237,13 +237,14 @@ function TaskDetailDrawerContent({
   });
 
   const addCommentMutation = useMutation({
-    mutationFn: async ({ body, attachmentIds }: { body: string; attachmentIds?: string[] }) => {
+    mutationFn: async ({ body, attachmentIds, visibility }: { body: string; attachmentIds?: string[]; visibility?: "internal" | "client_visible" }) => {
       const payload: any = { body };
       if (attachmentIds && attachmentIds.length > 0) payload.attachmentIds = attachmentIds;
+      if (visibility) payload.visibility = visibility;
       const response = await apiRequest("POST", `/api/tasks/${task?.id}/comments`, payload);
       return response.json() as Promise<Comment & { user?: User }>;
     },
-    onMutate: async ({ body }: { body: string; attachmentIds?: string[] }) => {
+    onMutate: async ({ body, visibility }: { body: string; attachmentIds?: string[]; visibility?: "internal" | "client_visible" }) => {
       if (!task?.id || !currentUser) return undefined;
       const commentsKey = commentQueryKey;
       await queryClient.cancelQueries({ queryKey: commentsKey });
@@ -251,6 +252,7 @@ function TaskDetailDrawerContent({
       const optimisticComment = {
         id: `temp-${Date.now()}`,
         body,
+        visibility: visibility || "internal",
         taskId: task.id,
         userId: currentUser.id,
         createdAt: new Date().toISOString(),
@@ -1519,7 +1521,7 @@ function TaskDetailDrawerContent({
               taskId={task.id}
               projectId={task.projectId}
               currentUserId={currentUser?.id}
-              onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
+              onAdd={(body, attachmentIds, visibility) => addCommentMutation.mutate({ body, attachmentIds, visibility })}
               onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
               onDelete={(id) => deleteCommentMutation.mutate(id)}
               onResolve={(id) => resolveCommentMutation.mutate(id)}

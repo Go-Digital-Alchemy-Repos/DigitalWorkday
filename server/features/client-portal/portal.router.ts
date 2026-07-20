@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { storage } from "../../storage";
-import { UserRole } from "@shared/schema";
+import { CommentVisibility, UserRole } from "@shared/schema";
 import type { Request, Response, NextFunction } from "express";
 import { isClientUser, getClientUserAccessibleClients } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
+import { filterCommentsForPortalUser } from "../../services/customerAccessPermissions";
 
 const router = Router();
 
@@ -300,8 +301,10 @@ router.get("/tasks/:taskId", async (req, res) => {
       throw AppError.forbidden("Access denied");
     }
     
-    // Get comments for this task
-    const comments = await storage.getCommentsByTask(taskId);
+    const comments = await filterCommentsForPortalUser(
+      await storage.getCommentsByTask(taskId),
+      userId,
+    );
     
     res.json({
       id: task.id,
@@ -378,6 +381,7 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
       taskId,
       userId,
       body: commentBody.trim(),
+      visibility: CommentVisibility.CLIENT_VISIBLE,
     });
     
     const user = await storage.getUser(userId);

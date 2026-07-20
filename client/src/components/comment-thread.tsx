@@ -28,6 +28,8 @@ import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
@@ -51,7 +53,7 @@ interface CommentThreadProps {
   entityId?: string;
   currentUserId?: string;
   users?: User[];
-  onAdd?: (body: string, attachmentIds?: string[]) => void;
+  onAdd?: (body: string, attachmentIds?: string[], visibility?: "internal" | "client_visible") => void;
   onUpdate?: (id: string, body: string) => void;
   onDelete?: (id: string) => void;
   onResolve?: (id: string) => void;
@@ -119,6 +121,7 @@ export function CommentThread({
   readOnly = false,
 }: CommentThreadProps) {
   const [body, setBody] = useState("");
+  const [shareWithClient, setShareWithClient] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const commentEditorRef = useRef<CommentEditorRef>(null);
@@ -201,12 +204,17 @@ export function CommentThread({
         return;
       }
 
-      onAdd?.(commentBody.trim(), completedIds.length > 0 ? completedIds : undefined);
+      onAdd?.(
+        commentBody.trim(),
+        completedIds.length > 0 ? completedIds : undefined,
+        shareWithClient ? "client_visible" : "internal",
+      );
       setBody("");
+      setShareWithClient(false);
       clearQueue();
       commentEditorRef.current?.clear();
     },
-    [body, pendingUploads, onAdd, toast, isUploading, hasErrors, completedIds, clearQueue]
+    [body, pendingUploads, onAdd, toast, isUploading, hasErrors, completedIds, clearQueue, shareWithClient]
   );
 
   const handleEdit = (comment: CommentWithUser) => {
@@ -404,6 +412,21 @@ export function CommentThread({
                   Drag files here or use the paperclip to attach
                 </p>
               )}
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={`share-comment-${taskId || entityId || "entity"}`}
+                  checked={shareWithClient}
+                  onCheckedChange={(checked) => setShareWithClient(checked === true)}
+                  data-testid="checkbox-share-comment-with-client"
+                />
+                <Label
+                  htmlFor={`share-comment-${taskId || entityId || "entity"}`}
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  Share with client
+                </Label>
+              </div>
 
               {pendingUploads.length > 0 && (
                 <div className="space-y-1">

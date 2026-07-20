@@ -95,6 +95,11 @@ export const ClientAccessLevel = {
   COLLABORATOR: "collaborator",
 } as const;
 
+export const CommentVisibility = {
+  INTERNAL: "internal",
+  CLIENT_VISIBLE: "client_visible",
+} as const;
+
 // Client pipeline stages
 export const ClientStage = {
   LEAD: "lead",
@@ -927,6 +932,7 @@ export const clientInvites = pgTable("client_invites", {
   roleHint: text("role_hint").default("client"),
   status: text("status").notNull().default("draft"),
   tokenPlaceholder: text("token_placeholder"),
+  accessClientIds: jsonb("access_client_ids").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -1583,6 +1589,7 @@ export const comments = pgTable("comments", {
   subtaskId: varchar("subtask_id").references(() => subtasks.id),
   userId: varchar("user_id").references(() => users.id).notNull(),
   body: text("body").notNull(),
+  visibility: text("visibility").notNull().default(CommentVisibility.INTERNAL),
   isResolved: boolean("is_resolved").default(false).notNull(),
   resolvedAt: timestamp("resolved_at"),
   resolvedByUserId: varchar("resolved_by_user_id").references(() => users.id),
@@ -1592,6 +1599,7 @@ export const comments = pgTable("comments", {
   index("comments_task_created").on(table.taskId, table.createdAt),
   index("comments_subtask_created").on(table.subtaskId, table.createdAt),
   index("comments_user_idx").on(table.userId),
+  index("comments_visibility_idx").on(table.visibility),
 ]);
 
 // Activity Log table
@@ -2880,6 +2888,8 @@ export const insertClientInviteSchema = createInsertSchema(clientInvites).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  accessClientIds: z.array(z.string()).default([]),
 });
 
 // Client Divisions Insert Schemas
@@ -3476,8 +3486,10 @@ export const updateTaskSchema = insertTaskSchema.partial();
 export const updateSubtaskSchema = insertSubtaskSchema.partial();
 export const updateTagSchema = insertTagSchema.partial();
 export const updateCommentSchema = z.object({
+  body: z.string().optional(),
   content: z.string().optional(),
   contentJson: z.unknown().optional(),
+  visibility: z.enum(["internal", "client_visible"]).optional(),
 });
 export const updateClientSchema = insertClientSchema.partial();
 export const updateClientContactSchema = insertClientContactSchema.partial();

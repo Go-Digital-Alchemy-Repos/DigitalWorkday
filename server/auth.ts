@@ -37,6 +37,7 @@ import {
   forgotPasswordRateLimiter,
   userCreateRateLimiter 
 } from "./middleware/rateLimit";
+import { getClientDescendantIds } from "./services/customerAccessPermissions";
 
 const scryptAsync = promisify(scrypt);
 const GOOGLE_CALLBACK_PATH = "/api/v1/auth/google/callback";
@@ -1313,16 +1314,28 @@ export function setupTenantInviteEndpoints(app: Express): void {
           });
         }
 
-        const existingAccess = await storage.getClientUserAccessByUserAndClient(user.id, invite.clientId);
-        if (!existingAccess) {
-          await storage.addClientUserAccess({
-            workspaceId: invite.workspaceId,
-            clientId: invite.clientId,
-            userId: user.id,
-            accessLevel: clientInviteAudit?.roleHint === ClientAccessLevel.COLLABORATOR
-              ? ClientAccessLevel.COLLABORATOR
-              : ClientAccessLevel.VIEWER,
-          });
+        const accessLevel = clientInviteAudit?.roleHint === ClientAccessLevel.COLLABORATOR
+          ? ClientAccessLevel.COLLABORATOR
+          : ClientAccessLevel.VIEWER;
+        const auditAccessClientIds: string[] = Array.isArray(clientInviteAudit?.accessClientIds) && clientInviteAudit.accessClientIds.length > 0
+          ? clientInviteAudit.accessClientIds
+          : [invite.clientId];
+        const allowedAccessClientIds: string[] = invite.tenantId
+          ? [invite.clientId, ...(await getClientDescendantIds(invite.clientId, invite.tenantId))]
+          : [invite.clientId];
+        const scopedClientIds: string[] = [...new Set<string>(auditAccessClientIds)].filter((clientId) => allowedAccessClientIds.includes(clientId));
+        if (!scopedClientIds.includes(invite.clientId)) scopedClientIds.unshift(invite.clientId);
+
+        for (const scopedClientId of scopedClientIds) {
+          const existingAccess = await storage.getClientUserAccessByUserAndClient(user.id, scopedClientId);
+          if (!existingAccess) {
+            await storage.addClientUserAccess({
+              workspaceId: invite.workspaceId,
+              clientId: scopedClientId,
+              userId: user.id,
+              accessLevel,
+            });
+          }
         }
 
         if (clientInviteAudit) {

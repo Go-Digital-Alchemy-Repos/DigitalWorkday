@@ -71,6 +71,13 @@
       "when": 1778007600000,
       "tag": "0047_archive_project_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778011200000,
+      "tag": "0048_customer_access_permissions",
+      "breakpoints": true
     }
   ]
 }
