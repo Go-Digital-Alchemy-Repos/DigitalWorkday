@@ -58,6 +58,7 @@ Compatibility considerations:
 - No production runtime behavior changed.
 - Fixture IDs remain human-readable and are only used by tests.
 - Test execution remains sequential; no CI runtime concurrency assumptions changed.
+- Railway deployment should be treated as a normal release verification step even for test-only commits so production and staging stay aligned.
 
 ## Verification Results
 
