@@ -9,6 +9,7 @@ import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { handleRouteError, AppError } from "../lib/errors";
 import { requireAuth } from "../auth";
 import { userCreateRateLimiter, inviteCreateRateLimiter } from "../middleware/rateLimit";
+import { isAgreementEnforcementEnabled } from "../middleware/agreementEnforcement";
 import { getCurrentUserId, getCurrentWorkspaceId, getCurrentWorkspaceIdAsync } from "./helpers";
 import { deleteFromStorageByUrl } from "../services/uploads/s3UploadService";
 import {
@@ -851,6 +852,16 @@ router.delete("/v1/me/avatar", requireAuth, async (req, res) => {
 
 router.get("/v1/me/agreement/status", requireAuth, async (req, res) => {
   try {
+    if (!isAgreementEnforcementEnabled()) {
+      return res.json({
+        tenantId: (req.user as any)?.tenantId ?? null,
+        requiresAcceptance: false,
+        activeAgreement: null,
+        accepted: true,
+        acceptedAt: null,
+      });
+    }
+
     const user = req.user as any;
     const tenantId = user.tenantId;
 
@@ -926,6 +937,10 @@ router.get("/v1/me/agreement/status", requireAuth, async (req, res) => {
 
 router.post("/v1/me/agreement/accept", requireAuth, async (req, res) => {
   try {
+    if (!isAgreementEnforcementEnabled()) {
+      return res.json({ ok: true, message: "Agreement enforcement is disabled" });
+    }
+
     const user = req.user as any;
     const tenantId = user.tenantId;
 

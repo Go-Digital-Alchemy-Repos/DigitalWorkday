@@ -36,6 +36,7 @@ let app: Express;
 let userCookie: string;
 
 let stashedGlobalAgreements: { id: string; originalStatus: string }[] = [];
+const originalAgreementEnforcement = process.env.AGREEMENT_ENFORCEMENT;
 
 async function suspendGlobalAgreements() {
   const globals = await db.select({ id: tenantAgreements.id, status: tenantAgreements.status })
@@ -175,6 +176,7 @@ async function loginUser(app: Express, email: string, password: string): Promise
 
 describe("Agreement Enforcement Middleware", () => {
   beforeEach(async () => {
+    process.env.AGREEMENT_ENFORCEMENT = "true";
     clearAgreementCache();
     await suspendGlobalAgreements();
     clearAgreementCache();
@@ -188,8 +190,33 @@ describe("Agreement Enforcement Middleware", () => {
         // Ignore cleanup errors
       }
     }
+    if (originalAgreementEnforcement === undefined) {
+      delete process.env.AGREEMENT_ENFORCEMENT;
+    } else {
+      process.env.AGREEMENT_ENFORCEMENT = originalAgreementEnforcement;
+    }
     await restoreGlobalAgreements();
     clearAgreementCache();
+  });
+
+  describe("Feature Flag Disabled", () => {
+    it("should allow access even when an active agreement exists", async () => {
+      delete process.env.AGREEMENT_ENFORCEMENT;
+      const { email } = await createTestFixtures({
+        createAgreement: true,
+        agreementStatus: AgreementStatus.ACTIVE,
+        createAcceptance: false,
+      });
+      app = await setupTestApp();
+      userCookie = await loginUser(app, email, "testpassword123");
+
+      const response = await request(app)
+        .get("/api/v1/protected")
+        .set("Cookie", userCookie);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
   });
 
   describe("Tenant with No Agreements", () => {

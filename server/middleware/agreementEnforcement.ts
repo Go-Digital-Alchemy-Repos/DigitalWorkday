@@ -123,6 +123,16 @@ const agreementCache = new Map<string, AgreementCache>();
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
 /**
+ * Agreement enforcement is dormant for the single-tenant pilot.
+ * Keep the feature opt-in so the existing agreement system can be restored
+ * deliberately instead of blocking users through stale agreement rows.
+ */
+export function isAgreementEnforcementEnabled(): boolean {
+  return process.env.AGREEMENT_ENFORCEMENT === "true"
+    || process.env.ENABLE_AGREEMENT_ENFORCEMENT === "true";
+}
+
+/**
  * Fetch active agreement for a tenant with caching.
  * 
  * RESOLUTION LOGIC:
@@ -243,6 +253,10 @@ export async function agreementEnforcementGuard(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  if (!isAgreementEnforcementEnabled()) {
+    return next();
+  }
+
   // INVARIANT 4: Exempt routes bypass enforcement
   if (isExemptRoute(req.path)) {
     return next();
