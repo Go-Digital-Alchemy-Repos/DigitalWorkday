@@ -1,19 +1,9 @@
-export * from './search/search.router';
-export * from './workspaces/workspaces.router';
-export * from './projects/projects.router';
-export * from './teams/teams.router';
-export * from './sections/sections.router';
-export * from './tasks/tasks.router';
-export * from './subtasks/subtasks.router';
-export * from './tags/tags.router';
-export * from './comments/comments.router';
-export * from './activity/activity.router';
-export * from './attachments/attachments.router';
-export * from './clients/clients.router';
-export * from './divisions/divisions.router';
-export * from './timer/timer.router';
-export * from './time-entries/time-entries.router';
-export * from './users/users.router';
-export * from './settings/settings.router';
-export * from './my-tasks/my-tasks.router';
-export * from './me/me.router';
+/**
+ * Legacy route-module barrel.
+ *
+ * Active API routes are registered through `server/http/mount.ts` and the
+ * domain routers under `server/http/domains/`. Keep this file as a migration
+ * marker for older docs/scripts that point at `server/routes/modules`, but do
+ * not add new exports here.
+ */
+export * from "./search/search.router";
