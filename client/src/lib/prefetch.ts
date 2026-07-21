@@ -3,7 +3,7 @@ type ConnectionInfo = {
   saveData?: boolean;
 };
 
-const MAX_PREFETCH_OPS = 6;
+const DEFAULT_PREFETCH_BUDGET_KB = 250;
 let prefetchFired = false;
 
 function isNetworkOk(): boolean {
@@ -24,19 +24,39 @@ function schedulePrefetch(fn: () => void): void {
   }
 }
 
-const TENANT_ROUTE_MODULES = [
-  () => import("@/routing/tenantRouter"),
-  () => import("@/pages/home"),
-  () => import("@/pages/my-tasks"),
-  () => import("@/pages/projects-dashboard"),
-  () => import("@/pages/chat"),
-  () => import("@/pages/my-time"),
+type PrefetchRouteModule = {
+  name: string;
+  estimatedChunkKb: number;
+  load: () => Promise<unknown>;
+};
+
+const TENANT_ROUTE_MODULES: PrefetchRouteModule[] = [
+  { name: "tenant-router", estimatedChunkKb: 110, load: () => import("@/routing/tenantRouter") },
+  { name: "home", estimatedChunkKb: 26, load: () => import("@/pages/home") },
+  { name: "my-tasks", estimatedChunkKb: 23, load: () => import("@/pages/my-tasks") },
+  { name: "projects-dashboard", estimatedChunkKb: 38, load: () => import("@/pages/projects-dashboard") },
+  { name: "my-time", estimatedChunkKb: 53, load: () => import("@/pages/my-time") },
+  { name: "chat", estimatedChunkKb: 125, load: () => import("@/pages/chat") },
 ];
 
+export function getTenantPrefetchRouteNames(budgetKb = DEFAULT_PREFETCH_BUDGET_KB): string[] {
+  let usedKb = 0;
+  const selected: string[] = [];
+
+  for (const module of TENANT_ROUTE_MODULES) {
+    if (usedKb + module.estimatedChunkKb > budgetKb) continue;
+    selected.push(module.name);
+    usedKb += module.estimatedChunkKb;
+  }
+
+  return selected;
+}
+
 function fireTenantPrefetch(): void {
-  const modules = TENANT_ROUTE_MODULES.slice(0, MAX_PREFETCH_OPS);
+  const selected = new Set(getTenantPrefetchRouteNames());
+  const modules = TENANT_ROUTE_MODULES.filter(module => selected.has(module.name));
   for (const load of modules) {
-    load().catch(() => {});
+    load.load().catch(() => {});
   }
 }
 
