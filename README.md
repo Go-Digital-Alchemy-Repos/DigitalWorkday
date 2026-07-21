@@ -1,6 +1,6 @@
-# MyWorkDay
+# Digital Workday
 
-An Asana-inspired project management application with comprehensive multi-tenancy support.
+A multi-tenant work management application for projects, tasks, client portal collaboration, approvals, support, time tracking, CRM, reporting, and team communication.
 
 ## Features
 
@@ -10,7 +10,7 @@ An Asana-inspired project management application with comprehensive multi-tenanc
 - **Time Tracking**: Timer-based tracking with reports and CSV export
 - **CRM**: Client management with contacts and project linking
 - **Real-time Updates**: Live collaboration via WebSocket
-- **File Attachments**: S3-based file storage with per-tenant configuration
+- **File Attachments**: Cloudflare R2/S3-compatible file storage with per-tenant configuration
 - **Role-Based Access**: Employee, admin, and super user roles
 
 ## Tech Stack
@@ -27,9 +27,9 @@ An Asana-inspired project management application with comprehensive multi-tenanc
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - PostgreSQL database
-- npm or yarn
+- npm 11.16.0
 
 ### Environment Setup
 
@@ -57,8 +57,16 @@ npm install
 
 ### Database Setup
 
+For local development, apply the schema to your local database:
+
 ```bash
-npx drizzle-kit push
+npm run db:push
+```
+
+For shared, staging, and production environments, prefer migrations and run:
+
+```bash
+npm run db:migrate
 ```
 
 ### Development
@@ -87,7 +95,8 @@ npm start
 │   │   └── lib/         # Utilities
 │   └── README.md
 ├── server/               # Express backend
-│   ├── routes/          # API route handlers
+│   ├── http/            # Versioned API router factory and domain routers
+│   ├── routes/          # Legacy/thin route aggregators and super-admin modules
 │   ├── middleware/      # Express middleware
 │   ├── services/        # Business logic
 │   ├── realtime/        # Socket.IO
@@ -96,11 +105,11 @@ npm start
 ├── shared/               # Shared code
 │   └── schema.ts        # Database schema & types
 ├── docs/                 # Documentation
-│   ├── AUDIT_CHECKLIST.md
-│   ├── ENDPOINTS.md
-│   ├── DEPLOYMENT_RAILWAY.md
-│   └── SECURITY_TENANCY.md
-└── design_guidelines.md  # UI/UX guidelines
+│   ├── 01-GETTING-STARTED/
+│   ├── 11-DEVELOPMENT/
+│   ├── 12-OPERATIONS/
+│   ├── 17-API-REGISTRY/
+│   └── review/
 ```
 
 ## Documentation
@@ -123,6 +132,10 @@ npm run test:http        # Run HTTP/supertest suites
 npm run test:db          # Run DB-backed suites
 npm run test:all         # Run the full Vitest suite
 npm run check            # Run the TypeScript typecheck
+npm run supply-chain:check
+npm run production:check
+npm run publishing:check
+npm run test:ci          # Full local release gate: supply chain, typecheck, tests, build
 ```
 
 The fast suite is intended to be the default local gate. DB-backed suites require a configured `DATABASE_URL` and local Postgres, and HTTP suites may be blocked in restricted sandboxes that do not allow local listeners.
@@ -188,19 +201,21 @@ See [Railway Deployment Guide](docs/RAILWAY_DEPLOYMENT_GUIDE.md) for complete se
 | `PORT` | Server port | `5000` |
 | `NODE_ENV` | Environment | `development` |
 | `TENANCY_ENFORCEMENT` | Tenant isolation | `off` |
-| `S3_BUCKET` | Global S3 bucket | - |
-| `S3_REGION` | AWS region | - |
-| `S3_ACCESS_KEY_ID` | AWS access key | - |
-| `S3_SECRET_ACCESS_KEY` | AWS secret key | - |
+| `CF_R2_ACCOUNT_ID` | Cloudflare R2 account ID | - |
+| `CF_R2_ACCESS_KEY_ID` | R2 access key | - |
+| `CF_R2_SECRET_ACCESS_KEY` | R2 secret key | - |
+| `CF_R2_BUCKET_NAME` | R2 bucket name | - |
+| `CF_R2_PUBLIC_URL` | Optional public R2 base URL | - |
 
 ## Documentation Standard
 
 When adding features, follow these documentation requirements:
 
-1. **Update FEATURE_INVENTORY.md** - Add new features/endpoints
+1. **Update FEATURE_INVENTORY.md** - Add new features/endpoints when the inventory changes
 2. **Update ENVIRONMENT_VARIABLES.md** - Add new env vars
-3. **Add module header comments** - Annotate key files with purpose and invariants
-4. **Update relevant README** - If changing setup or configuration
+3. **Update the API registry** - Use the super-admin docs sync flow when routes change
+4. **Add module header comments** - Annotate key files with purpose and invariants
+5. **Update relevant README** - If changing setup or configuration
 
 See `/docs/DOCUMENTATION_POLICY.md` for full guidelines and `/docs/DOCS_CHECKLIST.md` for verification.
 
@@ -212,7 +227,7 @@ Before major changes, create a recovery point:
 git tag pre-refinement-roadmap-YYYYMMDD
 ```
 
-For database backups, use Replit's checkpoint feature or manual `pg_dump`.
+For database backups, use Railway/Postgres provider backups or manual `pg_dump`.
 
 See `/docs/RECOVERY.md` for full rollback and restore procedures.
 

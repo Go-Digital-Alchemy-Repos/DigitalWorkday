@@ -1,10 +1,10 @@
-# MyWorkDay Documentation
+# Digital Workday Documentation
 
 **Status:** Current  
-**Last Updated:** January 2026  
-**Version:** Sprint 2 Complete
+**Last Updated:** July 2026  
+**Version:** Production pilot
 
-Welcome to the MyWorkDay documentation hub. MyWorkDay is a multi-tenant SaaS project management application with comprehensive features for project tracking, time management, client CRM, and team collaboration.
+Welcome to the Digital Workday documentation hub. Digital Workday is a multi-tenant SaaS work management application for project tracking, task operations, client portal collaboration, time management, CRM, reporting, and team communication.
 
 ---
 
@@ -18,7 +18,7 @@ Core system design and multi-tenancy fundamentals.
 | [System Overview](./architecture/SYSTEM_OVERVIEW.md) | Tech stack, high-level architecture, component relationships |
 | [Tenancy Model](./architecture/TENANCY_MODEL.md) | tenant_id invariants, tenant-wide visibility, workspace role |
 | [Effective Tenant Context](./architecture/EFFECTIVE_TENANT_CONTEXT.md) | "Tenant Context Loaded" gate, context propagation |
-| [Database Schema](./architecture/DATABASE_SCHEMA.md) | Entity relationships, tenant-owned tables |
+| [Database Schema](./08-DATABASE/README.md) | Schema, migrations, indexes, and integrity guidance |
 
 ### 2. Authentication & Authorization
 User authentication flows and permission models.
@@ -73,7 +73,7 @@ External service integrations.
 | Document | Description |
 |----------|-------------|
 | [Integrations Overview](./integrations/INTEGRATIONS_OVERVIEW.md) | Available integrations and configuration |
-| [Mailgun Email](./integrations/MAILGUN.md) | Email sending configuration |
+| [Email Observability](./EMAIL_OBSERVABILITY.md) | Email outbox and delivery diagnostics |
 | [Stripe Payments](./integrations/STRIPE.md) | Payment processing setup |
 
 ### 8. Performance & Scaling
@@ -82,7 +82,7 @@ Performance optimization and monitoring.
 | Document | Description |
 |----------|-------------|
 | [Performance Notes](./performance/PERFORMANCE_NOTES.md) | N+1 fixes, query optimization |
-| [Indexing Strategy](./performance/INDEXING_STRATEGY.md) | Database indexes for tenant-scoped queries |
+| [Database Indexes](./performance/db-indexes.md) | Database indexes for tenant-scoped queries |
 
 ### 9. Super Admin / Tenant Admin Operations
 Administrative functionality guides.
@@ -91,7 +91,7 @@ Administrative functionality guides.
 |----------|-------------|
 | [Super Admin Guide](./admin/SUPER_ADMIN_GUIDE.md) | Platform administration, tenant management |
 | [Tenant Admin Guide](./admin/TENANT_ADMIN_GUIDE.md) | Tenant-level administration |
-| [System Health](./admin/SYSTEM_HEALTH.md) | Health checks, diagnostics |
+| [System Status](./SUPER_SYSTEM_STATUS.md) | Health checks, diagnostics, and super-admin status |
 | [Tenancy Remediation](./admin/TENANCY_REMEDIATION.md) | Data health tools, backfill operations |
 
 ### 10. Development & Contribution Guide
@@ -99,9 +99,9 @@ Developer onboarding and coding standards.
 
 | Document | Description |
 |----------|-------------|
-| [Quick Start](./dev/QUICK_START.md) | Get running in 5 minutes |
+| [Getting Started](./01-GETTING-STARTED/README.md) | Local setup and first run |
 | [Environment Variables](./dev/ENVIRONMENT_VARIABLES.md) | Required configuration |
-| [Adding Features](./dev/ADDING_FEATURES.md) | Feature development workflow |
+| [Development Checklist](./dev/DEVELOPMENT_CHECKLIST.md) | Feature development workflow and verification |
 | [Modular Architecture](./dev/MODULAR_ARCHITECTURE.md) | Feature-based code organization |
 | [Error Handling](./dev/ERROR_HANDLING.md) | Error logging, request correlation |
 | [Testing Guide](./dev/TESTING.md) | Unit, integration, E2E testing |
@@ -112,20 +112,20 @@ Developer onboarding and coding standards.
 ## Quick Start Paths
 
 ### For New Developers
-1. [Quick Start](./dev/QUICK_START.md) - Get running in 5 minutes
+1. [Getting Started](./01-GETTING-STARTED/README.md) - Get running locally
 2. [Environment Variables](./dev/ENVIRONMENT_VARIABLES.md) - Required configuration
 3. [System Overview](./architecture/SYSTEM_OVERVIEW.md) - Understand the architecture
 4. [Tenant Data Visibility](./security/TENANT_DATA_VISIBILITY.md) - **Required reading** for all developers
 
 ### For Feature Development
 1. [Modular Architecture](./dev/MODULAR_ARCHITECTURE.md) - Code organization
-2. [Adding Features](./dev/ADDING_FEATURES.md) - Development workflow
+2. [Development Checklist](./dev/DEVELOPMENT_CHECKLIST.md) - Development workflow
 3. [Development Checklist](./dev/DEVELOPMENT_CHECKLIST.md) - **Use this for every PR**
 4. [Security Checklist](./security/SECURITY_CHECKLIST.md) - Security verification
 
 ### For Deployment
 1. [Deployment Guide](./deployment/DEPLOYMENT.md) - Production deployment
-2. [Environment Setup](./deployment/ENVIRONMENT_SETUP.md) - Production configuration
+2. [Railway Deployment Checklist](./RAILWAY_DEPLOYMENT_CHECKLIST.md) - Production configuration
 
 ---
 
@@ -135,7 +135,7 @@ Developer onboarding and coding standards.
 |-------|------------|
 | Frontend | React 18, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query |
 | Backend | Express.js, TypeScript, Drizzle ORM |
-| Database | PostgreSQL (Neon) |
+| Database | PostgreSQL |
 | Real-time | Socket.IO |
 | Storage | Cloudflare R2 (S3-compatible) |
 | Deployment | Railway |

@@ -18,6 +18,7 @@
     "test:db": "node script/run-vitest-suite.mjs db",
     "test:all": "vitest run",
     "publishing:check": "node server/scripts/publishing-readiness-check.cjs",
+    "docs:check": "node script/docs-entrypoint-check.cjs",
     "production:check": "node server/scripts/production-readiness-check.cjs",
     "slo:check": "node server/scripts/slo-check.cjs",
     "supply-chain:check": "node script/supply-chain-check.mjs",
