@@ -80,10 +80,18 @@ function redirectToLoginWithError(res: Response, message: string): void {
   res.redirect(`/login?error=${encodeURIComponent(message)}`);
 }
 
-async function resolveWorkspaceIdForLogin(user: Express.User): Promise<string | undefined> {
+export async function resolveWorkspaceIdForLogin(user: Express.User): Promise<string | undefined> {
   const isSuperUser = user.role === UserRole.SUPER_USER;
   const userWorkspaces = await storage.getWorkspacesByUser(user.id);
   const workspaceId = userWorkspaces.length > 0 ? userWorkspaces[0].id : undefined;
+
+  if (user.role === UserRole.CLIENT && !workspaceId) {
+    const clientAccess = await storage.getClientsForUser(user.id);
+    const portalWorkspaceId = clientAccess.find(({ access }) => !!access.workspaceId)?.access.workspaceId;
+    if (portalWorkspaceId) {
+      return portalWorkspaceId;
+    }
+  }
 
   if (!isSuperUser && !workspaceId) {
     throw new Error("No workspace access. Please contact your administrator.");
