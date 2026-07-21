@@ -25,7 +25,7 @@ DigitalWorkday is a Node/Express and React/Vite application using npm `11.16.0`,
 3. `deploy-smoke.cjs` verifies required secrets and build artifacts.
 4. `npm run start` serves `dist/index.cjs`, exposes `/health`, and uses PostgreSQL through `DATABASE_URL`.
 
-Areas inspected: `package.json`, `package-lock.json`, `.github/workflows/ci.yml`, `railway.toml`, `Dockerfile`, `docker-compose.yml`, `server/scripts/deploy-smoke.cjs`, migration scripts, SLO smoke checks, rollback/incident docs, Railway deployment docs, environment docs, and prior review artifacts in `docs/review`.
+Areas inspected: `package.json`, `package-lock.json`, `.github/workflows/ci.yml`, `railway.toml`, `deploy/Dockerfile.reference`, `docker-compose.yml`, `server/scripts/deploy-smoke.cjs`, migration scripts, SLO smoke checks, rollback/incident docs, Railway deployment docs, environment docs, and prior review artifacts in `docs/review`.
 
 ## Findings
 

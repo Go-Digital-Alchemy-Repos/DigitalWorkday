@@ -23,7 +23,7 @@ const REQUIRED_FILES = [
   "package-lock.json",
   "railway.toml",
   ".github/workflows/ci.yml",
-  "Dockerfile",
+  "deploy/Dockerfile.reference",
   "docker-compose.yml",
   "server/scripts/deploy-smoke.cjs",
   "server/scripts/migrate.ts",
@@ -149,7 +149,7 @@ function runProductionReadinessCheck(root = process.cwd()) {
     "Require all production secrets and build artifacts before the app process starts.",
   ));
 
-  const dockerfile = fileExists(root, "Dockerfile") ? readFile(root, "Dockerfile") : "";
+  const dockerfile = fileExists(root, "deploy/Dockerfile.reference") ? readFile(root, "deploy/Dockerfile.reference") : "";
   checks.push(createCheck(
     "PRD-006",
     "warning",
@@ -159,7 +159,7 @@ function runProductionReadinessCheck(root = process.cwd()) {
       "USER node",
       "HEALTHCHECK",
     ]),
-    "Dockerfile",
+    "deploy/Dockerfile.reference",
     "runtime image, production install, non-root user, and healthcheck checked",
     "Keep container runtime pinned, non-root, and health-probed.",
   ));
@@ -167,13 +167,13 @@ function runProductionReadinessCheck(root = process.cwd()) {
   checks.push(createCheck(
     "PRD-007",
     "critical",
-    containsAll(dockerfile, [
+    !fileExists(root, "Dockerfile") && containsAll(dockerfile, [
       "ENV PORT=8080",
       "EXPOSE 8080",
     ]) && !dockerfile.includes("ENV PORT=5000"),
-    "Dockerfile",
-    "Railway container port alignment checked",
-    "Keep the Docker runtime aligned with Railway service domains, which target port 8080.",
+    "deploy/Dockerfile.reference",
+    "Railway Railpack path and reference container port alignment checked",
+    "Keep root Dockerfile absent so Railway uses Railpack; keep the reference Docker runtime aligned with Railway port 8080.",
   ));
 
   const failed = checks.filter((check) => !check.ok);

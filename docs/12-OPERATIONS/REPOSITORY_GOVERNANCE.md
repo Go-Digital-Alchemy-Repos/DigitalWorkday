@@ -39,7 +39,7 @@ No GitHub `CODEOWNERS` file is active yet because this workspace does not curren
 | `shared/schema.ts`, `migrations/`, `server/scripts/migrate.ts` | Schema compatibility, migration safety, rollback |
 | `client/src/pages/`, `client/src/components/`, `client/src/lib/queryClient.ts` | User workflows, React Query keys, accessibility, polish |
 | `server/services/uploads/`, `server/s3.ts`, `server/http/domains/*documents*` | File isolation, upload validation, presigned URL safety |
-| `.github/`, `Dockerfile`, `railway.toml`, `server/scripts/deploy-smoke.cjs` | CI, deploy safety, Railway runtime |
+| `.github/`, `deploy/Dockerfile.reference`, `railway.toml`, `server/scripts/deploy-smoke.cjs` | CI, deploy safety, Railway runtime |
 | `docs/`, `README.md`, `.env.example` | Developer onboarding, operational accuracy |
 | `server/services/ai/`, `server/http/domains/ai.router.ts` | AI governance, model allowlists, prompt/data exposure |
 
@@ -73,4 +73,3 @@ The static repository governance check verifies that the key governance entrypoi
 ```bash
 npm run governance:check
 ```
-

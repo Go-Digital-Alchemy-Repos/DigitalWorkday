@@ -19,7 +19,7 @@ Most important risks:
 ## System Map
 
 Cost-sensitive surfaces inspected:
-- Compute and startup: `railway.toml`, `Dockerfile`, `script/build.ts`, `server/scripts/deploy-smoke.cjs`.
+- Compute and startup: `railway.toml`, `deploy/Dockerfile.reference`, `script/build.ts`, `server/scripts/deploy-smoke.cjs`.
 - Database: `server/db.ts`, `server/auth.ts`, `server/dbPoolConfig.ts`, `/readyz`, report pagination helpers.
 - Network egress/static assets: `server/static.ts`, Vite build output naming from `npm run build`.
 - Storage/media: `server/services/uploads/s3UploadService.ts`, `server/services/uploads/imageProcessor.ts`, `server/services/chatExport.service.ts`.

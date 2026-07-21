@@ -6,7 +6,7 @@ Overall score: 7/10
 
 Release recommendation: Approve with follow-up.
 
-DigitalWorkday's Railway runtime posture is solid for the current pilot: the service binds to `0.0.0.0`, honors `PORT`, exposes public health/readiness endpoints, performs startup schema readiness checks, runs deployment smoke checks before start, and handles SIGTERM/SIGINT graceful shutdown. The main verified defect was the local container path: `docker-compose.yml` referenced a `Dockerfile` that did not exist, so compose-based runtime validation could not build the application container. This pass restores that path with a production-oriented, non-root Dockerfile and compose defaults that satisfy production startup validation.
+DigitalWorkday's Railway runtime posture is solid for the current pilot: the service binds to `0.0.0.0`, honors `PORT`, exposes public health/readiness endpoints, performs startup schema readiness checks, runs deployment smoke checks before start, and handles SIGTERM/SIGINT graceful shutdown. Railway production should remain on Railpack; the portable Docker runtime is kept at `deploy/Dockerfile.reference` so a root Dockerfile does not override Railway's builder.
 
 Strongest aspects:
 
@@ -17,7 +17,7 @@ Strongest aspects:
 Most important risks:
 
 - Docker image build could not be executed on this workstation because the Docker daemon was not running.
-- Railway still uses Railpack rather than this Dockerfile, so Docker runtime parity is a local/portable validation path, not the production deployment mechanism.
+- Railway uses Railpack rather than the reference Dockerfile, so Docker runtime parity is a local/portable validation path, not the production deployment mechanism.
 - The app performs meaningful startup/schema work, so production rollout safety still depends on `/readyz`, deploy smoke, and SLO checks rather than `/health` alone.
 
 ## System Map
@@ -25,7 +25,7 @@ Most important risks:
 - Runtime: Node/Express server bundled by esbuild plus Vite-built React assets.
 - Package manager: npm pinned in `package.json` as `npm@11.16.0`.
 - Railway deployment: `railway.toml` with Railpack, `npm run build`, `node server/scripts/deploy-smoke.cjs && npm run start`, `/health` healthcheck.
-- Local containers: `docker-compose.yml` with PostgreSQL 16 Alpine plus app build from `Dockerfile`.
+- Local containers: `docker-compose.yml` with PostgreSQL 16 Alpine plus app build from `deploy/Dockerfile.reference`.
 - Persistence: PostgreSQL via Drizzle ORM and committed migrations.
 - Health: `/health` returns liveness plus readiness/version body; `/readyz` validates DB readiness.
 - Shutdown: `server/index.ts` handles SIGTERM/SIGINT with a 10s forced-exit guard.
@@ -33,7 +33,7 @@ Most important risks:
 
 Areas inspected:
 
-- `Dockerfile`
+- `deploy/Dockerfile.reference`
 - `.dockerignore`
 - `docker-compose.yml`
 - `railway.toml`
@@ -53,15 +53,15 @@ Areas inspected:
 
 | ID | Severity | Confidence | Location | Evidence | Why It Matters | Recommended Remediation | Effort | Risk |
 |----|----------|------------|----------|----------|-----------------|-------------------------|--------|------|
-| CTR-001 | High | Confirmed | `docker-compose.yml`, repository root | `docker-compose.yml` referenced `dockerfile: Dockerfile`; no `Dockerfile` existed before remediation. | Local container runtime validation was broken and could not reproduce production-like app startup. | Add a production-oriented Dockerfile aligned with the existing npm/build/start contract. | S | Low |
+| CTR-001 | High | Confirmed | `docker-compose.yml`, `deploy/Dockerfile.reference` | `docker-compose.yml` now references a non-root Dockerfile so Railway can keep using Railpack while local compose can build the application container. | Local container runtime validation remains available without changing production builder selection. | Keep the reference Dockerfile outside the repository root unless the team intentionally switches Railway to Dockerfile deploys. | S | Low |
 | CTR-002 | Medium | Confirmed | `docker-compose.yml` | App container set `NODE_ENV=production` but did not provide `SESSION_SECRET` or `APP_ENCRYPTION_KEY`. | Production startup paths require session and encryption configuration; missing defaults make local compose brittle. | Add local-only compose defaults for required secrets and schema startup flags. | XS | Low |
 | CTR-003 | Medium | Confirmed | `.dockerignore` | Ignore file omitted common heavy/unneeded context paths such as `.github`, `attached_assets`, `coverage`, logs, and generic `.env.*`. | Bloated or sensitive build contexts slow builds and can accidentally include local-only artifacts. | Tighten `.dockerignore` while preserving required package, source, and migration inputs. | XS | Low |
 | CTR-004 | Low | Confirmed | `server/index.ts` | Graceful shutdown exists with a 10s forced exit and closes jobs, HTTP, Socket.IO, and DB pool. | This is positive operational evidence; no code change needed. | Keep shutdown path covered in future runtime tests. | N/A | N/A |
-| CTR-005 | Low | Plausible | `railway.toml`, Dockerfile | Railway uses Railpack, while Dockerfile is for local/portable runtime validation. | Production and Docker images can drift unless both are checked periodically. | Treat Dockerfile as secondary runtime path unless the team explicitly switches Railway to Dockerfile deploys. | S | Moderate |
+| CTR-005 | Low | Plausible | `railway.toml`, `deploy/Dockerfile.reference` | Railway uses Railpack, while the reference Dockerfile is for local/portable runtime validation. | Production and Docker images can drift unless both are checked periodically. | Treat the reference Dockerfile as secondary runtime path unless the team explicitly switches Railway to Dockerfile deploys. | S | Moderate |
 
 ## Changes Made
 
-- Added `Dockerfile`.
+- Added `deploy/Dockerfile.reference`.
   - Uses Node `20.19` and pinned `npm@11.16.0`.
   - Builds with full dependencies in a build stage.
   - Installs production dependencies only in runtime stage.
@@ -96,7 +96,7 @@ Verification pending before deployment:
 
 ## Second Pass
 
-No Critical findings were identified. The verified High finding in scope, the missing Dockerfile referenced by compose, has been remediated. The remaining risks are operational: run a real Docker build when Docker Desktop/daemon is available, and decide later whether Docker should become the production deployment strategy instead of Railway Railpack.
+No Critical findings were identified. The verified High finding in scope, the missing Dockerfile referenced by compose, has been remediated without placing a Dockerfile at the repository root. The remaining risks are operational: run a real Docker build when Docker Desktop/daemon is available, and decide later whether Docker should become the production deployment strategy instead of Railway Railpack.
 
 ## Residual Risk and Roadmap
 
@@ -110,7 +110,7 @@ Near term:
 
 - Add Docker build validation to CI if Docker becomes a supported release artifact.
 - Add a short compose runbook for local production-like startup.
-- Periodically compare Railway Railpack runtime assumptions with Dockerfile assumptions.
+- Periodically compare Railway Railpack runtime assumptions with reference Dockerfile assumptions.
 
 Long term:
 
@@ -120,13 +120,13 @@ Long term:
 
 Premature:
 
-- Do not switch production to Dockerfile solely because a Dockerfile now exists.
+- Do not add a root `Dockerfile` unless production is intentionally switching away from Railpack.
 - Do not add container orchestration complexity while Railway Railpack is meeting deployment needs.
 - Do not hard-code CPU/memory limits in repository config until Railway metrics indicate a need.
 
 ## Final Scorecard
 
-- Container build definition: 7/10. Dockerfile now exists, but image build could not be executed locally.
+- Container build definition: 7/10. `deploy/Dockerfile.reference` now exists, but image build could not be executed locally.
 - Runtime startup: 8/10. Health endpoints, deploy smoke, schema readiness, and early bind are present.
 - Graceful shutdown: 8/10. SIGTERM/SIGINT drain major resources with timeout.
 - Environment validation: 8/10. Critical production env vars are validated; docs still have some older naming drift.

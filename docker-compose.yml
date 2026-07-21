@@ -20,7 +20,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deploy/Dockerfile.reference
     container_name: dasana-app
     restart: unless-stopped
     ports:
