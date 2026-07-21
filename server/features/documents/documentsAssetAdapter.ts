@@ -14,6 +14,10 @@ import { sanitizeFilename, isFilenameUnsafe } from "../../http/middleware/upload
 import { AppError } from "../../lib/errors";
 import crypto from "crypto";
 
+function assetUploadKeyPrefix(tenantId: string, clientId: string) {
+  return `assets/${tenantId}/${clientId}/`;
+}
+
 interface DocumentsFolderShape {
   id: string;
   name: string;
@@ -328,6 +332,10 @@ export const documentsAssetAdapter = {
       displayName?: string;
     }
   ) {
+    if (!data.r2Key.startsWith(assetUploadKeyPrefix(tenantId, clientId))) {
+      throw AppError.badRequest("Invalid upload key");
+    }
+
     const { asset, dedupe } = await assetService.createAsset({
       tenantId,
       clientId,

@@ -32,6 +32,7 @@ import {
 } from "@shared/schema";
 import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
+import { buildAppUrl } from "../lib/appLinks";
 
 const router = createApiRouter({ policy: "authTenant" });
 
@@ -543,9 +544,7 @@ router.post("/users/:id/generate-reset-link", requireAdmin, async (req, res) => 
       createdByUserId: currentUser.id,
     });
 
-    const appPublicUrl = process.env.APP_PUBLIC_URL;
-    const baseUrl = appPublicUrl || `${req.protocol}://${req.get("host")}`;
-    const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+    const resetUrl = buildAppUrl(`/auth/reset-password?token=${token}`, req);
 
     console.log(`[routes] Tenant admin ${currentUser.email} generated reset link for user ${targetUser.email}`);
 
@@ -677,7 +676,7 @@ router.post("/invitations/for-user", requireAdmin, async (req, res) => {
       status: "pending",
     });
 
-    const inviteLink = `${req.protocol}://${req.get("host")}/accept-invite/${token}`;
+    const inviteLink = buildAppUrl(`/accept-invite/${token}`, req);
 
     res.status(201).json({
       ...invitation,

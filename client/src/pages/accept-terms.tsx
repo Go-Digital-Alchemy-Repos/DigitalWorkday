@@ -9,6 +9,7 @@ import { Loader2, FileText, CheckCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RichTextRenderer } from "@/components/richtext/RichTextRenderer";
 
 interface AgreementStatus {
   tenantId: string | null;
@@ -159,10 +160,10 @@ export default function AcceptTermsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-            <div 
-              className="prose prose-sm dark:prose-invert max-w-none"
+            <RichTextRenderer
+              value={agreement.body}
+              className="max-w-none"
               data-testid="text-agreement-body"
-              dangerouslySetInnerHTML={{ __html: agreement.body }}
             />
           </ScrollArea>
 

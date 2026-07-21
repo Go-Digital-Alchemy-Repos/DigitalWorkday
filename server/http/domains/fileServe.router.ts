@@ -11,7 +11,40 @@ const router = Router();
 
 const SERVE_CACHE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-const ALLOWED_PREFIXES = ["tenants/", "system/", "global/"];
+const PUBLIC_PREFIXES = ["system/", "global/"];
+const TENANT_KEY_PATTERN = /^tenants\/([^/]+)\//;
+const PUBLIC_TENANT_ASSET_PATTERN = /^tenants\/[^/]+\/branding\/(?:logo|icon|favicon)\//;
+
+function getEffectiveTenantId(req: Request): string | null {
+  return req.tenant?.effectiveTenantId || (req.user as any)?.tenantId || null;
+}
+
+function isAuthenticated(req: Request): boolean {
+  return typeof req.isAuthenticated === "function" && req.isAuthenticated();
+}
+
+function authorizeFileKey(req: Request, key: string): { ok: true; tenantId: string | null } | { ok: false; status: number; error: string } {
+  if (PUBLIC_PREFIXES.some(prefix => key.startsWith(prefix)) || PUBLIC_TENANT_ASSET_PATTERN.test(key)) {
+    return { ok: true, tenantId: null };
+  }
+
+  const tenantMatch = TENANT_KEY_PATTERN.exec(key);
+  if (!tenantMatch) {
+    return { ok: false, status: 400, error: "Invalid file key" };
+  }
+
+  if (!isAuthenticated(req)) {
+    return { ok: false, status: 401, error: "Authentication required" };
+  }
+
+  const keyTenantId = tenantMatch[1];
+  const effectiveTenantId = getEffectiveTenantId(req);
+  if (!effectiveTenantId || effectiveTenantId !== keyTenantId) {
+    return { ok: false, status: 403, error: "File access denied" };
+  }
+
+  return { ok: true, tenantId: effectiveTenantId };
+}
 
 router.get("/*", async (req: Request, res: Response) => {
   try {
@@ -26,14 +59,12 @@ router.get("/*", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Invalid file key" });
     }
 
-    if (!ALLOWED_PREFIXES.some(p => decodedKey.startsWith(p))) {
-      return res.status(400).json({ error: "Invalid file key" });
+    const authorization = authorizeFileKey(req, decodedKey);
+    if (!authorization.ok) {
+      return res.status(authorization.status).json({ error: authorization.error });
     }
 
-    const tenantId = (req.user as any)?.tenantId ||
-      req.tenant?.effectiveTenantId || null;
-
-    const storageProvider = await getStorageProvider(tenantId);
+    const storageProvider = await getStorageProvider(authorization.tenantId);
     const client = createS3ClientFromConfig(storageProvider.config);
 
     const command = new GetObjectCommand({
@@ -52,6 +83,10 @@ router.get("/*", async (req: Request, res: Response) => {
 
     res.set("Content-Type", contentType);
     res.set("Cache-Control", `public, max-age=${SERVE_CACHE_MAX_AGE}, immutable`);
+    res.set("X-Content-Type-Options", "nosniff");
+    if (contentType === "image/svg+xml") {
+      res.set("Content-Security-Policy", "sandbox; script-src 'none'");
+    }
     if (response.ContentLength) {
       res.set("Content-Length", String(response.ContentLength));
     }

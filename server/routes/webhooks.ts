@@ -8,6 +8,12 @@ import {
 
 const router = createApiRouter({ policy: "public", skipEnvelope: true });
 
+function getRawWebhookBody(req: any) {
+  if (Buffer.isBuffer(req.body)) return req.body;
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody;
+  return JSON.stringify(req.body ?? {});
+}
+
 function errorEnvelope(
   code: string,
   message: string,
@@ -72,7 +78,7 @@ router.post("/stripe", raw({ type: "application/json" }), async (req, res) => {
     let event: any;
     try {
       event = stripe.webhooks.constructEvent(
-        req.body,
+        getRawWebhookBody(req),
         signature as string,
         webhookSecret
       );

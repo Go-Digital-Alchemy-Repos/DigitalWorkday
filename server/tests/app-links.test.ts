@@ -4,6 +4,7 @@ import { buildAppUrl, buildChatUrl, buildTaskUrl, getAppBaseUrl } from "../lib/a
 
 const originalAppPublicUrl = process.env.APP_PUBLIC_URL;
 const originalAppUrl = process.env.APP_URL;
+const originalAppAllowedHosts = process.env.APP_ALLOWED_HOSTS;
 
 afterEach(() => {
   if (originalAppPublicUrl === undefined) {
@@ -16,6 +17,12 @@ afterEach(() => {
     delete process.env.APP_URL;
   } else {
     process.env.APP_URL = originalAppUrl;
+  }
+
+  if (originalAppAllowedHosts === undefined) {
+    delete process.env.APP_ALLOWED_HOSTS;
+  } else {
+    process.env.APP_ALLOWED_HOSTS = originalAppAllowedHosts;
   }
 });
 
@@ -45,5 +52,29 @@ describe("app link helpers", () => {
     expect(buildChatUrl({ type: "dm", conversationId: "thread-1", messageId: "message-2" }))
       .toBe("https://digitalworkday.ai/chat?c=dm%3Athread-1&message=message-2");
   });
-});
 
+  it("does not trust arbitrary request hosts for external links", () => {
+    delete process.env.APP_PUBLIC_URL;
+    delete process.env.APP_URL;
+    delete process.env.APP_ALLOWED_HOSTS;
+    const req = {
+      protocol: "https",
+      get: (header: string) => header.toLowerCase() === "host" ? "evil.example" : undefined,
+    };
+
+    expect(buildAppUrl("/auth/reset-password?token=secret", req as any))
+      .toBe("http://localhost:5000/auth/reset-password?token=secret");
+  });
+
+  it("allows explicitly configured request hosts", () => {
+    delete process.env.APP_PUBLIC_URL;
+    delete process.env.APP_URL;
+    process.env.APP_ALLOWED_HOSTS = "preview.example.com";
+    const req = {
+      protocol: "https",
+      get: (header: string) => header.toLowerCase() === "host" ? "preview.example.com" : undefined,
+    };
+
+    expect(buildAppUrl("/reports", req as any)).toBe("https://preview.example.com/reports");
+  });
+});

@@ -60,6 +60,10 @@ function generateDocStorageKey(tenantId: string, fileName: string): string {
   return `tenants/${tenantId}/default-docs/${year}/${month}/${uuid}-${safe}`;
 }
 
+function defaultDocStorageKeyPrefix(tenantId: string): string {
+  return `tenants/${tenantId}/default-docs/`;
+}
+
 router.get("/tenants/:tenantId/default-docs/tree", requireAdminOrSuper, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
@@ -197,6 +201,9 @@ router.post("/tenants/:tenantId/default-docs/documents/upload/complete", require
       return res.status(403).json({ error: "Access denied to this tenant" });
     }
     const data = completeUploadSchema.parse(req.body);
+    if (!data.storageKey.startsWith(defaultDocStorageKeyPrefix(tenantId))) {
+      return res.status(400).json({ error: "Invalid upload key" });
+    }
     const userId = getCurrentUserId(req);
     const doc = await tenantDefaultDocsRepo.createDocument({
       tenantId,

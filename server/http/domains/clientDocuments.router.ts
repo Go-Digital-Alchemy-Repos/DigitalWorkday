@@ -41,6 +41,10 @@ function getUserId(req: Request): string {
   return userId;
 }
 
+function clientDocumentStorageKeyPrefix(tenantId: string, clientId: string): string {
+  return `tenants/${tenantId}/clients/${clientId}/documents/`;
+}
+
 async function verifyClientAccess(clientId: string, tenantId: string) {
   const [client] = await db.select({ id: clients.id })
     .from(clients)
@@ -493,6 +497,10 @@ router.post(
       if (useAssetAdapter()) {
         const result = await documentsAssetAdapter.completeUpload(tenantId, clientId, userId, data);
         return res.status(201).json(result);
+      }
+
+      if (!data.r2Key.startsWith(clientDocumentStorageKeyPrefix(tenantId, clientId))) {
+        return sendError(res, AppError.badRequest("Invalid upload key"), req);
       }
 
       if (data.folderId) {

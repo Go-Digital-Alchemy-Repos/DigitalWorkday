@@ -610,7 +610,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                         </span>
                       </div>
                       <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        <RichTextViewer content={convertBodyToHtml(note.body)} />
+                        <RichTextViewer content={note.body} />
                       </div>
                     </div>
                   </div>
@@ -709,7 +709,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                             {note.updatedAt !== note.createdAt && <span> (edited)</span>}
                           </p>
                           <div className="mt-2 text-sm">
-                            <RichTextViewer content={convertBodyToHtml(note.body)} />
+                            <RichTextViewer content={note.body} />
                           </div>
                         </div>
                       </div>
@@ -966,7 +966,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                 </Badge>
               </div>
               <div className="text-sm">
-                <RichTextViewer content={convertBodyToHtml(versionHistoryData.currentNote.body)} />
+                <RichTextViewer content={versionHistoryData.currentNote.body} />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Last updated {formatDistanceToNow(new Date(versionHistoryData.currentNote.updatedAt), { addSuffix: true })}
@@ -1017,7 +1017,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                         <div className="mt-3 pt-3 border-t">
                           <Badge variant="outline" className="mb-2" data-testid={`project-badge-version-category-${version.id}`}>{version.category}</Badge>
                           <div className="text-sm">
-                            <RichTextViewer content={convertBodyToHtml(version.body)} />
+                            <RichTextViewer content={version.body} />
                           </div>
                         </div>
                       )}

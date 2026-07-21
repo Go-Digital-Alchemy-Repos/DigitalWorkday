@@ -189,12 +189,12 @@ setupPasswordResetEndpoints(app);
 // Public QuickBooks app URLs required by Intuit app settings.
 app.use("/quickbooks", publicQuickBooksRouter);
 
-// Public file serving proxy (before auth middleware, no auth required)
-import fileServeRouter from "./http/domains/fileServe.router";
-app.use("/api/v1/files/serve", fileServeRouter);
-
 // Setup tenant context middleware (must be after auth)
 app.use(tenantContextMiddleware);
+
+// File serving proxy: public for system/global/branding assets, tenant-guarded for private tenant files.
+import fileServeRouter from "./http/domains/fileServe.router";
+app.use("/api/v1/files/serve", fileServeRouter);
 
 // Request logging middleware (after auth and tenant context for user/tenant info)
 app.use(requestLogger);

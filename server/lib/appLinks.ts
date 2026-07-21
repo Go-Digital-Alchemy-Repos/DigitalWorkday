@@ -10,6 +10,29 @@ function firstHeaderValue(value: string | undefined): string | undefined {
   return value?.split(",")[0]?.trim() || undefined;
 }
 
+const DEFAULT_TRUSTED_HOSTS = [
+  "digitalworkday.ai",
+  "www.digitalworkday.ai",
+  "digitalworkday-staging.up.railway.app",
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+];
+
+function stripPort(host: string): string {
+  return host.trim().toLowerCase().replace(/:\d+$/, "");
+}
+
+function isTrustedHost(host: string): boolean {
+  const hostName = stripPort(host);
+  const configuredHosts = process.env.APP_ALLOWED_HOSTS
+    ?.split(",")
+    .map(host => stripPort(host))
+    .filter(Boolean);
+  const trustedHosts = configuredHosts?.length ? configuredHosts : DEFAULT_TRUSTED_HOSTS;
+  return trustedHosts.some(trusted => hostName === trusted);
+}
+
 export function getAppBaseUrl(req?: RequestLike): string {
   const configuredUrl = process.env.APP_PUBLIC_URL || process.env.APP_URL;
   if (configuredUrl?.trim()) {
@@ -19,7 +42,7 @@ export function getAppBaseUrl(req?: RequestLike): string {
   const forwardedProto = firstHeaderValue(req?.get("x-forwarded-proto"));
   const forwardedHost = firstHeaderValue(req?.get("x-forwarded-host"));
   const host = forwardedHost || req?.get("host");
-  if (host) {
+  if (host && isTrustedHost(host)) {
     return trimTrailingSlash(`${forwardedProto || req?.protocol || "http"}://${host}`);
   }
 
@@ -72,4 +95,3 @@ export function buildChatUrl(
   if (options.messageId) params.set("message", options.messageId);
   return buildAppUrl(`/chat?${params.toString()}`, req);
 }
-

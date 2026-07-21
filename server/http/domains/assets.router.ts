@@ -324,6 +324,10 @@ const completeSchema = z.object({
   checksum: z.string().optional(),
 });
 
+function assetUploadKeyPrefix(tenantId: string, clientId: string) {
+  return `assets/${tenantId}/${clientId}/`;
+}
+
 router.post("/assets/upload/complete", async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -331,6 +335,9 @@ router.post("/assets/upload/complete", async (req: Request, res: Response) => {
 
     const data = completeSchema.parse(req.body);
     await validateClientBelongsToTenant(data.clientId, tenantId);
+    if (!data.r2Key.startsWith(assetUploadKeyPrefix(tenantId, data.clientId))) {
+      return res.status(400).json({ error: "Invalid upload key" });
+    }
 
     const userId = getCurrentUserId(req);
 

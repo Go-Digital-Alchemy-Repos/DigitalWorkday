@@ -30,6 +30,7 @@ import type { Express, Request, RequestHandler, Response } from "express";
 import connectPgSimple from "connect-pg-simple";
 import { Pool } from "pg";
 import { isGoogleEmailAllowed } from "./auth/googleDomain";
+import { buildAppUrl } from "./lib/appLinks";
 import { 
   loginRateLimiter, 
   bootstrapRateLimiter, 
@@ -1461,8 +1462,7 @@ export function setupPasswordResetEndpoints(app: Express): void {
       });
       
       // Generate reset URL
-      const appPublicUrl = process.env.APP_PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
-      const resetUrl = `${appPublicUrl}/auth/reset-password?token=${token}`;
+      const resetUrl = buildAppUrl(`/auth/reset-password?token=${token}`, req);
       
       // Log for audit
       console.log(JSON.stringify({
