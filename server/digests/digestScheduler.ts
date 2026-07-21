@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { sendDigestToRecipients } from "./generateOpsDigest";
+import { createSingleFlightRunner } from "../lib/singleFlight";
 
 
 async function dbRows<T>(
@@ -70,10 +71,14 @@ async function tick(): Promise<void> {
   }
 }
 
+const runTick = createSingleFlightRunner(tick, {
+  onSkip: () => console.warn("Digest scheduler: previous digest run still running, skipping overlapping tick"),
+});
+
 export function startDigestScheduler(): void {
   if (intervalHandle) return;
   console.log("Digest scheduler: starting (checking every 60min)");
-  intervalHandle = setInterval(() => { void tick(); }, INTERVAL_MS);
+  intervalHandle = setInterval(() => { void runTick(); }, INTERVAL_MS);
 }
 
 export function stopDigestScheduler(): void {

@@ -4,6 +4,7 @@ const ASANA_API_BASE = "https://app.asana.com/api/1.0";
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 const REQUEST_INTERVAL_MS = 200;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface AsanaWorkspace {
   gid: string;
@@ -60,14 +61,21 @@ interface AsanaApiResponse<T> {
 }
 
 let lastRequestTime = 0;
+let throttleChain: Promise<void> = Promise.resolve();
 
 async function throttle(): Promise<void> {
-  const now = Date.now();
-  const elapsed = now - lastRequestTime;
-  if (elapsed < REQUEST_INTERVAL_MS) {
-    await new Promise(r => setTimeout(r, REQUEST_INTERVAL_MS - elapsed));
-  }
-  lastRequestTime = Date.now();
+  const currentTurn = throttleChain.then(async () => {
+    const now = Date.now();
+    const elapsed = now - lastRequestTime;
+    if (elapsed < REQUEST_INTERVAL_MS) {
+      await new Promise(r => setTimeout(r, REQUEST_INTERVAL_MS - elapsed));
+    }
+    lastRequestTime = Date.now();
+  });
+
+  throttleChain = currentTurn.catch(() => undefined);
+
+  await currentTurn;
 }
 
 async function asanaFetch<T>(token: string, path: string, params?: Record<string, string>): Promise<AsanaApiResponse<T>> {
@@ -86,6 +94,7 @@ async function asanaFetch<T>(token: string, path: string, params?: Record<string
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (res.ok) {

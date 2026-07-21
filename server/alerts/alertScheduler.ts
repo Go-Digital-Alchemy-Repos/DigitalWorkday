@@ -1,5 +1,5 @@
 import { runAlertEvaluationForAllTenants } from "./evaluateAlertRules";
-
+import { createSingleFlightRunner } from "../lib/singleFlight";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let initialDelayHandle: NodeJS.Timeout | null = null;
@@ -17,12 +17,17 @@ async function tick(): Promise<void> {
   }
 }
 
+const runTick = createSingleFlightRunner(tick, {
+  onSkip: () => console.warn("Alert scheduler: previous evaluation still running, skipping overlapping tick"),
+});
+
 export function startAlertScheduler(): void {
-  if (intervalHandle) return;
+  if (intervalHandle || initialDelayHandle) return;
   console.log(`Alert scheduler: starting (initial delay ${INITIAL_DELAY_MS / 1000}s, then every ${INTERVAL_MS / 60000}min)`);
   initialDelayHandle = setTimeout(() => {
-    void tick();
-    intervalHandle = setInterval(() => { void tick(); }, INTERVAL_MS);
+    initialDelayHandle = null;
+    void runTick();
+    intervalHandle = setInterval(() => { void runTick(); }, INTERVAL_MS);
   }, INITIAL_DELAY_MS);
 }
 

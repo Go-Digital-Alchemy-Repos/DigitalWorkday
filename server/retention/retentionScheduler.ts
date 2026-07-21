@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { tenants } from "@shared/schema";
 import { runSoftArchive } from "./softArchiveRunner";
+import { createSingleFlightRunner } from "../lib/singleFlight";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let initialDelayHandle: NodeJS.Timeout | null = null;
@@ -29,12 +30,17 @@ async function tick(): Promise<void> {
   }
 }
 
+const runTick = createSingleFlightRunner(tick, {
+  onSkip: () => console.warn("[retention] Previous archive run still running, skipping overlapping tick"),
+});
+
 export function startRetentionScheduler(): void {
-  if (intervalHandle) return;
+  if (intervalHandle || initialDelayHandle) return;
   console.log(`[retention] Starting scheduler (initial delay ${INITIAL_DELAY_MS / 60000}min, then every 24h)`);
   initialDelayHandle = setTimeout(() => {
-    void tick();
-    intervalHandle = setInterval(() => { void tick(); }, INTERVAL_MS);
+    initialDelayHandle = null;
+    void runTick();
+    intervalHandle = setInterval(() => { void runTick(); }, INTERVAL_MS);
   }, INITIAL_DELAY_MS);
 }
 

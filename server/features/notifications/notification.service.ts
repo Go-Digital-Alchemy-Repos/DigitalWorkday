@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { clientCrm, clients } from "@shared/schema";
 import { eq, and, lte, isNotNull } from "drizzle-orm";
 import { buildChatUrl } from "../../lib/appLinks";
+import { createSingleFlightRunner } from "../../lib/singleFlight";
 
 type NotificationType = 
   | "task_deadline"
@@ -585,25 +586,32 @@ export async function checkUpcomingDeadlines(): Promise<void> {
 }
 
 let deadlineCheckerInterval: NodeJS.Timeout | null = null;
+let deadlineCheckerInitialTimeout: NodeJS.Timeout | null = null;
+const runDeadlineCheck = createSingleFlightRunner(checkUpcomingDeadlines, {
+  onSkip: () => console.warn("[deadline-checker] Previous deadline check still running, skipping overlapping tick"),
+});
 
 export function startDeadlineChecker(): void {
-  if (deadlineCheckerInterval) {
-    clearInterval(deadlineCheckerInterval);
-  }
+  if (deadlineCheckerInterval || deadlineCheckerInitialTimeout) return;
   
-  setTimeout(() => {
-    checkUpcomingDeadlines().catch(console.error);
+  deadlineCheckerInitialTimeout = setTimeout(() => {
+    deadlineCheckerInitialTimeout = null;
+    runDeadlineCheck().catch(console.error);
   }, 10000);
   
   const SIX_HOURS = 6 * 60 * 60 * 1000;
   deadlineCheckerInterval = setInterval(() => {
-    checkUpcomingDeadlines().catch(console.error);
+    runDeadlineCheck().catch(console.error);
   }, SIX_HOURS);
   
   console.log("[deadline-checker] Started deadline notification checker");
 }
 
 export function stopDeadlineChecker(): void {
+  if (deadlineCheckerInitialTimeout) {
+    clearTimeout(deadlineCheckerInitialTimeout);
+    deadlineCheckerInitialTimeout = null;
+  }
   if (deadlineCheckerInterval) {
     clearInterval(deadlineCheckerInterval);
     deadlineCheckerInterval = null;
@@ -658,6 +666,10 @@ export async function checkFollowUpsDue(): Promise<void> {
 }
 
 let followUpCheckerInterval: NodeJS.Timeout | null = null;
+let followUpCheckerInitialTimeout: NodeJS.Timeout | null = null;
+const runFollowUpCheck = createSingleFlightRunner(checkFollowUpsDue, {
+  onSkip: () => console.warn("[followup-checker] Previous follow-up check still running, skipping overlapping tick"),
+});
 
 export async function notifyApprovalResponse(
   requestedByUserId: string,
@@ -681,23 +693,26 @@ export async function notifyApprovalResponse(
 }
 
 export function startFollowUpChecker(): void {
-  if (followUpCheckerInterval) {
-    clearInterval(followUpCheckerInterval);
-  }
+  if (followUpCheckerInterval || followUpCheckerInitialTimeout) return;
 
-  setTimeout(() => {
-    checkFollowUpsDue().catch(console.error);
+  followUpCheckerInitialTimeout = setTimeout(() => {
+    followUpCheckerInitialTimeout = null;
+    runFollowUpCheck().catch(console.error);
   }, 15000);
 
   const SIX_HOURS = 6 * 60 * 60 * 1000;
   followUpCheckerInterval = setInterval(() => {
-    checkFollowUpsDue().catch(console.error);
+    runFollowUpCheck().catch(console.error);
   }, SIX_HOURS);
 
   console.log("[followup-checker] Started follow-up notification checker");
 }
 
 export function stopFollowUpChecker(): void {
+  if (followUpCheckerInitialTimeout) {
+    clearTimeout(followUpCheckerInitialTimeout);
+    followUpCheckerInitialTimeout = null;
+  }
   if (followUpCheckerInterval) {
     clearInterval(followUpCheckerInterval);
     followUpCheckerInterval = null;

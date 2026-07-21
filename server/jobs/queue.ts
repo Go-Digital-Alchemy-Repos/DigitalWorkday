@@ -32,6 +32,7 @@ const handlers = new Map<string, HandlerRegistration>();
 const runningCounts = new Map<string, number>();
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let isRunning = false;
+let isPolling = false;
 const POLL_INTERVAL_MS = 3000;
 const LOCK_TIMEOUT_MS = 30 * 60 * 1000;
 const INSTANCE_ID = randomUUID().slice(0, 8);
@@ -257,6 +258,9 @@ async function executeJob(job: any): Promise<void> {
 
 async function pollOnce(): Promise<void> {
   if (!isRunning) return;
+  if (isPolling) return;
+
+  isPolling = true;
 
   try {
     const job = await claimJob();
@@ -267,6 +271,8 @@ async function pollOnce(): Promise<void> {
     }
   } catch (err) {
     console.error(`[jobs] Error polling for jobs:`, err);
+  } finally {
+    isPolling = false;
   }
 }
 
