@@ -96,6 +96,7 @@ describe("client portal invitations", () => {
     vi.clearAllMocks();
     delete process.env.APP_PUBLIC_URL;
     delete process.env.APP_URL;
+    process.env.APP_PUBLIC_URL = "https://app.test";
 
     storageMocks.getClientByIdAndTenant.mockResolvedValue(client);
     storageMocks.getClient.mockResolvedValue(client);

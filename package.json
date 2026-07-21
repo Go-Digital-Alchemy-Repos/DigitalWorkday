@@ -12,7 +12,7 @@
     "typecheck": "npm run check",
     "test": "node script/run-vitest-suite.mjs fast",
     "test:watch": "node script/run-vitest-suite.mjs fast --watch",
-    "test:client": "vitest run client/src/__tests__",
+    "test:client": "vitest run client/src/**/*.test.ts client/src/**/*.test.tsx",
     "test:ci": "npm run supply-chain:check && npm run check && npm test && npm run test:client && npm run build",
     "test:http": "node script/run-vitest-suite.mjs http",
     "test:db": "node script/run-vitest-suite.mjs db",

@@ -5,7 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const ROOT = process.cwd();
-const TEST_ROOT = path.join(ROOT, "server", "tests");
+const TEST_ROOTS = [
+  path.join(ROOT, "server", "tests"),
+  path.join(ROOT, "server", "__tests__"),
+];
 const VALID_SUITES = new Set(["fast", "http", "db", "all"]);
 
 function collectTestFiles(dir) {
@@ -22,10 +25,15 @@ function collectTestFiles(dir) {
 
 function classifySuite(filePath) {
   const source = readFileSync(filePath, "utf8");
+  const explicitSuite = source.match(/@suite\s+(fast|http|db)\b/);
+  if (explicitSuite) return explicitSuite[1];
+
   const usesDb = /from\s+["'](?:\.\.\/)+db["']|import\(["'](?:\.\.\/)+db["']\)/.test(source);
+  const usesDbFixtures = /from\s+["'](?:\.\/|\.\.\/)+fixtures["']/.test(source);
+  const usesLiveServer = /request\(\s*BASE\s*\)|request\(\s*["']https?:\/\/localhost/.test(source);
   const usesSupertest = /from\s+["']supertest["']/.test(source);
 
-  if (usesDb) return "db";
+  if (usesDb || usesDbFixtures || usesLiveServer) return "db";
   if (usesSupertest) return "http";
   return "fast";
 }
@@ -43,7 +51,7 @@ const passthroughArgs = suiteArg === "fast" && positionals[0] && !VALID_SUITES.h
   ? positionals
   : positionals.slice(1);
 
-const files = collectTestFiles(TEST_ROOT);
+const files = TEST_ROOTS.flatMap(collectTestFiles).sort();
 const grouped = {
   fast: [],
   http: [],
@@ -72,6 +80,11 @@ if (listOnly) {
     ),
   );
   process.exit(0);
+}
+
+if (suiteArg === "db" && !process.env.DATABASE_URL) {
+  console.error("The db test suite requires DATABASE_URL to point at a test database.");
+  process.exit(1);
 }
 
 const selectedFiles = grouped[suiteArg];

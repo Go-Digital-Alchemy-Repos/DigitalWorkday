@@ -138,11 +138,12 @@ describe("Client delete authorization", () => {
     expect(response.status).toBe(404);
   });
 
-  it("allows super users to delete clients without tenant impersonation", async () => {
+  it("requires super users to select an effective tenant before deleting clients", async () => {
     const app = createAuthenticatedApp({ id: "super-1", tenantId: null, role: "super_user" });
 
     const response = await request(app).delete("/api/clients/client-1");
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(400);
+    expect(response.body.code || response.body.error?.code).toBe("TENANT_REQUIRED");
   });
 });

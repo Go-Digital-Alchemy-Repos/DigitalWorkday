@@ -1,3 +1,4 @@
+// @suite db
 /**
  * Integration Tests for Super Admin Debug Tools endpoints
  * 

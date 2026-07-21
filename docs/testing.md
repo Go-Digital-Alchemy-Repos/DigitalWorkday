@@ -8,6 +8,12 @@ This document describes the test suite, how to run tests, and known issues.
 # Run the default fast suite
 npm test
 
+# Run client tests, including colocated component tests
+npm run test:client
+
+# Run the same checks used by the normal CI gate
+npm run test:ci
+
 # Watch the fast suite
 npm run test:watch
 
@@ -38,6 +44,10 @@ server/tests/
 ├── platform-admins.test.ts            # Super admin management
 ├── purge-guards.test.ts               # Data purge safety guards
 └── ...
+
+server/__tests__/                    # Legacy colocated server unit tests included in the fast suite
+client/src/__tests__/                # Client unit and render tests
+client/src/**/**/*.test.ts(x)        # Colocated client component/helper tests
 ```
 
 ## Test Categories
@@ -119,8 +129,11 @@ The `safeDeleteAllUsers()` function deletes data in FK-safe order:
 ### Environment Requirements
 
 - `npm test` is the safest default local check and does not require Postgres.
+- `npm run test:client` runs both `client/src/__tests__` and colocated client tests under `client/src`.
+- `npm run test:ci` runs `supply-chain:check`, type checking, the fast server suite, client tests, and the production build.
 - `npm run test:db` requires `DATABASE_URL` and a reachable local Postgres instance.
 - `npm run test:http` mounts Express routers with `supertest`; in restricted sandboxes that block local listeners, these tests may fail even when app code is correct.
+- Add `// @suite fast`, `// @suite http`, or `// @suite db` to a server test when static dependency classification cannot infer the correct lane.
 
 ### Test Isolation
 
@@ -201,15 +214,15 @@ Current test coverage by area:
 
 | Area | Status | Tests |
 |------|--------|-------|
-| Tenancy enforcement | ✅ Complete | 22 |
-| Permissions audit | ✅ Complete | 22 |
-| Workload reports | ✅ Complete | 12 |
-| Tenant integrations | ✅ Complete | 10 |
-| Bootstrap/registration | ✅ Complete | 8 |
-| Task CRUD with auth | ❌ Missing | - |
-| Project CRUD with auth | ❌ Missing | - |
-| Client CRUD with auth | ❌ Missing | - |
-| Time tracking flows | ❌ Missing | - |
+| Fast server unit/policy suite | ✅ Active | 67 files |
+| HTTP route/supertest suite | ✅ Active | 19 files |
+| DB-backed suite | ✅ Active with `DATABASE_URL` | 47 files |
+| Client unit/render suite | ✅ Active | 25+ files |
+| Tenancy and permissions | ✅ Strong | Route policy, tenant scope, cross-tenant, division, portal access |
+| Task/project/client CRUD | ✅ Covered | DB-backed CRUD and route policy tests |
+| Time tracking flows | ✅ Covered | Selection, edit, division cascade, assignment tests |
+| Visual regression/E2E browser flows | ⚠️ Limited | No Playwright/Cypress gate found |
+| Coverage reporting | ⚠️ Limited | No enforced coverage threshold found |
 
 ## CI/CD Notes
 
