@@ -42,6 +42,7 @@ import {
 } from "../../shared/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { hashPassword } from "../auth";
+import { uniqueTestId } from "./helpers/uniqueTestId";
 
 // ============================================================================
 // Factory Helpers
@@ -59,7 +60,7 @@ export interface CreateUserOptions {
 export async function createTestUser(options: CreateUserOptions = {}) {
   const passwordHash = await hashPassword(options.password || "testpass123");
   const [user] = await db.insert(users).values({
-    email: options.email || `test-${Date.now()}@example.com`,
+    email: options.email || `${uniqueTestId("test-user")}@example.com`,
     name: options.name || "Test User",
     passwordHash,
     role: options.role || UserRole.EMPLOYEE,
@@ -76,10 +77,10 @@ export interface CreateTenantOptions {
 }
 
 export async function createTestTenant(options: CreateTenantOptions = {}) {
-  const timestamp = Date.now();
+  const id = uniqueTestId("test-tenant");
   const [tenant] = await db.insert(tenants).values({
-    name: options.name || `Test Tenant ${timestamp}`,
-    slug: options.slug || `test-tenant-${timestamp}`,
+    name: options.name || `Test Tenant ${id}`,
+    slug: options.slug || id,
     status: options.status || TenantStatus.ACTIVE,
   }).returning();
   return tenant;
@@ -545,7 +546,7 @@ export async function createAndLoginSuperUser(
   app: Express,
   options: { email?: string; password?: string } = {}
 ): Promise<{ user: any; cookie: string }> {
-  const email = options.email || `super-${Date.now()}@test.com`;
+  const email = options.email || `${uniqueTestId("super")}@test.com`;
   const password = options.password || "superpass123";
   
   const user = await createTestUser({
@@ -564,7 +565,7 @@ export async function createAndLoginTenantAdmin(
   tenantId: string,
   options: { email?: string; password?: string } = {}
 ): Promise<{ user: any; cookie: string }> {
-  const email = options.email || `admin-${Date.now()}@test.com`;
+  const email = options.email || `${uniqueTestId("admin")}@test.com`;
   const password = options.password || "adminpass123";
   
   const user = await createTestUser({
@@ -583,7 +584,7 @@ export async function createAndLoginEmployee(
   tenantId: string,
   options: { email?: string; password?: string } = {}
 ): Promise<{ user: any; cookie: string }> {
-  const email = options.email || `employee-${Date.now()}@test.com`;
+  const email = options.email || `${uniqueTestId("employee")}@test.com`;
   const password = options.password || "emppass123";
   
   const user = await createTestUser({
@@ -614,8 +615,8 @@ export async function setupTestEnvironment(app: Express): Promise<TestEnvironmen
   const tenant = await createTestTenant();
   const workspace = await createTestWorkspace({ tenantId: tenant.id, isPrimary: true });
   
-  const adminEmail = `admin-${Date.now()}@test.com`;
-  const employeeEmail = `employee-${Date.now()}@test.com`;
+  const adminEmail = `${uniqueTestId("admin")}@test.com`;
+  const employeeEmail = `${uniqueTestId("employee")}@test.com`;
   const password = "testpass123";
   
   const adminUser = await createTestUser({

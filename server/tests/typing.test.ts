@@ -38,6 +38,10 @@ describe("Typing state tracker", () => {
     stopTyping("u3", convId, "s3");
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("startTyping adds user and getTypingUsers returns them", () => {
     registerTypingSocket("s1", "u1", "t1");
     const { stateChanged } = startTyping("t1", "u1", "channel:ch1", "s1");
@@ -91,7 +95,6 @@ describe("Typing state tracker", () => {
     expect(expired[0].userId).toBe("u1");
 
     expect(getTypingUsers("channel:ch4")).not.toContain("u1");
-    vi.restoreAllMocks();
   });
 
   it("cleanupSocketTyping removes all typing state for disconnected socket", () => {
