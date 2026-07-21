@@ -164,6 +164,18 @@ function runProductionReadinessCheck(root = process.cwd()) {
     "Keep container runtime pinned, non-root, and health-probed.",
   ));
 
+  checks.push(createCheck(
+    "PRD-007",
+    "critical",
+    containsAll(dockerfile, [
+      "ENV PORT=8080",
+      "EXPOSE 8080",
+    ]) && !dockerfile.includes("ENV PORT=5000"),
+    "Dockerfile",
+    "Railway container port alignment checked",
+    "Keep the Docker runtime aligned with Railway service domains, which target port 8080.",
+  ));
+
   const failed = checks.filter((check) => !check.ok);
   const criticalFailures = failed.filter((check) => check.severity === "critical");
 
