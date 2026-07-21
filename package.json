@@ -17,6 +17,7 @@
     "test:http": "node script/run-vitest-suite.mjs http",
     "test:db": "node script/run-vitest-suite.mjs db",
     "test:all": "vitest run",
+    "slo:check": "node server/scripts/slo-check.cjs",
     "supply-chain:check": "node script/supply-chain-check.mjs",
     "db:push": "drizzle-kit push"
   },

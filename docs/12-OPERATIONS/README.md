@@ -12,6 +12,7 @@ This section covers system operations, monitoring, and maintenance.
 | Document | Description |
 |----------|-------------|
 | [MONITORING.md](./MONITORING.md) | System monitoring |
+| [SLOS_ALERTING_INCIDENT_RESPONSE.md](./SLOS_ALERTING_INCIDENT_RESPONSE.md) | SLOs, alert routing, and incident workflow |
 | [BACKUPS.md](./BACKUPS.md) | Backup strategies |
 | [DISASTER_RECOVERY.md](./DISASTER_RECOVERY.md) | DR procedures |
 | [SCALING.md](./SCALING.md) | Scaling considerations |

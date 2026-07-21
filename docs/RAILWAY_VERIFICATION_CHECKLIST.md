@@ -78,6 +78,16 @@ Expected response:
 }
 ```
 
+### 5. SLO Smoke Check Passes
+```bash
+SLO_BASE_URL=https://your-app.railway.app SLO_EXPECTED_VERSION=<commit-sha-prefix> npm run slo:check
+```
+
+Expected:
+- `/health` returns 2xx, `ok: true`, `ready: true`, and the expected version
+- `/readyz` returns 2xx within the readiness latency threshold
+- Command exits with status 0
+
 ---
 
 ## Part C: Auth Sanity Checks
