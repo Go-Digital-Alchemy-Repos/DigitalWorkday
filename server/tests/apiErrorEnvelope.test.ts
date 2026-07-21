@@ -7,11 +7,14 @@ describe("ApiErrorEnvelope", () => {
       const error = AppError.badRequest("Name is required", [{ field: "name" }]);
       const envelope = error.toApiErrorEnvelope("req-123");
 
-      expect(envelope).toEqual({
+      expect(envelope).toMatchObject({
+        ok: false,
         success: false,
         error: {
           code: "VALIDATION_ERROR",
           message: "Name is required",
+          status: 400,
+          requestId: "req-123",
           details: [{ field: "name" }],
         },
         requestId: "req-123",
@@ -32,8 +35,11 @@ describe("ApiErrorEnvelope", () => {
 
       for (const { error, expectedCode } of testCases) {
         const envelope = error.toApiErrorEnvelope("test-req");
+        expect(envelope.ok).toBe(false);
         expect(envelope.success).toBe(false);
         expect(envelope.error.code).toBe(expectedCode);
+        expect(envelope.error.status).toBe(error.statusCode);
+        expect(envelope.error.requestId).toBe("test-req");
         expect(typeof envelope.error.message).toBe("string");
         expect(envelope.requestId).toBe("test-req");
       }

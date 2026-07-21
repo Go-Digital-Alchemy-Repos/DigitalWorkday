@@ -156,9 +156,12 @@ function rateLimitHandler(limiterName: string, message: string) {
     logRateLimitHit(req, limiterName);
     res.status(429).json({
       ok: false,
+      success: false,
+      requestId,
       error: {
         code: "RATE_LIMITED",
         message,
+        status: 429,
         requestId,
       },
     });
@@ -231,9 +234,12 @@ function createEmailRateLimiter(
       res.setHeader("Retry-After", retryAfter.toString());
       return res.status(429).json({
         ok: false,
+        success: false,
+        requestId,
         error: {
           code: "RATE_LIMITED",
           message: "Too many requests for this email. Please try again later.",
+          status: 429,
           requestId,
           retryAfter,
         },
@@ -387,9 +393,12 @@ export function createRateLimiter(options: CreateRateLimiterOptions) {
       res.setHeader("Retry-After", retryAfter.toString());
       res.status(429).json({
         ok: false,
+        success: false,
+        requestId,
         error: {
           code: "RATE_LIMITED",
           message: "Too many requests. Please try again later.",
+          status: 429,
           requestId,
           retryAfter,
         },
@@ -412,9 +421,12 @@ export function createRateLimiter(options: CreateRateLimiterOptions) {
       res.setHeader("Retry-After", retryAfter.toString());
       return res.status(429).json({
         ok: false,
+        success: false,
+        requestId,
         error: {
           code: "RATE_LIMITED",
           message: "Too many requests for this email. Please try again later.",
+          status: 429,
           requestId,
           retryAfter,
         },

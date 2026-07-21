@@ -20,6 +20,7 @@ export function responseEnvelopeMiddleware(
   res.ok = function (data: unknown, statusCode = 200): Response {
     return this.status(statusCode).json({
       ok: true,
+      success: true,
       requestId: req.requestId || "unknown",
       data,
     });
@@ -34,6 +35,7 @@ export function responseEnvelopeMiddleware(
     const requestId = req.requestId || "unknown";
     return this.status(statusCode).json({
       ok: false,
+      success: false,
       requestId,
       error: {
         code,
@@ -49,6 +51,7 @@ export function responseEnvelopeMiddleware(
 
   res.sendSuccess = function(data: unknown, statusCode = 200): Response {
     return this.status(statusCode).json({
+      ok: true,
       success: true,
       data,
       requestId: req.requestId || "unknown",
@@ -63,10 +66,13 @@ export function responseEnvelopeMiddleware(
     const details = error.details;
 
     return this.status(statusCode).json({
+      ok: false,
       success: false,
       error: {
         code,
         message,
+        status: statusCode,
+        requestId,
         details,
       },
       requestId,

@@ -10,13 +10,14 @@ All API endpoints return responses in a standardized envelope format. This docum
 
 ```json
 {
+  "ok": true,
   "success": true,
   "data": { ... },
   "requestId": "uuid"
 }
 ```
 
-Legacy endpoints may also return:
+Legacy endpoints may return raw resource payloads or the older helper shape:
 ```json
 {
   "ok": true,
@@ -29,17 +30,22 @@ Legacy endpoints may also return:
 
 ```json
 {
+  "ok": false,
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "Human-readable error message",
+    "status": 400,
+    "requestId": "uuid",
     "details": [...]
   },
+  "message": "Human-readable error message",
+  "code": "VALIDATION_ERROR",
   "requestId": "uuid"
 }
 ```
 
-Legacy endpoints may also include top-level `message`, `code`, and `ok: false` fields for backward compatibility.
+Legacy-compatible helpers include top-level `message`, `code`, `ok: false`, and `success: false` fields. These fields are additive and should not be removed while the existing frontend still consumes legacy shapes.
 
 ## Error Codes
 
@@ -101,18 +107,20 @@ Available middleware:
 - `validateQuery(schema)` — Validates `req.query`
 - `validateParams(schema)` — Validates `req.params`
 
+Validation detail entries must include `path`, `message`, and the stable Zod issue `code` when produced by Zod. Keep new validation middleware additive-compatible with both `ok: false` and `success: false`.
+
 ## Response Helpers
 
 Routes using `createApiRouter` from `routerFactory` have access to:
 
 ```ts
 // Standard envelope helpers (existing)
-res.ok(data, statusCode?)      // { ok: true, data, requestId }
-res.fail(code, message, status?, details?)  // { ok: false, error: {...}, requestId }
+res.ok(data, statusCode?)      // { ok: true, success: true, data, requestId }
+res.fail(code, message, status?, details?)  // { ok: false, success: false, error: {...}, requestId }
 
 // New v2 helpers
-res.sendSuccess(data, statusCode?)   // { success: true, data, requestId }
-res.sendError(appError)              // { success: false, error: {...}, requestId }
+res.sendSuccess(data, statusCode?)   // { ok: true, success: true, data, requestId }
+res.sendError(appError)              // { ok: false, success: false, error: {...}, requestId }
 ```
 
 ## Request ID

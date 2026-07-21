@@ -28,6 +28,9 @@ export function apiNotFoundHandler(
   if (req.path.startsWith("/api")) {
     const requestId = req.requestId || "unknown";
     res.status(404).json({
+      ok: false,
+      success: false,
+      requestId,
       error: {
         code: "NOT_FOUND",
         message: `API endpoint not found: ${req.method} ${req.path}`,
@@ -76,6 +79,9 @@ export function apiJsonResponseGuard(
       
       res.setHeader("Content-Type", "application/json");
       return originalSend.call(this, JSON.stringify({
+        ok: false,
+        success: false,
+        requestId,
         error: {
           code: statusCode === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
           message: statusCode === 404 

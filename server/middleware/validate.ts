@@ -12,6 +12,7 @@ export function validateBody<T>(schema: ZodSchema<T>): RequestHandler {
         const details = error.errors.map((e) => ({
           path: e.path.join("."),
           message: e.message,
+          code: e.code,
         }));
         next(AppError.badRequest("Validation failed", details));
       } else {
@@ -31,6 +32,7 @@ export function validateQuery<T>(schema: ZodSchema<T>): RequestHandler {
         const details = error.errors.map((e) => ({
           path: e.path.join("."),
           message: e.message,
+          code: e.code,
         }));
         next(AppError.badRequest("Query validation failed", details));
       } else {
@@ -50,6 +52,7 @@ export function validateParams<T>(schema: ZodSchema<T>): RequestHandler {
         const details = error.errors.map((e) => ({
           path: e.path.join("."),
           message: e.message,
+          code: e.code,
         }));
         next(AppError.badRequest("Path parameter validation failed", details));
       } else {

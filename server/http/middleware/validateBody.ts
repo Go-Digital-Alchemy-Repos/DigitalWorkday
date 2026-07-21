@@ -26,10 +26,13 @@ export function validateBody<T>(schema: ZodSchema<T>) {
       const requestId = req.requestId || "unknown";
 
       res.status(400).json({
+        ok: false,
         success: false,
         error: {
           code: "VALIDATION_ERROR",
           message: "Request validation failed",
+          status: 400,
+          requestId,
           details,
         },
         requestId,
@@ -59,10 +62,13 @@ export function validateQuery<T>(schema: ZodSchema<T>) {
       const requestId = req.requestId || "unknown";
 
       res.status(400).json({
+        ok: false,
         success: false,
         error: {
           code: "VALIDATION_ERROR",
           message: "Query validation failed",
+          status: 400,
+          requestId,
           details,
         },
         requestId,
@@ -92,10 +98,13 @@ export function validateParams<T>(schema: ZodSchema<T>) {
       const requestId = req.requestId || "unknown";
 
       res.status(400).json({
+        ok: false,
         success: false,
         error: {
           code: "VALIDATION_ERROR",
           message: "Parameter validation failed",
+          status: 400,
+          requestId,
           details,
         },
         requestId,

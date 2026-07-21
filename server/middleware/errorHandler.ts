@@ -17,6 +17,7 @@ import { ZodError } from "zod";
 
 interface StandardErrorResponse {
   ok: false;
+  success: false;
   requestId: string;
   error: {
     code: string;
@@ -130,6 +131,7 @@ export function errorHandler(
       statusCode = err.statusCode;
       response = {
         ok: false,
+        success: false,
         requestId,
         error: {
           code: err.code,
@@ -148,9 +150,11 @@ export function errorHandler(
       const details = err.errors.map((e) => ({
         path: e.path.join("."),
         message: e.message,
+        code: e.code,
       }));
       response = {
         ok: false,
+        success: false,
         requestId,
         error: {
           code: "VALIDATION_ERROR",
@@ -170,6 +174,7 @@ export function errorHandler(
       statusCode = normalized.status;
       response = {
         ok: false,
+        success: false,
         requestId,
         error: {
           code: normalized.code,
@@ -188,6 +193,7 @@ export function errorHandler(
         : err.message || "Internal server error";
       response = {
         ok: false,
+        success: false,
         requestId,
         error: {
           code: "INTERNAL_ERROR",
@@ -209,6 +215,7 @@ export function errorHandler(
     try {
       res.status(500).json({
         ok: false,
+        success: false,
         requestId,
         error: {
           code: "INTERNAL_ERROR",

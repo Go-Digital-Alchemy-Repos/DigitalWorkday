@@ -113,6 +113,9 @@ export class AppError extends Error {
 
   toJSON(requestId = "unknown"): StandardErrorEnvelope {
     return {
+      ok: false,
+      success: false,
+      requestId,
       error: {
         code: this.code,
         message: this.message,
@@ -127,10 +130,13 @@ export class AppError extends Error {
 
   toApiErrorEnvelope(requestId = "unknown"): ApiErrorEnvelope {
     return {
+      ok: false,
       success: false,
       error: {
         code: this.code,
         message: this.message,
+        status: this.statusCode,
+        requestId,
         details: this.details,
       },
       requestId,
@@ -174,10 +180,12 @@ export function validateBody<T>(
     const details = result.error.errors.map((e) => ({
       path: e.path.join("."),
       message: e.message,
+      code: e.code,
     }));
     const requestId = req?.requestId || "unknown";
     res.status(400).json({
       ok: false,
+      success: false,
       requestId,
       error: {
         code: "VALIDATION_ERROR",
@@ -209,10 +217,12 @@ export function validateQuery<T>(
     const details = result.error.errors.map((e) => ({
       path: e.path.join("."),
       message: e.message,
+      code: e.code,
     }));
     const requestId = req?.requestId || "unknown";
     res.status(400).json({
       ok: false,
+      success: false,
       requestId,
       error: {
         code: "VALIDATION_ERROR",
@@ -235,6 +245,7 @@ export function validateQuery<T>(
  */
 export interface StandardErrorEnvelope {
   ok?: false;
+  success?: false;
   requestId?: string;
   error: {
     code: ErrorCode | string;
@@ -253,10 +264,13 @@ export interface StandardErrorEnvelope {
  * All new API endpoints should return this shape on failure.
  */
 export interface ApiErrorEnvelope {
+  ok?: false;
   success: false;
   error: {
     code: string;
     message: string;
+    status?: number;
+    requestId?: string;
     details?: unknown;
   };
   requestId?: string;
@@ -287,6 +301,7 @@ export function toErrorResponse(
   const requestId = req.requestId || "unknown";
   return {
     ok: false as const,
+    success: false as const,
     requestId,
     error: {
       code,
@@ -307,6 +322,7 @@ export function sendError(res: Response, error: AppError, req?: Request): Respon
   const requestId = req?.requestId || "unknown";
   return res.status(error.statusCode).json({
     ok: false,
+    success: false,
     requestId,
     error: {
       code: error.code,
@@ -341,9 +357,11 @@ export function handleRouteError(res: Response, error: unknown, context?: string
     const details = error.errors.map((e) => ({
       path: e.path.join("."),
       message: e.message,
+      code: e.code,
     }));
     return res.status(400).json({
       ok: false,
+      success: false,
       requestId,
       error: {
         code: "VALIDATION_ERROR",
@@ -363,6 +381,7 @@ export function handleRouteError(res: Response, error: unknown, context?: string
   
   return res.status(500).json({
     ok: false,
+    success: false,
     requestId,
     error: {
       code: "INTERNAL_ERROR",

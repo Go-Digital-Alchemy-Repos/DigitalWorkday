@@ -32,6 +32,8 @@ Documents may have one of the following statuses:
 
 ## Covered Domains
 
+The runtime route registry in `server/http/mount.ts` is the source of truth for mounted API domains and policies. As of the 2026-07-21 API contract review, it registers 57 API mounts: 40 `authTenant`, 10 `superUser`, 6 `authOnly`, and 1 `public` webhook mount. The table below is a documentation index, not a complete mount inventory.
+
 | Domain | File | Status |
 |--------|------|--------|
 | Template | `01-TEMPLATE.md` | Reference |
