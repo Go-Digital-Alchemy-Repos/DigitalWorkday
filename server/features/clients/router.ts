@@ -24,7 +24,7 @@ import { UserRole } from "@shared/schema";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { canDeleteClientInTenant } from "../../lib/clientDeleteAuthorization";
-import { getCurrentWorkspaceIdOrThrow } from "../../routes/helpers";
+import { getCurrentWorkspaceIdOrThrow } from "../../http/helpers";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";

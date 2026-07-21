@@ -337,6 +337,34 @@ describe("Route Policy Drift Tests", () => {
     });
   });
 
+  describe("Domain Router Middleware Scope", () => {
+    it("broadly mounted route modules must not use pathless client-blocking guards", () => {
+      const serverDir = path.resolve(__dirname, "../../");
+      let grepResult = "";
+
+      try {
+        grepResult = execSync(
+          `grep -rn "router\\.use(.*rejectClientPortalUsers\\|router\\.use(.*blockClientUsers" "${serverDir}" --include="*.ts" || true`,
+          { encoding: "utf-8" }
+        );
+      } catch {
+        grepResult = "";
+      }
+
+      const violations = grepResult
+        .split("\n")
+        .filter((line) => line.trim().length > 0)
+        .filter((line) => !line.includes("/tests/"))
+        .filter((line) => !line.includes(".test.ts"))
+        .filter((line) => {
+          const call = line.slice(line.indexOf(":") + 1);
+          return /router\.use\(\s*(rejectClientPortalUsers|blockClientUsers)/.test(call);
+        });
+
+      expect(violations).toEqual([]);
+    });
+  });
+
   describe("Guard Allowlist Consistency", () => {
     it("known guard-exempt paths should match auth allowlist in routes.ts", () => {
       const authExemptPaths = [
