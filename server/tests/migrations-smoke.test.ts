@@ -20,6 +20,11 @@ const REQUIRED_TABLES = [
   "notification_preferences",
   "time_entries",
   "active_timers",
+  "client_divisions",
+  "division_members",
+  "client_user_access",
+  "user_client_access",
+  "comment_mentions",
 ];
 
 const REQUIRED_COLUMNS = [
@@ -28,6 +33,15 @@ const REQUIRED_COLUMNS = [
   { table: "users", column: "tenant_id" },
   { table: "projects", column: "client_id" },
   { table: "tasks", column: "project_id" },
+  { table: "client_invites", column: "access_client_ids" },
+  { table: "client_user_access", column: "access_level" },
+  { table: "user_client_access", column: "workspace_id" },
+  { table: "user_client_access", column: "access_level" },
+  { table: "user_client_access", column: "permissions" },
+  { table: "client_divisions", column: "client_id" },
+  { table: "division_members", column: "division_id" },
+  { table: "comments", column: "visibility" },
+  { table: "comment_mentions", column: "mentioned_user_id" },
 ];
 
 interface JournalEntry {

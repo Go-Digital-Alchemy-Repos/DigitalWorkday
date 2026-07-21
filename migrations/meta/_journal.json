@@ -78,6 +78,13 @@
       "when": 1778011200000,
       "tag": "0048_customer_access_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778097600000,
+      "tag": "0049_user_client_access_integrity",
+      "breakpoints": true
     }
   ]
 }

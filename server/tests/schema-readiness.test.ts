@@ -25,11 +25,11 @@ function makeSchemaCheck(
   );
 
   return {
-    migrationAppliedCount: 10,
+    migrationAppliedCount: 11,
     pendingMigrationCount: 0,
     pendingMigrationTags: [],
     lastMigrationTimestamp: "1778007600000",
-    lastMigrationHash: "0047_archive_project_sections",
+    lastMigrationHash: "0048_customer_access_permissions",
     dbConnectionOk: true,
     tablesCheck,
     columnsCheck,
@@ -48,6 +48,11 @@ describe("schema readiness guards", () => {
         "sections",
         "task_attachments",
         "active_timers",
+        "client_divisions",
+        "division_members",
+        "client_user_access",
+        "user_client_access",
+        "comment_mentions",
         "chat_reads",
         "chat_thread_reads",
       ]),
@@ -58,6 +63,15 @@ describe("schema readiness guards", () => {
         { table: "sections", column: "archived_by" },
         { table: "active_timers", column: "subtask_id" },
         { table: "task_attachments", column: "subtask_id" },
+        { table: "client_invites", column: "access_client_ids" },
+        { table: "client_user_access", column: "access_level" },
+        { table: "user_client_access", column: "workspace_id" },
+        { table: "user_client_access", column: "access_level" },
+        { table: "user_client_access", column: "permissions" },
+        { table: "client_divisions", column: "client_id" },
+        { table: "division_members", column: "division_id" },
+        { table: "comments", column: "visibility" },
+        { table: "comment_mentions", column: "mentioned_user_id" },
       ]),
     );
   });
@@ -88,5 +102,29 @@ describe("schema readiness guards", () => {
 
     expect(schemaRequiredObjectsExist(makeSchemaCheck())).toBe(true);
     expect(schemaRequiredObjectsExist(missingArchiveColumn)).toBe(false);
+  });
+
+  it("blocks readiness when customer portal access schema is missing", () => {
+    const missingPortalAccessTable = makeSchemaCheck({
+      tablesCheck: makeSchemaCheck().tablesCheck.map((table) =>
+        table.table === "client_user_access"
+          ? { ...table, exists: false }
+          : table,
+      ),
+      allTablesExist: false,
+      isReady: false,
+    });
+    const missingCommentVisibility = makeSchemaCheck({
+      columnsCheck: makeSchemaCheck().columnsCheck.map((column) =>
+        column.table === "comments" && column.column === "visibility"
+          ? { ...column, exists: false }
+          : column,
+      ),
+      allColumnsExist: false,
+      isReady: false,
+    });
+
+    expect(schemaRequiredObjectsExist(missingPortalAccessTable)).toBe(false);
+    expect(schemaRequiredObjectsExist(missingCommentVisibility)).toBe(false);
   });
 });

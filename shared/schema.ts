@@ -976,11 +976,14 @@ export const clientFiles = pgTable("client_files", {
 export const userClientAccess = pgTable("user_client_access", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }).notNull(),
+  accessLevel: text("access_level").notNull().default("viewer"),
   permissions: jsonb("permissions"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
+  index("user_client_access_workspace_idx").on(table.workspaceId),
   index("user_client_access_user_idx").on(table.userId),
   index("user_client_access_client_idx").on(table.clientId),
   uniqueIndex("user_client_access_unique_idx").on(table.userId, table.clientId),
