@@ -1,3 +1,4 @@
+import * as React from "react";
 import { ReactNode } from "react";
 import { Search, Filter, SortAsc, LayoutGrid, List, X } from "lucide-react";
 import { Input } from "@/components/ui/input";

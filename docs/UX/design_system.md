@@ -42,6 +42,8 @@ import {
 
 ## Design Tokens
 
+Canonical token source: `client/src/design/tokens.ts` defines the typed spacing, radius, motion, z-index, and semantic status class maps. `client/src/components/ui-system/tokens.ts` provides smaller convenience aliases for UI-system components and should derive from the canonical token module.
+
 ### Spacing Scale
 | Token | Value | Use Case |
 |-------|-------|----------|

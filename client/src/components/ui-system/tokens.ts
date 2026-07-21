@@ -1,18 +1,20 @@
+import { DURATION, RADII, SPACING, Z_INDEX } from "@/design/tokens";
+
 export const spacing = {
-  xs: "var(--space-1)",      // 4px
-  sm: "var(--space-2)",      // 8px
-  md: "var(--space-4)",      // 16px
-  lg: "var(--space-6)",      // 24px
-  xl: "var(--space-8)",      // 32px
-  "2xl": "var(--space-12)",  // 48px
+  xs: SPACING["1"],      // 4px
+  sm: SPACING["2"],      // 8px
+  md: SPACING["4"],      // 16px
+  lg: SPACING["6"],      // 24px
+  xl: SPACING["8"],      // 32px
+  "2xl": SPACING["12"],  // 48px
 } as const;
 
 export const radius = {
-  sm: "var(--radius-sm)",    // 3px  - badges
-  md: "var(--radius-md)",    // 6px  - inputs, buttons
-  lg: "var(--radius-lg)",    // 9px  - cards
-  xl: "var(--radius-xl)",    // 16px - modals, drawers
-  full: "var(--radius-full)",
+  sm: RADII.sm,    // 3px  - badges
+  md: RADII.md,    // 6px  - inputs, buttons
+  lg: RADII.lg,    // 9px  - cards
+  xl: RADII.xl,    // 16px - modals, drawers
+  full: RADII.full,
 } as const;
 
 export const shadows = {
@@ -23,19 +25,19 @@ export const shadows = {
 } as const;
 
 export const sectionSpacing = {
-  betweenSections: "var(--space-section)",
-  withinSection: "var(--space-4)",
-  cardPadding: "var(--space-card)",
-  pagePadding: "var(--space-page)",
+  betweenSections: SPACING.section,
+  withinSection: SPACING["4"],
+  cardPadding: SPACING.card,
+  pagePadding: SPACING.page,
 } as const;
 
 export const motion = {
   duration: {
-    instant: "var(--duration-instant)",
-    fast: "var(--duration-fast)",
-    normal: "var(--duration-normal)",
-    slow: "var(--duration-slow)",
-    slower: "var(--duration-slower)",
+    instant: DURATION.instant,
+    fast: DURATION.fast,
+    normal: DURATION.normal,
+    slow: DURATION.slow,
+    slower: DURATION.slower,
   },
   easing: {
     standard: "var(--ease-standard)",
@@ -47,13 +49,13 @@ export const motion = {
 } as const;
 
 export const zIndex = {
-  base: "var(--z-base)",
-  dropdown: "var(--z-dropdown)",
-  sticky: "var(--z-sticky)",
-  overlay: "var(--z-overlay)",
-  modal: "var(--z-modal)",
-  popover: "var(--z-popover)",
-  toast: "var(--z-toast)",
-  tooltip: "var(--z-tooltip)",
-  max: "var(--z-max)",
+  base: Z_INDEX.base,
+  dropdown: Z_INDEX.dropdown,
+  sticky: Z_INDEX.sticky,
+  overlay: Z_INDEX.overlay,
+  modal: Z_INDEX.modal,
+  popover: Z_INDEX.popover,
+  toast: Z_INDEX.toast,
+  tooltip: Z_INDEX.tooltip,
+  max: Z_INDEX.max,
 } as const;

@@ -59,7 +59,7 @@ All clickable action elements must use the shared `<Button>` component from `@/c
 | `outline` | Tertiary actions, cancel buttons |
 | `ghost` | Inline actions, toolbar buttons, load-more |
 | `destructive` | Delete, remove, dangerous actions |
-| `link` | Text-style navigation links |
+| Text links | Use `Link` from `wouter` or a semantic `<a>` with token-based classes; `Button` does not define a `link` variant. |
 
 ### Toggle pattern
 
@@ -122,11 +122,13 @@ themePackId ?? themeMode ?? tenantDefaultThemePack ?? "light"
 ```
 client/src/
   design/
-    tokens.ts          # Semantic class maps and token references
+    tokens.ts          # Canonical semantic class maps and token references
   styles/
     tokens.css         # CSS custom properties (spacing, typography, motion, z-index)
   theme/
     themePacks.ts      # 14 theme pack definitions
+  components/ui-system/
+    tokens.ts          # Convenience aliases derived from design/tokens.ts
   components/ui/
     button.tsx         # Shared Button component
     badge.tsx          # Shared Badge component

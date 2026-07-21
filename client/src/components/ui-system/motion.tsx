@@ -1,3 +1,4 @@
+import * as React from "react";
 import { motion, AnimatePresence, type Variants, type Transition } from "framer-motion";
 import { cn } from "@/lib/utils";
 
