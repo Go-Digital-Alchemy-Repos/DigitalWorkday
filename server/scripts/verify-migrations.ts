@@ -4,6 +4,7 @@
  * Checks all migration files for:
  * - Idempotent syntax (IF NOT EXISTS, IF EXISTS)
  * - Dangerous operations (DROP, TRUNCATE, DELETE)
+ * - Statements that cannot run inside Drizzle's transactional migrator
  * - Required structure and naming
  * 
  * Usage:
@@ -44,11 +45,19 @@ interface VerificationResult {
 
 const IDEMPOTENT_PATTERNS = {
   createTable: /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS/gi,
-  createIndex: /CREATE\s+(UNIQUE\s+)?INDEX\s+(CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS/gi,
+  createIndex: /CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS/gi,
   addColumn: /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS/gi,
   dropTableIfExists: /DROP\s+TABLE\s+IF\s+EXISTS/gi,
-  dropIndexIfExists: /DROP\s+INDEX\s+(CONCURRENTLY\s+)?IF\s+EXISTS/gi,
+  dropIndexIfExists: /DROP\s+INDEX\s+IF\s+EXISTS/gi,
 };
+
+const LEGACY_IDEMPOTENCY_ALLOWLIST = new Set([
+  "0000_petite_spyke.sql",
+  "0001_cloudy_spot.sql",
+  "0002_safe_additive_fixes.sql",
+  "0003_fast_imperial_guard.sql",
+  "0004_add_missing_production_tables.sql",
+]);
 
 // These patterns are truly dangerous - always issues
 const DANGEROUS_PATTERNS = [
@@ -86,6 +95,7 @@ function countUnsafeDeletes(content: string): number {
 function checkMigrationFile(filePath: string, strictMode: boolean): MigrationCheck {
   const fileName = path.basename(filePath);
   const content = fs.readFileSync(filePath, "utf-8");
+  const isLegacyIdempotencyAllowed = LEGACY_IDEMPOTENCY_ALLOWLIST.has(fileName);
   
   const issues: string[] = [];
   const warnings: string[] = [];
@@ -127,7 +137,7 @@ function checkMigrationFile(filePath: string, strictMode: boolean): MigrationChe
   const hasIdempotentTables = createTableMatches.length === 0 || 
     createTableMatches.length === idempotentTableMatches.length;
   
-  if (!hasIdempotentTables) {
+  if (!hasIdempotentTables && !isLegacyIdempotencyAllowed) {
     const nonIdempotent = createTableMatches.length - idempotentTableMatches.length;
     const msg = `${nonIdempotent} CREATE TABLE statement(s) missing IF NOT EXISTS`;
     if (strictMode) {
@@ -137,13 +147,27 @@ function checkMigrationFile(filePath: string, strictMode: boolean): MigrationChe
     }
   }
   
-  // Check for idempotent CREATE INDEX (handle CONCURRENTLY)
+  // Check for idempotent CREATE INDEX.
   const createIndexMatches = content.match(/CREATE\s+(UNIQUE\s+)?INDEX/gi) || [];
   const idempotentIndexMatches = content.match(IDEMPOTENT_PATTERNS.createIndex) || [];
   const hasIdempotentIndexes = createIndexMatches.length === 0 || 
     createIndexMatches.length === idempotentIndexMatches.length;
+  const concurrentIndexMatches = content.match(/CREATE\s+(UNIQUE\s+)?INDEX\s+CONCURRENTLY/gi) || [];
+  const concurrentIndexDropMatches = content.match(/DROP\s+INDEX\s+CONCURRENTLY/gi) || [];
+
+  if (concurrentIndexMatches.length > 0) {
+    issues.push(
+      `${concurrentIndexMatches.length} CREATE INDEX CONCURRENTLY statement(s) found; Drizzle wraps migrations in a transaction, so run online index builds outside the startup migrator`
+    );
+  }
+
+  if (concurrentIndexDropMatches.length > 0) {
+    issues.push(
+      `${concurrentIndexDropMatches.length} DROP INDEX CONCURRENTLY statement(s) found; Drizzle wraps migrations in a transaction, so run online index drops outside the startup migrator`
+    );
+  }
   
-  if (!hasIdempotentIndexes) {
+  if (!hasIdempotentIndexes && !isLegacyIdempotencyAllowed) {
     const nonIdempotent = createIndexMatches.length - idempotentIndexMatches.length;
     const msg = `${nonIdempotent} CREATE INDEX statement(s) missing IF NOT EXISTS`;
     if (strictMode) {
@@ -159,7 +183,7 @@ function checkMigrationFile(filePath: string, strictMode: boolean): MigrationChe
   const hasIdempotentColumns = addColumnMatches.length === 0 || 
     addColumnMatches.length === idempotentColumnMatches.length;
   
-  if (!hasIdempotentColumns) {
+  if (!hasIdempotentColumns && !isLegacyIdempotencyAllowed) {
     const nonIdempotent = addColumnMatches.length - idempotentColumnMatches.length;
     const msg = `${nonIdempotent} ADD COLUMN statement(s) missing IF NOT EXISTS`;
     if (strictMode) {

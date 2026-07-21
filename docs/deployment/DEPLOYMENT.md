@@ -86,9 +86,13 @@ Or connect GitHub for automatic deployments.
 
 ### 5. Run Database Migrations
 
+Railway deployments should either run committed migrations automatically with `AUTO_MIGRATE=true` or apply those same committed migrations manually:
+
 ```bash
-railway run npx drizzle-kit push
+railway run npx drizzle-kit migrate
 ```
+
+Do not run `drizzle-kit push` against staging or production. `push` applies live schema diffs outside the reviewed migration history and can make rollback and parity checks unreliable.
 
 ### 6. Create Super Admin
 

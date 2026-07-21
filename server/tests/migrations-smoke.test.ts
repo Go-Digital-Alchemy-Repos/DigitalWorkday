@@ -143,8 +143,8 @@ describe("Database Migration Smoke Tests", () => {
 
     const idempotentPatterns = [
       /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS/i,
-      /CREATE\s+INDEX\s+(IF\s+NOT\s+EXISTS|CONCURRENTLY)/i,
-      /CREATE\s+UNIQUE\s+INDEX\s+(IF\s+NOT\s+EXISTS|CONCURRENTLY)/i,
+      /CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS/i,
+      /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS/i,
       /CREATE\s+TYPE\s+.*\s+AS\s+ENUM/i,
       /DO\s+\$\$/i,
       /ALTER\s+TABLE.*ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS/i,
@@ -155,8 +155,8 @@ describe("Database Migration Smoke Tests", () => {
 
     const nonIdempotentPatterns = [
       { pattern: /^\s*CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/im, name: "CREATE TABLE without IF NOT EXISTS" },
-      { pattern: /^\s*CREATE\s+INDEX\s+(?!IF\s+NOT\s+EXISTS|CONCURRENTLY)/im, name: "CREATE INDEX without IF NOT EXISTS" },
-      { pattern: /^\s*CREATE\s+UNIQUE\s+INDEX\s+(?!IF\s+NOT\s+EXISTS|CONCURRENTLY)/im, name: "CREATE UNIQUE INDEX without IF NOT EXISTS" },
+      { pattern: /^\s*CREATE\s+INDEX\s+(?!IF\s+NOT\s+EXISTS)/im, name: "CREATE INDEX without IF NOT EXISTS" },
+      { pattern: /^\s*CREATE\s+UNIQUE\s+INDEX\s+(?!IF\s+NOT\s+EXISTS)/im, name: "CREATE UNIQUE INDEX without IF NOT EXISTS" },
     ];
 
     for (const file of migrationFiles) {
@@ -259,6 +259,69 @@ describe("Database Migration Smoke Tests", () => {
       dangerousOperations,
       `Dangerous operations found: ${JSON.stringify(dangerousOperations, null, 2)}`
     ).toHaveLength(0);
+  });
+
+  test("committed migrations stay compatible with Drizzle's transactional runner", () => {
+    const migrationFiles = getMigrationFiles();
+    const transactionalIssues: { file: string; line: number; operation: string }[] = [];
+
+    const incompatiblePatterns = [
+      {
+        pattern: /^\s*CREATE\s+(UNIQUE\s+)?INDEX\s+CONCURRENTLY/im,
+        name: "CREATE INDEX CONCURRENTLY",
+      },
+      {
+        pattern: /^\s*DROP\s+INDEX\s+CONCURRENTLY/im,
+        name: "DROP INDEX CONCURRENTLY",
+      },
+      {
+        pattern: /^\s*ALTER\s+TYPE\s+.*\s+ADD\s+VALUE/im,
+        name: "ALTER TYPE ADD VALUE",
+      },
+    ];
+
+    for (const file of migrationFiles) {
+      const content = readMigrationContent(file);
+      const lines = content.split("\n");
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line || line.startsWith("--") || line.startsWith("/*")) continue;
+
+        for (const { pattern, name } of incompatiblePatterns) {
+          if (pattern.test(line)) {
+            transactionalIssues.push({
+              file,
+              line: i + 1,
+              operation: `${name}: ${line.substring(0, 80)}...`,
+            });
+          }
+        }
+      }
+    }
+
+    expect(
+      transactionalIssues,
+      `Operations incompatible with Drizzle's transactional startup migrator: ${JSON.stringify(transactionalIssues, null, 2)}`
+    ).toHaveLength(0);
+  });
+
+  test("Railway deployment docs require migrations instead of schema push", () => {
+    const docs = [
+      "docs/DEPLOYMENT_RAILWAY.md",
+      "docs/deployment/DEPLOYMENT.md",
+    ];
+
+    for (const docPath of docs) {
+      const content = fs.readFileSync(path.resolve(process.cwd(), docPath), "utf-8");
+
+      expect(content, `${docPath} should document committed migration application`).toContain(
+        "drizzle-kit migrate"
+      );
+      expect(content, `${docPath} must not instruct staging/production schema push`).not.toContain(
+        "railway run npx drizzle-kit push"
+      );
+    }
   });
 
   test("required tables are defined in migrations", () => {
