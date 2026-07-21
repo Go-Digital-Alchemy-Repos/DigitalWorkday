@@ -1182,6 +1182,16 @@ router.get("/crm/clients/:clientId/conversations/merge-candidates", requireAuth,
       isNull(clientConversations.closedAt),
     );
 
+    const messageMeta = db.select({
+      conversationId: clientMessages.conversationId,
+      messageCount: count(clientMessages.id).as("message_count"),
+      lastMessageAt: dsql<Date>`max(${clientMessages.createdAt})`.as("last_message_at"),
+    })
+      .from(clientMessages)
+      .where(eq(clientMessages.tenantId, tenantId))
+      .groupBy(clientMessages.conversationId)
+      .as("message_meta");
+
     const results = await db.select({
       id: clientConversations.id,
       subject: clientConversations.subject,
@@ -1189,25 +1199,20 @@ router.get("/crm/clients/:clientId/conversations/merge-candidates", requireAuth,
       createdAt: clientConversations.createdAt,
       updatedAt: clientConversations.updatedAt,
       assignedToUserId: clientConversations.assignedToUserId,
+      messageCount: messageMeta.messageCount,
+      lastMessageAt: messageMeta.lastMessageAt,
     })
       .from(clientConversations)
+      .leftJoin(messageMeta, eq(messageMeta.conversationId, clientConversations.id))
       .where(condition)
       .orderBy(desc(clientConversations.updatedAt));
 
     const filtered = excludeId ? results.filter(r => r.id !== excludeId) : results;
 
-    const withMeta = await Promise.all(filtered.map(async (c) => {
-      const [msgCount] = await db.select({ value: count() })
-        .from(clientMessages)
-        .where(eq(clientMessages.conversationId, c.id));
-      const [lastMsg] = await db.select({
-        createdAt: clientMessages.createdAt,
-      })
-        .from(clientMessages)
-        .where(eq(clientMessages.conversationId, c.id))
-        .orderBy(desc(clientMessages.createdAt))
-        .limit(1);
-      return { ...c, messageCount: msgCount?.value || 0, lastMessage: lastMsg || null };
+    const withMeta = filtered.map(({ lastMessageAt, messageCount, ...conversation }) => ({
+      ...conversation,
+      messageCount: Number(messageCount || 0),
+      lastMessage: lastMessageAt ? { createdAt: lastMessageAt } : null,
     }));
 
     res.json(withMeta);

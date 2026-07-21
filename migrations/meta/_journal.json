@@ -85,6 +85,13 @@
       "when": 1778097600000,
       "tag": "0049_user_client_access_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778184000000,
+      "tag": "0050_query_performance_indexes",
+      "breakpoints": true
     }
   ]
 }

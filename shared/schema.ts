@@ -1663,6 +1663,8 @@ export const notifications = pgTable("notifications", {
   index("notifications_tenant_user_idx").on(table.tenantId, table.userId),
   index("notifications_dedupe_idx").on(table.tenantId, table.userId, table.dedupeKey),
   index("notifications_group_lookup_idx").on(table.tenantId, table.userId, table.dedupeKey, table.isDismissed),
+  index("notifications_user_dismissed_created_idx").on(table.userId, table.isDismissed, table.createdAt),
+  index("notifications_user_dismissed_read_created_idx").on(table.userId, table.isDismissed, table.readAt, table.createdAt),
 ]);
 
 // Notification preferences table
@@ -3695,6 +3697,8 @@ export const clientConversations = pgTable("client_conversations", {
   index("client_conversations_type_idx").on(table.tenantId, table.clientId, table.type),
   index("client_conversations_dup_detect_idx").on(table.tenantId, table.clientId, table.subject, table.createdAt),
   index("client_conversations_sla_check_idx").on(table.tenantId, table.closedAt, table.firstResponseAt),
+  index("client_conversations_tenant_client_updated_idx").on(table.tenantId, table.clientId, table.updatedAt),
+  index("client_conversations_tenant_updated_idx").on(table.tenantId, table.updatedAt),
 ]);
 
 export const insertClientConversationSchema = createInsertSchema(clientConversations).omit({
@@ -3732,6 +3736,7 @@ export const clientMessages = pgTable("client_messages", {
   index("client_messages_conversation_idx").on(table.conversationId),
   index("client_messages_created_idx").on(table.createdAt),
   index("client_messages_visibility_idx").on(table.visibility),
+  index("client_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
 ]);
 
 export const insertClientMessageSchema = createInsertSchema(clientMessages).omit({
@@ -3955,6 +3960,8 @@ export const supportTickets = pgTable("support_tickets", {
   index("support_tickets_tenant_status_idx").on(table.tenantId, table.status, table.priority),
   index("support_tickets_tenant_client_idx").on(table.tenantId, table.clientId),
   index("support_tickets_tenant_assigned_idx").on(table.tenantId, table.assignedToUserId),
+  index("support_tickets_tenant_last_activity_idx").on(table.tenantId, table.lastActivityAt),
+  index("support_tickets_tenant_client_last_activity_idx").on(table.tenantId, table.clientId, table.lastActivityAt),
 ]);
 
 export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
