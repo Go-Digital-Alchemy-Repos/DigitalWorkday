@@ -102,26 +102,43 @@ export async function resolveWorkspaceIdForLogin(user: Express.User): Promise<st
 
 async function finishLogin(req: Request, res: Response, user: Express.User): Promise<void> {
   const workspaceId = await resolveWorkspaceIdForLogin(user);
-  req.session.workspaceId = workspaceId;
-
-  req.session.save((saveErr) => {
-    if (saveErr) {
-      console.error("Session save error:", saveErr);
-    }
-    return res.json({ user, workspaceId });
-  });
+  await establishAuthenticatedSession(req, user, workspaceId);
+  res.json({ user, workspaceId });
 }
 
 async function finishGoogleLogin(req: Request, res: Response, user: Express.User): Promise<void> {
   const workspaceId = await resolveWorkspaceIdForLogin(user);
+  await establishAuthenticatedSession(req, user, workspaceId);
+  const destination = user.role === UserRole.SUPER_USER ? "/super-admin/dashboard" : "/";
+  res.redirect(destination);
+}
+
+export async function establishAuthenticatedSession(
+  req: Request,
+  user: Express.User,
+  workspaceId?: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    req.session.regenerate((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    req.logIn(user, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+
   req.session.workspaceId = workspaceId;
 
-  req.session.save((saveErr) => {
-    if (saveErr) {
-      console.error("[auth] Google OAuth session save error:", saveErr);
-    }
-    const destination = user.role === UserRole.SUPER_USER ? "/super-admin/dashboard" : "/";
-    res.redirect(destination);
+  await new Promise<void>((resolve, reject) => {
+    req.session.save((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
   });
 }
 
@@ -333,21 +350,15 @@ export function setupAuth(app: Express): void {
       if (!user) {
         return res.status(401).json({ error: info?.message || "Invalid credentials" });
       }
-      req.logIn(user, async (loginErr) => {
-        if (loginErr) {
-          return res.status(500).json({ error: "Login failed" });
-        }
-        
-        try {
-          await finishLogin(req, res, user);
-        } catch (workspaceErr) {
-          console.error("Workspace lookup error:", workspaceErr);
-          req.logout(() => {});
-          const message = workspaceErr instanceof Error ? workspaceErr.message : "Failed to resolve workspace";
-          const status = message.startsWith("No workspace access") ? 403 : 500;
-          return res.status(status).json({ error: message });
-        }
-      });
+      try {
+        await finishLogin(req, res, user);
+      } catch (workspaceErr) {
+        console.error("Login session establishment error:", workspaceErr);
+        req.logout(() => {});
+        const message = workspaceErr instanceof Error ? workspaceErr.message : "Failed to resolve workspace";
+        const status = message.startsWith("No workspace access") ? 403 : 500;
+        return res.status(status).json({ error: status === 500 ? "Login failed" : message });
+      }
     })(req, res, next);
   });
 
@@ -383,20 +394,11 @@ export function setupAuth(app: Express): void {
         return redirectToLoginWithError(res, info?.message || "Google authentication failed");
       }
 
-      req.logIn(user, async (loginErr) => {
-        if (loginErr) {
-          console.error("[auth] Google OAuth login error:", loginErr);
-          return redirectToLoginWithError(res, "Login failed");
-        }
-
-        try {
-          await finishGoogleLogin(req, res, user);
-        } catch (workspaceErr) {
-          console.error("[auth] Google OAuth workspace lookup error:", workspaceErr);
-          req.logout(() => {});
-          const message = workspaceErr instanceof Error ? workspaceErr.message : "Failed to resolve workspace";
-          return redirectToLoginWithError(res, message);
-        }
+      finishGoogleLogin(req, res, user).catch((workspaceErr) => {
+        console.error("[auth] Google OAuth session establishment error:", workspaceErr);
+        req.logout(() => {});
+        const message = workspaceErr instanceof Error ? workspaceErr.message : "Failed to resolve workspace";
+        return redirectToLoginWithError(res, message.startsWith("No workspace access") ? message : "Login failed");
       });
     })(req, res, next);
   });
@@ -747,39 +749,31 @@ export function setupBootstrapEndpoints(app: Express): void {
       const { passwordHash: _, ...userWithoutPassword } = result.user!;
 
       // Log in the user immediately
-      req.logIn(userWithoutPassword as Express.User, (loginErr) => {
-        if (loginErr) {
-          console.error("[auth] bootstrap login error:", loginErr);
-          return res.status(201).json({ 
-            user: userWithoutPassword,
-            message: "Account created but auto-login failed. Please log in manually.",
-            autoLoginFailed: true,
-          });
-        }
-
-        // Save session
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error("[auth] session save error:", saveErr);
-          }
-
-          // Log bootstrap event
-          console.log(JSON.stringify({
-            level: "info",
-            component: "auth",
-            event: "bootstrap_register_created_super_admin",
-            userId: userWithoutPassword.id,
-            email: userWithoutPassword.email,
-            requestId: req.requestId || "unknown",
-            timestamp: new Date().toISOString(),
-          }));
-
-          res.status(201).json({ 
-            user: userWithoutPassword,
-            message: "Super Admin account created successfully.",
-            autoLoginFailed: false,
-          });
+      try {
+        await establishAuthenticatedSession(req, userWithoutPassword as Express.User);
+      } catch (loginErr) {
+        console.error("[auth] bootstrap login error:", loginErr);
+        return res.status(201).json({
+          user: userWithoutPassword,
+          message: "Account created but auto-login failed. Please log in manually.",
+          autoLoginFailed: true,
         });
+      }
+
+      console.log(JSON.stringify({
+        level: "info",
+        component: "auth",
+        event: "bootstrap_register_created_super_admin",
+        userId: userWithoutPassword.id,
+        email: userWithoutPassword.email,
+        requestId: req.requestId || "unknown",
+        timestamp: new Date().toISOString(),
+      }));
+
+      res.status(201).json({
+        user: userWithoutPassword,
+        message: "Super Admin account created successfully.",
+        autoLoginFailed: false,
       });
     } catch (error) {
       console.error("[auth] bootstrap-register error:", error);
@@ -983,38 +977,32 @@ export function setupPlatformInviteEndpoints(app: Express): void {
       // Log in the user
       const { passwordHash: _, ...userWithoutPassword } = updatedUser;
       
-      req.logIn(userWithoutPassword as Express.User, (loginErr) => {
-        if (loginErr) {
-          console.error("[auth] platform-invite login error:", loginErr);
-          return res.status(200).json({
-            success: true,
-            user: userWithoutPassword,
-            message: "Password set successfully. Please log in.",
-            autoLoginFailed: true,
-          });
-        }
-        
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error("[auth] session save error:", saveErr);
-          }
-          
-          console.log(JSON.stringify({
-            level: "info",
-            component: "auth",
-            event: "platform_invite_accepted",
-            userId: userWithoutPassword.id,
-            email: userWithoutPassword.email,
-            timestamp: new Date().toISOString(),
-          }));
-          
-          res.json({
-            success: true,
-            user: userWithoutPassword,
-            message: "Account activated successfully.",
-            autoLoginFailed: false,
-          });
+      try {
+        await establishAuthenticatedSession(req, userWithoutPassword as Express.User);
+      } catch (loginErr) {
+        console.error("[auth] platform-invite login error:", loginErr);
+        return res.status(200).json({
+          success: true,
+          user: userWithoutPassword,
+          message: "Password set successfully. Please log in.",
+          autoLoginFailed: true,
         });
+      }
+
+      console.log(JSON.stringify({
+        level: "info",
+        component: "auth",
+        event: "platform_invite_accepted",
+        userId: userWithoutPassword.id,
+        email: userWithoutPassword.email,
+        timestamp: new Date().toISOString(),
+      }));
+
+      res.json({
+        success: true,
+        user: userWithoutPassword,
+        message: "Account activated successfully.",
+        autoLoginFailed: false,
       });
     } catch (error) {
       console.error("[auth] platform-invite/accept error:", error);
@@ -1364,45 +1352,36 @@ export function setupTenantInviteEndpoints(app: Express): void {
       // Log the user in (establish session)
       const { passwordHash: _, ...userWithoutPassword } = user;
       
-      req.login(userWithoutPassword, (loginErr) => {
-        if (loginErr) {
-          console.error("[auth] tenant-invite login error:", loginErr);
-          return res.json({
-            ok: true,
-            success: true,
-            user: userWithoutPassword,
-            message: "Account activated. Please log in manually.",
-            autoLoginFailed: true,
-          });
-        }
-        
-        // Set workspace in session
-        req.session.workspaceId = invite.workspaceId;
-        
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error("[auth] session save error:", saveErr);
-          }
-          
-          console.log(JSON.stringify({
-            level: "info",
-            component: "auth",
-            event: "tenant_invite_accepted",
-            userId: userWithoutPassword.id,
-            email: userWithoutPassword.email,
-            tenantId: invite.tenantId,
-            workspaceId: invite.workspaceId,
-            timestamp: new Date().toISOString(),
-          }));
-          
-          res.json({
-            ok: true,
-            success: true,
-            user: userWithoutPassword,
-            message: "Account activated successfully.",
-            autoLoginFailed: false,
-          });
+      try {
+        await establishAuthenticatedSession(req, userWithoutPassword, invite.workspaceId);
+      } catch (loginErr) {
+        console.error("[auth] tenant-invite login error:", loginErr);
+        return res.json({
+          ok: true,
+          success: true,
+          user: userWithoutPassword,
+          message: "Account activated. Please log in manually.",
+          autoLoginFailed: true,
         });
+      }
+
+      console.log(JSON.stringify({
+        level: "info",
+        component: "auth",
+        event: "tenant_invite_accepted",
+        userId: userWithoutPassword.id,
+        email: userWithoutPassword.email,
+        tenantId: invite.tenantId,
+        workspaceId: invite.workspaceId,
+        timestamp: new Date().toISOString(),
+      }));
+
+      res.json({
+        ok: true,
+        success: true,
+        user: userWithoutPassword,
+        message: "Account activated successfully.",
+        autoLoginFailed: false,
       });
     } catch (error) {
       console.error("[auth] tenant-invite/accept error:", error);
