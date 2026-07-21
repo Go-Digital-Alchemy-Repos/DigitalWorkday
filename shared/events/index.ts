@@ -762,7 +762,7 @@ export interface NotificationPayload {
   type: string;
   title: string;
   message: string | null;
-  payloadJson: any;
+  payloadJson: unknown;
   severity: string;
   entityType: string | null;
   entityId: string | null;

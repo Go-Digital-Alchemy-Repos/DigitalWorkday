@@ -37,6 +37,26 @@ function rgbaToString(rgba: RgbaColor): string {
 
 const supportsEyeDropper = typeof window !== "undefined" && "EyeDropper" in window;
 
+interface EyeDropperResult {
+  sRGBHex: string;
+}
+
+interface EyeDropper {
+  open(): Promise<EyeDropperResult>;
+}
+
+interface EyeDropperConstructor {
+  new (): EyeDropper;
+}
+
+function getEyeDropperConstructor(): EyeDropperConstructor | null {
+  if (typeof window === "undefined" || !("EyeDropper" in window)) {
+    return null;
+  }
+
+  return (window as Window & { EyeDropper: EyeDropperConstructor }).EyeDropper;
+}
+
 interface ColorPickerProps {
   value?: string;
   defaultValue?: string;
@@ -104,15 +124,15 @@ export function ColorPicker({
   );
 
   const handleEyeDropper = useCallback(async () => {
-    if (!supportsEyeDropper) return;
+    const EyeDropper = getEyeDropperConstructor();
+    if (!EyeDropper) return;
     try {
       setIsSampling(true);
       // Close the popover so the eyedropper can sample the full page
       setIsOpen(false);
       // Small delay to let the popover close before the eyedropper activates
       await new Promise((resolve) => setTimeout(resolve, 150));
-      // @ts-ignore — EyeDropper is not yet in the TS lib but is supported in Chrome/Edge
-      const eyeDropper = new window.EyeDropper();
+      const eyeDropper = new EyeDropper();
       const result = await eyeDropper.open();
       const hex = result.sRGBHex;
       const newColor = hexToRgba(hex);
