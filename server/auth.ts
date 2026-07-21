@@ -29,6 +29,7 @@ import type { User } from "@shared/schema";
 import type { Express, Request, RequestHandler, Response } from "express";
 import connectPgSimple from "connect-pg-simple";
 import { Pool } from "pg";
+import { getDbPoolCapacityConfig } from "./dbPoolConfig";
 import { isGoogleEmailAllowed } from "./auth/googleDomain";
 import { buildAppUrl } from "./lib/appLinks";
 import { 
@@ -199,8 +200,14 @@ export function setupAuth(app: Express): void {
   }
 
   const PgSession = connectPgSimple(session);
+  const sessionPoolCapacity = getDbPoolCapacityConfig(process.env).session;
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    max: sessionPoolCapacity.max,
+    min: process.env.DATABASE_URL ? sessionPoolCapacity.min : 0,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
   });
 
   // Create session table manually if it doesn't exist

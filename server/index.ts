@@ -141,9 +141,9 @@ app.get("/readyz", async (_req, res) => {
     const { checkDbHealth } = await import("./db");
     const dbHealth = await checkDbHealth();
     if (dbHealth.connected) {
-      res.status(200).json({ ok: true, db: "ok", ts: new Date().toISOString() });
+      res.status(200).json({ ok: true, db: "ok", pool: dbHealth.pool, ts: new Date().toISOString() });
     } else {
-      res.status(503).json({ ok: false, db: "degraded", ts: new Date().toISOString(), detail: dbHealth.error });
+      res.status(503).json({ ok: false, db: "degraded", pool: dbHealth.pool, ts: new Date().toISOString(), detail: dbHealth.error });
     }
   } catch (err: any) {
     res.status(503).json({ ok: false, db: "degraded", ts: new Date().toISOString(), detail: err?.message });

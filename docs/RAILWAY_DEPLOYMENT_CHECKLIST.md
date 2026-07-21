@@ -20,6 +20,8 @@ This document provides a comprehensive guide for deploying MyWorkDay to Railway.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `FAIL_ON_SCHEMA_ISSUES` | `true` | Fail startup if schema is incomplete (always true in production) |
+| `DB_POOL_MAX` | `10` | Primary app Postgres pool max per Railway replica |
+| `SESSION_DB_POOL_MAX` | `5` | Session-store Postgres pool max per Railway replica |
 | `RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
 | `MAILGUN_API_KEY` | - | For email functionality |
 | `MAILGUN_DOMAIN` | - | Mailgun sending domain |

@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import { getDbPoolCapacityConfig } from "./dbPoolConfig";
 
 const { Pool } = pg;
 
@@ -9,6 +10,7 @@ const { Pool } = pg;
 // This enables health check endpoints to respond even if DB is misconfigured
 const databaseUrl = process.env.DATABASE_URL;
 const isProduction = process.env.NODE_ENV === "production";
+const poolCapacity = getDbPoolCapacityConfig(process.env, { databaseConfigured: !!databaseUrl });
 
 // Log warning if DATABASE_URL is missing (will fail when actually used)
 if (!databaseUrl) {
@@ -21,8 +23,8 @@ if (!databaseUrl) {
 export const pool = new Pool({
   connectionString: databaseUrl || "postgresql://dummy:dummy@localhost:5432/dummy",
   ssl: isProduction ? { rejectUnauthorized: false } : false,
-  max: 10,
-  min: databaseUrl ? 2 : 0, // Don't create connections if no URL
+  max: poolCapacity.app.max,
+  min: databaseUrl ? poolCapacity.app.min : 0, // Don't create connections if no URL
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
@@ -48,7 +50,10 @@ if (databaseUrl) {
 export const isDatabaseConfigured = !!databaseUrl;
 
 if (databaseUrl) {
-  console.log(`[db] Pool initialized: min=2 max=10 idleTimeout=30s connectTimeout=5s ssl=${isProduction}`);
+  console.log(
+    `[db] Pool initialized: min=${poolCapacity.app.min} max=${poolCapacity.app.max} ` +
+    `idleTimeout=30s connectTimeout=5s ssl=${isProduction}`
+  );
 } else {
   console.log(`[db] Pool NOT initialized - DATABASE_URL missing`);
 }

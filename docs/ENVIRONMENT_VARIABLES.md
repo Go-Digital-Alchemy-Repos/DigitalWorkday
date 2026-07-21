@@ -10,6 +10,10 @@ This document lists all environment variables used in the application, grouped b
 | Variable | Required | Secret | Description | Default |
 |----------|----------|--------|-------------|---------|
 | `DATABASE_URL` | Yes | Yes | PostgreSQL connection string | - |
+| `DB_POOL_MAX` | No | No | Maximum primary application Postgres connections per app replica | `10` |
+| `DB_POOL_MIN` | No | No | Minimum primary application Postgres connections per app replica | `2` when `DATABASE_URL` is set |
+| `SESSION_DB_POOL_MAX` | No | No | Maximum session-store Postgres connections per app replica | `5` |
+| `SESSION_DB_POOL_MIN` | No | No | Minimum session-store Postgres connections per app replica | `0` |
 | `PGHOST` | No | No | PostgreSQL host (auto-set by Replit) | - |
 | `PGPORT` | No | No | PostgreSQL port | 5432 |
 | `PGUSER` | No | No | PostgreSQL user | - |
