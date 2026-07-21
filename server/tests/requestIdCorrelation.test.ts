@@ -6,19 +6,13 @@
 
 import { describe, it, expect } from 'vitest';
 import express, { Request, Response, NextFunction } from "express";
-import { randomUUID } from 'crypto';
 import { request } from "./httpHarness";
+import { requestIdMiddleware } from "../middleware/requestId";
 
 function createTestAppWithRequestId() {
   const app = express();
   app.use(express.json());
-  
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const requestId = req.headers['x-request-id'] as string || randomUUID();
-    res.setHeader('X-Request-Id', requestId);
-    (req as any).requestId = requestId;
-    next();
-  });
+  app.use(requestIdMiddleware);
   
   app.get('/api/test/success', (_req: Request, res: Response) => {
     res.json({ success: true });
@@ -116,6 +110,26 @@ describe('Request ID format validation', () => {
       .set('X-Request-Id', customId);
     
     expect(response.headers['x-request-id']).toBe(customId);
+  });
+
+  it('should reject client-provided IDs with control characters', async () => {
+    const app = createTestAppWithRequestId();
+    const response = await request(app)
+      .get('/api/test/success')
+      .set('X-Request-Id', 'bad\nrequest-id');
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    expect(response.headers['x-request-id']).toMatch(uuidRegex);
+  });
+
+  it('should reject oversized client-provided IDs', async () => {
+    const app = createTestAppWithRequestId();
+    const response = await request(app)
+      .get('/api/test/success')
+      .set('X-Request-Id', 'x'.repeat(129));
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    expect(response.headers['x-request-id']).toMatch(uuidRegex);
   });
 });
 

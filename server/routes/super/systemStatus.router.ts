@@ -19,8 +19,16 @@ import { sql } from "drizzle-orm";
 import { isS3Configured } from "../../s3";
 import { isEncryptionAvailable } from "../../lib/encryption";
 import { checkSchemaReadiness } from "../../startup/schemaReadiness";
+import { createLogger, ctxFromReq } from "../../lib/logger";
+import { redactSecrets } from "../../lib/redaction";
 
 const router = createApiRouter({ policy: "superUser" });
+const statusLog = createLogger("super:status");
+
+function diagnosticErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return redactSecrets(message || "Unknown error");
+}
 
 /**
  * GET /status/health - System health checks
@@ -45,7 +53,10 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
       dbLatency = Date.now() - dbStart;
       databaseStatus = "healthy";
     } catch (e) {
-      console.error("[health] Database check failed:", e);
+      statusLog.error("Health database check failed", {
+        ...ctxFromReq(req),
+        error: diagnosticErrorMessage(e),
+      });
     }
     
     const s3Status: "healthy" | "not_configured" = isS3Configured() ? "healthy" : "not_configured";
@@ -81,7 +92,10 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[health] Health check failed:", error);
+    statusLog.error("Health check failed", {
+      ...ctxFromReq(req),
+      error: diagnosticErrorMessage(error),
+    });
     res.status(500).json({ error: "Health check failed" });
   }
 });
@@ -102,7 +116,7 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
  * - Debug Railway/production deployment issues
  * - Verify trust proxy and CORS settings
  */
-router.get("/status/auth-diagnostics", requireSuperUser, async (_req, res) => {
+router.get("/status/auth-diagnostics", requireSuperUser, async (req, res) => {
   try {
     const nodeEnv = process.env.NODE_ENV || "development";
     const isProduction = nodeEnv === "production";
@@ -210,7 +224,10 @@ router.get("/status/auth-diagnostics", requireSuperUser, async (_req, res) => {
       lastAuthCheck: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[auth-diagnostics] Failed:", error);
+    statusLog.error("Auth diagnostics failed", {
+      ...ctxFromReq(req),
+      error: diagnosticErrorMessage(error),
+    });
     res.status(500).json({ error: "Auth diagnostics failed" });
   }
 });
@@ -227,7 +244,7 @@ router.get("/status/auth-diagnostics", requireSuperUser, async (_req, res) => {
  * 
  * Super Admin only.
  */
-router.get("/status/db", requireSuperUser, async (_req, res) => {
+router.get("/status/db", requireSuperUser, async (req, res) => {
   try {
     const schemaStatus = await checkSchemaReadiness();
     
@@ -248,14 +265,17 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
         createdAt: row.created_at,
       }));
     } catch (e: any) {
-      const errMsg = e?.message || String(e);
+      const errMsg = diagnosticErrorMessage(e);
       // Check if it's a "table doesn't exist" error (fresh database)
       if (errMsg.includes("does not exist") || errMsg.includes("relation")) {
         migrationHistoryError = "Migrations table not found - database may need initial migration";
       } else {
         migrationHistoryError = `Failed to query migrations: ${errMsg}`;
       }
-      console.error("[status/db] Failed to get migration history:", errMsg);
+      statusLog.warn("Failed to get migration history", {
+        ...ctxFromReq(req),
+        error: errMsg,
+      });
     }
     
     // Check for pending migrations by reading migration folder
@@ -274,7 +294,10 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
         pendingMigrations = migrationFiles.filter(f => !appliedHashes.has(f));
       }
     } catch (e: any) {
-      console.error("[status/db] Failed to read migrations folder:", e?.message || e);
+      statusLog.warn("Failed to read migrations folder", {
+        ...ctxFromReq(req),
+        error: diagnosticErrorMessage(e),
+      });
     }
     
     // Count missing tables
@@ -340,10 +363,14 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
       checkedAt: new Date().toISOString(),
     });
   } catch (error: any) {
-    console.error("[status/db] Database status check failed:", error);
+    const message = diagnosticErrorMessage(error);
+    statusLog.error("Database status check failed", {
+      ...ctxFromReq(req),
+      error: message,
+    });
     res.status(500).json({ 
       error: "Database status check failed",
-      message: error?.message || String(error),
+      message,
     });
   }
 });
@@ -372,7 +399,11 @@ router.post("/status/checks/:type", requireSuperUser, async (req, res) => {
         res.status(400).json({ error: `Unknown check type: ${type}` });
     }
   } catch (error) {
-    console.error("[checks] Check failed:", error);
+    statusLog.error("Manual diagnostic check failed", {
+      ...ctxFromReq(req),
+      checkType: req.params.type,
+      error: diagnosticErrorMessage(error),
+    });
     res.status(500).json({ error: "Check failed" });
   }
 });
