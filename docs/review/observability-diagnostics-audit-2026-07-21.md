@@ -45,9 +45,10 @@ The main gaps are consistency and depth rather than absence. Some diagnostic rou
 - `npm run test:http` - 19 files / 247 tests passed.
 - `npm run test:ci` - supply-chain check, TypeScript, fast tests, client tests, and production build passed.
 
-Deployment verification pending:
-
-- Railway production and staging health checks after deployment.
+- Railway production deployment `0794432d-a73c-4328-aae7-26faf9f852b6` succeeded on commit `075552b3`.
+- Railway staging deployment `d0d4b502-7703-4e3e-ab6b-396979b28b06` succeeded on commit `075552b3`.
+- Production health: `https://digitalworkday.ai/health` returned `ok: true`, `ready: true`, version `075552b`.
+- Staging health: `https://digitalworkday-staging.up.railway.app/health` returned `ok: true`, `ready: true`, version `075552b`.
 
 ## Residual Risk
 
