@@ -23,7 +23,7 @@ function rejectClientPortalUsers(req: Request, res: Response, next: import("expr
   next();
 }
 
-router.use(rejectClientPortalUsers);
+router.use("/projects/:projectId/notes", rejectClientPortalUsers);
 
 const createNoteSchema = z.object({
   body: z.any(),

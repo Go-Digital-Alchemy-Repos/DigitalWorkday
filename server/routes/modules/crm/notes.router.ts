@@ -24,7 +24,8 @@ function rejectClientPortalUsers(req: Request, res: Response, next: import("expr
   next();
 }
 
-router.use(rejectClientPortalUsers);
+router.use("/crm/clients/:clientId/notes", rejectClientPortalUsers);
+router.use("/crm/notes", rejectClientPortalUsers);
 
 const crmNoteCreateSchema = z.object({
   body: z.unknown(),

@@ -38,7 +38,7 @@ function rejectClientPortalUsers(req: Request, res: Response, next: import("expr
   next();
 }
 
-router.use(rejectClientPortalUsers);
+router.use("/:clientId/notes", rejectClientPortalUsers);
 
 const createNoteSchema = z.object({
   clientId: z.string().uuid(),
