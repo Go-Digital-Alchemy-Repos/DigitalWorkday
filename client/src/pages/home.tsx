@@ -28,7 +28,7 @@ import { ProjectClientBadge } from "@/components/project-client-badge";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { TaskCard } from "@/features/tasks/task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
-import { CreateProjectDialog } from "@/features/projects";
+import { CreateProjectDialog } from "@/features/projects/create-project-dialog";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { fetchTaskDetail } from "@/lib/task-detail";

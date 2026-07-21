@@ -68,8 +68,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { CreateProjectDialog } from "@/features/projects";
-import { TeamDrawer } from "@/features/teams";
+import { CreateProjectDialog } from "@/features/projects/create-project-dialog";
+import { TeamDrawer } from "@/features/teams/team-drawer";
 import { addUsersToTeam } from "@/features/teams/team-member-batch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";

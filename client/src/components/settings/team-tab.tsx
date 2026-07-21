@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { useToast } from "@/hooks/use-toast";
 import { UserDrawer } from "@/components/user-drawer";
-import { TeamDrawer } from "@/features/teams";
+import { TeamDrawer } from "@/features/teams/team-drawer";
 import { addUsersToTeam } from "@/features/teams/team-member-batch";
 import { UserProfilePanel } from "@/components/settings/user-profile-panel";
 import {

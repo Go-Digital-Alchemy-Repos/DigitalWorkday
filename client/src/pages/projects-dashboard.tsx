@@ -24,7 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock } from "lucide-react";
-import { ProjectDrawer } from "@/features/projects";
+import { ProjectDrawer } from "@/features/projects/project-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useWorkspaceRealtime } from "@/lib/realtime";

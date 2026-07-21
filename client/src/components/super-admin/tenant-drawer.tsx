@@ -69,7 +69,7 @@ import {
   getStatusBadge,
 } from "./tenant-drawer/index";
 import type { TenantWithDetails, TenantSettings, OnboardingProgress, IntegrationStatus } from "./tenant-drawer/types";
-import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
+import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs/DefaultTenantDocumentsManager";
 
 interface TenantDrawerProps {
   tenant: TenantWithDetails | null;

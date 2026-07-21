@@ -9,7 +9,7 @@ import { AgreementTab } from "@/components/settings/agreement-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 import { MessagesTab } from "@/components/settings/messages-tab";
 import { PipelineAutomationTab } from "@/components/settings/pipeline-automation-tab";
-import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
+import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs/DefaultTenantDocumentsManager";
 import AlertRulesPage from "@/pages/settings-alerts";
 import DigestConfigPage from "@/pages/settings-digest";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";

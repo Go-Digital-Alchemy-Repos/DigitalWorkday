@@ -54,8 +54,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ProjectDrawer } from "@/features/projects";
-import { TeamDrawer } from "@/features/teams";
+import { ProjectDrawer } from "@/features/projects/project-drawer";
+import { TeamDrawer } from "@/features/teams/team-drawer";
 import { addUsersToTeam } from "@/features/teams/team-member-batch";
 import { useToast } from "@/hooks/use-toast";
 import type { Client, Project, Team, Workspace, User } from "@shared/schema";

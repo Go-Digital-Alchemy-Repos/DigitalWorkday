@@ -10,7 +10,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ProjectClientBadge } from "@/components/project-client-badge";
-import { TeamDrawer } from "@/features/teams";
+import { TeamDrawer } from "@/features/teams/team-drawer";
 import {
   AlertDialog,
   AlertDialogAction,

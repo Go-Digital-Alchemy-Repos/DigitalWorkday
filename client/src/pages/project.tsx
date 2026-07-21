@@ -42,7 +42,11 @@ import { TaskCard } from "@/features/tasks/task-card";
 import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
-import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
+import { ProjectCalendar } from "@/features/projects/project-calendar";
+import { ProjectSettingsSheet } from "@/features/projects/project-settings-sheet";
+import { ProjectMembersSheet } from "@/features/projects/project-members-sheet";
+import { ProjectActivityFeed } from "@/features/projects/project-activity-feed";
+import { AIProjectPlanner } from "@/features/projects/ai-project-planner";
 import {
   Sheet,
   SheetContent,

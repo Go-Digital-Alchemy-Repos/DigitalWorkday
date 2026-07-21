@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualizedList } from "@/components/ui/virtualized-list";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
-import { ClientDrawer } from "@/features/clients";
+import { ClientDrawer } from "@/features/clients/client-drawer";
 import {
   Sheet,
   SheetContent,

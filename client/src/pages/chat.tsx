@@ -3,7 +3,14 @@ import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } fro
 import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, ChatAIAssist, ConvertToTaskAction, SlashCommandDropdown, getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand, type ReadByUser } from "@/features/chat";
+import { useChatUrlState } from "@/features/chat/ChatLayout";
+import { ConversationListPanel } from "@/features/chat/ConversationListPanel";
+import { ChatMessageTimeline, type ReadByUser } from "@/features/chat/ChatMessageTimeline";
+import { ChatContextPanelToggle } from "@/features/chat/ChatContextPanelToggle";
+import { PinnedMessagesPanel } from "@/features/chat/PinnedMessagesPanel";
+import { ChatAIAssist, ConvertToTaskAction } from "@/features/chat/ChatAIAssist";
+import { SlashCommandDropdown } from "@/features/chat/SlashCommandDropdown";
+import { getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand } from "@/features/chat/slashCommands";
 
 const LazyChatContextPanel = lazy(() =>
   import("@/features/chat/ChatContextPanel").then((mod) => ({
