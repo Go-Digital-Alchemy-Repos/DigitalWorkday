@@ -4,6 +4,9 @@ import { type User, UserRole } from "@shared/schema";
 import { clearActingAsState, setSuperUserFlag, queryClient, markAuthenticated, clearAuthenticated } from "./queryClient";
 import { prefetchPostLogin, resetPrefetchState, type PrefetchOptions } from "./prefetch";
 
+const DEBUG_AUTH =
+  import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH === "true";
+
 interface UserImpersonationData {
   isImpersonating: boolean;
   impersonatedUser: {
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         
-        if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH === "true") {
+        if (DEBUG_AUTH) {
           console.log("[Auth] /api/auth/me response:", {
             userId: data.user?.id,
             email: data.user?.email,
@@ -80,7 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         markAuthenticated();
         triggerPrefetch(data.user?.role);
       } else {
-        console.log("[Auth] /api/auth/me failed:", response.status);
+        if (DEBUG_AUTH) {
+          console.log("[Auth] /api/auth/me failed:", response.status);
+        }
         setUser(null);
         setUserImpersonation(null);
         clearActingAsState();

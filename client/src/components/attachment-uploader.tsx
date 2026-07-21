@@ -22,6 +22,9 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { TaskAttachmentWithUser } from "@shared/schema";
 
+const DEBUG_UPLOADS =
+  import.meta.env.DEV || import.meta.env.VITE_DEBUG_UPLOADS === "true";
+
 interface AttachmentUploaderProps {
   taskId: string;
   projectId: string | null;
@@ -153,7 +156,9 @@ async function compressImageIfNeeded(file: File): Promise<{ file: File; mimeType
             const ext = outputType === "image/webp" ? ".webp" : ".png";
             const baseName = file.name.replace(/\.[^.]+$/, "");
             const compressedFile = new window.File([blob], baseName + ext, { type: outputType });
-            console.log(`[attachment] Compressed ${file.name}: ${(file.size / 1024).toFixed(1)}KB → ${(blob.size / 1024).toFixed(1)}KB`);
+            if (DEBUG_UPLOADS) {
+              console.log(`[attachment] Compressed ${file.name}: ${(file.size / 1024).toFixed(1)}KB -> ${(blob.size / 1024).toFixed(1)}KB`);
+            }
             resolve({ file: compressedFile, mimeType: outputType });
           } else {
             resolve({ file, mimeType: file.type });

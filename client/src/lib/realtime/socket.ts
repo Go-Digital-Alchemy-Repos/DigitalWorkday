@@ -4,6 +4,9 @@ import { CONNECTION_EVENTS } from "@shared/events";
 
 type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
+const DEBUG_SOCKET =
+  import.meta.env.DEV || import.meta.env.VITE_DEBUG_SOCKET === "true";
+
 let socket: TypedSocket | null = null;
 let isConnected = false;
 let lastServerTime: string | null = null;
@@ -20,6 +23,12 @@ const connectionCallbacks: Set<ConnectionCallback> = new Set();
 type ConnectedAckCallback = (payload: ConnectionConnectedPayload) => void;
 const connectedAckCallbacks: Set<ConnectedAckCallback> = new Set();
 
+function debugSocketLog(message: string, ...args: unknown[]): void {
+  if (DEBUG_SOCKET) {
+    console.log(`[Socket.IO] ${message}`, ...args);
+  }
+}
+
 export function getSocket(): TypedSocket {
   if (!socket) {
     socket = io({
@@ -33,7 +42,7 @@ export function getSocket(): TypedSocket {
     });
 
     socket.on("connect", () => {
-      console.log("[Socket.IO] Connected:", socket?.id);
+      debugSocketLog("Connected:", socket?.id);
       isConnected = true;
       notifyConnectionChange(true);
       
@@ -42,7 +51,7 @@ export function getSocket(): TypedSocket {
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("[Socket.IO] Disconnected:", reason);
+      debugSocketLog("Disconnected:", reason);
       isConnected = false;
       notifyConnectionChange(false);
     });
@@ -56,12 +65,12 @@ export function getSocket(): TypedSocket {
     // Heartbeat/ping handling - socket.io handles this automatically
     // but we can add explicit pong handling if needed
     socket.io.on("ping", () => {
-      console.debug("[Socket.IO] Ping received");
+      debugSocketLog("Ping received");
     });
 
     // Handle server connected ack with serverTime and requestId
     socket.on(CONNECTION_EVENTS.CONNECTED, (payload: ConnectionConnectedPayload) => {
-      console.log("[Socket.IO] Server ack received:", payload.requestId);
+      debugSocketLog("Server ack received:", payload.requestId);
       lastServerTime = payload.serverTime;
       lastRequestId = payload.requestId;
       // Notify any listeners about the connected ack
@@ -110,13 +119,13 @@ export function joinChatRoom(targetType: 'channel' | 'dm', targetId: string): vo
   
   // Prevent duplicate joins
   if (joinedChatRooms.has(roomKey)) {
-    console.debug("[Socket.IO] Already in room:", roomKey);
+    debugSocketLog("Already in room:", roomKey);
     return;
   }
   
   s.emit("chat:join" as any, { targetType, targetId });
   joinedChatRooms.add(roomKey);
-  console.log("[Socket.IO] Joining chat room:", roomKey);
+  debugSocketLog("Joining chat room:", roomKey);
 }
 
 export function leaveChatRoom(targetType: 'channel' | 'dm', targetId: string): void {
@@ -124,25 +133,25 @@ export function leaveChatRoom(targetType: 'channel' | 'dm', targetId: string): v
   const roomKey = `${targetType}:${targetId}`;
   
   if (!joinedChatRooms.has(roomKey)) {
-    console.debug("[Socket.IO] Not in room:", roomKey);
+    debugSocketLog("Not in room:", roomKey);
     return;
   }
   
   s.emit("chat:leave" as any, { targetType, targetId });
   joinedChatRooms.delete(roomKey);
-  console.log("[Socket.IO] Leaving chat room:", roomKey);
+  debugSocketLog("Leaving chat room:", roomKey);
 }
 
 function rejoinChatRooms(): void {
   if (joinedChatRooms.size === 0) return;
   
-  console.log("[Socket.IO] Rejoining", joinedChatRooms.size, "chat rooms after reconnect");
+  debugSocketLog("Rejoining chat rooms after reconnect:", joinedChatRooms.size);
   const s = getSocket();
   
   joinedChatRooms.forEach(roomKey => {
     const [targetType, targetId] = roomKey.split(':') as ['channel' | 'dm', string];
     s.emit("chat:join" as any, { targetType, targetId });
-    console.log("[Socket.IO] Rejoined chat room:", roomKey);
+    debugSocketLog("Rejoined chat room:", roomKey);
   });
 }
 
@@ -153,13 +162,13 @@ export function clearChatRooms(): void {
 export function joinProjectRoom(projectId: string): void {
   const s = getSocket();
   s.emit("room:join:project", { projectId });
-  console.log("[Socket.IO] Joining project room:", projectId);
+  debugSocketLog("Joining project room:", projectId);
 }
 
 export function leaveProjectRoom(projectId: string): void {
   const s = getSocket();
   s.emit("room:leave:project", { projectId });
-  console.log("[Socket.IO] Leaving project room:", projectId);
+  debugSocketLog("Leaving project room:", projectId);
 }
 
 export function disconnectSocket(): void {
