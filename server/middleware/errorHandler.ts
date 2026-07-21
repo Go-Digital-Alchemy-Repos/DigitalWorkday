@@ -14,6 +14,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../lib/errors";
 import { ZodError } from "zod";
+import { redactSecrets, redactSecretsFromObject } from "../lib/redaction";
 
 interface StandardErrorResponse {
   ok: false;
@@ -115,13 +116,13 @@ export function errorHandler(
       tenantId: getTenantId(req),
       userId: getUserId(req),
       errorCode: (err as AppError).code || err.name || "UNKNOWN",
-      message: err.message,
+      message: redactSecrets(err.message),
     };
     
     // Always include stack in server logs (not in response)
     console.error("[error]", JSON.stringify({
-      ...errorLogEntry,
-      stack: err.stack,
+      ...redactSecretsFromObject(errorLogEntry),
+      stack: err.stack ? redactSecrets(err.stack) : undefined,
     }));
 
     let response: StandardErrorResponse;

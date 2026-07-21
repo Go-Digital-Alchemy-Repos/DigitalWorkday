@@ -2,6 +2,7 @@ import { db } from "../db";
 import { tenantIntegrations, IntegrationStatus } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryption";
+import { externalFetch } from "../lib/fetchWithTimeout";
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
@@ -149,7 +150,7 @@ async function refreshQuickBooksToken(
   clientSecret: string,
   refreshToken: string,
 ): Promise<QuickBooksTokenResponse> {
-  const response = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
+  const response = await externalFetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
     method: "POST",
     headers: {
       Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
@@ -785,7 +786,7 @@ export class TenantIntegrationService {
     });
 
     const baseUrl = getQuickBooksApiBaseUrl(config.environment);
-    const companyResponse = await fetch(
+    const companyResponse = await externalFetch(
       `${baseUrl}/v3/company/${encodeURIComponent(config.realmId)}/companyinfo/${encodeURIComponent(config.realmId)}?minorversion=75`,
       {
         headers: {

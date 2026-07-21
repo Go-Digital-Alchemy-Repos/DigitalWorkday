@@ -32,6 +32,7 @@ import { validateBrandAsset, generateBrandAssetKey, uploadToS3, isS3Configured, 
 import { getStorageStatus } from "../storage/getStorageProvider";
 import { AppError, handleRouteError } from "../lib/errors";
 import { buildAppUrl } from "../lib/appLinks";
+import { externalFetch } from "../lib/fetchWithTimeout";
 import { hasTenantAdminAccess } from "@shared/roles";
 
 const upload = multer({ 
@@ -523,7 +524,7 @@ async function exchangeQuickBooksCode(input: {
   code: string;
   redirectUri: string;
 }) {
-  const response = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
+  const response = await externalFetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
     method: "POST",
     headers: {
       Authorization: `Basic ${Buffer.from(`${input.clientId}:${input.clientSecret}`).toString("base64")}`,

@@ -1,10 +1,10 @@
 import { tenantIntegrationService, type AsanaSecretConfig } from "../tenantIntegrations";
+import { externalFetch } from "../../lib/fetchWithTimeout";
 
 const ASANA_API_BASE = "https://app.asana.com/api/1.0";
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 const REQUEST_INTERVAL_MS = 200;
-const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface AsanaWorkspace {
   gid: string;
@@ -89,12 +89,11 @@ async function asanaFetch<T>(token: string, path: string, params?: Record<string
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     await throttle();
 
-    const res = await fetch(url.toString(), {
+    const res = await externalFetch(url.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (res.ok) {

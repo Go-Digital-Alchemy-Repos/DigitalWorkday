@@ -35,6 +35,7 @@
 
 import { Request, Response } from "express";
 import { z, ZodError } from "zod";
+import { redactSecrets } from "./redaction";
 
 export type ErrorCode =
   | "VALIDATION_ERROR"
@@ -377,7 +378,12 @@ export function handleRouteError(res: Response, error: unknown, context?: string
   }
 
   const message = error instanceof Error ? error.message : "Unknown error";
-  console.error(`[RouteError]${context ? ` ${context}:` : ""} requestId=${requestId}`, error);
+  const safeMessage = redactSecrets(message);
+  const safeStack = error instanceof Error && error.stack ? redactSecrets(error.stack) : undefined;
+  console.error(
+    `[RouteError]${context ? ` ${context}:` : ""} requestId=${requestId}`,
+    { message: safeMessage, stack: safeStack }
+  );
   
   return res.status(500).json({
     ok: false,

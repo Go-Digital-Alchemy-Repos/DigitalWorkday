@@ -158,6 +158,28 @@ describe("Error Handler Middleware", () => {
     expect(res.body.error.code).toBe("INTERNAL_ERROR");
     expect(res.body.error.requestId).toBe("test-req-3");
   });
+
+  it("should redact secrets from console error logs", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const app = createTestApp();
+
+    app.get("/test", () => {
+      throw new Error('database_url="postgres://user:secret@db/app" api_key="sk-secret-value"');
+    });
+    app.use(errorHandler);
+
+    const res = await request(app)
+      .get("/test")
+      .set("X-Request-Id", "test-req-redact");
+
+    expect(res.status).toBe(500);
+    const logged = consoleSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(logged).toContain("[REDACTED]");
+    expect(logged).not.toContain("sk-secret-value");
+    expect(logged).not.toContain("postgres://user:secret@db/app");
+
+    consoleSpy.mockRestore();
+  });
 });
 
 describe("sendError Helper", () => {
@@ -217,6 +239,32 @@ describe("handleRouteError Helper", () => {
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe("INTERNAL_ERROR");
     expect(res.body.error.requestId).toBe("route-test-2");
+  });
+
+  it("should redact secrets from route helper logs", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const app = createTestApp();
+
+    app.get("/test", (req, res) => {
+      handleRouteError(
+        res,
+        new Error('authorization="Bearer secret-token" password="secret-password"'),
+        "testRoute",
+        req
+      );
+    });
+
+    const res = await request(app)
+      .get("/test")
+      .set("X-Request-Id", "route-test-redact");
+
+    expect(res.status).toBe(500);
+    const logged = consoleSpy.mock.calls.map((call) => JSON.stringify(call)).join("\n");
+    expect(logged).toContain("[REDACTED]");
+    expect(logged).not.toContain("secret-token");
+    expect(logged).not.toContain("secret-password");
+
+    consoleSpy.mockRestore();
   });
 });
 
