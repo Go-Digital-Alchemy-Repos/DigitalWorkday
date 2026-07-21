@@ -11,6 +11,8 @@ dist
 .vscode
 .idea
 attached_assets
+!attached_assets/
+!attached_assets/Symbol_1767994625714.png
 coverage
 tmp
 *.log
