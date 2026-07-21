@@ -23,6 +23,7 @@ npm run docs:check
 npm run governance:check
 npm run production:check
 npm run test:ci
+npm run release:check
 ```
 
 Run additional gates when the change touches those areas:
@@ -67,10 +68,8 @@ Use extra care and call out reviewers when touching:
 
 `main` is the production source of truth. Railway deploys from pushed commits. Before a production deploy, verify:
 
-- `npm run test:ci`
-- `npm run production:check`
+- `npm run release:check`
 - Any domain-specific gate for the changed area
 - Railway variables and deploy smoke requirements for runtime changes
 
 GitHub pushes that modify `.github/workflows/*` require a token with `workflow` scope.
-

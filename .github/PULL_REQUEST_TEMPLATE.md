@@ -23,6 +23,7 @@
 - [ ] `npm run governance:check`
 - [ ] `npm run production:check`
 - [ ] `npm run test:ci`
+- [ ] `npm run release:check`
 
 Additional checks run:
 
@@ -39,4 +40,3 @@ Additional checks run:
 
 - [ ] Updated docs for changed setup, env vars, APIs, permissions, or workflows
 - [ ] No documentation change needed
-

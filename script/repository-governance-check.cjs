@@ -27,6 +27,7 @@ const REQUIRED_PACKAGE_SCRIPTS = [
   "test",
   "test:client",
   "test:ci",
+  "release:check",
   "docs:check",
   "governance:check",
   "production:check",
@@ -90,6 +91,7 @@ function runRepositoryGovernanceCheck(root = process.cwd()) {
       "Risk Areas",
       "Database Changes",
       "Documentation Changes",
+      "npm run release:check",
       "GitHub pushes that modify `.github/workflows/*` require a token with `workflow` scope.",
     ]),
     "CONTRIBUTING.md",
@@ -108,6 +110,7 @@ function runRepositoryGovernanceCheck(root = process.cwd()) {
       "Tenant isolation or route policy",
       "Database schema, migration, or data repair",
       "`npm run test:ci`",
+      "`npm run release:check`",
       "Rollback notes",
     ]),
     ".github/PULL_REQUEST_TEMPLATE.md",
@@ -186,4 +189,3 @@ module.exports = {
   containsAll,
   runRepositoryGovernanceCheck,
 };
-

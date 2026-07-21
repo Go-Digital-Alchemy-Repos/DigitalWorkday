@@ -17,6 +17,7 @@
     "test:http": "node script/run-vitest-suite.mjs http",
     "test:db": "node script/run-vitest-suite.mjs db",
     "test:all": "vitest run",
+    "release:check": "npm run docs:check && npm run governance:check && npm run publishing:check && npm run production:check && npm run test:ci",
     "publishing:check": "node server/scripts/publishing-readiness-check.cjs",
     "docs:check": "node script/docs-entrypoint-check.cjs",
     "governance:check": "node script/repository-governance-check.cjs",

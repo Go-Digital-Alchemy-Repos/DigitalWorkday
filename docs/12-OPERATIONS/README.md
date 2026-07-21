@@ -1,7 +1,7 @@
 # Operations
 
 **Status:** Current  
-**Last Updated:** January 2026
+**Last Updated:** July 2026
 
 This section covers system operations, monitoring, and maintenance.
 
@@ -11,12 +11,14 @@ This section covers system operations, monitoring, and maintenance.
 
 | Document | Description |
 |----------|-------------|
-| [MONITORING.md](./MONITORING.md) | System monitoring |
 | [SLOS_ALERTING_INCIDENT_RESPONSE.md](./SLOS_ALERTING_INCIDENT_RESPONSE.md) | SLOs, alert routing, and incident workflow |
-| [BACKUPS.md](./BACKUPS.md) | Backup strategies |
-| [DISASTER_RECOVERY.md](./DISASTER_RECOVERY.md) | DR procedures |
-| [SCALING.md](./SCALING.md) | Scaling considerations |
-| [MAINTENANCE.md](./MAINTENANCE.md) | Maintenance tasks |
+| [REPOSITORY_GOVERNANCE.md](./REPOSITORY_GOVERNANCE.md) | Contribution, review, ownership, and release governance |
+| [PUBLIC_CONTENT_GOVERNANCE.md](./PUBLIC_CONTENT_GOVERNANCE.md) | Public content, crawler, docs, and publishing boundaries |
+| [Rollback Procedure](../ROLLBACK_PROCEDURE.md) | Production rollback and recovery workflow |
+| [Incidents](../INCIDENTS.md) | Incident log and postmortem record |
+| [Railway Verification Checklist](../RAILWAY_VERIFICATION_CHECKLIST.md) | Staging and production deployment verification |
+| [Railway Deployment Checklist](../RAILWAY_DEPLOYMENT_CHECKLIST.md) | Railway variable and deploy checklist |
+| [Top 1% Engineering Review](../review/top-one-percent-engineering-review-2026-07-21.md) | Integrated quality assessment and 30/90-day roadmap |
 
 ---
 
@@ -25,7 +27,9 @@ This section covers system operations, monitoring, and maintenance.
 ### Health Check Endpoint
 
 ```
+GET /health
 GET /api/health
+GET /readyz
 ```
 
 ### Super Admin System Status
@@ -58,16 +62,21 @@ Application logs include:
 - User actions
 - Error stack traces
 
+### Release Gate
+
+Run the aggregate release gate before production-bound deploys:
+
+```bash
+npm run release:check
+```
+
 ---
 
 ## Backups
 
 ### Database Backups
 
-Railway/Neon provide automatic backups:
-- Point-in-time recovery
-- Daily snapshots
-- 7-day retention
+Use Railway/Postgres provider backups and record restore drills in the incident or release notes.
 
 ### Manual Backup
 
@@ -83,14 +92,14 @@ pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
 
 ```bash
 # Backfill missing tenant IDs
-BACKFILL_TENANT_IDS_ALLOWED=true node server/scripts/backfill_tenant_ids.ts
+BACKFILL_TENANT_IDS_ALLOWED=true tsx server/scripts/backfillTenants.ts
 ```
 
 ### Data Purge
 
 ```bash
 # Delete all application data (use with extreme caution)
-PURGE_APP_DATA_ALLOWED=true PURGE_APP_DATA_CONFIRM=CONFIRM node server/scripts/purge_app_data.ts
+PURGE_APP_DATA_ALLOWED=true PURGE_APP_DATA_CONFIRM=YES_PURGE_APP_DATA npm run dev
 ```
 
 ---
