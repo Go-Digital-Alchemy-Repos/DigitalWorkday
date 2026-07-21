@@ -214,7 +214,7 @@ Current test coverage by area:
 
 | Area | Status | Tests |
 |------|--------|-------|
-| Fast server unit/policy suite | ✅ Active | 67 files |
+| Fast server unit/policy suite | ✅ Active | 68 files |
 | HTTP route/supertest suite | ✅ Active | 19 files |
 | DB-backed suite | ✅ Active with `DATABASE_URL` | 47 files |
 | Client unit/render suite | ✅ Active | 25+ files |
