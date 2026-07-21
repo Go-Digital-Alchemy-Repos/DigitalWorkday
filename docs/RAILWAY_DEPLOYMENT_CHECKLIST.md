@@ -10,6 +10,7 @@ This document provides a comprehensive guide for deploying MyWorkDay to Railway.
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string (provided by Railway) |
 | `SESSION_SECRET` | Yes | Secret for session encryption (min 32 chars) |
+| `APP_ENCRYPTION_KEY` | Yes | Base64-encoded 32-byte key for tenant and integration secret encryption |
 | `NODE_ENV` | Yes | Set to `production` |
 | `AUTO_MIGRATE` | Recommended | Set to `true` to run migrations on boot |
 | `PORT` | No | Railway sets this automatically |
@@ -108,7 +109,8 @@ Or enable `AUTO_MIGRATE=true` and redeploy.
 **Fix:**
 1. Check Railway logs for specific error
 2. Verify all required env vars are set
-3. Run smoke test: `railway run npx tsx server/scripts/railway-smoke.ts`
+3. Verify `APP_ENCRYPTION_KEY` was generated with `openssl rand -base64 32`
+4. Run smoke test: `railway run npx tsx server/scripts/railway-smoke.ts`
 
 ### 4. "FATAL: Schema is NOT ready"
 

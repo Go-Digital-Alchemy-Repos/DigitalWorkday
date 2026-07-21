@@ -10,6 +10,7 @@ const path = require('path');
 const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'SESSION_SECRET',
+  'APP_ENCRYPTION_KEY',
 ];
 
 const OPTIONAL_ENV_VARS = [
@@ -56,6 +57,33 @@ function checkEnvVars() {
   return allPresent;
 }
 
+function checkEncryptionKey() {
+  console.log('[smoke] Validating APP_ENCRYPTION_KEY format...');
+  const value = process.env.APP_ENCRYPTION_KEY;
+
+  if (!value) {
+    console.error('[smoke] ERROR: APP_ENCRYPTION_KEY is required for production secret encryption');
+    return false;
+  }
+
+  let decoded;
+  try {
+    decoded = Buffer.from(value, 'base64');
+  } catch {
+    console.error('[smoke] ERROR: APP_ENCRYPTION_KEY must be base64 encoded');
+    return false;
+  }
+
+  if (decoded.length !== 32) {
+    console.error(`[smoke] ERROR: APP_ENCRYPTION_KEY must decode to 32 bytes, found ${decoded.length}`);
+    console.error("[smoke] Fix: Generate one with 'openssl rand -base64 32'");
+    return false;
+  }
+
+  console.log('[smoke]   APP_ENCRYPTION_KEY: valid 32-byte base64 value');
+  return true;
+}
+
 function checkBuildArtifacts() {
   console.log('[smoke] Checking build artifacts...');
   
@@ -92,6 +120,7 @@ function runSmokeCheck() {
   const checks = [
     { name: 'Node.js version', fn: checkNodeVersion },
     { name: 'Environment variables', fn: checkEnvVars },
+    { name: 'Encryption key', fn: checkEncryptionKey },
     { name: 'Build artifacts', fn: checkBuildArtifacts },
   ];
   

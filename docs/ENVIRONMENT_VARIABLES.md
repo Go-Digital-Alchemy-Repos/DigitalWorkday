@@ -103,9 +103,9 @@ These flags enable destructive operations. **Never enable in production without 
 
 | Variable | Required | Secret | Description | Default |
 |----------|----------|--------|-------------|---------|
-| `ENCRYPTION_KEY` | No | Yes | 32-byte hex key for tenant secret encryption. Generate with `openssl rand -hex 32` | Auto-derived from SESSION_SECRET |
+| `APP_ENCRYPTION_KEY` | Yes in production | Yes | Base64-encoded 32-byte key for tenant and integration secret encryption. Generate with `openssl rand -base64 32` | Development only allows missing key for non-encrypted settings |
 
-**Note:** If not set, derived from SESSION_SECRET using HKDF. For production, set explicitly.
+**Note:** Production deploy smoke checks fail if `APP_ENCRYPTION_KEY` is missing or does not decode to exactly 32 bytes.
 
 ---
 
@@ -123,7 +123,7 @@ These flags enable destructive operations. **Never enable in production without 
 ### Must Set (Secrets)
 - [ ] `DATABASE_URL`
 - [ ] `SESSION_SECRET`
-- [ ] `ENCRYPTION_KEY` (recommended)
+- [ ] `APP_ENCRYPTION_KEY`
 
 ### Should Set (Integrations)
 - [ ] `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (for file uploads)

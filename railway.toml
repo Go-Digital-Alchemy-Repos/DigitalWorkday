@@ -17,4 +17,5 @@ restartPolicyMaxRetries = 10
 #   AUTO_MIGRATE=true
 #   FAIL_ON_SCHEMA_ISSUES=true
 #   SESSION_SECRET=<random 32+ chars>
+#   APP_ENCRYPTION_KEY=<openssl rand -base64 32>
 #   DATABASE_URL (auto-set by Railway PostgreSQL plugin)
