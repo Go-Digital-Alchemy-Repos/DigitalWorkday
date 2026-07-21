@@ -1,4 +1,5 @@
-import { ReactNode } from "react";
+import * as React from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface EmptyStateProps {
@@ -64,7 +65,7 @@ export function EmptyState({
         </p>
       )}
       {action && (
-        <div className="mt-4" data-testid="empty-state-action">
+        <div className="mt-4 flex w-full max-w-sm justify-center sm:w-auto sm:max-w-none" data-testid="empty-state-action">
           {action}
         </div>
       )}

@@ -55,13 +55,13 @@ import {
 ### Border Radius
 | Token | Value | Use Case |
 |-------|-------|----------|
-| `sm` | 6px | Buttons, badges |
-| `md` | 8px | Inputs, small cards |
-| `lg` | 16px | Cards, modals |
-| `xl` | 20px | Large cards, drawers |
+| `sm` | 3px | Badges and tight controls |
+| `md` | 6px | Inputs and buttons |
+| `lg` | 9px | Cards and panels |
+| `xl` | 16px | Modals and drawers |
 | `full` | 9999px | Pills, avatars |
 
-**Standard Card Radius**: 16-20px (`rounded-xl`)
+**Standard Card Radius**: 9px (`rounded-lg`). Reserve 16px (`rounded-xl`) for larger overlays and drawers.
 
 ### Shadows
 | Token | Use Case |

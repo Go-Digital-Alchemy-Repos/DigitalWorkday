@@ -1,3 +1,4 @@
+import * as React from "react";
 import { cn } from "@/lib/utils";
 import { LucideIcon, Plus, Search, MessageSquare, FileText, Users, FolderOpen, Clock, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,13 +43,13 @@ export function EmptyState({
         data-testid={testId}
       >
         {Icon && <Icon className="h-5 w-5 shrink-0" />}
-        <span className="text-sm">{title}</span>
+        <span className="min-w-0 flex-1 text-sm">{title}</span>
         {action && (
           <Button 
             variant="ghost" 
             size="sm"
             onClick={action.onClick}
-            className="ml-auto"
+            className="shrink-0"
             data-testid="button-empty-state-action"
           >
             {action.icon && <action.icon className="h-4 w-4 mr-1" />}
@@ -80,10 +81,11 @@ export function EmptyState({
           </p>
         )}
         {action && (
-          <Button 
+          <Button
             size="sm"
             variant={action.variant || "default"}
             onClick={action.onClick} 
+            className="max-w-full whitespace-normal text-center"
             data-testid="button-empty-state-action"
           >
             {action.icon && <action.icon className="h-4 w-4 mr-1" />}
@@ -114,11 +116,12 @@ export function EmptyState({
         </p>
       )}
       {(action || secondaryAction) && (
-        <div className="flex items-center gap-3">
+        <div className="flex w-full max-w-sm flex-col items-stretch gap-2 sm:w-auto sm:max-w-none sm:flex-row sm:items-center sm:justify-center sm:gap-3">
           {action && (
             <Button 
               variant={action.variant || "default"}
               onClick={action.onClick} 
+              className="w-full whitespace-normal text-center sm:w-auto"
               data-testid="button-empty-state-action"
             >
               {action.icon && <action.icon className="h-4 w-4 mr-2" />}
@@ -129,6 +132,7 @@ export function EmptyState({
             <Button 
               variant={secondaryAction.variant || "outline"}
               onClick={secondaryAction.onClick}
+              className="w-full whitespace-normal text-center sm:w-auto"
               data-testid="button-empty-state-secondary"
             >
               {secondaryAction.icon && <secondaryAction.icon className="h-4 w-4 mr-2" />}
