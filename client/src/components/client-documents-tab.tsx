@@ -300,7 +300,7 @@ export function ClientDocumentsTab({ clientId }: ClientDocumentsTabProps) {
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" data-testid={`document-menu-${doc.id}`}>
+                          <Button variant="ghost" size="icon" aria-label={`Document actions for ${doc.displayName || doc.originalFileName}`} data-testid={`document-menu-${doc.id}`}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

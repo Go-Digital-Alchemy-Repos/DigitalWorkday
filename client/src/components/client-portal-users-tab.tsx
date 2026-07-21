@@ -571,7 +571,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                     {getAccessLevelBadge(portalUser.accessLevel)}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" data-testid={`button-portal-user-menu-${portalUser.userId}`}>
+                        <Button variant="ghost" size="icon" aria-label={`Portal user actions for ${portalUser.user.name || portalUser.user.email}`} data-testid={`button-portal-user-menu-${portalUser.userId}`}>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -1220,7 +1220,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
           {lastInviteLink?.registrationUrl && (
             <div className="flex gap-2">
               <Input readOnly value={lastInviteLink.registrationUrl} data-testid="input-created-portal-invite-url" />
-              <Button type="button" variant="outline" size="icon" onClick={copyInviteLink} data-testid="button-copy-created-portal-invite-url">
+              <Button type="button" variant="outline" size="icon" aria-label="Copy created portal invite link" onClick={copyInviteLink} data-testid="button-copy-created-portal-invite-url">
                 <Copy className="h-4 w-4" />
               </Button>
             </div>

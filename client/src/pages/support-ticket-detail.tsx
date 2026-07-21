@@ -263,7 +263,7 @@ export default function SupportTicketDetail() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/support")} data-testid="button-back">
+          <Button variant="ghost" size="icon" aria-label="Back to support tickets" onClick={() => navigate("/support")} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1 min-w-0">

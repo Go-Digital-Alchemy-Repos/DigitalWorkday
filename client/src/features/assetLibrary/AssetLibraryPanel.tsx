@@ -256,7 +256,7 @@ function AssetGridThumbnail({ asset, onSelect, onDownload, onRename, onDelete, o
         <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="secondary" size="icon" className="h-7 w-7 shadow-sm" data-testid={`asset-grid-menu-${asset.id}`}>
+              <Button variant="secondary" size="icon" aria-label={`Asset actions for ${asset.title}`} className="h-7 w-7 shadow-sm" data-testid={`asset-grid-menu-${asset.id}`}>
                 <MoreVertical className="w-3.5 h-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -353,7 +353,7 @@ function SortableFolderCard({ folder, isDropTarget, onNavigate, onRename, onDele
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" className="shrink-0" data-testid={`folder-menu-${folder.id}`}>
+          <Button variant="ghost" size="icon" aria-label={`Folder actions for ${folder.name}`} className="shrink-0" data-testid={`folder-menu-${folder.id}`}>
             <MoreVertical className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -452,7 +452,7 @@ function DraggableAssetRow({ asset, onSelect, onDownload, onRename, onDelete, on
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" className="shrink-0" data-testid={`asset-menu-${asset.id}`}>
+          <Button variant="ghost" size="icon" aria-label={`Asset actions for ${asset.title}`} className="shrink-0" data-testid={`asset-menu-${asset.id}`}>
             <MoreVertical className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>

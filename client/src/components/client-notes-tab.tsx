@@ -847,7 +847,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="shrink-0" data-testid={`note-menu-${note.id}`}>
+                          <Button variant="ghost" size="icon" aria-label={`Note actions for ${note.category} note`} className="shrink-0" data-testid={`note-menu-${note.id}`}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -889,7 +889,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                 <FolderOpen className="h-4 w-4" />
                 Categories
               </CardTitle>
-              <Button variant="ghost" size="icon" onClick={openCreateCategoryDialog} data-testid="button-add-category-sidebar" className="h-8 w-8">
+              <Button variant="ghost" size="icon" aria-label="Add note category" onClick={openCreateCategoryDialog} data-testid="button-add-category-sidebar" className="h-8 w-8">
                 <Plus className="h-4 w-4" />
               </Button>
             </CardHeader>

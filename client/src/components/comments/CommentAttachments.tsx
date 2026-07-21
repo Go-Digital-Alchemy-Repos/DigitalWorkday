@@ -150,7 +150,7 @@ export function CommentAttachments({ attachments, projectId, taskId }: CommentAt
         <DialogContent className="max-w-3xl p-2">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium truncate">{previewName}</span>
-            <Button size="icon" variant="ghost" onClick={() => { setPreviewUrl(null); setPreviewName(""); }}>
+            <Button size="icon" variant="ghost" aria-label="Close attachment preview" onClick={() => { setPreviewUrl(null); setPreviewName(""); }}>
               <X className="h-4 w-4" />
             </Button>
           </div>

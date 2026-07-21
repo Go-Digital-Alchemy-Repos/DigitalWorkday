@@ -448,7 +448,7 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
                       className="pr-10"
                       data-testid="input-manual-password"
                     />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full" onClick={() => setShowManualPassword(!showManualPassword)} data-testid="button-toggle-password">
+                    <Button type="button" variant="ghost" size="icon" aria-label={showManualPassword ? "Hide manual password" : "Show manual password"} className="absolute right-0 top-0 h-full" onClick={() => setShowManualPassword(!showManualPassword)} data-testid="button-toggle-password">
                       {showManualPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -631,23 +631,23 @@ export function TenantDrawerUsers({ activeTenant, open }: TenantDrawerUsersProps
                         ) : isExpired ? (
                           <>
                             <Badge variant="secondary" className="text-xs">Expired</Badge>
-                            <Button size="icon" variant="ghost" onClick={() => regenerateInvitationMutation.mutate(invitation.id)} disabled={regenerateInvitationMutation.isPending} title="Regenerate invitation link" data-testid={`button-regenerate-invitation-${invitation.id}`}>
+                            <Button size="icon" variant="ghost" aria-label="Regenerate invitation link" onClick={() => regenerateInvitationMutation.mutate(invitation.id)} disabled={regenerateInvitationMutation.isPending} title="Regenerate invitation link" data-testid={`button-regenerate-invitation-${invitation.id}`}>
                               <RefreshCw className="h-4 w-4" />
                             </Button>
                           </>
                         ) : (
                           <>
                             <Badge className="text-xs">Pending</Badge>
-                            <Button size="icon" variant="ghost" onClick={() => activateInvitationMutation.mutate(invitation.id)} disabled={activateInvitationMutation.isPending} title="Activate (create user account)" data-testid={`button-activate-invitation-${invitation.id}`}>
+                            <Button size="icon" variant="ghost" aria-label="Activate invitation and create user account" onClick={() => activateInvitationMutation.mutate(invitation.id)} disabled={activateInvitationMutation.isPending} title="Activate (create user account)" data-testid={`button-activate-invitation-${invitation.id}`}>
                               <UserPlus className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => regenerateInvitationMutation.mutate(invitation.id)} disabled={regenerateInvitationMutation.isPending} title="Get invite link (regenerate & copy)" data-testid={`button-get-link-${invitation.id}`}>
+                            <Button size="icon" variant="ghost" aria-label="Get invitation link" onClick={() => regenerateInvitationMutation.mutate(invitation.id)} disabled={regenerateInvitationMutation.isPending} title="Get invite link (regenerate & copy)" data-testid={`button-get-link-${invitation.id}`}>
                               <Copy className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => resendInvitationMutation.mutate(invitation.id)} disabled={resendInvitationMutation.isPending} title="Resend invitation email" data-testid={`button-resend-invitation-${invitation.id}`}>
+                            <Button size="icon" variant="ghost" aria-label="Resend invitation email" onClick={() => resendInvitationMutation.mutate(invitation.id)} disabled={resendInvitationMutation.isPending} title="Resend invitation email" data-testid={`button-resend-invitation-${invitation.id}`}>
                               <Send className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => revokeInvitationMutation.mutate(invitation.id)} disabled={revokeInvitationMutation.isPending} title="Revoke invitation" data-testid={`button-revoke-invitation-${invitation.id}`}>
+                            <Button size="icon" variant="ghost" aria-label="Revoke invitation" onClick={() => revokeInvitationMutation.mutate(invitation.id)} disabled={revokeInvitationMutation.isPending} title="Revoke invitation" data-testid={`button-revoke-invitation-${invitation.id}`}>
                               <X className="h-4 w-4" />
                             </Button>
                           </>

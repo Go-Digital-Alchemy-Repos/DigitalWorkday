@@ -715,7 +715,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="shrink-0" data-testid={`project-note-menu-${note.id}`}>
+                          <Button variant="ghost" size="icon" aria-label={`Note actions for ${note.category} note`} className="shrink-0" data-testid={`project-note-menu-${note.id}`}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -756,7 +756,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                   <FolderOpen className="h-4 w-4" />
                   Categories
                 </span>
-                <Button variant="ghost" size="icon" onClick={openCreateCategoryDialog} data-testid="project-button-add-category-sidebar">
+                <Button variant="ghost" size="icon" aria-label="Add project note category" onClick={openCreateCategoryDialog} data-testid="project-button-add-category-sidebar">
                   <Plus className="h-4 w-4" />
                 </Button>
               </CardTitle>
@@ -809,7 +809,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
                           <Badge variant="secondary" className="text-xs">{count}</Badge>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" data-testid={`project-category-menu-${cat.id}`}>
+                              <Button variant="ghost" size="icon" aria-label={`Category actions for ${cat.name}`} className="h-6 w-6 opacity-0 group-hover:opacity-100" data-testid={`project-category-menu-${cat.id}`}>
                                 <MoreHorizontal className="h-3 w-3" />
                               </Button>
                             </DropdownMenuTrigger>

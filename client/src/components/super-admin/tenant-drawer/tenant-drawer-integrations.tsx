@@ -170,7 +170,7 @@ export function TenantDrawerIntegrations({ activeTenant, open }: TenantDrawerInt
                 </Label>
                 <div className="relative">
                   <Input id="mg-key" type={showApiKey ? "text" : "password"} placeholder={mailgunIntegration?.secretConfigured ? "••••••••" : "key-xxx..."} value={mailgunData.apiKey || ""} onChange={(e) => setMailgunData(prev => ({ ...prev, apiKey: e.target.value }))} className="h-8 pr-8" data-testid="input-mailgun-key" />
-                  <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-8 w-8" onClick={() => setShowApiKey(!showApiKey)}>
+                  <Button type="button" variant="ghost" size="icon" aria-label={showApiKey ? "Hide Mailgun API key" : "Show Mailgun API key"} className="absolute right-0 top-0 h-8 w-8" onClick={() => setShowApiKey(!showApiKey)}>
                     {showApiKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                   </Button>
                 </div>
@@ -229,7 +229,7 @@ export function TenantDrawerIntegrations({ activeTenant, open }: TenantDrawerInt
                 <Label htmlFor="s3-secret" className="text-xs">Secret Access Key</Label>
                 <div className="relative">
                   <Input id="s3-secret" type={showSecretKey ? "text" : "password"} placeholder={s3Integration?.secretConfigured ? "••••••••" : "Secret..."} value={s3Data.secretAccessKey || ""} onChange={(e) => setS3Data(prev => ({ ...prev, secretAccessKey: e.target.value }))} className="h-8 pr-8" data-testid="input-s3-secret" />
-                  <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-8 w-8" onClick={() => setShowSecretKey(!showSecretKey)}>
+                  <Button type="button" variant="ghost" size="icon" aria-label={showSecretKey ? "Hide S3 secret access key" : "Show S3 secret access key"} className="absolute right-0 top-0 h-8 w-8" onClick={() => setShowSecretKey(!showSecretKey)}>
                     {showSecretKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                   </Button>
                 </div>

@@ -508,7 +508,7 @@ export function AppSidebar() {
               pm@demo.com
             </span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" data-testid="button-settings">
+          <Button variant="ghost" size="icon" aria-label="Open settings" className="h-8 w-8 rounded-xl" data-testid="button-settings">
             <Settings className="h-4 w-4" />
           </Button>
         </div>

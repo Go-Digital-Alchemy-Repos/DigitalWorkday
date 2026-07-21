@@ -369,13 +369,13 @@ export default function MyCalendarPage() {
           </div>
           
           <div className="flex items-center gap-1">
-            <Button size="icon" variant="outline" onClick={handlePrev} data-testid="button-prev">
+            <Button size="icon" variant="outline" aria-label="Previous calendar period" onClick={handlePrev} data-testid="button-prev">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button size="sm" variant="outline" onClick={handleToday} data-testid="button-today">
               Today
             </Button>
-            <Button size="icon" variant="outline" onClick={handleNext} data-testid="button-next">
+            <Button size="icon" variant="outline" aria-label="Next calendar period" onClick={handleNext} data-testid="button-next">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

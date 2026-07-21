@@ -120,7 +120,7 @@ export default function ClientPortalSupportNew() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/portal/support")} data-testid="button-back">
+          <Button variant="ghost" size="icon" aria-label="Back to portal support" onClick={() => navigate("/portal/support")} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-semibold" data-testid="text-new-ticket-title">New Support Ticket</h1>

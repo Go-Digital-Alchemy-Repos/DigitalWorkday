@@ -152,7 +152,7 @@ export function ForecastSnapshotsTab() {
                         download
                         data-testid={`link-export-snapshot-${snap.id}`}
                       >
-                        <Button size="icon" variant="ghost">
+                        <Button size="icon" variant="ghost" aria-label="Download forecast snapshot CSV">
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </a>

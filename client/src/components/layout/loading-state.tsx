@@ -86,7 +86,12 @@ function DetailLoadingSkeleton() {
 
 export function LoadingState({ type = "list", rows = 5, className }: LoadingStateProps) {
   return (
-    <div className={cn("animate-in fade-in-50", className)}>
+    <div
+      className={cn("animate-in fade-in-50", className)}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading content"
+    >
       {type === "page" && <PageLoadingSkeleton />}
       {type === "card" && <CardLoadingSkeleton rows={rows} />}
       {type === "table" && <TableLoadingSkeleton rows={rows} />}

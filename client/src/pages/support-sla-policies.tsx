@@ -181,7 +181,7 @@ export default function SupportSlaPolicies() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/support")} data-testid="button-back-support">
+        <Button variant="ghost" size="icon" aria-label="Back to support" onClick={() => navigate("/support")} data-testid="button-back-support">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -240,6 +240,7 @@ export default function SupportSlaPolicies() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Edit SLA policy for ${priorityLabels[policy.priority] || policy.priority}`}
                     onClick={() => { setEditingPolicy(policy); setShowForm(true); }}
                     data-testid={`button-edit-sla-${policy.id}`}
                   >
@@ -248,6 +249,7 @@ export default function SupportSlaPolicies() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Delete SLA policy for ${priorityLabels[policy.priority] || policy.priority}`}
                     onClick={() => setDeleteConfirm(policy)}
                     data-testid={`button-delete-sla-${policy.id}`}
                   >

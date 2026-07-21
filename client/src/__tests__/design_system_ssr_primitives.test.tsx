@@ -9,6 +9,8 @@ import {
   PageShell,
   SurfacePanel,
 } from "@/components/layout";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ToastClose } from "@/components/ui/toast";
 
 function render(node: React.ReactElement) {
   return renderToStaticMarkup(node);
@@ -42,5 +44,21 @@ describe("design-system primitive SSR smoke", () => {
 
     expect(markup).toContain("No clients yet");
     expect(markup).toContain("loading-state-list");
+  });
+
+  it("renders accessible status and dismiss defaults for shared primitives", () => {
+    const markup = render(
+      <div>
+        <LoadingState type="table" rows={1} />
+        <Skeleton className="h-4 w-20" />
+        <ToastClose />
+      </div>,
+    );
+
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('aria-label="Loading content"');
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup).toContain('aria-label="Close notification"');
   });
 });

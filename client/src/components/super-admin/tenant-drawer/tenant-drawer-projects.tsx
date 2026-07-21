@@ -227,7 +227,7 @@ export function TenantDrawerProjects({ activeTenant, open }: TenantDrawerProject
                           <Button size="sm" variant="ghost" onClick={() => { setSelectedProjectForTasks(project); setShowTaskImportPanel(true); }} data-testid={`button-import-tasks-${project.id}`}>
                             <Upload className="h-3 w-3 mr-1" />Import
                           </Button>
-                          <Button size="icon" variant="ghost" onClick={() => deleteProjectMutation.mutate(project.id)} disabled={deleteProjectMutation.isPending} data-testid={`button-delete-project-${project.id}`}>
+                          <Button size="icon" variant="ghost" aria-label={`Delete project ${project.name}`} onClick={() => deleteProjectMutation.mutate(project.id)} disabled={deleteProjectMutation.isPending} data-testid={`button-delete-project-${project.id}`}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>

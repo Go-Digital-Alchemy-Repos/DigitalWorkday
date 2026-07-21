@@ -37,9 +37,11 @@ export function ErrorState({
         "flex flex-col items-center justify-center text-center py-12",
         className
       )}
+      role="alert"
+      aria-live="assertive"
       data-testid="error-state"
     >
-      <div className="mb-4 text-destructive">
+      <div className="mb-4 text-destructive" aria-hidden="true">
         {icon || <AlertCircle className="h-12 w-12" />}
       </div>
       <h3 className="text-lg font-semibold mb-2" data-testid="error-state-title">

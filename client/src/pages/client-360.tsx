@@ -1708,7 +1708,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
             {(canClose || isAdmin) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-convo-actions">
+                  <Button variant="ghost" size="icon" aria-label="Conversation actions" data-testid="button-convo-actions">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

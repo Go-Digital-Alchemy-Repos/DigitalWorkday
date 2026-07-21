@@ -97,6 +97,7 @@ export function DataToolbar({
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Clear search"
               className="absolute right-1 top-1/2 -translate-y-1/2"
               onClick={() => onSearchChange("")}
               data-testid="button-clear-search"
@@ -182,6 +183,7 @@ export function DataToolbar({
             <Button
               variant={viewMode === "list" ? "secondary" : "ghost"}
               size="icon"
+              aria-label="Show list view"
               className="h-9 w-9 rounded-r-none"
               onClick={() => onViewModeChange("list")}
               data-testid="button-view-list"
@@ -191,6 +193,7 @@ export function DataToolbar({
             <Button
               variant={viewMode === "grid" ? "secondary" : "ghost"}
               size="icon"
+              aria-label="Show grid view"
               className="h-9 w-9 rounded-l-none"
               onClick={() => onViewModeChange("grid")}
               data-testid="button-view-grid"

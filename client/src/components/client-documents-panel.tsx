@@ -678,7 +678,7 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button size="icon" variant="ghost" className="invisible group-hover:visible" data-testid={`menu-folder-${folder.id}`}>
+                    <Button size="icon" variant="ghost" aria-label={`Folder actions for ${folder.name}`} className="invisible group-hover:visible" data-testid={`menu-folder-${folder.id}`}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -774,7 +774,7 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost" className="invisible group-hover:visible" data-testid={`menu-file-${file.id}`}>
+                        <Button size="icon" variant="ghost" aria-label={`File actions for ${file.displayName || file.originalFileName}`} className="invisible group-hover:visible" data-testid={`menu-file-${file.id}`}>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>

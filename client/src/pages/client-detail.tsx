@@ -1215,7 +1215,7 @@ export default function ClientDetailPage() {
                       <CardDescription>Basic company details and identification</CardDescription>
                     </div>
                     {editingCard !== "company" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("company")} data-testid="button-edit-company-info">
+                      <Button variant="ghost" size="icon" aria-label="Edit company information" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("company")} data-testid="button-edit-company-info">
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                       </Button>
                     )}
@@ -1563,7 +1563,7 @@ export default function ClientDetailPage() {
                       <CardDescription>Primary company location</CardDescription>
                     </div>
                     {editingCard !== "address" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("address")} data-testid="button-edit-address">
+                      <Button variant="ghost" size="icon" aria-label="Edit physical address" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("address")} data-testid="button-edit-address">
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                       </Button>
                     )}
@@ -1689,7 +1689,7 @@ export default function ClientDetailPage() {
                       <CardDescription>Main point of contact at this company</CardDescription>
                     </div>
                     {editingCard !== "contact" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("contact")} data-testid="button-edit-contact">
+                      <Button variant="ghost" size="icon" aria-label="Edit primary contact" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("contact")} data-testid="button-edit-contact">
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                       </Button>
                     )}
@@ -1853,7 +1853,7 @@ export default function ClientDetailPage() {
                     <CardDescription>Separate mailing address if different from physical location</CardDescription>
                   </div>
                   {editingCard !== "mailing" && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("mailing")} data-testid="button-edit-mailing">
+                    <Button variant="ghost" size="icon" aria-label="Edit mailing address" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("mailing")} data-testid="button-edit-mailing">
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </Button>
                   )}
@@ -2356,7 +2356,7 @@ export default function ClientDetailPage() {
                     )}
                     <div className="flex gap-2">
                       <Input readOnly value={lastPortalInvite.registrationUrl} data-testid="input-portal-invite-url" />
-                      <Button type="button" variant="outline" size="icon" onClick={copyPortalInviteLink} data-testid="button-copy-portal-invite-url">
+                      <Button type="button" variant="outline" size="icon" aria-label="Copy portal invite link" onClick={copyPortalInviteLink} data-testid="button-copy-portal-invite-url">
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>

@@ -48,9 +48,9 @@ export default function DesignSystemPage() {
             <Button size="sm" data-testid="button-sm">Small</Button>
             <Button size="default" data-testid="button-md">Default</Button>
             <Button size="lg" data-testid="button-lg">Large</Button>
-            <Button size="icon" data-testid="button-icon"><Plus /></Button>
-            <Button size="icon" variant="outline" data-testid="button-icon-outline"><Settings /></Button>
-            <Button size="icon" variant="ghost" data-testid="button-icon-ghost"><Bell /></Button>
+            <Button size="icon" aria-label="Add item" data-testid="button-icon"><Plus /></Button>
+            <Button size="icon" variant="outline" aria-label="Open settings" data-testid="button-icon-outline"><Settings /></Button>
+            <Button size="icon" variant="ghost" aria-label="View notifications" data-testid="button-icon-ghost"><Bell /></Button>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button data-testid="button-with-icon-left"><Download className="mr-1" /> Download</Button>
@@ -240,7 +240,7 @@ export default function DesignSystemPage() {
         <div className="flex flex-wrap items-center gap-4">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" data-testid="button-tooltip-star"><Star /></Button>
+              <Button variant="outline" size="icon" aria-label="Add to favorites" data-testid="button-tooltip-star"><Star /></Button>
             </TooltipTrigger>
             <TooltipContent>
               <p>Add to favorites</p>
@@ -248,7 +248,7 @@ export default function DesignSystemPage() {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" data-testid="button-tooltip-mail"><Mail /></Button>
+              <Button variant="outline" size="icon" aria-label="Send message" data-testid="button-tooltip-mail"><Mail /></Button>
             </TooltipTrigger>
             <TooltipContent>
               <p>Send message</p>
@@ -256,7 +256,7 @@ export default function DesignSystemPage() {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" data-testid="button-tooltip-trash"><Trash2 /></Button>
+              <Button variant="ghost" size="icon" aria-label="Delete item" data-testid="button-tooltip-trash"><Trash2 /></Button>
             </TooltipTrigger>
             <TooltipContent>
               <p>Delete item</p>

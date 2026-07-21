@@ -259,7 +259,7 @@ export default function SupportTemplates() {
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/support")} data-testid="button-back-to-support">
+          <Button variant="ghost" size="icon" aria-label="Back to support" onClick={() => navigate("/support")} data-testid="button-back-to-support">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -317,10 +317,10 @@ export default function SupportTemplates() {
                           <span className="text-xs text-muted-foreground mt-1 block">Updated {formatDate(reply.updatedAt)}</span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditingReply(reply); setShowReplyDialog(true); }} data-testid={`button-edit-reply-${reply.id}`}>
+                          <Button variant="ghost" size="icon" aria-label={`Edit canned reply ${reply.title}`} onClick={() => { setEditingReply(reply); setShowReplyDialog(true); }} data-testid={`button-edit-reply-${reply.id}`}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ type: "reply", id: reply.id, title: reply.title })} data-testid={`button-delete-reply-${reply.id}`}>
+                          <Button variant="ghost" size="icon" aria-label={`Delete canned reply ${reply.title}`} onClick={() => setDeleteTarget({ type: "reply", id: reply.id, title: reply.title })} data-testid={`button-delete-reply-${reply.id}`}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -383,10 +383,10 @@ export default function SupportTemplates() {
                             <span className="text-xs text-muted-foreground mt-1 block">Updated {formatDate(macro.updatedAt)}</span>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <Button variant="ghost" size="icon" onClick={() => { setEditingMacro(macro); setShowMacroDialog(true); }} data-testid={`button-edit-macro-${macro.id}`}>
+                            <Button variant="ghost" size="icon" aria-label={`Edit macro ${macro.title}`} onClick={() => { setEditingMacro(macro); setShowMacroDialog(true); }} data-testid={`button-edit-macro-${macro.id}`}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ type: "macro", id: macro.id, title: macro.title })} data-testid={`button-delete-macro-${macro.id}`}>
+                            <Button variant="ghost" size="icon" aria-label={`Delete macro ${macro.title}`} onClick={() => setDeleteTarget({ type: "macro", id: macro.id, title: macro.title })} data-testid={`button-delete-macro-${macro.id}`}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
