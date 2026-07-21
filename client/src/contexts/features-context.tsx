@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 interface FeatureStatus {
@@ -54,21 +54,21 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
     ? Object.values(features).some((f) => !f.enabled)
     : false;
 
-  const isFeatureEnabled = (feature: keyof FeaturesResponse["features"]): boolean => {
+  const isFeatureEnabled = useCallback((feature: keyof FeaturesResponse["features"]): boolean => {
     if (!features) return true;
     return features[feature]?.enabled ?? true;
-  };
+  }, [features]);
+
+  const value = useMemo<FeaturesContextType>(() => ({
+    features,
+    recommendations,
+    isLoading,
+    hasDisabledFeatures,
+    isFeatureEnabled,
+  }), [features, recommendations, isLoading, hasDisabledFeatures, isFeatureEnabled]);
 
   return (
-    <FeaturesContext.Provider
-      value={{
-        features,
-        recommendations,
-        isLoading,
-        hasDisabledFeatures,
-        isFeatureEnabled,
-      }}
-    >
+    <FeaturesContext.Provider value={value}>
       {children}
     </FeaturesContext.Provider>
   );

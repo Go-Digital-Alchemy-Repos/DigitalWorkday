@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useCallback, useContext, useMemo } from "react";
 
 interface ReportContextValue {
   isSuperAdmin: boolean;
@@ -18,8 +18,13 @@ export function ReportContextProvider({
   children: React.ReactNode;
 }) {
   const linkPrefix = isSuperAdmin ? "/super-admin/reports" : "";
+  const value = useMemo<ReportContextValue>(() => ({
+    isSuperAdmin,
+    linkPrefix,
+  }), [isSuperAdmin, linkPrefix]);
+
   return (
-    <ReportContext.Provider value={{ isSuperAdmin, linkPrefix }}>
+    <ReportContext.Provider value={value}>
       {children}
     </ReportContext.Provider>
   );
@@ -31,7 +36,7 @@ export function useReportContext() {
 
 export function useReportLink() {
   const { isSuperAdmin, linkPrefix } = useReportContext();
-  return (path: string): string => {
+  return useCallback((path: string): string => {
     if (!isSuperAdmin) return path;
     if (path.startsWith("/reports/")) {
       return linkPrefix + path.slice("/reports".length);
@@ -40,5 +45,5 @@ export function useReportLink() {
       return linkPrefix + path;
     }
     return path;
-  };
+  }, [isSuperAdmin, linkPrefix]);
 }

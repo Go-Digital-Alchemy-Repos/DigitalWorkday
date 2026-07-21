@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskDrawerSkeleton } from "@/components/skeletons";
@@ -48,6 +48,10 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
   const closeTask = useCallback(() => {
     setTaskIdToOpen(null);
   }, []);
+  const value = useMemo<TaskDrawerContextType>(() => ({
+    openTask,
+    closeTask,
+  }), [openTask, closeTask]);
 
   const isOpen = !!taskIdToOpen;
   const renderState = getTaskDrawerRenderState({
@@ -58,7 +62,7 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
   });
 
   return (
-    <TaskDrawerContext.Provider value={{ openTask, closeTask }}>
+    <TaskDrawerContext.Provider value={value}>
       {children}
       {renderState === "loading" && (
         <Sheet open={isOpen} onOpenChange={(open) => { if (!open) closeTask(); }}>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { type User, UserRole } from "@shared/schema";
 import { clearActingAsState, setSuperUserFlag, queryClient, markAuthenticated, clearAuthenticated } from "./queryClient";
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       clearActingAsState();
       
@@ -136,9 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { success: false, error: "Network error" };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -153,20 +153,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserImpersonation(null);
       setLocation("/login");
     }
-  };
+  }, [setLocation]);
+
+  const value = useMemo<AuthContextType>(() => ({
+    user,
+    isLoading,
+    isAuthenticated: !!user,
+    userImpersonation,
+    login,
+    logout,
+    refetch: fetchUser,
+  }), [user, isLoading, userImpersonation, login, logout, fetchUser]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        userImpersonation,
-        login,
-        logout,
-        refetch: fetchUser,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

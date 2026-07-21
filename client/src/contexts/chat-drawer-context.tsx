@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
 
 interface ChatThread {
   type: "channel" | "dm";
@@ -24,18 +24,17 @@ export function ChatDrawerProvider({ children }: { children: ReactNode }) {
   const openDrawer = useCallback(() => setIsOpen(true), []);
   const closeDrawer = useCallback(() => setIsOpen(false), []);
   const toggleDrawer = useCallback(() => setIsOpen((prev) => !prev), []);
+  const value = useMemo<ChatDrawerContextValue>(() => ({
+    isOpen,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    lastActiveThread,
+    setLastActiveThread,
+  }), [isOpen, openDrawer, closeDrawer, toggleDrawer, lastActiveThread]);
 
   return (
-    <ChatDrawerContext.Provider
-      value={{
-        isOpen,
-        openDrawer,
-        closeDrawer,
-        toggleDrawer,
-        lastActiveThread,
-        setLastActiveThread,
-      }}
-    >
+    <ChatDrawerContext.Provider value={value}>
       {children}
     </ChatDrawerContext.Provider>
   );

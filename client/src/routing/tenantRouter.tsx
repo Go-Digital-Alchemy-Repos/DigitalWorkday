@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, type CSSProperties } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -34,6 +34,11 @@ import { type Workspace } from "@shared/schema";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 import { trackChunkLoad } from "@/lib/perf";
+
+const TENANT_SIDEBAR_STYLE = {
+  "--sidebar-width": "16rem",
+  "--sidebar-width-icon": "3rem",
+} as CSSProperties;
 
 const Home = lazy(trackChunkLoad("Home", () => import("@/pages/home")));
 const MyTasks = lazy(trackChunkLoad("MyTasks", () => import("@/pages/my-tasks")));
@@ -281,15 +286,10 @@ export function TenantLayout() {
   });
   const hasActiveTimer = isMobile && !!activeTimerData;
   
-  const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
-  };
-
   return (
     <TaskDrawerProvider>
       <ChatDrawerProvider>
-        <SidebarProvider style={style as React.CSSProperties}>
+        <SidebarProvider style={TENANT_SIDEBAR_STYLE}>
           <TenantContextGate>
           <CommandPalette
             onNewTask={() => setLocation("/my-tasks")}
