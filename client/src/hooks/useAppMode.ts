@@ -13,7 +13,7 @@
  * - On exiting tenant mode: clear tenant-scoped caches and reset to super context
  * - Auth/session state is preserved across transitions
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -47,12 +47,39 @@ interface AppModeHook {
 
 const ACTING_TENANT_NAME_KEY = "actingTenantName";
 
+export type AppModeTransitionTimeoutRef = MutableRefObject<ReturnType<typeof setTimeout> | null>;
+export type AppModeMountedRef = MutableRefObject<boolean>;
+
+export function clearPendingAppModeTransition(timeoutRef: AppModeTransitionTimeoutRef): void {
+  if (timeoutRef.current) {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  }
+}
+
+export function scheduleAppModeTransitionCompletion(
+  timeoutRef: AppModeTransitionTimeoutRef,
+  mountedRef: AppModeMountedRef,
+  complete: () => void,
+): void {
+  clearPendingAppModeTransition(timeoutRef);
+
+  timeoutRef.current = setTimeout(() => {
+    timeoutRef.current = null;
+    if (mountedRef.current) {
+      complete();
+    }
+  }, 100);
+}
+
 export function useAppMode(): AppModeHook {
   const { user, userImpersonation } = useAuth();
   const { toast } = useToast();
   const { prefetchV1 } = useFeatureFlags();
   const isSuperUser = user?.role === UserRole.SUPER_USER;
   const [isModeTransitioning, setIsModeTransitioning] = useState(false);
+  const isMountedRef = useRef(true);
+  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validationInProgress = useRef(false);
   
   const [impersonation, setImpersonation] = useState<ImpersonationState | null>(() => {
@@ -65,6 +92,23 @@ export function useAppMode(): AppModeHook {
     return null;
   });
 
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      clearPendingAppModeTransition(transitionTimeoutRef);
+    };
+  }, []);
+
+  const finishModeTransitionSoon = useCallback(() => {
+    scheduleAppModeTransitionCompletion(
+      transitionTimeoutRef,
+      isMountedRef,
+      () => setIsModeTransitioning(false),
+    );
+  }, []);
+
   // Validate stored impersonation state on mount and user change
   useEffect(() => {
     const tenantId = getActingTenantId();
@@ -76,6 +120,7 @@ export function useAppMode(): AppModeHook {
         validationInProgress.current = true;
         validateTenantExists(tenantId).then(exists => {
           validationInProgress.current = false;
+          if (!isMountedRef.current) return;
           if (exists) {
             setImpersonation({ tenantId, tenantName });
           } else {
@@ -122,11 +167,11 @@ export function useAppMode(): AppModeHook {
     setActingTenantId(tenantId);
     localStorage.setItem(ACTING_TENANT_NAME_KEY, tenantName);
     setImpersonation({ tenantId, tenantName });
-    
+
     prefetchTenantRoutes(prefetchV1);
 
-    setTimeout(() => setIsModeTransitioning(false), 100);
-  }, [prefetchV1]);
+    finishModeTransitionSoon();
+  }, [finishModeTransitionSoon, prefetchV1]);
 
   const stopImpersonation = useCallback(() => {
     setIsModeTransitioning(true);
@@ -143,8 +188,8 @@ export function useAppMode(): AppModeHook {
     queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants"] });
     
     // Allow UI to settle before completing transition
-    setTimeout(() => setIsModeTransitioning(false), 100);
-  }, []);
+    finishModeTransitionSoon();
+  }, [finishModeTransitionSoon]);
 
   // Determine if user impersonation is active (super admin logged in as tenant user)
   const isUserImpersonating = userImpersonation?.isImpersonating === true;
