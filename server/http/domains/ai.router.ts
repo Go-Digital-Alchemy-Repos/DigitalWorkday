@@ -62,9 +62,9 @@ router.get("/v1/ai/status", async (req, res) => {
 });
 
 const taskBreakdownSchema = z.object({
-  taskTitle: z.string().min(1),
-  taskDescription: z.string().optional(),
-  projectContext: z.string().optional(),
+  taskTitle: z.string().trim().min(1).max(500),
+  taskDescription: z.string().trim().max(4000).optional(),
+  projectContext: z.string().trim().max(4000).optional(),
 });
 
 router.post("/v1/ai/suggest/task-breakdown", async (req, res) => {
@@ -105,10 +105,10 @@ router.post("/v1/ai/suggest/task-breakdown", async (req, res) => {
 });
 
 const projectPlanSchema = z.object({
-  projectName: z.string().min(1),
-  projectDescription: z.string().optional(),
-  clientName: z.string().optional(),
-  teamSize: z.number().optional(),
+  projectName: z.string().trim().min(1).max(500),
+  projectDescription: z.string().trim().max(4000).optional(),
+  clientName: z.string().trim().max(300).optional(),
+  teamSize: z.number().int().positive().max(500).optional(),
 });
 
 router.post("/v1/ai/suggest/project-plan", async (req, res) => {
@@ -149,8 +149,8 @@ router.post("/v1/ai/suggest/project-plan", async (req, res) => {
 });
 
 const descriptionSchema = z.object({
-  taskTitle: z.string().min(1),
-  projectContext: z.string().optional(),
+  taskTitle: z.string().trim().min(1).max(500),
+  projectContext: z.string().trim().max(4000).optional(),
 });
 
 router.post("/v1/ai/suggest/task-description", async (req, res) => {

@@ -5,6 +5,7 @@ import { systemSettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { encryptApiKey, testAIConnection, getAIConfigStatus } from '../../../services/ai/aiService';
+import { aiConfigUpdateSchema } from '../../../services/ai/governance';
 import { recordTenantAuditEvent } from './audit';
 
 export const aiConfigRouter = Router();
@@ -33,14 +34,7 @@ aiConfigRouter.get("/ai/config", requireSuperUser, async (req, res) => {
   }
 });
 
-const updateAIConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  provider: z.string().optional(),
-  model: z.string().optional(),
-  apiKey: z.string().optional(),
-  maxTokens: z.number().min(100).max(8000).optional(),
-  temperature: z.string().optional(),
-});
+const updateAIConfigSchema = aiConfigUpdateSchema;
 
 aiConfigRouter.put("/ai/config", requireSuperUser, async (req, res) => {
   try {

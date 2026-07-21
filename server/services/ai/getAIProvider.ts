@@ -18,6 +18,7 @@ import { tenantIntegrations, IntegrationStatus } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { decryptValue, isEncryptionAvailable } from "../../lib/encryption";
 import OpenAI from "openai";
+import { normalizeAIMaxTokens, normalizeAIModel, normalizeAITemperature } from "./governance";
 
 export interface AIConfig {
   enabled: boolean;
@@ -109,10 +110,10 @@ async function getIntegrationConfig(tenantId: string | null): Promise<{
       return {
         config: {
           enabled: publicConfig.enabled,
-          model: publicConfig.model || "gpt-4o-mini",
+          model: normalizeAIModel(publicConfig.model),
           apiKey: secretConfig.apiKey,
-          maxTokens: publicConfig.maxTokens || 2000,
-          temperature: parseFloat(publicConfig.temperature || "0.7"),
+          maxTokens: normalizeAIMaxTokens(publicConfig.maxTokens),
+          temperature: normalizeAITemperature(publicConfig.temperature),
         },
         source: tenantId ? "tenant" : "system",
         sourceId: integration.id,
@@ -173,10 +174,10 @@ export async function getAIProvider(tenantId: string | null): Promise<AIProvider
     return {
       config: {
         enabled: true,
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        model: normalizeAIModel(process.env.OPENAI_MODEL),
         apiKey: envApiKey,
-        maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || "2000", 10),
-        temperature: parseFloat(process.env.OPENAI_TEMPERATURE || "0.7"),
+        maxTokens: normalizeAIMaxTokens(process.env.OPENAI_MAX_TOKENS),
+        temperature: normalizeAITemperature(process.env.OPENAI_TEMPERATURE),
       },
       source: "environment",
       sourceId: null,

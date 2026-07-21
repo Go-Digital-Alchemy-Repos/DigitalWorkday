@@ -3,6 +3,16 @@ import { db } from "../../db";
 import { systemSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import {
+  AI_GOVERNANCE_SYSTEM_MESSAGE,
+  boundAIInput,
+  normalizeAIMaxTokens,
+  normalizeAIModel,
+  normalizeAITemperature,
+  parseGovernedAIJson,
+  projectPlanningSuggestionSchema,
+  taskBreakdownSuggestionSchema,
+} from "./governance";
 
 function getEncryptionSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -67,10 +77,10 @@ async function getAIConfig(): Promise<AIConfig | null> {
     return {
       enabled: settings.aiEnabled,
       provider: settings.aiProvider || "openai",
-      model: settings.aiModel || "gpt-4o-mini",
+      model: normalizeAIModel(settings.aiModel),
       apiKey,
-      maxTokens: settings.aiMaxTokens || 2000,
-      temperature: parseFloat(settings.aiTemperature || "0.7"),
+      maxTokens: normalizeAIMaxTokens(settings.aiMaxTokens),
+      temperature: normalizeAITemperature(settings.aiTemperature),
     };
   } catch (error) {
     console.error("[AI] Failed to decrypt API key:", error);
@@ -105,10 +115,10 @@ export async function getAIConfigStatus(): Promise<AIConfigStatus> {
       config: {
         enabled: settings.aiEnabled,
         provider: settings.aiProvider || "openai",
-        model: settings.aiModel || "gpt-4o-mini",
+        model: normalizeAIModel(settings.aiModel),
         apiKey,
-        maxTokens: settings.aiMaxTokens || 2000,
-        temperature: parseFloat(settings.aiTemperature || "0.7"),
+        maxTokens: normalizeAIMaxTokens(settings.aiMaxTokens),
+        temperature: normalizeAITemperature(settings.aiTemperature),
       }
     };
   } catch (error) {
@@ -199,11 +209,17 @@ export async function suggestTaskBreakdown(
   try {
     const client = getOpenAIClient(config.apiKey);
     
-    const prompt = `You are a project management assistant. Break down the following task into smaller, actionable subtasks.
+    const safeTitle = boundAIInput(taskTitle, 500) || "Untitled task";
+    const safeDescription = boundAIInput(taskDescription);
+    const safeProjectContext = boundAIInput(projectContext);
+    const prompt = `Break down the task below into smaller, actionable subtasks.
 
-Task Title: ${taskTitle}
-${taskDescription ? `Task Description: ${taskDescription}` : ""}
-${projectContext ? `Project Context: ${projectContext}` : ""}
+Task Title:
+<task_title>
+${safeTitle}
+</task_title>
+${safeDescription ? `\nTask Description:\n<task_description>\n${safeDescription}\n</task_description>` : ""}
+${safeProjectContext ? `\nProject Context:\n<project_context>\n${safeProjectContext}\n</project_context>` : ""}
 
 Provide 3-7 subtasks that would help complete this task. For each subtask, include:
 - A clear, actionable title
@@ -224,7 +240,10 @@ Respond in JSON format:
 
     const response = await client.chat.completions.create({
       model: config.model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: AI_GOVERNANCE_SYSTEM_MESSAGE },
+        { role: "user", content: prompt },
+      ],
       max_tokens: config.maxTokens,
       temperature: config.temperature,
       response_format: { type: "json_object" },
@@ -235,7 +254,7 @@ Respond in JSON format:
       return null;
     }
 
-    return JSON.parse(content) as TaskBreakdownSuggestion;
+    return parseGovernedAIJson(content, taskBreakdownSuggestionSchema, "Task breakdown");
   } catch (error: any) {
     console.error("[AI] Task breakdown failed:", error);
     throw new Error(error.message || "Failed to generate task breakdown");
@@ -258,11 +277,17 @@ export async function suggestProjectPlan(
   try {
     const client = getOpenAIClient(config.apiKey);
     
-    const prompt = `You are a project management assistant. Create a project plan for the following project.
+    const safeProjectName = boundAIInput(projectName, 500) || "Untitled project";
+    const safeProjectDescription = boundAIInput(projectDescription);
+    const safeClientName = boundAIInput(clientName, 300);
+    const prompt = `Create a project plan for the project below.
 
-Project Name: ${projectName}
-${projectDescription ? `Description: ${projectDescription}` : ""}
-${clientName ? `Client: ${clientName}` : ""}
+Project Name:
+<project_name>
+${safeProjectName}
+</project_name>
+${safeProjectDescription ? `\nDescription:\n<project_description>\n${safeProjectDescription}\n</project_description>` : ""}
+${safeClientName ? `\nClient:\n<client_name>\n${safeClientName}\n</client_name>` : ""}
 ${teamSize ? `Team Size: ${teamSize} people` : ""}
 
 Create a structured project plan with phases and tasks. Each phase should have:
@@ -291,7 +316,10 @@ Respond in JSON format:
 
     const response = await client.chat.completions.create({
       model: config.model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: AI_GOVERNANCE_SYSTEM_MESSAGE },
+        { role: "user", content: prompt },
+      ],
       max_tokens: config.maxTokens,
       temperature: config.temperature,
       response_format: { type: "json_object" },
@@ -302,7 +330,7 @@ Respond in JSON format:
       return null;
     }
 
-    return JSON.parse(content) as ProjectPlanningSuggestion;
+    return parseGovernedAIJson(content, projectPlanningSuggestionSchema, "Project plan");
   } catch (error: any) {
     console.error("[AI] Project planning failed:", error);
     throw new Error(error.message || "Failed to generate project plan");
@@ -322,16 +350,24 @@ export async function generateTaskDescription(
   try {
     const client = getOpenAIClient(config.apiKey);
     
-    const prompt = `You are a project management assistant. Write a clear, concise task description for the following task.
+    const safeTitle = boundAIInput(taskTitle, 500) || "Untitled task";
+    const safeProjectContext = boundAIInput(projectContext);
+    const prompt = `Write a clear, concise task description for the task below.
 
-Task Title: ${taskTitle}
-${projectContext ? `Project Context: ${projectContext}` : ""}
+Task Title:
+<task_title>
+${safeTitle}
+</task_title>
+${safeProjectContext ? `\nProject Context:\n<project_context>\n${safeProjectContext}\n</project_context>` : ""}
 
 Write a 1-3 sentence description that clarifies what needs to be done. Be specific and actionable.`;
 
     const response = await client.chat.completions.create({
       model: config.model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: AI_GOVERNANCE_SYSTEM_MESSAGE },
+        { role: "user", content: prompt },
+      ],
       max_tokens: 200,
       temperature: 0.7,
     });

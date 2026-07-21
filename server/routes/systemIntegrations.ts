@@ -13,6 +13,7 @@ import { UserRole } from "@shared/schema";
 import { tenantIntegrationService } from "../services/tenantIntegrations";
 import { getStorageStatus } from "../storage/getStorageProvider";
 import { isEncryptionAvailable } from "../lib/encryption";
+import { aiConfigUpdateSchema } from "../services/ai/governance";
 import { AppError, handleRouteError } from "../lib/errors";
 
 const router = Router();
@@ -292,13 +293,7 @@ router.get("/storage/status", requireSuperUser, async (req: Request, res: Respon
 /**
  * OpenAI configuration schema
  */
-const openaiUpdateSchema = z.object({
-  enabled: z.boolean().optional(),
-  model: z.string().optional(),
-  maxTokens: z.number().optional(),
-  temperature: z.string().optional(),
-  apiKey: z.string().optional(),
-});
+const openaiUpdateSchema = aiConfigUpdateSchema;
 
 /**
  * GET /api/v1/system/integrations/openai

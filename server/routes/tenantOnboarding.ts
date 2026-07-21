@@ -493,10 +493,13 @@ const r2UpdateSchema = z.object({
 
 const openaiUpdateSchema = z.object({
   enabled: z.boolean().optional(),
-  model: z.string().optional(),
-  maxTokens: z.number().optional(),
-  temperature: z.string().optional(),
-  apiKey: z.string().optional(),
+  model: z.enum(["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]).optional(),
+  maxTokens: z.coerce.number().int().min(100).max(8000).optional(),
+  temperature: z.union([z.number(), z.string()]).transform((value) => String(value).trim()).refine((value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1;
+  }, "Temperature must be between 0 and 1").optional(),
+  apiKey: z.string().trim().min(1).optional(),
 });
 
 const quickBooksUpdateSchema = z.object({
