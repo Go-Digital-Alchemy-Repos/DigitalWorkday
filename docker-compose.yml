@@ -29,9 +29,19 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-dasana}:${POSTGRES_PASSWORD:-dasana}@db:5432/${POSTGRES_DB:-dasana}
       - NODE_ENV=production
       - PORT=5000
+      - SESSION_SECRET=${SESSION_SECRET:-local-compose-session-secret-change-me-32-chars}
+      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+      - AUTO_MIGRATE=${AUTO_MIGRATE:-true}
+      - FAIL_ON_SCHEMA_ISSUES=${FAIL_ON_SCHEMA_ISSUES:-true}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres_data:
