@@ -41,7 +41,7 @@ export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
   { id: "projects", label: "Projects", icon: FolderKanban, testId: "tab-projects", primary: true },
   { id: "divisions", label: "Divisions", icon: Layers, testId: "tab-divisions", primary: true },
   { id: "activity", label: "Activity", icon: Activity, testId: "tab-activity", primary: true },
-  { id: "reports", label: "Reports", icon: BarChart3, testId: "tab-reports", primary: false, requiresCrmFlag: "client360" },
+  { id: "reports", label: "Intelligence", icon: BarChart3, testId: "tab-intelligence", primary: false },
   { id: "notes", label: "Notes", icon: StickyNote, testId: "tab-notes", primary: false },
   { id: "approvals", label: "Approvals", icon: ClipboardCheck, testId: "tab-approvals", primary: false, requiresCrmFlag: "approvals" },
   { id: "messages", label: "Messages", icon: MessageSquare, testId: "tab-messages", primary: false, requiresCrmFlag: "clientMessaging" },

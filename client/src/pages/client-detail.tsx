@@ -1156,12 +1156,10 @@ export default function ClientDetailPage() {
                 <TabsTrigger value="documents" data-testid="tab-documents">
                   Documents
                 </TabsTrigger>
-                {crmFlags.client360 && (
-                  <TabsTrigger value="reports" data-testid="tab-reports">
-                    <BarChart3 className="h-3.5 w-3.5 mr-1" />
-                    Reports
-                  </TabsTrigger>
-                )}
+                <TabsTrigger value="reports" data-testid="tab-intelligence">
+                  <BarChart3 className="h-3.5 w-3.5 mr-1" />
+                  Intelligence
+                </TabsTrigger>
                 {crmFlags.approvals && (
                   <TabsTrigger value="approvals" data-testid="tab-approvals">
                     <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
@@ -2609,11 +2607,9 @@ export default function ClientDetailPage() {
             <ClientDocumentsPanel clientId={clientId || ""} />
           </TabsContent>
 
-          {crmFlags.client360 && (
-            <TabsContent value="reports" className="p-6">
-              <ClientReportsTab clientId={clientId || ""} />
-            </TabsContent>
-          )}
+          <TabsContent value="reports" className="p-6">
+            <ClientReportsTab clientId={clientId || ""} />
+          </TabsContent>
 
           {crmFlags.approvals && (
             <TabsContent value="approvals" className="p-6">

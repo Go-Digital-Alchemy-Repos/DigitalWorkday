@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -21,15 +21,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import {
   ReportCommandCenterLayout,
   buildDateParams,
   type ReportRangeValue,
 } from "@/components/reports/report-command-center-layout";
 import { fetchReport as fetch } from "@/components/reports/report-fetch";
-import { DataPointLabel } from "@/components/data-point-help";
-import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
+import { DataPointHelp } from "@/components/data-point-help";
+import {
+  nextTableSortState,
+  sortTableRows,
+  type SortDirection,
+  type TableSortState,
+} from "@/lib/table-sort";
 
 interface ClientWorkSummary {
   client: {
@@ -106,6 +112,10 @@ interface ClientWorkSummary {
   }>;
 }
 
+type ProjectSortField = "projectName" | "status" | "rangeHours" | "ytdHours" | "lifetimeHours" | "openTasks" | "overdueTasks" | "completionPercent";
+type TaskSortField = "title" | "projectName" | "status" | "dueDate" | "rangeHours" | "lifetimeHours" | "estimateHours";
+type EntrySortField = "startTime" | "title" | "projectName" | "taskTitle" | "userName" | "durationSeconds" | "scope";
+
 function formatHours(hours: number): string {
   return hours.toFixed(1);
 }
@@ -147,6 +157,9 @@ function SummaryCard({
 export function ClientReportsTab({ clientId, showBackButton = true }: { clientId: string; showBackButton?: boolean }) {
   const [range, setRange] = useState<ReportRangeValue>("lifetime");
   const [isExporting, setIsExporting] = useState(false);
+  const [projectSort, setProjectSort] = useState<TableSortState<ProjectSortField>>({ key: "rangeHours", direction: "desc" });
+  const [taskSort, setTaskSort] = useState<TableSortState<TaskSortField>>({ key: "rangeHours", direction: "desc" });
+  const [entrySort, setEntrySort] = useState<TableSortState<EntrySortField>>({ key: "startTime", direction: "desc" });
 
   const { data: report, isLoading, isError, error, refetch } = useQuery<ClientWorkSummary>({
     queryKey: ["/api/reports/v2/clients", clientId, "work-summary", range],
@@ -175,6 +188,37 @@ export function ClientReportsTab({ clientId, showBackButton = true }: { clientId
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const sortedProjects = useMemo(() => {
+    const rows = report?.projects ?? [];
+    if (!projectSort.key) return rows;
+    const key = projectSort.key;
+    return sortTableRows(rows, (row) => row[key], projectSort.direction);
+  }, [projectSort, report?.projects]);
+
+  const sortedTasks = useMemo(() => {
+    const rows = report?.tasks ?? [];
+    if (!taskSort.key) return rows;
+    const key = taskSort.key;
+    return sortTableRows(rows, (row) => row[key], taskSort.direction);
+  }, [report?.tasks, taskSort]);
+
+  const sortedEntries = useMemo(() => {
+    const rows = report?.recentEntries ?? [];
+    if (!entrySort.key) return rows;
+    const key = entrySort.key;
+    return sortTableRows(rows, (row) => row[key], entrySort.direction);
+  }, [entrySort, report?.recentEntries]);
+
+  const requestProjectSort = (key: ProjectSortField, firstDirection: SortDirection = "desc") => {
+    setProjectSort((current) => nextTableSortState(current, key, firstDirection));
+  };
+  const requestTaskSort = (key: TaskSortField, firstDirection: SortDirection = "desc") => {
+    setTaskSort((current) => nextTableSortState(current, key, firstDirection));
+  };
+  const requestEntrySort = (key: EntrySortField, firstDirection: SortDirection = "desc") => {
+    setEntrySort((current) => nextTableSortState(current, key, firstDirection));
   };
 
   if (isLoading) {
@@ -209,7 +253,7 @@ export function ClientReportsTab({ clientId, showBackButton = true }: { clientId
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-medium">
           <BarChart3 className="h-5 w-5 text-muted-foreground" />
-          Reports
+          Client Intelligence
         </h2>
         {showBackButton ? (
           <Button
@@ -226,7 +270,7 @@ export function ClientReportsTab({ clientId, showBackButton = true }: { clientId
       </div>
 
       <ReportCommandCenterLayout
-        title="Client Work Summary"
+        title="Client Intelligence Report"
         description="Time, project, task, and contributor reporting for this client"
         icon={<BarChart3 className="h-5 w-5" />}
         rangeDays={range}
@@ -281,18 +325,18 @@ export function ClientReportsTab({ clientId, showBackButton = true }: { clientId
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Project</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Range</TableHead>
-                        <TableHead className="text-right">YTD</TableHead>
-                        <TableHead className="text-right">Lifetime</TableHead>
-                        <TableHead className="text-right">Open</TableHead>
-                        <TableHead className="text-right">Overdue</TableHead>
-                        <TableHead>Progress</TableHead>
+                        <SortableTableHead label="Project" columnLabel="project name" active={projectSort.key === "projectName"} direction={projectSort.direction} onSort={() => requestProjectSort("projectName", "asc")} />
+                        <SortableTableHead label="Status" columnLabel="project status" active={projectSort.key === "status"} direction={projectSort.direction} onSort={() => requestProjectSort("status", "asc")} />
+                        <SortableTableHead label="Range" columnLabel="range hours" active={projectSort.key === "rangeHours"} direction={projectSort.direction} onSort={() => requestProjectSort("rangeHours")} align="right" testId="sort-client-project-range" />
+                        <SortableTableHead label="YTD" columnLabel="year-to-date hours" active={projectSort.key === "ytdHours"} direction={projectSort.direction} onSort={() => requestProjectSort("ytdHours")} align="right" />
+                        <SortableTableHead label="Lifetime" columnLabel="lifetime hours" active={projectSort.key === "lifetimeHours"} direction={projectSort.direction} onSort={() => requestProjectSort("lifetimeHours")} align="right" />
+                        <SortableTableHead label="Open" columnLabel="open tasks" active={projectSort.key === "openTasks"} direction={projectSort.direction} onSort={() => requestProjectSort("openTasks")} align="right" />
+                        <SortableTableHead label="Overdue" columnLabel="overdue tasks" active={projectSort.key === "overdueTasks"} direction={projectSort.direction} onSort={() => requestProjectSort("overdueTasks")} align="right" />
+                        <SortableTableHead label="Progress" columnLabel="project progress" active={projectSort.key === "completionPercent"} direction={projectSort.direction} onSort={() => requestProjectSort("completionPercent")} />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {report.projects.map((project) => (
+                      {sortedProjects.map((project) => (
                         <TableRow key={project.projectId}>
                           <TableCell>
                             <Link href={`/projects/${project.projectId}`} className="font-medium hover:underline">
@@ -345,17 +389,17 @@ export function ClientReportsTab({ clientId, showBackButton = true }: { clientId
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead><DataPointLabel label="Task" definition="Task where this work is tracked." source="tasks" /></TableHead>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Due</TableHead>
-                      <TableHead className="text-right">Range Hours</TableHead>
-                      <TableHead className="text-right">Lifetime</TableHead>
-                      <TableHead className="text-right">Estimate</TableHead>
+                      <SortableTableHead label="Task" columnLabel="task name" active={taskSort.key === "title"} direction={taskSort.direction} onSort={() => requestTaskSort("title", "asc")} help={<DataPointHelp label="Task" definition="Task where this work is tracked." source="tasks" />} />
+                      <SortableTableHead label="Project" columnLabel="project name" active={taskSort.key === "projectName"} direction={taskSort.direction} onSort={() => requestTaskSort("projectName", "asc")} />
+                      <SortableTableHead label="Status" columnLabel="task status" active={taskSort.key === "status"} direction={taskSort.direction} onSort={() => requestTaskSort("status", "asc")} />
+                      <SortableTableHead label="Due" columnLabel="due date" active={taskSort.key === "dueDate"} direction={taskSort.direction} onSort={() => requestTaskSort("dueDate")} />
+                      <SortableTableHead label="Range Hours" columnLabel="range hours" active={taskSort.key === "rangeHours"} direction={taskSort.direction} onSort={() => requestTaskSort("rangeHours")} align="right" testId="sort-client-task-range" />
+                      <SortableTableHead label="Lifetime" columnLabel="lifetime hours" active={taskSort.key === "lifetimeHours"} direction={taskSort.direction} onSort={() => requestTaskSort("lifetimeHours")} align="right" />
+                      <SortableTableHead label="Estimate" columnLabel="estimated hours" active={taskSort.key === "estimateHours"} direction={taskSort.direction} onSort={() => requestTaskSort("estimateHours")} align="right" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {report.tasks.slice(0, 100).map((task) => (
+                    {sortedTasks.slice(0, 100).map((task) => (
                       <TableRow key={task.taskId}>
                         <TableCell className="max-w-80 truncate font-medium">{task.title}</TableCell>
                         <TableCell className="text-muted-foreground">{task.projectName}</TableCell>
@@ -387,17 +431,17 @@ export function ClientReportsTab({ clientId, showBackButton = true }: { clientId
                 <Table data-testid="table-time-entries">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Employee</TableHead>
-                      <TableHead className="text-right">Duration</TableHead>
-                      <TableHead>Scope</TableHead>
+                      <SortableTableHead label="Date" columnLabel="entry date" active={entrySort.key === "startTime"} direction={entrySort.direction} onSort={() => requestEntrySort("startTime")} />
+                      <SortableTableHead label="Title" columnLabel="entry title" active={entrySort.key === "title"} direction={entrySort.direction} onSort={() => requestEntrySort("title", "asc")} />
+                      <SortableTableHead label="Project" columnLabel="project name" active={entrySort.key === "projectName"} direction={entrySort.direction} onSort={() => requestEntrySort("projectName", "asc")} />
+                      <SortableTableHead label="Task" columnLabel="task name" active={entrySort.key === "taskTitle"} direction={entrySort.direction} onSort={() => requestEntrySort("taskTitle", "asc")} />
+                      <SortableTableHead label="Employee" columnLabel="employee name" active={entrySort.key === "userName"} direction={entrySort.direction} onSort={() => requestEntrySort("userName", "asc")} />
+                      <SortableTableHead label="Duration" columnLabel="duration" active={entrySort.key === "durationSeconds"} direction={entrySort.direction} onSort={() => requestEntrySort("durationSeconds")} align="right" />
+                      <SortableTableHead label="Scope" columnLabel="billing scope" active={entrySort.key === "scope"} direction={entrySort.direction} onSort={() => requestEntrySort("scope", "asc")} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {report.recentEntries.map((entry) => (
+                    {sortedEntries.map((entry) => (
                       <TableRow key={entry.id} data-testid={`row-time-entry-${entry.id}`}>
                         <TableCell className="whitespace-nowrap text-sm">
                           {entry.startTime ? format(new Date(entry.startTime), "MMM d, yyyy") : "—"}

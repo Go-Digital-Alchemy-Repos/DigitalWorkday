@@ -16,6 +16,7 @@ import {
   Phone,
   Globe,
   Briefcase,
+  ContactRound,
 } from "lucide-react";
 import {
   Card,
@@ -226,6 +227,7 @@ export default function ClientProfileReportPage() {
   const range = typeof reportRange === "number" ? `${reportRange}d` : "custom";
   const section = searchParams.get("section");
   const reportBasePath = getReportBasePath(location);
+  const crmProfilePath = reportBasePath === "/reports" ? `/clients/${clientId}` : null;
   const initialCustom = dateInputsForReportRange(reportRange);
   const [customStart, setCustomStart] = useState(initialCustom.startDate);
   const [customEnd, setCustomEnd] = useState(initialCustom.endDate);
@@ -429,7 +431,13 @@ export default function ClientProfileReportPage() {
 
                     <div className="flex-1 space-y-1 min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <h2 className="text-2xl font-bold" data-testid="text-client-name">{data.client.companyName}</h2>
+                        <h2 className="text-2xl font-bold" data-testid="text-client-name">
+                          {crmProfilePath ? (
+                            <Link href={crmProfilePath} className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              {data.client.companyName}
+                            </Link>
+                          ) : data.client.companyName}
+                        </h2>
                         <Badge variant={data.client.status === "active" ? "default" : "secondary"}>
                           {data.client.status}
                         </Badge>
@@ -466,6 +474,14 @@ export default function ClientProfileReportPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 sm:justify-end">
+                      {crmProfilePath ? (
+                        <Button asChild variant="outline" size="sm" data-testid="button-open-client-crm">
+                          <Link href={crmProfilePath}>
+                            <ContactRound className="mr-1.5 h-4 w-4" />
+                            Open CRM
+                          </Link>
+                        </Button>
+                      ) : null}
                       <div className="flex flex-col gap-1 items-start sm:items-end">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Health Index</span>
                         <Badge className={cn("text-sm py-1 px-3 text-white", getHealthColor(data.summary.healthTier))} data-testid="badge-health">
