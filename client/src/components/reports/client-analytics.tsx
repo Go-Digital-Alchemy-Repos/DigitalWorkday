@@ -36,6 +36,7 @@ import {
   buildDateParams,
   type ReportRangeValue,
 } from "./report-command-center-layout";
+import { useReportRangeState } from "./use-report-range-state";
 import { fetchReport as fetch } from "./report-fetch";
 import { getClientReportPath } from "./report-paths";
 
@@ -118,14 +119,17 @@ function MetricCard({
   value,
   sub,
   icon,
+  onClick,
 }: {
   label: string;
   value: string | number;
   sub: string;
   icon: ReactNode;
+  onClick: () => void;
 }) {
   return (
-    <Card>
+    <Card className="overflow-hidden">
+      <button type="button" onClick={onClick} className="w-full text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -138,13 +142,16 @@ function MetricCard({
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{sub}</p>
       </CardContent>
+      </button>
     </Card>
   );
 }
 
 export default function ClientAnalytics() {
-  const [range, setRange] = useState<ReportRangeValue>("ytd");
+  const [range, setRange] = useReportRangeState("ytd");
   const [search, setSearch] = useState("");
+  const [workspaceView, setWorkspaceView] = useState("attention");
+  const [portfolioFilter, setPortfolioFilter] = useState<"all" | "risk" | "active" | "open">("all");
   const [sort, setSort] = useState<TableSortState<ClientSortField>>({
     key: "rangeHours",
     direction: "desc",
@@ -163,14 +170,20 @@ export default function ClientAnalytics() {
   const clients = useMemo(() => {
     const rows = data?.clients ?? [];
     const q = search.trim().toLowerCase();
-    const filtered = q
+    const searched = q
       ? rows.filter((client) => client.companyName.toLowerCase().includes(q))
       : rows;
+    const filtered = searched.filter((client) => {
+      if (portfolioFilter === "risk") return client.overdueTasks > 0 || (client.inactivityDays ?? 0) >= 14;
+      if (portfolioFilter === "active") return client.activeProjects > 0;
+      if (portfolioFilter === "open") return client.openTasks > 0;
+      return true;
+    });
 
     if (!sort.key) return filtered;
     const key = sort.key;
     return sortTableRows(filtered, (client) => client[key], sort.direction);
-  }, [data?.clients, search, sort]);
+  }, [data?.clients, portfolioFilter, search, sort]);
 
   const timeLeaders = useMemo(
     () => sortTableRows(data?.clients ?? [], (client) => client.rangeHours, "desc").slice(0, 6),
@@ -245,28 +258,32 @@ export default function ClientAnalytics() {
             value={formatNumber(totalClients)}
             sub={`${formatNumber(atRiskClients)} with overdue or stale work`}
             icon={<Building2 className="h-4 w-4" />}
+            onClick={() => { setPortfolioFilter("all"); setWorkspaceView("portfolio"); }}
           />
           <MetricCard
             label="Active Projects"
             value={formatNumber(data.totals.activeProjects)}
             sub="Active client projects across the tenant"
             icon={<FolderKanban className="h-4 w-4" />}
+            onClick={() => { setPortfolioFilter("active"); setWorkspaceView("portfolio"); }}
           />
           <MetricCard
             label="Open Tasks"
             value={formatNumber(totalOpenTasks)}
             sub={`${formatNumber(data.totals.overdueTasks)} overdue tasks`}
             icon={<AlertTriangle className="h-4 w-4" />}
+            onClick={() => { setPortfolioFilter("open"); setWorkspaceView("portfolio"); }}
           />
           <MetricCard
             label="Time Investment"
             value={formatHours(data.totals.rangeHours)}
             sub={`${formatHours(data.totals.ytdHours)} YTD, ${formatHours(data.totals.lifetimeHours)} lifetime`}
             icon={<Clock className="h-4 w-4" />}
+            onClick={() => { setPortfolioFilter("all"); setSort({ key: "rangeHours", direction: "desc" }); setWorkspaceView("portfolio"); }}
           />
         </div>
 
-        <Tabs defaultValue="attention" className="w-full" data-testid="tabs-client-analytics-workspace">
+        <Tabs value={workspaceView} onValueChange={setWorkspaceView} className="w-full" data-testid="tabs-client-analytics-workspace">
           <Card>
             <CardHeader className="pb-3">
               <TabsList className="grid h-auto w-full grid-cols-2 sm:w-[440px]">
@@ -328,7 +345,7 @@ export default function ClientAnalytics() {
               <CardContent className="space-y-3">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h3 className="text-base font-medium">Client Portfolio</h3>
+                    <div className="flex items-center gap-2"><h3 className="text-base font-medium">Client Portfolio</h3>{portfolioFilter !== "all" ? <Badge variant="outline" className="capitalize">{portfolioFilter}</Badge> : null}</div>
                     <p className="text-xs text-muted-foreground">Client-level work, task, and time investment rollups</p>
                   </div>
                   <div className="relative w-full md:w-80">

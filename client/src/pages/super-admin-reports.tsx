@@ -92,6 +92,11 @@ export default function SuperAdminReportsPage() {
     sessionStorage.setItem(STORAGE_KEY_TENANT, tenantId);
   };
 
+  const handlePlatformTenantOpen = (tenantId: string) => {
+    handleTenantSelect(tenantId);
+    handleTabChange("tenant");
+  };
+
   useEffect(() => {
     if (activeTab === "tenant" && selectedTenantId) {
       setActingTenantId(selectedTenantId);
@@ -175,7 +180,7 @@ export default function SuperAdminReportsPage() {
       >
         <div className="h-full overflow-auto">
           <Suspense fallback={<PageSkeleton />}>
-            <SuperAdminPlatformReports />
+            <SuperAdminPlatformReports onOpenTenant={handlePlatformTenantOpen} />
           </Suspense>
         </div>
       </TabsContent>

@@ -7,6 +7,98 @@ import * as schema from '@shared/schema';
 
 export const reportsRouter = Router();
 
+reportsRouter.get("/reports/platform-summary", requireSuperUser, async (_req, res) => {
+  try {
+    const result = await db.execute(sql`
+      WITH user_rollup AS (
+        SELECT tenant_id,
+          COUNT(*) FILTER (WHERE role != 'super_user') AS users,
+          COUNT(*) FILTER (WHERE role != 'super_user' AND is_active = true) AS enabled_users,
+          COUNT(*) FILTER (WHERE role = 'admin') AS admins,
+          MAX(updated_at) AS last_user_activity
+        FROM users WHERE tenant_id IS NOT NULL GROUP BY tenant_id
+      ), active_user_rollup AS (
+        SELECT tenant_id, COUNT(DISTINCT user_id) AS active_users_30d
+        FROM (
+          SELECT tenant_id, user_id FROM time_entries
+          WHERE tenant_id IS NOT NULL AND start_time >= NOW() - INTERVAL '30 days'
+          UNION ALL
+          SELECT u.tenant_id, c.user_id FROM comments c
+          JOIN users u ON u.id = c.user_id
+          WHERE u.tenant_id IS NOT NULL AND c.created_at >= NOW() - INTERVAL '30 days'
+          UNION ALL
+          SELECT w.tenant_id, al.actor_user_id FROM activity_log al
+          JOIN workspaces w ON w.id = al.workspace_id
+          WHERE w.tenant_id IS NOT NULL AND al.created_at >= NOW() - INTERVAL '30 days'
+        ) activity
+        GROUP BY tenant_id
+      ), project_rollup AS (
+        SELECT tenant_id,
+          COUNT(*) FILTER (WHERE status = 'active') AS active_projects,
+          COUNT(*) AS projects,
+          MAX(updated_at) AS last_project_activity
+        FROM projects WHERE tenant_id IS NOT NULL GROUP BY tenant_id
+      ), task_rollup AS (
+        SELECT tenant_id,
+          COUNT(*) FILTER (WHERE archived_at IS NULL AND status NOT IN ('done','cancelled')) AS open_tasks,
+          COUNT(*) FILTER (WHERE archived_at IS NULL AND status NOT IN ('done','cancelled') AND due_date < NOW()) AS overdue_tasks,
+          COUNT(*) FILTER (WHERE COALESCE(completed_at, updated_at) >= NOW() - INTERVAL '30 days' AND status = 'done') AS completed_30d,
+          MAX(updated_at) AS last_task_activity
+        FROM tasks WHERE tenant_id IS NOT NULL GROUP BY tenant_id
+      ), time_rollup AS (
+        SELECT tenant_id,
+          COALESCE(SUM(duration_seconds) FILTER (WHERE start_time >= NOW() - INTERVAL '30 days'), 0) AS seconds_30d,
+          COUNT(DISTINCT user_id) FILTER (WHERE start_time >= NOW() - INTERVAL '30 days') AS time_loggers_30d,
+          MAX(start_time) AS last_time_activity
+        FROM time_entries WHERE tenant_id IS NOT NULL GROUP BY tenant_id
+      ), branding AS (
+        SELECT tenant_id, BOOL_OR(logo_url IS NOT NULL) AS configured
+        FROM tenant_settings GROUP BY tenant_id
+      )
+      SELECT tn.id AS "tenantId", tn.name AS "tenantName", tn.status, tn.created_at AS "createdAt",
+        COALESCE(ur.users, 0)::int AS "users",
+        COALESCE(ur.enabled_users, 0)::int AS "enabledUsers",
+        COALESCE(aur.active_users_30d, 0)::int AS "activeUsers30d",
+        COALESCE(ur.admins, 0)::int AS "admins",
+        COALESCE(pr.projects, 0)::int AS "projects",
+        COALESCE(pr.active_projects, 0)::int AS "activeProjects",
+        COALESCE(tr.open_tasks, 0)::int AS "openTasks",
+        COALESCE(tr.overdue_tasks, 0)::int AS "overdueTasks",
+        COALESCE(tr.completed_30d, 0)::int AS "completed30d",
+        ROUND(COALESCE(tmr.seconds_30d, 0)::numeric / 3600, 1)::float AS "hours30d",
+        COALESCE(tmr.time_loggers_30d, 0)::int AS "timeLoggers30d",
+        COALESCE(br.configured, false) AS "brandingConfigured",
+        GREATEST(ur.last_user_activity, pr.last_project_activity, tr.last_task_activity, tmr.last_time_activity, tn.created_at) AS "lastActivityAt"
+      FROM tenants tn
+      LEFT JOIN user_rollup ur ON ur.tenant_id = tn.id
+      LEFT JOIN active_user_rollup aur ON aur.tenant_id = tn.id
+      LEFT JOIN project_rollup pr ON pr.tenant_id = tn.id
+      LEFT JOIN task_rollup tr ON tr.tenant_id = tn.id
+      LEFT JOIN time_rollup tmr ON tmr.tenant_id = tn.id
+      LEFT JOIN branding br ON br.tenant_id = tn.id
+      ORDER BY "lastActivityAt" DESC NULLS LAST, tn.name
+    `);
+    const tenantRows = Array.isArray(result) ? result : (result as unknown as { rows?: any[] }).rows ?? [];
+    const active30d = tenantRows.filter((tenant: any) => tenant.activeUsers30d > 0 || tenant.hours30d > 0 || tenant.completed30d > 0).length;
+    res.json({
+      generatedAt: new Date().toISOString(),
+      summary: {
+        tenants: tenantRows.length,
+        activeTenants30d: active30d,
+        dormantTenants30d: tenantRows.length - active30d,
+        activeUsers30d: tenantRows.reduce((sum: number, tenant: any) => sum + tenant.activeUsers30d, 0),
+        hours30d: Math.round(tenantRows.reduce((sum: number, tenant: any) => sum + Number(tenant.hours30d), 0) * 10) / 10,
+        overdueTasks: tenantRows.reduce((sum: number, tenant: any) => sum + tenant.overdueTasks, 0),
+        configurationIssues: tenantRows.filter((tenant: any) => tenant.admins === 0 || !tenant.brandingConfigured).length,
+      },
+      tenants: tenantRows,
+    });
+  } catch (error) {
+    console.error("[reports] Failed to get platform summary:", error);
+    res.status(500).json({ error: "Failed to get platform summary" });
+  }
+});
+
 reportsRouter.get("/reports/tenants-summary", requireSuperUser, async (req, res) => {
   try {
     const now = new Date();

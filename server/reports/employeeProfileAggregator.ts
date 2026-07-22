@@ -1,7 +1,6 @@
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { formatMinutesToHours } from "./utils";
-import { calculateEmployeePerformance } from "./performance/calculateEmployeePerformance";
 
 function toRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
@@ -9,6 +8,19 @@ function toRows<T>(result: unknown): T[] {
     return (result as { rows: T[] }).rows;
   }
   return result as unknown as T[];
+}
+
+function countBusinessDays(startDate: Date, endDate: Date): number {
+  const cursor = new Date(startDate);
+  cursor.setUTCHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setUTCHours(0, 0, 0, 0);
+  let count = 0;
+  while (cursor <= end) {
+    if (cursor.getUTCDay() !== 0 && cursor.getUTCDay() !== 6) count += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return Math.max(count, 1);
 }
 
 export interface EmployeeProfileParams {
@@ -24,10 +36,7 @@ export async function getEmployeeProfileReport({
   startDate,
   endDate,
 }: EmployeeProfileParams) {
-  const daysInRange = Math.max(
-    Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-    1
-  );
+  const businessDaysInRange = countBusinessDays(startDate, endDate);
 
   // 1. Employee Info
   const employeeInfoPromise = db.execute<{
@@ -39,6 +48,7 @@ export async function getEmployeeProfileReport({
     avatar_url: string | null;
     is_active: boolean;
     team_name: string | null;
+    weekly_capacity_minutes: string;
   }>(sql`
     SELECT 
       u.id, 
@@ -48,7 +58,13 @@ export async function getEmployeeProfileReport({
       u.role, 
       u.avatar_url, 
       u.is_active,
-      t.name as team_name
+      t.name as team_name,
+      COALESCE((
+        SELECT MAX(wm.weekly_capacity_minutes)
+        FROM workspace_members wm
+        JOIN workspaces w ON w.id = wm.workspace_id
+        WHERE wm.user_id = u.id AND w.tenant_id = ${tenantId} AND wm.status = 'active'
+      ), 2400)::text AS weekly_capacity_minutes
     FROM users u
     LEFT JOIN team_members tm ON tm.user_id = u.id
     LEFT JOIN teams t ON t.id = tm.team_id AND t.tenant_id = ${tenantId}
@@ -81,15 +97,15 @@ export async function getEmployeeProfileReport({
       END) AS backlog,
       COUNT(DISTINCT CASE 
         WHEN t.status = 'done' 
-        AND t.updated_at >= ${startDate} 
-        AND t.updated_at <= ${endDate} 
+        AND COALESCE(t.completed_at, t.updated_at) >= ${startDate}
+        AND COALESCE(t.completed_at, t.updated_at) <= ${endDate}
         THEN t.id 
       END) AS completed_in_range,
       AVG(CASE 
         WHEN t.status = 'done' 
-        AND t.updated_at >= ${startDate} 
-        AND t.updated_at <= ${endDate} 
-        THEN EXTRACT(days FROM (t.updated_at - t.created_at)) 
+        AND COALESCE(t.completed_at, t.updated_at) >= ${startDate}
+        AND COALESCE(t.completed_at, t.updated_at) <= ${endDate}
+        THEN EXTRACT(days FROM (COALESCE(t.completed_at, t.updated_at) - t.created_at))
       END) AS avg_completion_days
     FROM task_assignees ta
     JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
@@ -229,14 +245,6 @@ export async function getEmployeeProfileReport({
     LIMIT 100
   `);
 
-  // 7. Performance Index (EPI)
-  const performancePromise = calculateEmployeePerformance({
-    tenantId,
-    startDate,
-    endDate,
-    userId: employeeId,
-  });
-
   // Wait for all
   const [
     employeeInfoResult,
@@ -247,7 +255,6 @@ export async function getEmployeeProfileReport({
     breakdownPriority,
     breakdownProject,
     assignedTasksResult,
-    performance,
   ] = await Promise.all([
     employeeInfoPromise,
     workloadStatsPromise,
@@ -257,7 +264,6 @@ export async function getEmployeeProfileReport({
     breakdownPriorityPromise,
     breakdownProjectPromise,
     assignedTasksPromise,
-    performancePromise,
   ]);
 
   const employeeRows = toRows<typeof employeeInfoResult extends (infer U)[] ? U : any>(employeeInfoResult);
@@ -273,7 +279,6 @@ export async function getEmployeeProfileReport({
   const priorityRows = toRows<any>(breakdownPriority);
   const projectRows = toRows<any>(breakdownProject);
   const taskRows = toRows<any>(assignedTasksResult);
-  const perf = performance.results[0];
 
   const totalHours = Math.round(Number(time.total_seconds) / 3600 * 10) / 10;
   const billableHours = Math.round(Number(time.billable_seconds) / 3600 * 10) / 10;
@@ -288,6 +293,8 @@ export async function getEmployeeProfileReport({
   const overdueCount = Number(workload.overdue_tasks);
   const overdueRate = activeTasks > 0 ? Math.round((overdueCount / activeTasks) * 100) : 0;
 
+  const weeklyCapacityHours = Number(employee.weekly_capacity_minutes ?? 2400) / 60;
+  const rangeCapacityHours = Math.round(weeklyCapacityHours * businessDaysInRange / 5 * 10) / 10;
   const weeklyData = capacityRows.map(r => {
     const actHours = Math.round(Number(r.actual_seconds) / 3600 * 10) / 10;
     const planHours = Math.round(Number(r.planned_minutes) / 60 * 10) / 10;
@@ -295,19 +302,18 @@ export async function getEmployeeProfileReport({
       week: r.week_start,
       plannedHours: planHours,
       actualHours: actHours,
-      utilization: Math.round((actHours / 40) * 100),
-      overAllocated: actHours > 40,
+      utilization: weeklyCapacityHours > 0 ? Math.round((actHours / weeklyCapacityHours) * 100) : 0,
+      overAllocated: planHours > weeklyCapacityHours,
     };
   });
 
-  const riskIndicators = perf?.riskFlags.map(flag => ({
-    type: "Performance",
-    severity: flag.includes("High") || flag.includes("Overutil") ? "high" : "medium",
-    description: flag,
-  })) || [];
+  const riskIndicators: Array<{ type: string; severity: "high" | "medium" | "low"; description: string }> = [];
 
   if (overdueCount > 5) {
     riskIndicators.push({ type: "Workload", severity: "high", description: `User has ${overdueCount} overdue tasks.` });
+  }
+  if (estimatedHours > rangeCapacityHours * 1.1) {
+    riskIndicators.push({ type: "Capacity", severity: "high", description: `Open estimated work exceeds configured capacity by more than 10%.` });
   }
 
   return {
@@ -320,11 +326,11 @@ export async function getEmployeeProfileReport({
       status: employee.is_active ? "active" : "inactive",
     },
     summary: {
-      performanceScore: perf?.overallScore || 0,
-      performanceTier: perf?.performanceTier || "Stable",
+      performanceScore: 0,
+      performanceTier: "Not scored",
       riskLevel: riskIndicators.length > 2 ? "Critical" : riskIndicators.length > 0 ? "At Risk" : "Healthy",
-      utilization: perf?.rawMetrics.utilizationPct || 0,
-      capacityUsage: Math.round((totalHours / (daysInRange * 8)) * 100),
+      utilization: rangeCapacityHours > 0 ? Math.round((totalHours / rangeCapacityHours) * 100) : 0,
+      capacityUsage: rangeCapacityHours > 0 ? Math.round((estimatedHours / rangeCapacityHours) * 100) : 0,
       completionRate,
       overdueRate,
     },

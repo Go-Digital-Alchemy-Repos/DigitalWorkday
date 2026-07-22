@@ -10,7 +10,6 @@ import {
   AlertTriangle, 
   TrendingUp,
   Activity,
-  Award,
   CalendarRange,
   ShieldAlert,
   Target,
@@ -466,11 +465,11 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">Data sources used:</p>
                   <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
-                    <li>Employee Performance Index (EPI) score and tier</li>
+                    <li>Operational workload, delivery risk, and time coverage</li>
                     <li>Task completion rate and overdue rate</li>
                     <li>Workload pressure metrics (active, overdue, backlog)</li>
                     <li>Time tracking totals and daily averages</li>
-                    <li>Weekly capacity utilization percentages</li>
+                    <li>Weekly planned load and logged-time coverage</li>
                     <li>Automated risk flags</li>
                   </ul>
                   {data.supportingMetrics.length > 0 && (
@@ -631,16 +630,6 @@ export default function EmployeeProfileReportPage() {
     );
   }
 
-  const getPerformanceColor = (tier: string) => {
-    switch (tier.toLowerCase()) {
-      case "high": return "bg-green-500 hover:bg-green-600";
-      case "stable": return "bg-blue-500 hover:bg-blue-600";
-      case "needs attention": return "bg-amber-500 hover:bg-amber-600";
-      case "critical": return "bg-red-500 hover:bg-red-600";
-      default: return "bg-slate-500";
-    }
-  };
-
   const getRiskColor = (level: string) => {
     switch (level.toLowerCase()) {
       case "healthy": return "bg-green-500";
@@ -771,12 +760,6 @@ export default function EmployeeProfileReportPage() {
 
                     <div className="flex flex-wrap gap-2 sm:justify-end">
                       <div className="flex flex-col gap-1 items-start sm:items-end">
-                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Performance Index</span>
-                        <Badge className={cn("text-sm py-1 px-3", getPerformanceColor(data.summary.performanceTier))} data-testid="badge-performance">
-                          {data.summary.performanceTier} ({data.summary.performanceScore})
-                        </Badge>
-                      </div>
-                      <div className="flex flex-col gap-1 items-start sm:items-end">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Risk Status</span>
                         <Badge className={cn("text-sm py-1 px-3 text-white", getRiskColor(data.summary.riskLevel))} data-testid="badge-risk">
                           {data.summary.riskLevel}
@@ -789,14 +772,14 @@ export default function EmployeeProfileReportPage() {
 
               {/* Summary Metrics Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-                <MetricCard 
-                  title="Performance Index" 
-                  value={data.summary.performanceScore} 
-                  icon={Award}
+                <MetricCard
+                  title="Active Tasks"
+                  value={data.workload.activeTasks}
+                  icon={ListChecks}
                   iconColor="purple"
-                  testId="metric-performance-index"
-                  definition="Composite Employee Performance Index from completion, overdue, utilization, efficiency, and time compliance signals."
-                  source="employee performance engine"
+                  testId="metric-active-tasks"
+                  definition="Current non-completed tasks assigned to this employee."
+                  source="tasks + assignees"
                 />
                 <MetricCard 
                   title="Completion Rate" 
@@ -817,22 +800,22 @@ export default function EmployeeProfileReportPage() {
                   source="tasks + assignees"
                 />
                 <MetricCard 
-                  title="Utilization" 
+                  title="Time Coverage"
                   value={`${data.summary.utilization}%`} 
                   icon={TrendingUp}
                   iconColor="blue"
-                  testId="metric-utilization"
-                  definition={DATA_POINT_DEFINITIONS.utilization}
-                  source="time entries"
+                  testId="metric-time-coverage"
+                  definition="Logged hours divided by the employee's configured working capacity for the selected range."
+                  source="time entries + workspace capacity"
                 />
                 <MetricCard 
-                  title="Capacity" 
+                  title="Planned Load"
                   value={`${data.summary.capacityUsage}%`} 
                   icon={Activity}
                   iconColor="amber"
                   testId="metric-capacity"
-                  definition="Current workload compared with expected employee capacity."
-                  source="assigned tasks + estimates"
+                  definition="Open task estimates divided by configured employee capacity."
+                  source="assigned tasks + estimates + workspace capacity"
                 />
                 <MetricCard 
                   title="Total Hours" 
@@ -1051,9 +1034,9 @@ export default function EmployeeProfileReportPage() {
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <CalendarRange className="h-5 w-5 text-primary" />
-                    Weekly Capacity & Utilization
+                    Weekly Capacity & Coverage
                   </CardTitle>
-                  <CardDescription>Historical trend of planned vs actual work hours (40h baseline)</CardDescription>
+                  <CardDescription>Planned work and logged-time coverage against configured weekly capacity</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -1063,7 +1046,7 @@ export default function EmployeeProfileReportPage() {
                           <TableHead>Week Starting</TableHead>
                           <TableHead className="text-center">Planned Hours</TableHead>
                           <TableHead className="text-center">Actual Tracked</TableHead>
-                          <TableHead className="text-center">Utilization</TableHead>
+                          <TableHead className="text-center">Time Coverage</TableHead>
                           <TableHead className="text-right">Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1087,7 +1070,7 @@ export default function EmployeeProfileReportPage() {
                               {week.overAllocated ? (
                                 <Badge variant="destructive">Over-Allocated</Badge>
                               ) : (
-                                <Badge variant="outline">Optimal</Badge>
+                                <Badge variant="outline">Within Capacity</Badge>
                               )}
                             </TableCell>
                           </TableRow>

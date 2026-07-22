@@ -547,9 +547,38 @@ export const workspaceMembers = pgTable("workspace_members", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   role: text("role").notNull().default("member"),
   status: text("status").notNull().default("active"),
+  weeklyCapacityMinutes: integer("weekly_capacity_minutes").notNull().default(2400),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("workspace_members_unique").on(table.workspaceId, table.userId),
+]);
+
+export const memberCapacityExceptions = pgTable("member_capacity_exceptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  capacityDate: date("capacity_date").notNull(),
+  availableMinutes: integer("available_minutes").notNull().default(0),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("member_capacity_exception_unique").on(table.tenantId, table.userId, table.capacityDate),
+  index("member_capacity_exception_tenant_date_idx").on(table.tenantId, table.capacityDate),
+]);
+
+export const reportSavedViews = pgTable("report_saved_views", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  workspace: text("workspace").notNull(),
+  name: text("name").notNull(),
+  query: text("query").notNull().default(""),
+  isShared: boolean("is_shared").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("report_saved_views_owner_name_unique").on(table.tenantId, table.userId, table.workspace, table.name),
+  index("report_saved_views_tenant_workspace_idx").on(table.tenantId, table.workspace),
 ]);
 
 // Teams table
@@ -1429,6 +1458,7 @@ export const tasks = pgTable("tasks", {
   personalSortOrder: integer("personal_sort_order"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
   archivedAt: timestamp("archived_at"),
   archivedReason: text("archived_reason"),
 }, (table) => [
@@ -1449,6 +1479,20 @@ export const tasks = pgTable("tasks", {
   index("tasks_tenant_visibility_idx").on(table.tenantId, table.visibility),
   index("tasks_tenant_archived_idx").on(table.tenantId, table.archivedAt),
   index("tasks_tenant_status_archived_idx").on(table.tenantId, table.status, table.archivedAt),
+]);
+
+export const taskStatusHistory = pgTable("task_status_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  taskId: varchar("task_id").references(() => tasks.id, { onDelete: "cascade" }).notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  changedBy: varchar("changed_by").references(() => users.id),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  isApproximate: boolean("is_approximate").notNull().default(false),
+}, (table) => [
+  index("task_status_history_tenant_changed_idx").on(table.tenantId, table.changedAt),
+  index("task_status_history_task_changed_idx").on(table.taskId, table.changedAt),
 ]);
 
 // Task Assignees table (for multiple assignees)

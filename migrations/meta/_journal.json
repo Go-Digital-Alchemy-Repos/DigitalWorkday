@@ -99,6 +99,13 @@
       "when": 1784684817000,
       "tag": "0051_reporting_rollup_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784771200000,
+      "tag": "0052_reporting_semantics_and_capacity",
+      "breakpoints": true
     }
   ]
 }

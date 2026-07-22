@@ -1,343 +1,81 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertTriangle, Building2, Clock3, Search, Settings2, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, FolderKanban, Users, CheckSquare, Clock, AlertTriangle, TrendingUp } from "lucide-react";
-import { DataPointLabel } from "@/components/data-point-help";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ExplorableMetric } from "@/components/reports/explorable-metric";
+import { relativeDate } from "@/components/reports/report-shared";
 
-interface TenantsSummary {
-  total: number;
-  active: number;
-  inactive: number;
-  suspended: number;
-  missingAgreement: number;
-  missingBranding: number;
-  missingAdminUser: number;
-  recentlyCreated: number;
+interface TenantRow {
+  tenantId: string; tenantName: string; status: string; users: number; enabledUsers: number; activeUsers30d: number;
+  admins: number; projects: number; activeProjects: number; openTasks: number; overdueTasks: number;
+  completed30d: number; hours30d: number; timeLoggers30d: number; brandingConfigured: boolean; lastActivityAt: string | null;
 }
 
-interface ProjectsSummary {
-  total: number;
-  active: number;
-  archived: number;
-  withOverdueTasks: number;
-  topTenantsByProjects: Array<{ tenantId: string; tenantName: string; projectCount: number }>;
+interface PlatformSummary {
+  generatedAt: string;
+  summary: { tenants: number; activeTenants30d: number; dormantTenants30d: number; activeUsers30d: number; hours30d: number; overdueTasks: number; configurationIssues: number };
+  tenants: TenantRow[];
 }
 
-interface UsersSummary {
-  total: number;
-  byRole: { super_user: number; admin: number; employee: number; client: number };
-  activeUsers: number;
-  pendingInvites: number;
-}
+type PlatformFilter = "all" | "active" | "dormant" | "overdue" | "configuration";
 
-interface TasksSummary {
-  total: number;
-  byStatus: { todo: number; in_progress: number; blocked: number; done: number };
-  overdue: number;
-  dueToday: number;
-  upcoming: number;
-  unassigned: number;
-}
+export default function SuperAdminPlatformReports({ onOpenTenant }: { onOpenTenant?: (tenantId: string) => void }) {
+  const [filter, setFilter] = useState<PlatformFilter>("all");
+  const [search, setSearch] = useState("");
+  const { data, isLoading, isError } = useQuery<PlatformSummary>({ queryKey: ["/api/v1/super/reports/platform-summary"] });
+  const tenants = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (data?.tenants ?? []).filter((tenant) => {
+      if (query && !tenant.tenantName.toLowerCase().includes(query)) return false;
+      const active = tenant.activeUsers30d > 0 || tenant.hours30d > 0 || tenant.completed30d > 0;
+      if (filter === "active") return active;
+      if (filter === "dormant") return !active;
+      if (filter === "overdue") return tenant.overdueTasks > 0;
+      if (filter === "configuration") return tenant.admins === 0 || !tenant.brandingConfigured;
+      return true;
+    });
+  }, [data?.tenants, filter, search]);
 
-interface TimeSummary {
-  totalMinutesThisWeek: number;
-  totalMinutesThisMonth: number;
-  topTenantsByHours: Array<{ tenantId: string; tenantName: string; totalMinutes: number }>;
-  topUsersByHours: Array<{ userId: string; userName: string; totalMinutes: number }>;
-}
-
-const PLATFORM_STAT_DEFINITIONS: Record<string, string> = {
-  "Total Tenants": "All tenants currently visible to the platform reporting scope.",
-  Active: "Records currently marked active in this platform summary.",
-  "Missing Agreement": "Tenants that do not yet have an agreement date recorded.",
-  "Recently Created": "Tenants created during the recent activity window shown below the metric.",
-  "Total Projects": "All projects across tenants in the platform reporting scope.",
-  Archived: "Projects that have been archived and removed from active project lists.",
-  "With Overdue Tasks": "Projects that currently contain at least one overdue task.",
-  "Total Users": "All user accounts across tenants in the platform reporting scope.",
-  "Active Users": "Users with recent application activity.",
-  "Pending Invites": "Users invited to the platform who have not accepted yet.",
-  "Platform Admins": "Users with super admin access.",
-  "Total Tasks": "All tasks across tenants in the platform reporting scope.",
-  Overdue: "Open tasks past their due date.",
-  "Due Today": "Open tasks with a due date today.",
-  Unassigned: "Open tasks without a current assignee.",
-  "This Week": "Tracked time recorded during the current week.",
-  "This Month": "Tracked time recorded during the current month.",
-};
-
-function StatCard({ title, value, subtitle, icon: Icon }: { title: string; value: number | string; subtitle?: string; icon: React.ComponentType<{ className?: string }> }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          <DataPointLabel label={title} definition={PLATFORM_STAT_DEFINITIONS[title]} source="platform reports" />
-        </CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function SuperAdminPlatformReports() {
-  const [activeTab, setActiveTab] = useState("tenants");
-
-  const { data: tenantsSummary, isLoading: tenantsLoading } = useQuery<TenantsSummary>({
-    queryKey: ["/api/v1/super/reports/tenants-summary"],
-    enabled: activeTab === "tenants",
-  });
-
-  const { data: projectsSummary, isLoading: projectsLoading } = useQuery<ProjectsSummary>({
-    queryKey: ["/api/v1/super/reports/projects-summary"],
-    enabled: activeTab === "projects",
-  });
-
-  const { data: usersSummary, isLoading: usersLoading } = useQuery<UsersSummary>({
-    queryKey: ["/api/v1/super/reports/users-summary"],
-    enabled: activeTab === "users",
-  });
-
-  const { data: tasksSummary, isLoading: tasksLoading } = useQuery<TasksSummary>({
-    queryKey: ["/api/v1/super/reports/tasks-summary"],
-    enabled: activeTab === "tasks",
-  });
-
-  const { data: timeSummary, isLoading: timeLoading } = useQuery<TimeSummary>({
-    queryKey: ["/api/v1/super/reports/time-summary"],
-    enabled: activeTab === "time",
-  });
+  if (isLoading) return <div className="space-y-4 p-4 sm:p-6"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-24" />)}</div><Skeleton className="h-[34rem]" /></div>;
+  if (isError || !data) return <p className="m-6 border border-destructive/30 p-8 text-center text-sm text-destructive">Platform operations could not be loaded.</p>;
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
-      <div className="p-4 sm:p-6">
-        <p className="text-sm text-muted-foreground mb-6">
-          Cross-tenant aggregate analytics and platform-wide metrics.
-        </p>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 mb-6">
-            <TabsList className="inline-flex w-auto min-w-full sm:min-w-0" data-testid="platform-reports-tabs">
-              <TabsTrigger value="tenants" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tenants">
-                <Building2 className="h-4 w-4 mr-1.5 sm:mr-2" />
-                Tenants
-              </TabsTrigger>
-              <TabsTrigger value="projects" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-projects">
-                <FolderKanban className="h-4 w-4 mr-1.5 sm:mr-2" />
-                Projects
-              </TabsTrigger>
-              <TabsTrigger value="users" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-users">
-                <Users className="h-4 w-4 mr-1.5 sm:mr-2" />
-                Users
-              </TabsTrigger>
-              <TabsTrigger value="tasks" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tasks">
-                <CheckSquare className="h-4 w-4 mr-1.5 sm:mr-2" />
-                Tasks
-              </TabsTrigger>
-              <TabsTrigger value="time" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-time">
-                <Clock className="h-4 w-4 mr-1.5 sm:mr-2" />
-                Time Tracking
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="tenants">
-            {tenantsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : tenantsSummary ? (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <StatCard title="Total Tenants" value={tenantsSummary.total} icon={Building2} />
-                  <StatCard title="Active" value={tenantsSummary.active} subtitle={`${tenantsSummary.inactive} inactive, ${tenantsSummary.suspended} suspended`} icon={TrendingUp} />
-                  <StatCard title="Missing Agreement" value={tenantsSummary.missingAgreement} icon={AlertTriangle} />
-                  <StatCard title="Recently Created" value={tenantsSummary.recentlyCreated} subtitle="Last 7 days" icon={Building2} />
-                </div>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Configuration Status</CardTitle>
-                    <CardDescription>Tenants missing critical configuration</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Missing Agreement</span>
-                        <Badge variant={tenantsSummary.missingAgreement > 0 ? "destructive" : "secondary"}>{tenantsSummary.missingAgreement}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Missing Branding</span>
-                        <Badge variant={tenantsSummary.missingBranding > 0 ? "outline" : "secondary"}>{tenantsSummary.missingBranding}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Missing Admin User</span>
-                        <Badge variant={tenantsSummary.missingAdminUser > 0 ? "destructive" : "secondary"}>{tenantsSummary.missingAdminUser}</Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">No tenant data available</div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="projects">
-            {projectsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : projectsSummary ? (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <StatCard title="Total Projects" value={projectsSummary.total} icon={FolderKanban} />
-                  <StatCard title="Active" value={projectsSummary.active} icon={TrendingUp} />
-                  <StatCard title="Archived" value={projectsSummary.archived} icon={FolderKanban} />
-                  <StatCard title="With Overdue Tasks" value={projectsSummary.withOverdueTasks} icon={AlertTriangle} />
-                </div>
-                {projectsSummary.topTenantsByProjects?.length > 0 && (
-                  <Card>
-                    <CardHeader><CardTitle>Top Tenants by Projects</CardTitle></CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {projectsSummary.topTenantsByProjects.map((tenant, i) => (
-                          <div key={tenant.tenantId} className="flex items-center justify-between">
-                            <span className="text-sm">{i + 1}. {tenant.tenantName}</span>
-                            <Badge variant="secondary">{tenant.projectCount} projects</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">No project data available</div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="users">
-            {usersLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : usersSummary ? (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <StatCard title="Total Users" value={usersSummary.total} icon={Users} />
-                  <StatCard title="Active Users" value={usersSummary.activeUsers} icon={TrendingUp} />
-                  <StatCard title="Pending Invites" value={usersSummary.pendingInvites} icon={Users} />
-                  <StatCard title="Platform Admins" value={usersSummary.byRole.super_user} icon={Users} />
-                </div>
-                <Card>
-                  <CardHeader><CardTitle>Users by Role</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {[
-                        { label: "Super Users", count: usersSummary.byRole.super_user },
-                        { label: "Tenant Admins", count: usersSummary.byRole.admin },
-                        { label: "Employees", count: usersSummary.byRole.employee },
-                        { label: "Clients", count: usersSummary.byRole.client },
-                      ].map(({ label, count }) => (
-                        <div key={label} className="flex items-center justify-between">
-                          <span className="text-sm">{label}</span>
-                          <Badge variant="secondary">{count}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">No user data available</div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="tasks">
-            {tasksLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : tasksSummary ? (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <StatCard title="Total Tasks" value={tasksSummary.total} icon={CheckSquare} />
-                  <StatCard title="Overdue" value={tasksSummary.overdue} icon={AlertTriangle} />
-                  <StatCard title="Due Today" value={tasksSummary.dueToday} icon={Clock} />
-                  <StatCard title="Unassigned" value={tasksSummary.unassigned} icon={Users} />
-                </div>
-                <Card>
-                  <CardHeader><CardTitle>Tasks by Status</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {[
-                        { label: "To Do", count: tasksSummary.byStatus.todo, variant: "secondary" as const },
-                        { label: "In Progress", count: tasksSummary.byStatus.in_progress, variant: "secondary" as const },
-                        { label: "Blocked", count: tasksSummary.byStatus.blocked, variant: "destructive" as const },
-                        { label: "Done", count: tasksSummary.byStatus.done, variant: "secondary" as const },
-                      ].map(({ label, count, variant }) => (
-                        <div key={label} className="flex items-center justify-between">
-                          <span className="text-sm">{label}</span>
-                          <Badge variant={variant}>{count}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">No task data available</div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="time">
-            {timeLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : timeSummary ? (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <StatCard
-                    title="This Week"
-                    value={`${Math.round(timeSummary.totalMinutesThisWeek / 60)}h`}
-                    subtitle={`${timeSummary.totalMinutesThisWeek} minutes`}
-                    icon={Clock}
-                  />
-                  <StatCard
-                    title="This Month"
-                    value={`${Math.round(timeSummary.totalMinutesThisMonth / 60)}h`}
-                    subtitle={`${timeSummary.totalMinutesThisMonth} minutes`}
-                    icon={Clock}
-                  />
-                </div>
-                {timeSummary.topTenantsByHours?.length > 0 && (
-                  <Card>
-                    <CardHeader><CardTitle>Top Tenants by Hours</CardTitle></CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {timeSummary.topTenantsByHours.map((tenant, i) => (
-                          <div key={tenant.tenantId} className="flex items-center justify-between">
-                            <span className="text-sm">{i + 1}. {tenant.tenantName}</span>
-                            <Badge variant="secondary">{Math.round(tenant.totalMinutes / 60)}h</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">No time tracking data available</div>
-            )}
-          </TabsContent>
-        </Tabs>
+    <div className="space-y-4 p-4 sm:p-6" data-testid="platform-operations">
+      <div><h2 className="text-lg font-semibold">Platform Operations</h2><p className="text-sm text-muted-foreground">Tenant adoption, activity, configuration, and delivery signals</p></div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+        <ExplorableMetric label="Tenants" value={data.summary.tenants} icon={<Building2 className="h-4 w-4" />} onClick={() => setFilter("all")} />
+        <ExplorableMetric label="Active tenants, 30d" value={data.summary.activeTenants30d} tone="positive" icon={<Building2 className="h-4 w-4" />} onClick={() => setFilter("active")} />
+        <ExplorableMetric label="Dormant tenants, 30d" value={data.summary.dormantTenants30d} tone="warning" icon={<Clock3 className="h-4 w-4" />} onClick={() => setFilter("dormant")} />
+        <ExplorableMetric label="Active users, 30d" value={data.summary.activeUsers30d} icon={<UsersRound className="h-4 w-4" />} onClick={() => setFilter("active")} />
+        <ExplorableMetric label="Overdue tasks" value={data.summary.overdueTasks} tone="danger" icon={<AlertTriangle className="h-4 w-4" />} onClick={() => setFilter("overdue")} />
+        <ExplorableMetric label="Configuration issues" value={data.summary.configurationIssues} tone="warning" icon={<Settings2 className="h-4 w-4" />} onClick={() => setFilter("configuration")} />
       </div>
+
+      <Card>
+        <CardHeader className="gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><CardTitle className="text-base">Tenant comparison</CardTitle><p className="mt-1 text-xs text-muted-foreground">Showing {tenants.length} of {data.summary.tenants} tenants · {data.summary.hours30d.toFixed(1)} platform hours in 30 days</p></div>
+          <div className="flex items-center gap-2"><Badge variant="outline" className="capitalize">{filter}</Badge><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tenants" className="pl-8 sm:w-64" /></div></div>
+        </CardHeader>
+        <CardContent className="overflow-x-auto p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Tenant</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Active users</TableHead><TableHead className="text-right">Projects</TableHead><TableHead className="text-right">Open tasks</TableHead><TableHead className="text-right">Overdue</TableHead><TableHead className="text-right">Hours, 30d</TableHead><TableHead>Configuration</TableHead><TableHead>Last activity</TableHead><TableHead className="w-20"><span className="sr-only">Open</span></TableHead></TableRow></TableHeader>
+            <TableBody>{tenants.map((tenant) => <TableRow key={tenant.tenantId}>
+              <TableCell className="font-medium">{tenant.tenantName}<span className="block text-xs font-normal text-muted-foreground">{tenant.users} users · {tenant.timeLoggers30d} time loggers</span></TableCell>
+              <TableCell><Badge variant={tenant.status === "active" ? "secondary" : "outline"}>{tenant.status}</Badge></TableCell>
+              <TableCell className="text-right">{tenant.activeUsers30d}</TableCell><TableCell className="text-right">{tenant.activeProjects}<span className="block text-xs text-muted-foreground">{tenant.projects} total</span></TableCell>
+              <TableCell className="text-right">{tenant.openTasks}</TableCell><TableCell className="text-right">{tenant.overdueTasks}</TableCell><TableCell className="text-right">{Number(tenant.hours30d).toFixed(1)}h</TableCell>
+              <TableCell>{tenant.admins > 0 && tenant.brandingConfigured ? <Badge variant="secondary">Ready</Badge> : <div className="flex flex-wrap gap-1">{tenant.admins === 0 ? <Badge variant="destructive">No admin</Badge> : null}{!tenant.brandingConfigured ? <Badge variant="outline">No branding</Badge> : null}</div>}</TableCell>
+              <TableCell>{relativeDate(tenant.lastActivityAt)}</TableCell><TableCell><Button type="button" variant="outline" size="sm" onClick={() => onOpenTenant?.(tenant.tenantId)}>Explore</Button></TableCell>
+            </TableRow>)}</TableBody>
+          </Table>
+          {tenants.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">No tenants match the current filters.</p> : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }
