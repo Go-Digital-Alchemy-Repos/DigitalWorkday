@@ -1,53 +1,62 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-
+import { describe, expect, it, vi } from "vitest";
 import { parsePresetReportRangeDays, parseReportRange } from "../reports/utils";
 
-describe("report range utils", () => {
-  afterEach(() => {
+describe("report range utilities", () => {
+  it("parses legacy and named last-N-day presets", () => {
+    expect(parsePresetReportRangeDays("30d")).toBe(30);
+    expect(parsePresetReportRangeDays("last_90")).toBe(90);
+    expect(parsePresetReportRangeDays("last_999")).toBeNull();
+    expect(parsePresetReportRangeDays("ytd")).toBeNull();
+  });
+
+  it("resolves year-to-date ranges from January 1 through now", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
+
+    const { startDate, endDate } = parseReportRange({ range: "ytd" });
+
+    expect(startDate.getFullYear()).toBe(2026);
+    expect(startDate.getMonth()).toBe(0);
+    expect(startDate.getDate()).toBe(1);
+    expect(endDate.toISOString()).toBe("2026-07-21T12:00:00.000Z");
+
     vi.useRealTimers();
   });
 
-  it("parses supported preset range query values", () => {
-    expect(parsePresetReportRangeDays("7d")).toBe(7);
-    expect(parsePresetReportRangeDays("30d")).toBe(30);
-    expect(parsePresetReportRangeDays("60d")).toBe(60);
-    expect(parsePresetReportRangeDays("90d")).toBe(90);
-  });
-
-  it("uses preset ranges when only range is provided", () => {
-    const now = new Date("2026-05-05T12:00:00.000Z");
+  it("resolves lifetime ranges from the canonical reporting floor through now", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(now);
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
 
-    const { startDate, endDate } = parseReportRange({ range: "60d" });
+    const { startDate, endDate } = parseReportRange({ range: "lifetime" });
 
-    expect(startDate.toISOString()).toBe(new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString());
-    expect(endDate.toISOString()).toBe(now.toISOString());
+    expect(startDate.toISOString()).toBe("1970-01-01T00:00:00.000Z");
+    expect(endDate.toISOString()).toBe("2026-07-21T12:00:00.000Z");
+
+    vi.useRealTimers();
   });
 
-  it("lets preset range override stale custom dates", () => {
-    const now = new Date("2026-05-05T12:00:00.000Z");
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
+  it("preserves explicit custom ranges", () => {
     const { startDate, endDate } = parseReportRange({
-      range: "30d",
-      startDate: "2026-02-01T00:00:00.000Z",
-      endDate: "2026-02-28T23:59:59.999Z",
-    });
-
-    expect(startDate.toISOString()).toBe(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString());
-    expect(endDate.toISOString()).toBe(now.toISOString());
-  });
-
-  it("keeps explicit dates for custom ranges", () => {
-    const { startDate, endDate } = parseReportRange({
-      range: "custom",
-      startDate: "2026-02-01T00:00:00.000Z",
-      endDate: "2026-02-28T23:59:59.999Z",
+      startDate: "2026-02-01",
+      endDate: "2026-03-01",
     });
 
     expect(startDate.toISOString()).toBe("2026-02-01T00:00:00.000Z");
-    expect(endDate.toISOString()).toBe("2026-02-28T23:59:59.999Z");
+    expect(endDate.toISOString()).toBe("2026-03-01T00:00:00.000Z");
+  });
+
+  it("lets named presets override stale custom dates", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
+
+    const { startDate, endDate } = parseReportRange({
+      range: "ytd",
+      startDate: "2025-01-01T00:00:00.000Z",
+      endDate: "2025-02-01T00:00:00.000Z",
+    });
+
+    expect(startDate.getFullYear()).toBe(2026);
+    expect(endDate.toISOString()).toBe("2026-07-21T12:00:00.000Z");
+    vi.useRealTimers();
   });
 });

@@ -1,81 +1,56 @@
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, Building2, Clock, FolderKanban, Search, TimerReset } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { formatNumber } from "@/lib/utils";
 import { DataPointLabel } from "@/components/data-point-help";
 import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
+  ReportCommandCenterLayout,
+  buildDateParams,
+  type ReportRangeValue,
+} from "./report-command-center-layout";
+import { fetchReport as fetch } from "./report-fetch";
+import { getClientReportPath } from "./report-paths";
 
-const STAGE_COLORS: Record<string, string> = {
-  lead: "hsl(var(--muted-foreground))",
-  proposal: "hsl(var(--primary))",
-  prospect: "hsl(var(--chart-3, 45 93% 47%))",
-  content_strategy: "hsl(var(--chart-4, 280 65% 60%))",
-  design: "hsl(var(--chart-4, 280 65% 60%))",
-  development: "hsl(var(--chart-3, 45 93% 47%))",
-  final_testing: "hsl(var(--chart-5, 27 96% 61%))",
-  active_maintenance: "hsl(var(--chart-2, 142 71% 45%))",
-  active: "hsl(var(--chart-2, 142 71% 45%))",
-};
+interface ClientWorkIntelligenceRow {
+  clientId: string;
+  companyName: string;
+  activeProjects: number;
+  openTasks: number;
+  overdueTasks: number;
+  rangeHours: number;
+  ytdHours: number;
+  lifetimeHours: number;
+  lastActivityAt: string | null;
+  inactivityDays: number | null;
+}
 
-interface ClientAnalyticsData {
-  clients: {
-    id: string;
-    company_name: string;
-    stage: string;
-    status: string;
-    project_count: number;
-    active_projects: number;
-    task_count: number;
-    completed_tasks: number;
-    total_hours: number;
-    time_entries: number;
-    budget_minutes: number;
-  }[];
-  stageDistribution: { stage: string; count: number }[];
-  topClientsByHours: {
-    id: string;
-    company_name: string;
-    hours: number;
-    entries: number;
-  }[];
-  budgetUtilization: {
-    id: string;
-    company_name: string;
-    budget_minutes: number;
-    used_minutes: number;
-    utilizationPercent: number;
-  }[];
+interface ClientWorkIntelligenceData {
+  totals: {
+    activeProjects: number;
+    projectsAtRisk: number;
+    overdueTasks: number;
+    rangeHours: number;
+    ytdHours: number;
+    lifetimeHours: number;
+  };
+  clients: ClientWorkIntelligenceRow[];
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <Skeleton className="h-[250px] w-full" />
-            </CardContent>
-          </Card>
-        ))}
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
       </div>
+      <Skeleton className="h-96" />
     </div>
   );
 }
@@ -86,221 +61,187 @@ function formatHours(hours: number) {
   return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
 }
 
-function formatMinutesToHours(minutes: number) {
-  if (minutes === 0) return "0h";
-  const hours = Math.round((minutes / 60) * 10) / 10;
-  return `${formatNumber(hours, { maximumFractionDigits: 1 })}h`;
+function MetricCard({
+  label,
+  value,
+  sub,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  sub: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="mt-1 text-2xl font-semibold">{value}</p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background p-2 text-muted-foreground">
+            {icon}
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">{sub}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ClientAnalytics() {
-  const { data, isLoading } = useQuery<ClientAnalyticsData>({
-    queryKey: ["/api/v1/reports/clients/analytics"],
+  const [range, setRange] = useState<ReportRangeValue>("ytd");
+  const [search, setSearch] = useState("");
+
+  const { data, isLoading, isError } = useQuery<ClientWorkIntelligenceData>({
+    queryKey: ["/api/reports/v2/pm/portfolio", "client-work-intelligence", range],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/pm/portfolio?${buildDateParams(range)}`);
+      if (!res.ok) throw new Error("Failed to load client work intelligence");
+      return res.json();
+    },
+    staleTime: 60_000,
   });
 
-  if (isLoading || !data) return <LoadingSkeleton />;
+  const clients = useMemo(() => {
+    const rows = data?.clients ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((client) => client.companyName.toLowerCase().includes(q));
+  }, [data?.clients, search]);
 
-  const stageData = data.stageDistribution.map((s) => ({
-    name: CLIENT_STAGE_LABELS[s.stage as ClientStageType] || s.stage,
-    value: s.count,
-    fill: STAGE_COLORS[s.stage] || "#6B7280",
-  }));
+  if (isLoading) return <LoadingSkeleton />;
 
-  const hoursData = data.topClientsByHours.map((c) => ({
-    name: c.company_name.length > 15 ? c.company_name.slice(0, 15) + "..." : c.company_name,
-    hours: c.hours,
-  }));
-
-  const totalClients = data.clients.length;
-  const activeClients = data.clients.filter((c) => c.status === "active").length;
-  const totalProjects = data.clients.reduce((s, c) => s + c.project_count, 0);
-  const totalHours = data.clients.reduce((s, c) => s + c.total_hours, 0);
-
-  return (
-    <div className="space-y-6" data-testid="client-analytics">
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Card data-testid="metric-total-clients">
-          <CardContent className="p-4">
-            <DataPointLabel label="Total Clients" definition="All clients included in this analytics view." source="clients" className="text-xs text-muted-foreground" />
-            <p className="text-2xl font-bold">{formatNumber(totalClients)}</p>
-            <p className="text-xs text-muted-foreground">{formatNumber(activeClients)} active</p>
-          </CardContent>
-        </Card>
-        <Card data-testid="metric-total-projects">
-          <CardContent className="p-4">
-            <DataPointLabel label="Client Projects" definition="Projects associated with clients in this analytics view." source="projects" className="text-xs text-muted-foreground" />
-            <p className="text-2xl font-bold">{formatNumber(totalProjects)}</p>
-          </CardContent>
-        </Card>
-        <Card data-testid="metric-total-hours">
-          <CardContent className="p-4">
-            <DataPointLabel label="Total Hours" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" className="text-xs text-muted-foreground" />
-            <p className="text-2xl font-bold">{formatHours(Math.round(totalHours * 10) / 10)}</p>
-          </CardContent>
-        </Card>
-        <Card data-testid="metric-budget-clients">
-          <CardContent className="p-4">
-            <DataPointLabel label="Budgeted Clients" definition="Clients with an allocated budget available for utilization tracking." source="client budgets" className="text-xs text-muted-foreground" />
-            <p className="text-2xl font-bold">{formatNumber(data.budgetUtilization.length)}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Client Stage Distribution</CardTitle>
-            <CardDescription>Clients across pipeline stages</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stageData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : ""}
-                    outerRadius={80}
-                    dataKey="value"
-                  >
-                    {stageData.map((entry, index) => (
-                      <Cell key={`stage-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top Clients by Hours</CardTitle>
-            <CardDescription>Most time tracked per client</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[280px]">
-              {hoursData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={hoursData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis type="number" className="text-xs" />
-                    <YAxis dataKey="name" type="category" className="text-xs" width={120} />
-                    <Tooltip formatter={(value: number) => [formatHours(value), "Hours"]} />
-                    <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                  No time tracking data available
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {data.budgetUtilization.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Budget Utilization</CardTitle>
-            <CardDescription>Time spent vs allocated budget per client</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {data.budgetUtilization.map((client) => (
-                <div key={client.id} className="space-y-1.5" data-testid={`budget-row-${client.id}`}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium truncate max-w-[200px]">{client.company_name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">
-                        {formatMinutesToHours(client.used_minutes)} / {formatMinutesToHours(client.budget_minutes)}
-                      </span>
-                      <Badge
-                        variant={client.utilizationPercent > 100 ? "destructive" : client.utilizationPercent > 80 ? "outline" : "secondary"}
-                        className="text-xs"
-                      >
-                        {formatNumber(client.utilizationPercent)}%
-                      </Badge>
-                    </div>
-                  </div>
-                  <Progress value={Math.min(client.utilizationPercent, 100)} className="h-2" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+  if (isError || !data) {
+    return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Client Summary</CardTitle>
-          <CardDescription>Comprehensive client metrics overview</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead><DataPointLabel label="Client" definition={DATA_POINT_DEFINITIONS.client} /></TableHead>
-                <TableHead><DataPointLabel label="Stage" definition="Current pipeline or relationship stage for the client." source="clients" /></TableHead>
-                <TableHead><DataPointLabel label="Projects" definition="Projects associated with this client." source="projects" /></TableHead>
-                <TableHead><DataPointLabel label="Tasks" definition="Total client project tasks, with completion progress shown below." source="tasks" /></TableHead>
-                <TableHead><DataPointLabel label="Hours" definition={DATA_POINT_DEFINITIONS.hoursTracked} source="time entries" /></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.clients.map((client) => {
-                const completionRate = client.task_count > 0
-                  ? Math.round((client.completed_tasks / client.task_count) * 100)
-                  : 0;
-                return (
-                  <TableRow key={client.id} data-testid={`client-row-${client.id}`}>
-                    <TableCell>
-                      <span className="font-medium">{client.company_name}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="text-xs"
-                        style={{ borderColor: STAGE_COLORS[client.stage] || "#6B7280" }}
-                      >
-                        {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{formatNumber(client.project_count)}</span>
-                      {client.active_projects > 0 && (
-                        <span className="text-xs text-muted-foreground ml-1">({formatNumber(client.active_projects)} active)</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">{formatNumber(client.task_count)}</div>
-                      {client.task_count > 0 && (
-                        <div className="text-xs text-muted-foreground">{formatNumber(completionRate)}% done</div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-medium text-sm">{formatHours(client.total_hours)}</span>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {data.clients.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    No client data available
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-          </div>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          Client work intelligence is unavailable right now.
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  const totalClients = data.clients.length;
+  const atRiskClients = data.clients.filter((client) => client.overdueTasks > 0 || (client.inactivityDays ?? 0) >= 14).length;
+  const totalOpenTasks = data.clients.reduce((sum, client) => sum + client.openTasks, 0);
+
+  return (
+    <ReportCommandCenterLayout
+      title="Client Work Intelligence"
+      description="Client-level work, task, and time investment rollups"
+      icon={<Building2 className="h-5 w-5" />}
+      rangeDays={range}
+      onRangeChange={setRange}
+      extraControls={
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search clients..."
+            className="pl-9"
+            data-testid="input-client-work-search"
+          />
+        </div>
+      }
+    >
+      <div className="space-y-6" data-testid="client-analytics">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Clients"
+            value={formatNumber(totalClients)}
+            sub={`${formatNumber(atRiskClients)} with overdue or stale work`}
+            icon={<Building2 className="h-4 w-4" />}
+          />
+          <MetricCard
+            label="Active Projects"
+            value={formatNumber(data.totals.activeProjects)}
+            sub="Active client projects across the tenant"
+            icon={<FolderKanban className="h-4 w-4" />}
+          />
+          <MetricCard
+            label="Open Tasks"
+            value={formatNumber(totalOpenTasks)}
+            sub={`${formatNumber(data.totals.overdueTasks)} overdue tasks`}
+            icon={<AlertTriangle className="h-4 w-4" />}
+          />
+          <MetricCard
+            label="Hours"
+            value={formatHours(data.totals.rangeHours)}
+            sub={`${formatHours(data.totals.ytdHours)} YTD, ${formatHours(data.totals.lifetimeHours)} lifetime`}
+            icon={<Clock className="h-4 w-4" />}
+          />
+        </div>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Client Work Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead><DataPointLabel label="Client" definition={DATA_POINT_DEFINITIONS.client} /></TableHead>
+                    <TableHead className="text-right">Active Projects</TableHead>
+                    <TableHead className="text-right">Open Tasks</TableHead>
+                    <TableHead className="text-right">Overdue</TableHead>
+                    <TableHead className="text-right">Range Hours</TableHead>
+                    <TableHead className="text-right">YTD Hours</TableHead>
+                    <TableHead className="text-right">Lifetime Hours</TableHead>
+                    <TableHead>Last Activity</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow key={client.clientId} data-testid={`client-work-row-${client.clientId}`}>
+                      <TableCell>
+                        <Link href={getClientReportPath(window.location.pathname, client.clientId)} className="font-medium hover:underline">
+                          {client.companyName}
+                        </Link>
+                        {(client.inactivityDays ?? 0) >= 14 ? (
+                          <div className="mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              <TimerReset className="mr-1 h-3 w-3" />
+                              {client.inactivityDays}d inactive
+                            </Badge>
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-right">{formatNumber(client.activeProjects)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(client.openTasks)}</TableCell>
+                      <TableCell className="text-right">
+                        {client.overdueTasks > 0 ? (
+                          <Badge variant="destructive">{formatNumber(client.overdueTasks)}</Badge>
+                        ) : (
+                          "0"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatHours(client.rangeHours)}</TableCell>
+                      <TableCell className="text-right">{formatHours(client.ytdHours)}</TableCell>
+                      <TableCell className="text-right">{formatHours(client.lifetimeHours)}</TableCell>
+                      <TableCell>
+                        {client.lastActivityAt
+                          ? new Date(client.lastActivityAt).toLocaleDateString()
+                          : <span className="text-muted-foreground">No activity</span>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {clients.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                        No clients match the current filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </ReportCommandCenterLayout>
   );
 }

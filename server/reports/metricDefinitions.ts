@@ -93,10 +93,10 @@ export const MetricDefinitions: Record<string, MetricDefinition> = {
 
   billableHours: {
     description: "Sum of billable time entry hours within the date range",
-    calculation: "SUM(time_entries.duration_seconds / 3600) WHERE start_time BETWEEN startDate AND endDate AND is_billable = true",
+    calculation: "SUM(time_entries.duration_seconds / 3600) WHERE start_time BETWEEN startDate AND endDate AND scope = 'out_of_scope'",
     type: "range_based",
     dateField: "time_entries.start_time",
-    nullHandling: "Returns 0 if no billable entries or if is_billable column is unavailable",
+    nullHandling: "Returns 0 if no out-of-scope billable entries exist",
   },
 
   nonBillableHours: {
@@ -145,8 +145,8 @@ export const MetricDefinitions: Record<string, MetricDefinition> = {
   },
 
   varianceHours: {
-    description: "Difference between actual hours and estimated hours (positive = over estimate)",
-    calculation: "totalHours - estimatedHours",
+    description: "Difference between cumulative actual hours and total task estimates (positive = over estimate)",
+    calculation: "lifetimeHours - totalEstimatedHours",
     type: "derived",
     nullHandling: "Returns 0 if estimatedHours is 0",
   },

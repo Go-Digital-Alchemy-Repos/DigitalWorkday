@@ -49,6 +49,15 @@ describe("report range query state", () => {
     expect(buildReportRangeSearchParams(60).toString()).toBe("range=60d");
   });
 
+  it("keeps year-to-date and lifetime ranges stable in URLs", () => {
+    for (const range of ["ytd", "lifetime"] as const) {
+      const source = new URLSearchParams({ range });
+      expect(reportRangeValueFromQuery(source)).toBe(range);
+      expect(reportRangeSearchParamsFromQuery(source).toString()).toBe(`range=${range}`);
+      expect(buildReportRangeSearchParams(range).toString()).toBe(`range=${range}`);
+    }
+  });
+
   it("keeps explicit dates only when the selected range is custom", () => {
     const source = new URLSearchParams({
       range: "custom",

@@ -458,7 +458,7 @@ export default function ReportsPage({ embedded: _embedded }: { embedded?: boolea
     {
       icon: <PieChart className="h-6 w-6 text-white" />,
       title: "Client Analytics",
-      description: "Client profitability, budget utilization, project metrics, and activity breakdown",
+      description: "Client work, lifetime and YTD hours, project investment, and delivery exceptions",
       view: "client-analytics" as ReportView,
       color: "bg-rose-500",
     },
@@ -505,7 +505,7 @@ export default function ReportsPage({ embedded: _embedded }: { embedded?: boolea
       case "client-cc": return "Client engagement, time, task load, SLA and risk analysis per client";
       case "overview": return "Executive KPIs and trends across your entire organization";
       case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
-      case "client-analytics": return "Client profitability, budget utilization, and activity breakdown";
+      case "client-analytics": return "Client work, project and task investment, time history, and delivery exceptions";
       case "time": return "Tracked hours, project rollups, team contributions, and employee time summaries";
       case "pipeline": return "Pipeline stage distribution and client progression";
       default: return "Detailed analytics and exportable reports";

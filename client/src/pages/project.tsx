@@ -84,6 +84,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ProjectWorkSummaryStrip } from "@/components/reports/project-work-summary-strip";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1018,6 +1019,8 @@ export default function ProjectPage() {
           </div>
           </div>
         </div>
+
+        {projectId ? <ProjectWorkSummaryStrip projectId={projectId} /> : null}
 
         <div className="px-4 pb-4 sm:px-5 lg:px-8">
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-card/90 px-3 py-3 shadow-[var(--shadow-soft)] md:px-4">

@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { handleRouteError } from "../../lib/errors";
+import { hasProjectManagerDashboardAccess } from "@shared/roles";
 import {
   parseReportRange,
   normalizeFilters,
@@ -9,12 +10,74 @@ import {
   reportingGuard,
   getTenantId,
 } from "../../reports/utils";
+import {
+  getClientWorkSummaryReport,
+  getClientWorkSummaryCsv,
+  getPmPortfolioReport,
+  getProjectWorkSummaryReport,
+  toClientSafeWorkSummary,
+} from "../../reports/workSummary";
 
 const router = Router();
 
+const BILLABLE_TIME_CONDITION = sql`te.scope = 'out_of_scope'`;
+
+router.get("/pm/portfolio", async (req: Request, res: Response) => {
+  try {
+    if (!hasProjectManagerDashboardAccess((req.user as any)?.role)) {
+      return res.status(403).json({ message: "Project Manager access required" });
+    }
+    const tenantId = getTenantId(req);
+    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const report = await getPmPortfolioReport({ tenantId, startDate, endDate });
+    res.json(report);
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/pm/portfolio", req);
+  }
+});
+
 router.use(reportingGuard);
 
-const BILLABLE_TIME_CONDITION = sql`te.scope = 'out_of_scope'`;
+router.get("/clients/:clientId/work-summary", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { clientId } = req.params;
+    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const report = await getClientWorkSummaryReport({ tenantId, clientId, startDate, endDate });
+    if (!report) return res.status(404).json({ message: "Client not found" });
+    res.json(req.query.visibility === "client_safe" ? toClientSafeWorkSummary(report) : report);
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/clients/:clientId/work-summary", req);
+  }
+});
+
+router.get("/clients/:clientId/work-summary.csv", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { clientId } = req.params;
+    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const csv = await getClientWorkSummaryCsv({ tenantId, clientId, startDate, endDate });
+    if (csv === null) return res.status(404).json({ message: "Client not found" });
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="client-work-summary-${clientId}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/clients/:clientId/work-summary.csv", req);
+  }
+});
+
+router.get("/projects/:projectId/work-summary", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { projectId } = req.params;
+    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+    const report = await getProjectWorkSummaryReport({ tenantId, projectId, startDate, endDate });
+    if (!report) return res.status(404).json({ message: "Project not found" });
+    res.json(req.query.visibility === "client_safe" ? toClientSafeWorkSummary(report) : report);
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/projects/:projectId/work-summary", req);
+  }
+});
 
 function clientFilterClause(clientIds: string[]) {
   return clientIds.length > 0
@@ -206,6 +269,47 @@ router.get("/client/overview", async (req: Request, res: Response) => {
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
     const prior = previousRange(startDate, endDate);
+
+    if (filters.statuses.length === 0) {
+      const [currentReport, priorReport] = await Promise.all([
+        getPmPortfolioReport({ tenantId, startDate, endDate }),
+        getPmPortfolioReport({ tenantId, startDate: prior.startDate, endDate: prior.endDate }),
+      ]);
+      const allowedClientIds = new Set(filters.clientIds);
+      const selectClients = (report: typeof currentReport) => report.clients
+        .filter((client) => allowedClientIds.size === 0 || allowedClientIds.has(client.clientId))
+        .map((client) => {
+          const engagementScore = Math.min(100, Math.round(
+            Math.min(client.rangeHours, 40) / 40 * 40 +
+            Math.min(client.openTasks, 20) / 20 * 40 +
+            Math.min(client.completedInRange, 10) / 10 * 20
+          ));
+          return {
+            ...client,
+            totalHours: client.rangeHours,
+            lastActivityDate: client.lastActivityAt,
+            engagementScore,
+          };
+        });
+      const currentClients = selectClients(currentReport);
+      const priorClients = selectClients(priorReport);
+      const summary = (clients: typeof currentClients) => ({
+        totalClients: clients.length,
+        totalOpenTasks: clients.reduce((sum, client) => sum + client.openTasks, 0),
+        totalHours: Math.round(clients.reduce((sum, client) => sum + client.totalHours, 0) * 10) / 10,
+        avgEngagement: clients.length > 0
+          ? Math.round(clients.reduce((sum, client) => sum + client.engagementScore, 0) / clients.length)
+          : 0,
+      });
+      return res.json({
+        clients: currentClients.slice(offset, offset + limit),
+        summary: { current: summary(currentClients), prior: summary(priorClients) },
+        pagination: { total: currentClients.length, limit, offset },
+        range: { startDate, endDate },
+        source: "shared-work-summary",
+      });
+    }
+
     const clientFilter = clientFilterClause(filters.clientIds);
     const [rows, currentSummaryRows, priorSummaryRows] = await Promise.all([
       loadClientOverviewRows({

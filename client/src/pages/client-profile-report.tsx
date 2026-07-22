@@ -62,6 +62,7 @@ import { formatMetricValue } from "@/components/reports/report-shared";
 import { fetchReport as fetch } from "@/components/reports/report-fetch";
 import { DataPointLabel } from "@/components/data-point-help";
 import { DATA_POINT_DEFINITIONS } from "@/lib/data-point-definitions";
+import { ClientReportsTab } from "@/components/client-reports-tab";
 
 interface ClientProfileData {
   client: {
@@ -249,10 +250,14 @@ export default function ClientProfileReportPage() {
 
   const handleRangeChange = (value: string) => {
     if (value === "custom") {
-      const custom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+      const custom = typeof reportRange === "object" ? reportRange : defaultCustomRange();
       setCustomStart(custom.startDate);
       setCustomEnd(custom.endDate);
       updateRange(custom);
+      return;
+    }
+    if (value === "ytd" || value === "lifetime") {
+      updateRange(value);
       return;
     }
     updateRange(reportRangeDaysFromValue(value) ?? 30);
@@ -477,6 +482,10 @@ export default function ClientProfileReportPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              <section id="section-work-summary" data-testid="canonical-client-work-summary">
+                <ClientReportsTab clientId={clientId} showBackButton={false} />
+              </section>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 <MetricCard

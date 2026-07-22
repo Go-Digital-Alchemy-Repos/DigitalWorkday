@@ -1291,6 +1291,7 @@ export const timeEntries = pgTable("time_entries", {
   index("time_entries_tenant_user_start_idx").on(table.tenantId, table.userId, table.startTime),
   index("time_entries_tenant_project_start_idx").on(table.tenantId, table.projectId, table.startTime),
   index("time_entries_tenant_client_idx").on(table.tenantId, table.clientId),
+  index("time_entries_tenant_client_start_idx").on(table.tenantId, table.clientId, table.startTime),
   index("time_entries_tenant_created_at_idx").on(table.tenantId, table.createdAt),
 ]);
 
@@ -1438,6 +1439,7 @@ export const tasks = pgTable("tasks", {
   index("tasks_tenant_idx").on(table.tenantId),
   index("tasks_personal_section_idx").on(table.personalSectionId, table.personalSortOrder),
   index("tasks_tenant_project_idx").on(table.tenantId, table.projectId),
+  index("tasks_tenant_project_archived_status_idx").on(table.tenantId, table.projectId, table.archivedAt, table.status),
   index("tasks_tenant_status_idx").on(table.tenantId, table.status),
   index("tasks_tenant_created_by_idx").on(table.tenantId, table.createdBy),
   index("tasks_tenant_due_date_idx").on(table.tenantId, table.dueDate),
@@ -1460,6 +1462,7 @@ export const taskAssignees = pgTable("task_assignees", {
   uniqueIndex("task_assignees_unique").on(table.taskId, table.userId),
   index("task_assignees_user").on(table.userId),
   index("task_assignees_tenant_idx").on(table.tenantId),
+  index("task_assignees_tenant_task_idx").on(table.tenantId, table.taskId),
   index("task_assignees_task_id_idx").on(table.taskId),
 ]);
 

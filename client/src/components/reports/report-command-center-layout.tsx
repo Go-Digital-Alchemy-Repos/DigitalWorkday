@@ -10,7 +10,8 @@ export type CustomReportRange = {
   endDate: string;
 };
 
-export type ReportRangeValue = number | CustomReportRange;
+export type NamedReportRange = "ytd" | "lifetime";
+export type ReportRangeValue = number | NamedReportRange | CustomReportRange;
 
 export interface ReportCommandCenterLayoutProps {
   title: string;
@@ -28,6 +29,11 @@ export const REPORT_DATE_RANGES = [
   { label: "Last 30 days", days: 30 },
   { label: "Last 60 days", days: 60 },
   { label: "Last 90 days", days: 90 },
+];
+
+export const REPORT_NAMED_DATE_RANGES: Array<{ label: string; value: NamedReportRange }> = [
+  { label: "Year to date", value: "ytd" },
+  { label: "Lifetime", value: "lifetime" },
 ];
 
 export function toDateInputValue(date: Date): string {
@@ -53,7 +59,22 @@ export function defaultCustomRange(): CustomReportRange {
 }
 
 export function dateInputsForReportRange(rangeDays: ReportRangeValue): CustomReportRange {
-  if (typeof rangeDays !== "number") return rangeDays;
+  if (typeof rangeDays === "object") return rangeDays;
+  if (rangeDays === "ytd") {
+    const now = new Date();
+    return {
+      mode: "custom",
+      startDate: toDateInputValue(new Date(now.getFullYear(), 0, 1)),
+      endDate: toDateInputValue(now),
+    };
+  }
+  if (rangeDays === "lifetime") {
+    return {
+      mode: "custom",
+      startDate: "1970-01-01",
+      endDate: toDateInputValue(new Date()),
+    };
+  }
   const end = new Date();
   const start = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
   return {
@@ -64,6 +85,13 @@ export function dateInputsForReportRange(rangeDays: ReportRangeValue): CustomRep
 }
 
 export function buildDateParams(rangeDays: ReportRangeValue, extra?: Record<string, string>): string {
+  if (rangeDays === "ytd" || rangeDays === "lifetime") {
+    const params = new URLSearchParams({
+      range: rangeDays,
+      ...(extra ?? {}),
+    });
+    return params.toString();
+  }
   const isCustom = typeof rangeDays !== "number";
   const end = isCustom ? dateAtEndOfDay(rangeDays.endDate) : new Date();
   const start = isCustom ? dateAtStartOfDay(rangeDays.startDate) : new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
@@ -76,6 +104,9 @@ export function buildDateParams(rangeDays: ReportRangeValue, extra?: Record<stri
 }
 
 export function buildReportRangeSearchParams(rangeDays: ReportRangeValue, extra?: Record<string, string>): URLSearchParams {
+  if (rangeDays === "ytd" || rangeDays === "lifetime") {
+    return new URLSearchParams({ ...(extra ?? {}), range: rangeDays });
+  }
   const params = typeof rangeDays === "number"
     ? new URLSearchParams(extra ?? {})
     : new URLSearchParams(buildDateParams(rangeDays, extra));
@@ -93,6 +124,7 @@ export function reportRangeDaysFromValue(value: string | null | undefined): numb
 
 export function reportRangeValueFromQuery(searchParams: URLSearchParams): ReportRangeValue {
   const selectedRange = searchParams.get("range");
+  if (selectedRange === "ytd" || selectedRange === "lifetime") return selectedRange;
   const presetDays = reportRangeDaysFromValue(selectedRange);
   if (presetDays) return presetDays;
 
@@ -111,6 +143,9 @@ export function reportRangeValueFromQuery(searchParams: URLSearchParams): Report
 
 export function reportRangeSearchParamsFromQuery(searchParams: URLSearchParams): URLSearchParams {
   const selectedRange = searchParams.get("range");
+  if (selectedRange === "ytd" || selectedRange === "lifetime") {
+    return new URLSearchParams({ range: selectedRange });
+  }
   if (selectedRange && selectedRange !== "custom") {
     return buildReportRangeSearchParams(reportRangeValueFromQuery(searchParams));
   }
@@ -127,11 +162,14 @@ export function reportRangeSearchParamsFromQuery(searchParams: URLSearchParams):
 
 export function getReportRangeLabel(range: ReportRangeValue): string {
   if (typeof range === "number") return `${range}d`;
+  if (range === "ytd" || range === "lifetime") return range;
   return `${range.startDate}_${range.endDate}`;
 }
 
 export function getReportRangeDisplay(range: ReportRangeValue): string {
   if (typeof range === "number") return REPORT_DATE_RANGES.find(r => r.days === range)?.label ?? `Last ${range} days`;
+  if (range === "ytd") return "Year to date";
+  if (range === "lifetime") return "Lifetime";
   return `${range.startDate} to ${range.endDate}`;
 }
 
@@ -158,10 +196,18 @@ export function ReportCommandCenterLayout({
 
   function handlePresetChange(value: string) {
     if (value === "custom") {
-      const custom = typeof rangeDays === "number" ? defaultCustomRange() : rangeDays;
+      const custom = typeof rangeDays === "object" ? rangeDays : defaultCustomRange();
       setCustomStart(custom.startDate);
       setCustomEnd(custom.endDate);
       onRangeChange(custom);
+      return;
+    }
+    if (value === "ytd" || value === "lifetime") {
+      const preset = value as NamedReportRange;
+      const inputs = dateInputsForReportRange(preset);
+      setCustomStart(inputs.startDate);
+      setCustomEnd(inputs.endDate);
+      onRangeChange(preset);
       return;
     }
     const preset = reportRangeDaysFromValue(value) ?? 30;
@@ -187,7 +233,7 @@ export function ReportCommandCenterLayout({
     <div className="space-y-3 sm:space-y-4" data-testid="report-command-center-layout">
       <div className="flex items-start sm:items-center justify-end gap-3 flex-wrap">
         {extraControls}
-        <Select value={typeof rangeDays === "number" ? String(rangeDays) : "custom"} onValueChange={handlePresetChange}>
+        <Select value={typeof rangeDays === "number" ? String(rangeDays) : typeof rangeDays === "string" ? rangeDays : "custom"} onValueChange={handlePresetChange}>
           <SelectTrigger className="w-full sm:w-44 shrink-0" data-testid="select-date-range">
             <CalendarRange className="h-3.5 w-3.5 mr-1.5 shrink-0" />
             <SelectValue />
@@ -195,6 +241,11 @@ export function ReportCommandCenterLayout({
           <SelectContent>
             {REPORT_DATE_RANGES.map((r) => (
               <SelectItem key={r.days} value={String(r.days)} data-testid={`range-option-${r.days}`}>
+                {r.label}
+              </SelectItem>
+            ))}
+            {REPORT_NAMED_DATE_RANGES.map((r) => (
+              <SelectItem key={r.value} value={r.value} data-testid={`range-option-${r.value}`}>
                 {r.label}
               </SelectItem>
             ))}

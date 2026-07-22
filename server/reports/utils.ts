@@ -25,11 +25,25 @@ const MAX_PRESET_RANGE_DAYS = 366;
 
 export function parsePresetReportRangeDays(value: unknown): number | null {
   if (typeof value !== "string") return null;
+  const namedPreset = value.match(/^last_(\d+)$/);
+  if (namedPreset) {
+    const days = Number(namedPreset[1]);
+    if (!Number.isInteger(days) || days < 1 || days > MAX_PRESET_RANGE_DAYS) return null;
+    return days;
+  }
   const match = value.match(/^(\d+)d$/);
   if (!match) return null;
   const days = Number(match[1]);
   if (!Number.isInteger(days) || days < 1 || days > MAX_PRESET_RANGE_DAYS) return null;
   return days;
+}
+
+function startOfYear(date: Date): Date {
+  return new Date(date.getFullYear(), 0, 1, 0, 0, 0, 0);
+}
+
+function lifetimeStartDate(): Date {
+  return new Date("1970-01-01T00:00:00.000Z");
 }
 
 export function parseReportRange(query: Record<string, unknown>): {
@@ -38,15 +52,24 @@ export function parseReportRange(query: Record<string, unknown>): {
   params: ReportRangeParams;
 } {
   const now = new Date();
+  const namedRange = typeof query.range === "string" ? query.range : null;
   const presetDays = parsePresetReportRangeDays(query.range);
   const rangeDays = presetDays ?? DEFAULT_RANGE_DAYS;
   const defaultEnd = now.toISOString();
-  const defaultStart = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000).toISOString();
+  const defaultStart = namedRange === "lifetime"
+    ? lifetimeStartDate().toISOString()
+    : namedRange === "ytd"
+      ? startOfYear(now).toISOString()
+      : new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000).toISOString();
 
   const raw = {
     ...query,
-    startDate: presetDays ? defaultStart : query.startDate ?? defaultStart,
-    endDate: presetDays ? defaultEnd : query.endDate ?? defaultEnd,
+    startDate: presetDays || namedRange === "ytd" || namedRange === "lifetime"
+      ? defaultStart
+      : query.startDate ?? defaultStart,
+    endDate: presetDays || namedRange === "ytd" || namedRange === "lifetime"
+      ? defaultEnd
+      : query.endDate ?? defaultEnd,
   };
 
   const parsed = reportRangeSchema.parse(raw);

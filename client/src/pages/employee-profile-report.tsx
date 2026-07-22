@@ -527,6 +527,11 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
 
 function getDaysForReportRange(range: ReportRangeValue): number {
   if (typeof range === "number") return range;
+  if (range === "ytd") {
+    const start = new Date(new Date().getFullYear(), 0, 1);
+    return Math.max(1, Math.ceil((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  if (range === "lifetime") return 3650;
   const start = new Date(`${range.startDate}T00:00:00`);
   const end = new Date(`${range.endDate}T23:59:59.999`);
   return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
@@ -566,10 +571,14 @@ export default function EmployeeProfileReportPage() {
 
   const handleRangeChange = (value: string) => {
     if (value === "custom") {
-      const custom = typeof reportRange === "number" ? defaultCustomRange() : reportRange;
+      const custom = typeof reportRange === "object" ? reportRange : defaultCustomRange();
       setCustomStart(custom.startDate);
       setCustomEnd(custom.endDate);
       updateRange(custom);
+      return;
+    }
+    if (value === "ytd" || value === "lifetime") {
+      updateRange(value);
       return;
     }
     updateRange(reportRangeDaysFromValue(value) ?? 30);
