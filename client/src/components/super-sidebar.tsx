@@ -25,6 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -45,6 +46,7 @@ export function SuperSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const { appName, iconUrl, logoUrl } = useTenantTheme();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const isActive = (url: string, exact: boolean) => {
     if (exact) return location === url;
@@ -80,7 +82,11 @@ export function SuperSidebar() {
                     asChild
                     isActive={isActive(item.url, item.exact)}
                   >
-                    <Link href={item.url} data-testid={`link-super-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
+                    <Link
+                      href={item.url}
+                      onClick={() => isMobile && setOpenMobile(false)}
+                      data-testid={`link-super-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+                    >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>

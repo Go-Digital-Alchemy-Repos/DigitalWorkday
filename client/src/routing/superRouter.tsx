@@ -125,10 +125,10 @@ export function SuperLayout() {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <SkipLink />
-      <div className="flex h-screen w-full">
+      <div className="flex h-dvh w-full min-w-0">
         <SuperSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between h-14 px-4 border-b border-border bg-background shrink-0">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-3 sm:px-4">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-2">
               <NotificationCenter />
@@ -136,7 +136,7 @@ export function SuperLayout() {
               <UserMenu />
             </div>
           </header>
-          <main id="main-content" className="flex-1 overflow-hidden">
+          <main id="main-content" className="min-w-0 flex-1 overflow-hidden">
             <ErrorBoundary>
               <SuperAdminRouter />
             </ErrorBoundary>

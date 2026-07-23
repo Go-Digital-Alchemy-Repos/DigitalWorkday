@@ -106,21 +106,22 @@ export default function SuperAdminDocsCoverage() {
   const missingFunctionalDocs = coverage?.functional.coverage.filter(d => !d.exists || d.isEmpty) || [];
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Documentation Coverage</h1>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold sm:text-2xl" data-testid="text-page-title">Documentation Coverage</h1>
             <p className="text-muted-foreground" data-testid="text-page-description">
               Track documentation completeness across API and functional domains
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <Button
               variant="outline"
               size="sm"
               onClick={() => refetch()}
               disabled={isRefetching}
+              className="w-full sm:w-auto"
               data-testid="button-refresh-coverage"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
@@ -130,6 +131,7 @@ export default function SuperAdminDocsCoverage() {
               size="sm"
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending}
+              className="w-full sm:w-auto"
               data-testid="button-sync-api-docs"
             >
               <Sparkles className="h-4 w-4 mr-2" />
@@ -160,7 +162,7 @@ export default function SuperAdminDocsCoverage() {
                   </Badge>
                 </div>
                 <Progress value={coverage?.summary.apiCoveragePercent} className="h-2" data-testid="progress-api-coverage" />
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid gap-2 text-sm sm:grid-cols-2">
                   <div className="flex flex-wrap items-center gap-2" data-testid="text-api-with-auth">
                     <CheckCircle className="h-4 w-4 text-green-500" />
                     <span>{coverage?.api.withAuth} with auth notes</span>
@@ -195,7 +197,7 @@ export default function SuperAdminDocsCoverage() {
                   </Badge>
                 </div>
                 <Progress value={coverage?.summary.functionalCoveragePercent} className="h-2" data-testid="progress-functional-coverage" />
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid gap-2 text-sm sm:grid-cols-2">
                   <div className="flex flex-wrap items-center gap-2" data-testid="text-functional-exists">
                     <CheckCircle className="h-4 w-4 text-green-500" />
                     <span>{coverage?.functional.exists} pages exist</span>
@@ -293,7 +295,7 @@ export default function SuperAdminDocsCoverage() {
                 {coverage?.api.coverage.map(d => (
                   <div
                     key={d.domain}
-                    className="flex items-center justify-between gap-2 p-2 rounded-md border"
+                    className="flex flex-col items-start justify-between gap-2 rounded-md border p-2 sm:flex-row sm:items-center"
                     data-testid={`row-api-domain-${d.domain}`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
@@ -334,7 +336,7 @@ export default function SuperAdminDocsCoverage() {
                 {coverage?.functional.coverage.map(d => (
                   <div
                     key={d.id}
-                    className="flex items-center justify-between gap-2 p-2 rounded-md border"
+                    className="flex flex-col items-start justify-between gap-2 rounded-md border p-2 sm:flex-row sm:items-center"
                     data-testid={`row-functional-doc-${d.id}`}
                   >
                     <div className="flex flex-wrap items-center gap-2">

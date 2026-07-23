@@ -140,35 +140,37 @@ export default function SuperAdminDashboardPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-6 border-b shrink-0">
-        <h1 className="text-2xl font-bold" data-testid="heading-dashboard">Dashboard</h1>
+      <div className="shrink-0 border-b p-4 sm:p-6">
+        <h1 className="text-xl font-bold sm:text-2xl" data-testid="heading-dashboard">Dashboard</h1>
         <p className="text-muted-foreground mt-1">Cross-tenant analytics and platform overview</p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6" data-testid="dashboard-tabs">
-            <TabsTrigger value="tenants" data-testid="tab-tenants">
-              <Building2 className="h-4 w-4 mr-2" />
-              Tenants
-            </TabsTrigger>
-            <TabsTrigger value="projects" data-testid="tab-projects">
-              <FolderKanban className="h-4 w-4 mr-2" />
-              Projects
-            </TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users">
-              <Users className="h-4 w-4 mr-2" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="tasks" data-testid="tab-tasks">
-              <CheckSquare className="h-4 w-4 mr-2" />
-              Tasks
-            </TabsTrigger>
-            <TabsTrigger value="time" data-testid="tab-time">
-              <Clock className="h-4 w-4 mr-2" />
-              Time Tracking
-            </TabsTrigger>
-          </TabsList>
+          <div className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <TabsList className="w-max" data-testid="dashboard-tabs">
+              <TabsTrigger value="tenants" data-testid="tab-tenants">
+                <Building2 className="mr-2 h-4 w-4" />
+                Tenants
+              </TabsTrigger>
+              <TabsTrigger value="projects" data-testid="tab-projects">
+                <FolderKanban className="mr-2 h-4 w-4" />
+                Projects
+              </TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users">
+                <Users className="mr-2 h-4 w-4" />
+                Users
+              </TabsTrigger>
+              <TabsTrigger value="tasks" data-testid="tab-tasks">
+                <CheckSquare className="mr-2 h-4 w-4" />
+                Tasks
+              </TabsTrigger>
+              <TabsTrigger value="time" data-testid="tab-time">
+                <Clock className="mr-2 h-4 w-4" />
+                Time Tracking
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="tenants">
             {tenantsLoading ? (

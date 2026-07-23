@@ -347,9 +347,9 @@ export default function SuperAdminDocs() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0">
       {/* Sidebar with categories */}
-      <div className="w-80 border-r bg-muted/30 flex flex-col">
+      <div className={`${selectedDoc ? "hidden md:flex" : "flex"} w-full flex-col bg-muted/30 md:w-80 md:shrink-0 md:border-r`}>
         <div className="p-4 border-b">
           <div className="flex items-center gap-2 mb-3">
             <BookOpen className="h-5 w-5 text-primary" />
@@ -465,10 +465,10 @@ export default function SuperAdminDocs() {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`${selectedDoc ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}>
         {!selectedDoc ? (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center max-w-md">
+          <div className="flex-1 items-center justify-center p-6 text-muted-foreground md:flex">
+            <div className="max-w-md text-center">
               <BookOpen className="h-16 w-16 mx-auto mb-4 opacity-30" />
               <h3 className="text-xl font-semibold mb-2">App Documentation</h3>
               <p className="text-sm mb-4">
@@ -512,9 +512,9 @@ export default function SuperAdminDocs() {
           </div>
         ) : docContent ? (
           <>
-            <div className="border-b px-6 py-4 bg-muted/20">
+            <div className="border-b bg-muted/20 px-3 py-3 sm:px-6 sm:py-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-3">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -524,9 +524,9 @@ export default function SuperAdminDocs() {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <div>
-                    <h1 className="font-semibold">{docContent.title}</h1>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <h1 className="break-words font-semibold">{docContent.title}</h1>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:text-sm">
                       <span className="flex items-center gap-1">
                         <HardDrive className="h-3.5 w-3.5" />
                         {formatBytes(docContent.sizeBytes)}
@@ -535,7 +535,7 @@ export default function SuperAdminDocs() {
                         <Calendar className="h-3.5 w-3.5" />
                         {formatDate(docContent.modifiedAt)}
                       </span>
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="max-w-full break-all text-xs whitespace-normal">
                         {docContent.relativePath}
                       </Badge>
                     </div>
@@ -544,7 +544,7 @@ export default function SuperAdminDocs() {
               </div>
             </div>
             <ScrollArea className="flex-1">
-              <div className="p-6 max-w-4xl">
+              <div className="max-w-4xl overflow-hidden p-4 sm:p-6">
                 <MarkdownRenderer content={docContent.content} />
               </div>
             </ScrollArea>
