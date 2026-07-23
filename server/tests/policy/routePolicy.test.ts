@@ -53,6 +53,20 @@ describe("Route Policy Drift Tests", () => {
       expect(superAdmin).toBeDefined();
       expect(superAdmin!.policy).toBe("superUser");
     });
+
+    it("mounts super-user routes before broad tenant-scoped routers", async () => {
+      const { orderRoutesBySpecificity } = await import("../../http/mount");
+      const ordered = orderRoutesBySpecificity(registry);
+      const superAdminIndex = ordered.findIndex((r) => r.domain === "super-admin");
+      const broadTenantIndexes = ordered
+        .map((r, index) => ({ r, index }))
+        .filter(({ r }) => r.path === "/api" && r.policy === "authTenant")
+        .map(({ index }) => index);
+
+      expect(superAdminIndex).toBeGreaterThanOrEqual(0);
+      expect(broadTenantIndexes.length).toBeGreaterThan(0);
+      expect(superAdminIndex).toBeLessThan(Math.min(...broadTenantIndexes));
+    });
   });
 
   describe("Policy Requirements", () => {

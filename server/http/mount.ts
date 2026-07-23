@@ -1,6 +1,11 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { registerRoute, clearRouteRegistry, getRouteRegistry } from "./routeRegistry";
+import {
+  registerRoute,
+  clearRouteRegistry,
+  getRouteRegistry,
+  type RouteMount,
+} from "./routeRegistry";
 import { apiNoCacheMiddleware } from "../middleware/apiCacheControl";
 import {
   startDeadlineChecker,
@@ -487,6 +492,15 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
   },
 ];
 
+export function orderRoutesBySpecificity(
+  routes: ReadonlyArray<RouteMount>
+): RouteMount[] {
+  return routes
+    .map((route, index) => ({ route, index }))
+    .sort((a, b) => b.route.path.length - a.route.path.length || a.index - b.index)
+    .map(({ route }) => route);
+}
+
 export async function mountAllRoutes(
   httpServer: Server,
   app: Express
@@ -506,8 +520,14 @@ export async function mountAllRoutes(
     });
   }
 
+  // Express evaluates mounted routers in registration order. Mount specific
+  // prefixes before broad compatibility prefixes such as `/api`; otherwise an
+  // authTenant router mounted at `/api` can reject `/api/v1/super/*` before the
+  // dedicated superUser router gets a chance to handle it.
   const registry = getRouteRegistry();
-  for (const route of registry) {
+  const routesBySpecificity = orderRoutesBySpecificity(registry);
+
+  for (const route of routesBySpecificity) {
     if (route.router) {
       app.use(route.path, route.router);
     }
