@@ -1393,6 +1393,25 @@ export const projectMembers = pgTable("project_members", {
   uniqueIndex("project_members_unique").on(table.projectId, table.userId),
 ]);
 
+// Audit trail for the staged retirement of client divisions. divisionId is
+// intentionally not a foreign key because the source division is deleted only
+// after its replacement project and this immutable mapping are created.
+export const divisionProjectConversions = pgTable("division_project_conversions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }).notNull(),
+  divisionId: varchar("division_id").notNull(),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  divisionName: text("division_name").notNull(),
+  divisionSnapshot: jsonb("division_snapshot").notNull(),
+  convertedAt: timestamp("converted_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("division_project_conversions_division_unique").on(table.divisionId),
+  uniqueIndex("division_project_conversions_project_unique").on(table.projectId),
+  index("division_project_conversions_tenant_idx").on(table.tenantId),
+  index("division_project_conversions_client_idx").on(table.clientId),
+]);
+
 // Hidden Projects table - tracks which users have hidden which projects from their view
 export const hiddenProjects = pgTable("hidden_projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

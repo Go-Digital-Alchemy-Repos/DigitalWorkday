@@ -428,19 +428,13 @@ router.post("/projects", async (req: Request, res: Response) => {
         return sendError(res, AppError.notFound("Client not found"), req);
       }
       
-      const clientDivisions = await storage.getClientDivisionsByClient(body.clientId, tenantId);
-      if (clientDivisions.length > 0) {
-        if (!body.divisionId) {
-          return sendError(res, AppError.badRequest("Division is required when client has divisions"), req);
-        }
+      if (body.divisionId) {
         const divisionValid = await storage.validateDivisionBelongsToClientTenant(
           body.divisionId, body.clientId, tenantId
         );
         if (!divisionValid) {
           return sendError(res, AppError.badRequest("Division does not belong to the selected client"), req);
         }
-      } else if (body.divisionId) {
-        return sendError(res, AppError.badRequest("Cannot assign division to a client without divisions"), req);
       }
     }
     
@@ -526,6 +520,8 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
   try {
     const data = validateBody(req.body, updateProjectSchema, res);
     if (!data) return;
+    if (data.teamId === "") data.teamId = null;
+    if (data.divisionId === "") data.divisionId = null;
     normalizeProjectDescriptionInput(data as Record<string, unknown>);
     
     const tenantId = getEffectiveTenantId(req);
@@ -550,19 +546,13 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
         return sendError(res, AppError.badRequest("Client not found or does not belong to tenant"), req);
       }
       
-      const clientDivisions = await storage.getClientDivisionsByClient(effectiveClientId, tenantId);
-      if (clientDivisions.length > 0) {
-        if (!effectiveDivisionId) {
-          return sendError(res, AppError.badRequest("Division is required when client has divisions"), req);
-        }
+      if (effectiveDivisionId) {
         const divisionValid = await storage.validateDivisionBelongsToClientTenant(
           effectiveDivisionId, effectiveClientId, tenantId
         );
         if (!divisionValid) {
           return sendError(res, AppError.badRequest("Division does not belong to the selected client"), req);
         }
-      } else if (effectiveDivisionId) {
-        (data as any).divisionId = null;
       }
     }
     

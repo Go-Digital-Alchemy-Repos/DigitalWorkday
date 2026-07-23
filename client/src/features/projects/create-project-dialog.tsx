@@ -94,10 +94,6 @@ export function CreateProjectDialog({
   const clientHasDivisions = divisions && divisions.length > 0;
 
   const handleSubmit = (data: CreateProjectFormData) => {
-    if (clientHasDivisions && !data.divisionId) {
-      form.setError("divisionId", { message: "Division is required for this client" });
-      return;
-    }
     onSubmit(data);
     form.reset();
   };
@@ -202,13 +198,17 @@ export function CreateProjectDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Division</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                      value={field.value || "none"}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-division">
                           <SelectValue placeholder="Select a division" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="none">Directly under client</SelectItem>
                         {divisions.map((division) => (
                           <SelectItem key={division.id} value={division.id}>
                             <div className="flex items-center gap-2">

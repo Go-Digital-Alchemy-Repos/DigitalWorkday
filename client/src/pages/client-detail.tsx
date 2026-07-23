@@ -2461,17 +2461,7 @@ export default function ClientDetailPage() {
           <TabsContent value="divisions" className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">Divisions</h2>
-              <Button
-                onClick={() => {
-                  setEditingDivision(null);
-                  setDivisionMode("create");
-                  setDivisionDrawerOpen(true);
-                }}
-                data-testid="button-add-division"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Division
-              </Button>
+              <Badge variant="outline">Retirement in progress</Badge>
             </div>
 
             {childClients.length > 0 && (
@@ -2568,21 +2558,10 @@ export default function ClientDetailPage() {
             {divisions.length === 0 && childClients.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Layers className="h-12 w-12 text-muted-foreground/50 mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">No divisions created yet</p>
+                <p className="text-sm text-muted-foreground mb-4">No divisions remain for this client</p>
                 <p className="text-xs text-muted-foreground mb-4 max-w-md">
-                  Divisions help you organize teams and projects within this client for better access control.
+                  Create projects directly under the client. New divisions are disabled during the retirement process.
                 </p>
-                <Button
-                  onClick={() => {
-                    setEditingDivision(null);
-                    setDivisionMode("create");
-                    setDivisionDrawerOpen(true);
-                  }}
-                  variant="outline"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create First Division
-                </Button>
               </div>
             )}
           </TabsContent>

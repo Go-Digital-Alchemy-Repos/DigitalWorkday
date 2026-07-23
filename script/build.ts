@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { cp, rm, readFile } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -59,6 +59,20 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // App Docs is runtime content, not just repository documentation. Keep it in
+  // the deploy artifact so production builders that prune source files do not
+  // leave the Super Admin documentation center empty.
+  console.log("copying app docs...");
+  await cp("docs", "dist/docs", { recursive: true });
+
+  // The in-app Sync API Docs action scans route source to preserve useful file
+  // and line references. Package only the server trees it needs when a runtime
+  // image omits the repository source.
+  console.log("copying API documentation scanner sources...");
+  for (const directory of ["http", "routes", "features", "jobs"]) {
+    await cp(`server/${directory}`, `dist/source/server/${directory}`, { recursive: true });
+  }
 }
 
 buildAll()

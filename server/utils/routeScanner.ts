@@ -4,6 +4,7 @@
  */
 
 import * as fs from "fs/promises";
+import { existsSync } from "fs";
 import * as path from "path";
 
 export interface RouteDefinition {
@@ -21,8 +22,16 @@ export interface DomainRoutes {
   routes: RouteDefinition[];
 }
 
-const ROUTES_DIR = path.join(process.cwd(), "server/routes");
-const FEATURES_DIR = path.join(process.cwd(), "server/features");
+const sourceServerDir = path.join(process.cwd(), "server");
+const builtSourceServerDir = path.join(process.cwd(), "dist", "source", "server");
+const SERVER_DIR = existsSync(sourceServerDir) ? sourceServerDir : builtSourceServerDir;
+const FEATURES_DIR = path.join(SERVER_DIR, "features");
+const MOUNT_FILE = path.join(SERVER_DIR, "http", "mount.ts");
+
+function displaySourcePath(filePath: string): string {
+  const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, "/");
+  return relativePath.replace(/^dist\/source\//, "");
+}
 
 // Domain inference from file paths
 const DOMAIN_MAP: Record<string, { domain: string; displayName: string }> = {
@@ -95,14 +104,17 @@ const BASE_PATH_MAP: Record<string, string> = {
  * Handles both single-line and multi-line route definitions
  * Uses flexible patterns that work with various whitespace and formatting
  */
-async function extractRoutesFromFile(filePath: string): Promise<RouteDefinition[]> {
+async function extractRoutesFromFile(
+  filePath: string,
+  context?: { domain: string; displayName: string; basePath: string },
+): Promise<RouteDefinition[]> {
   const routes: RouteDefinition[] = [];
   const filename = path.basename(filePath);
-  const domainInfo = DOMAIN_MAP[filename] || { 
+  const domainInfo = context || DOMAIN_MAP[filename] || {
     domain: filename.replace(/\.(router\.)?ts$/, "").toLowerCase(),
     displayName: filename.replace(/\.(router\.)?ts$/, "").replace(/([A-Z])/g, " $1").trim()
   };
-  const basePath = BASE_PATH_MAP[filename] || "/api/v1";
+  const basePath = context?.basePath || BASE_PATH_MAP[filename] || "/api/v1";
   
   try {
     const content = await fs.readFile(filePath, "utf-8");
@@ -142,7 +154,7 @@ async function extractRoutesFromFile(filePath: string): Promise<RouteDefinition[
         routes.push({
           method,
           path: fullPath,
-          file: path.relative(process.cwd(), filePath),
+          file: displaySourcePath(filePath),
           domain: domainInfo.domain,
           line: findLineNumber(match.index),
         });
@@ -161,7 +173,7 @@ async function extractRoutesFromFile(filePath: string): Promise<RouteDefinition[
         routes.push({
           method,
           path: fullPath,
-          file: path.relative(process.cwd(), filePath),
+          file: displaySourcePath(filePath),
           domain: domainInfo.domain,
           line: findLineNumber(match.index),
         });
@@ -183,8 +195,40 @@ async function extractRoutesFromFile(filePath: string): Promise<RouteDefinition[
  */
 export async function scanAllRoutes(): Promise<Map<string, DomainRoutes>> {
   const domains = new Map<string, DomainRoutes>();
-  
-  async function scanDirectory(dir: string) {
+
+  const addRoutes = async (
+    filePath: string,
+    context?: { domain: string; displayName: string; basePath: string },
+  ) => {
+    const routes = await extractRoutesFromFile(filePath, context);
+    if (routes.length === 0) return;
+    const filename = path.basename(filePath);
+    const domainInfo = context || DOMAIN_MAP[filename] || {
+      domain: filename.replace(/\.(router\.)?ts$/, "").toLowerCase(),
+      displayName: filename.replace(/\.(router\.)?ts$/, "").replace(/([A-Z])/g, " $1").trim(),
+      basePath: BASE_PATH_MAP[filename] || "/api/v1",
+    };
+    const relativeFile = displaySourcePath(filePath);
+    const existing = domains.get(domainInfo.domain);
+    if (existing) {
+      const routeKeys = new Set(existing.routes.map(route => `${route.method}:${route.path}`));
+      existing.routes.push(...routes.filter(route => !routeKeys.has(`${route.method}:${route.path}`)));
+      existing.routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
+      if (!existing.files.includes(relativeFile)) existing.files.push(relativeFile);
+    } else {
+      domains.set(domainInfo.domain, {
+        domain: domainInfo.domain,
+        displayName: domainInfo.displayName,
+        files: [relativeFile],
+        routes,
+      });
+    }
+  };
+
+  async function scanDirectory(
+    dir: string,
+    contextForFile?: (filePath: string) => { domain: string; displayName: string; basePath: string },
+  ) {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       
@@ -192,40 +236,46 @@ export async function scanAllRoutes(): Promise<Map<string, DomainRoutes>> {
         const fullPath = path.join(dir, entry.name);
         
         if (entry.isDirectory()) {
-          await scanDirectory(fullPath);
+          await scanDirectory(fullPath, contextForFile);
         } else if (entry.name.endsWith(".ts") && !entry.name.startsWith("index")) {
-          const routes = await extractRoutesFromFile(fullPath);
-          
-          if (routes.length > 0) {
-            const filename = entry.name;
-            const domainInfo = DOMAIN_MAP[filename] || {
-              domain: filename.replace(/\.(router\.)?ts$/, "").toLowerCase(),
-              displayName: filename.replace(/\.(router\.)?ts$/, "").replace(/([A-Z])/g, " $1").trim()
-            };
-            
-            const existing = domains.get(domainInfo.domain);
-            if (existing) {
-              existing.routes.push(...routes);
-              if (!existing.files.includes(path.relative(process.cwd(), fullPath))) {
-                existing.files.push(path.relative(process.cwd(), fullPath));
-              }
-            } else {
-              domains.set(domainInfo.domain, {
-                domain: domainInfo.domain,
-                displayName: domainInfo.displayName,
-                files: [path.relative(process.cwd(), fullPath)],
-                routes,
-              });
-            }
-          }
+          await addRoutes(fullPath, contextForFile?.(fullPath));
         }
       }
     } catch (error) {
       console.error(`[routeScanner] Failed to scan ${dir}:`, error);
     }
   }
-  
-  await scanDirectory(ROUTES_DIR);
+
+  // mount.ts is the production source of truth. Derive direct router source,
+  // mount prefix, and documentation domain from REGISTERED_DOMAINS instead of
+  // maintaining a second list that drifts whenever routes are reorganized.
+  const mountSource = await fs.readFile(MOUNT_FILE, "utf-8");
+  const imports = new Map<string, string>();
+  for (const match of mountSource.matchAll(/import\s+(?:\{\s*)?([A-Za-z0-9_]+)(?:\s*\})?\s+from\s+["']([^"']+)["']/g)) {
+    const [, identifier, importPath] = match;
+    if (importPath.startsWith(".")) {
+      const modulePath = path.resolve(path.dirname(MOUNT_FILE), importPath);
+      const filePath = existsSync(`${modulePath}.ts`) ? `${modulePath}.ts` : path.join(modulePath, "index.ts");
+      imports.set(identifier, filePath);
+    }
+  }
+  for (const match of mountSource.matchAll(/\{\s*path:\s*["']([^"']+)["'][\s\S]{0,240}?router:\s*([A-Za-z0-9_]+),[\s\S]{0,160}?domain:\s*["']([^"']+)["'][\s\S]{0,160}?description:\s*["']([^"']+)["']/g)) {
+    const [, basePath, identifier, domain, description] = match;
+    const filePath = imports.get(identifier);
+    if (filePath) await addRoutes(filePath, { domain, displayName: description.replace(/:.*/, ""), basePath });
+  }
+
+  // Aggregator routers keep their endpoints in child modules. They inherit the
+  // mount prefix and domain registered for the aggregator in mount.ts.
+  await scanDirectory(path.join(SERVER_DIR, "routes/modules/super-admin"), () => ({
+    domain: "super-admin", displayName: "Super Admin", basePath: "/api/v1/super",
+  }));
+  await scanDirectory(path.join(SERVER_DIR, "routes/modules/superDebug"), () => ({
+    domain: "super-debug", displayName: "Super Debug", basePath: "/api/v1/super/debug",
+  }));
+
+  // Feature routers are nested below /api and already declare their remaining
+  // path segments in each route definition.
   await scanDirectory(FEATURES_DIR);
   
   return domains;

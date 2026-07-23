@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { requireSuperUser } from '../../../middleware/tenantContext';
 import { promises as fs } from 'fs';
+import { existsSync } from 'fs';
 import path from 'path';
 import { scanAllRoutes, createStubDocument, mergeContent, generateAutoSection } from '../../../utils/routeScanner';
 
 export const docsRouter = Router();
 
-const DOCS_DIR = path.join(process.cwd(), "docs");
+const sourceDocsDir = path.join(process.cwd(), "docs");
+const builtDocsDir = path.join(process.cwd(), "dist", "docs");
+const DOCS_DIR = existsSync(sourceDocsDir) ? sourceDocsDir : builtDocsDir;
 
 const CATEGORY_CONFIG: Record<string, { displayName: string; icon: string; order: number }> = {
   "01-GETTING-STARTED": { displayName: "Getting Started", icon: "rocket", order: 1 },
@@ -127,7 +130,8 @@ docsRouter.get("/docs", requireSuperUser, async (req, res) => {
   }
 });
 
-docsRouter.get("/docs/:docPath", requireSuperUser, async (req, res) => {
+docsRouter.get("/docs/:docPath", requireSuperUser, async (req, res, next) => {
+  if (req.params.docPath === "coverage") return next();
   try {
     const { docPath } = req.params;
     
@@ -291,6 +295,10 @@ docsRouter.get("/docs/coverage", requireSuperUser, async (req, res) => {
       { id: "06-NOTIFICATIONS", name: "Notifications" },
       { id: "07-UPLOADS-AND-FILES", name: "Uploads & Files" },
       { id: "08-AUDIT-LOGGING", name: "Audit Logging" },
+      { id: "09-REPORTING-METRICS", name: "Reporting Metrics" },
+      { id: "10-EMPLOYEE-PERFORMANCE-INDEX", name: "Employee Performance Index" },
+      { id: "11-CLIENT-HEALTH-INDEX", name: "Client Health Index" },
+      { id: "12-CLIENT-PORTAL", name: "Client Portal" },
     ];
     
     const functionalCoverage: Array<{

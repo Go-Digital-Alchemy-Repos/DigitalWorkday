@@ -1,6 +1,6 @@
 /**
  * @module server/tests/project_requires_division_when_client_has_divisions.test.ts
- * @description Tests that project creation requires divisionId when the client has divisions.
+ * @description Tests transitional support for direct projects alongside retained divisions.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -89,7 +89,7 @@ async function cleanupTestData() {
   await db.delete(tenants).where(eq(tenants.id, tenantId));
 }
 
-describe("Project requires division when client has divisions", () => {
+describe("Direct projects during division retirement", () => {
   beforeEach(async () => {
     await createTestData();
   });
@@ -127,6 +127,22 @@ describe("Project requires division when client has divisions", () => {
     );
     expect(divisions).toHaveLength(1);
     expect(divisions[0].id).toBe(divisionId);
+  });
+
+  it("allows a direct project while the client still has retained divisions", async () => {
+    const project = await storage.createProjectWithTenant(
+      {
+        workspaceId,
+        clientId: clientWithDivisionsId,
+        divisionId: null,
+        name: "Direct Client Project",
+        createdBy: adminUserId,
+      },
+      tenantId
+    );
+
+    expect(project.clientId).toBe(clientWithDivisionsId);
+    expect(project.divisionId).toBeNull();
   });
 
   it("should allow creating project with division when client has divisions", async () => {

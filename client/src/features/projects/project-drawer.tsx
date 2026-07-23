@@ -101,7 +101,6 @@ export function ProjectDrawer({
   });
 
   const clientIdValue = form.watch("clientId");
-  const divisionIdValue = form.watch("divisionId");
   const hasClientAssigned = !!clientIdValue;
   const projectMissingClient = mode === "edit" && project && !project.clientId && !hasClientAssigned;
 
@@ -111,7 +110,6 @@ export function ProjectDrawer({
   });
 
   const clientHasDivisions = divisions && divisions.length > 0;
-  const requiresDivision = Boolean(clientHasDivisions);
 
   const handleClientChange = (newClientId: string) => {
     form.setValue("clientId", newClientId, {
@@ -157,10 +155,6 @@ export function ProjectDrawer({
   }, [form]);
 
   const handleSubmit = async (data: ProjectFormData) => {
-    if (clientHasDivisions && !data.divisionId) {
-      form.setError("divisionId", { message: "Division is required for this client" });
-      return;
-    }
     try {
       await onSubmit({
         ...data,
@@ -227,7 +221,7 @@ export function ProjectDrawer({
           onSave={form.handleSubmit(handleSubmit)}
           isLoading={isLoading}
           saveLabel={mode === "create" ? "Create Project" : "Save Changes"}
-          saveDisabled={!form.formState.isValid || !hasClientAssigned || (requiresDivision && !divisionIdValue)}
+          saveDisabled={!form.formState.isValid || !hasClientAssigned}
         />
       }
     >
@@ -325,14 +319,18 @@ export function ProjectDrawer({
                   name="divisionId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel required>Division</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <FormLabel>Division</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                        value={field.value || "none"}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-division">
-                            <SelectValue placeholder="Select a division (required)" />
+                            <SelectValue placeholder="Directly under client" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="none">Directly under client</SelectItem>
                           {divisions.map((division) => (
                             <SelectItem key={division.id} value={division.id}>
                               <div className="flex items-center gap-2">

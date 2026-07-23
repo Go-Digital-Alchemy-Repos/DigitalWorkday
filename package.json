@@ -24,6 +24,7 @@
     "production:check": "node server/scripts/production-readiness-check.cjs",
     "slo:check": "node server/scripts/slo-check.cjs",
     "supply-chain:check": "node script/supply-chain-check.mjs",
+    "divisions:convert": "tsx server/scripts/convertEmptyDivisions.ts",
     "db:migrate": "tsx server/scripts/migrate.ts",
     "db:push": "tsx server/scripts/guard-production-push.ts && drizzle-kit push"
   },

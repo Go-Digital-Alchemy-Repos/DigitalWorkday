@@ -68,12 +68,13 @@ router.get("/clients/:clientId/divisions", async (req, res) => {
       divisions = divisions.filter(d => userDivisionIds.has(d.id));
     }
     
+    const tenantProjects = await storage.getProjectsByTenant(tenantId);
     const divisionsWithCounts = await Promise.all(divisions.map(async (division) => {
       const members = await storage.getDivisionMembers(division.id);
       return {
         ...division,
         memberCount: members.length,
-        projectCount: 0,
+        projectCount: tenantProjects.filter(project => project.divisionId === division.id).length,
       };
     }));
     
@@ -105,15 +106,8 @@ router.post("/clients/:clientId/divisions", async (req, res) => {
     if (!canCreate) {
       throw AppError.forbidden("You do not have permission to create divisions");
     }
-    
-    const data = insertClientDivisionSchema.parse({
-      ...req.body,
-      clientId,
-      tenantId,
-    });
-    
-    const division = await storage.createClientDivision(data);
-    res.status(201).json(division);
+
+    throw AppError.conflict("Creating new divisions is disabled while divisions are being retired. Create a project under the client instead.");
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw AppError.badRequest("Validation failed", error.errors);
