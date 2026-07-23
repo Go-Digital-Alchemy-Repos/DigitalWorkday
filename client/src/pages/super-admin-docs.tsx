@@ -112,8 +112,11 @@ function MarkdownRenderer({ content }: { content: string }) {
         codeBlockContent = [];
       } else {
         elements.push(
-          <pre key={`code-${i}`} className="bg-muted rounded-md p-4 overflow-x-auto my-4 text-sm font-mono">
-            <code>{codeBlockContent.join("\n")}</code>
+          <pre
+            key={`code-${i}`}
+            className="not-prose my-4 overflow-x-auto rounded-md border border-slate-800 bg-slate-950 p-4 font-mono text-sm leading-relaxed text-slate-100"
+          >
+            <code className="text-inherit">{codeBlockContent.join("\n")}</code>
           </pre>
         );
         inCodeBlock = false;
