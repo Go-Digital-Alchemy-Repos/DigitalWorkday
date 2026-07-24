@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Clock, Calendar, TrendingUp, AlertTriangle, Play, Edit, FileWarning, Timer, BarChart3, List } from "lucide-react";
+import { Clock, Calendar, TrendingUp, AlertTriangle, Play, Edit, FileWarning, Timer, BarChart3, List, PlusCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
 import { TimeTrackingContent } from "./time-tracking";
 import { SurfacePanel } from "@/components/layout";
+import { NewTimeEntryDrawer } from "@/features/time/new-time-entry-drawer";
 
 interface TimeStats {
   total: number;
@@ -237,20 +238,31 @@ function WarningsPanel({ warnings, onEditEntry }: {
   );
 }
 
-function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
+function QuickActions({ lastEntryId, onEditEntry, onStartTimer, onCreateTimeEntry }: {
   lastEntryId: string | null;
   onEditEntry: (id: string) => void;
   onStartTimer: () => void;
+  onCreateTimeEntry: () => void;
 }) {
   return (
     <SurfacePanel className="p-4" data-testid="quick-actions">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
       <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          onClick={onCreateTimeEntry}
+          data-testid="button-quick-new-time-entry"
+          className="shadow-[var(--shadow-soft)]"
+        >
+          <PlusCircle className="mr-1.5 h-4 w-4" />
+          Create New Time Entry
+        </Button>
+
         <Button 
           size="sm" 
           variant="outline"
           onClick={onStartTimer}
-          data-testid="button-start-timer"
+          data-testid="button-quick-start-timer"
           className="bg-background hover:bg-muted"
         >
           <Play className="h-4 w-4 mr-1 text-blue-500" />
@@ -285,6 +297,7 @@ export default function MyTimePage() {
   const { toast } = useToast();
   const [location] = useLocation();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [newTimeEntryOpen, setNewTimeEntryOpen] = useState(false);
   
   // Auto-switch to entries tab when edit param is present in URL
   useEffect(() => {
@@ -345,20 +358,37 @@ export default function MyTimePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
       <div className="shrink-0 border-b border-border/70 bg-background/95 backdrop-blur-xl">
-        <div className="px-4 py-4 sm:px-5 lg:px-8 md:py-5">
-          <SurfacePanel padding="none" className="flex items-center justify-between px-4 py-4 md:px-5">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" data-testid="page-title">
-            <Clock className="h-6 w-6" />
-            My Time
-          </h1>
-          <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
-        </div>
-        <Button className="rounded-xl shadow-[var(--shadow-soft)]" onClick={handleStartTimer} data-testid="button-start-timer">
-          <Play className="h-4 w-4 mr-2" />
-          Start Timer
-        </Button>
+        <div className="space-y-3 px-4 py-4 sm:px-5 lg:px-8 md:py-5">
+          <SurfacePanel padding="none" className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" data-testid="page-title">
+                <Clock className="h-6 w-6" />
+                My Time
+              </h1>
+              <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                className="rounded-xl bg-background shadow-[var(--shadow-soft)]"
+                onClick={() => setNewTimeEntryOpen(true)}
+                data-testid="button-new-time-entry"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                New Time Entry
+              </Button>
+              <Button className="rounded-xl shadow-[var(--shadow-soft)]" onClick={handleStartTimer} data-testid="button-start-timer">
+                <Play className="h-4 w-4 mr-2" />
+                Start Timer
+              </Button>
+            </div>
           </SurfacePanel>
+          <QuickActions
+            lastEntryId={stats?.lastEntryId ?? null}
+            onEditEntry={handleEditEntry}
+            onStartTimer={handleStartTimer}
+            onCreateTimeEntry={() => setNewTimeEntryOpen(true)}
+          />
         </div>
       </div>
       
@@ -401,17 +431,10 @@ export default function MyTimePage() {
                 
                 <div className="grid gap-4 md:grid-cols-2">
                   <WeeklyChart data={stats.dailyBreakdown} />
-                  <div className="space-y-4">
-                    <QuickActions 
-                      lastEntryId={stats.lastEntryId} 
-                      onEditEntry={handleEditEntry}
-                      onStartTimer={handleStartTimer}
-                    />
-                    <WarningsPanel 
-                      warnings={stats.warnings} 
-                      onEditEntry={handleEditEntry}
-                    />
-                  </div>
+                  <WarningsPanel
+                    warnings={stats.warnings}
+                    onEditEntry={handleEditEntry}
+                  />
                 </div>
               </>
             ) : null}
@@ -422,7 +445,8 @@ export default function MyTimePage() {
           </TabsContent>
         </Tabs>
       </div>
-      
+
+      <NewTimeEntryDrawer open={newTimeEntryOpen} onOpenChange={setNewTimeEntryOpen} />
     </div>
   );
 }
