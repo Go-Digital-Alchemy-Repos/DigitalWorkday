@@ -130,10 +130,13 @@ final class AppStore {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func updateTask(_ task: DWTask, title: String, description: String, status: String, priority: String, dueDate: Date?) async {
+    func updateTask(_ task: DWTask, title: String, description: String, status: String, priority: String, dueDate: Date?, projectID: String? = nil) async {
         guard await canMutate() else { return }
         var body: [String: Any] = ["title": title, "description": description, "status": status,
-                                   "priority": priority, "expectedUpdatedAt": ISO8601DateFormatter().string(from: task.updatedAt)]
+                                   "priority": priority, "isPersonal": projectID == nil,
+                                   "projectId": projectID ?? NSNull(),
+                                   "expectedUpdatedAt": ISO8601DateFormatter().string(from: task.updatedAt)]
+        if projectID != task.projectId { body["sectionId"] = NSNull() }
         body["dueDate"] = dueDate.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull()
         do { try await api.mutate("/api/v1/desktop/tasks/\(task.id)", method: "PATCH", body: try json(body)); await refresh() }
         catch APIError.conflict { errorMessage = "This task changed online. The current version has been reloaded."; await refresh() }
@@ -141,7 +144,8 @@ final class AppStore {
     }
 
     func complete(_ task: DWTask) async {
-        await updateTask(task, title: task.title, description: task.description ?? "", status: "done", priority: task.priority, dueDate: task.dueDate)
+        await updateTask(task, title: task.title, description: task.description ?? "", status: "done", priority: task.priority,
+                         dueDate: task.dueDate, projectID: task.projectId)
     }
 
     func addComment(taskID: String, body: String) async {

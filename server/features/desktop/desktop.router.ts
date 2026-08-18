@@ -160,6 +160,34 @@ router.get("/task-details/:id", async (req, res, next) => {
   }
 });
 
+// A desktop task may only be moved into a project already present in that
+// user's authorized bootstrap payload. Client context continues to come from
+// the selected project rather than being accepted from the client.
+router.patch("/tasks/:id", async (req, res, next) => {
+  const projectId = req.body?.projectId;
+  if (projectId === undefined || projectId === null) { next(); return; }
+  if (typeof projectId !== "string") {
+    res.status(400).json({ error: "Invalid project" });
+    return;
+  }
+  try {
+    const auth = req.desktopAuth!;
+    const projects = await storage.getProjectsForUser(
+      req.user!.id,
+      auth.tenantId,
+      auth.workspaceId,
+      hasTenantAdminAccess(req.user!.role),
+    );
+    if (!projects.some((project) => project.id === projectId)) {
+      res.status(403).json({ error: "Project is not available to this desktop session" });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Mount the existing domain handlers under the versioned desktop namespace so
 // task completion, notifications, automations, comments and time tracking keep
 // exactly the same server-side semantics as the web client.

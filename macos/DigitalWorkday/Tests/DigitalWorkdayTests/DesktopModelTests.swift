@@ -21,4 +21,13 @@ final class DesktopModelTests: XCTestCase {
     }
 
     func testDurationFormatting() { XCTAssertEqual(DurationFormatter.short(3_661), "1:01:01") }
+
+    func testRichTextDescriptionRendersReadableLists() {
+        let value = #"{"type":"doc","content":[{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"First item"}]}]},{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Second item"}]}]}]},{"type":"paragraph","content":[{"type":"text","text":"Closing note"}]}]}"#
+        XCTAssertEqual(RichTextPlainText.displayText(from: value), "• First item\n• Second item\nClosing note")
+    }
+
+    func testPlainDescriptionIsUnchanged() {
+        XCTAssertEqual(RichTextPlainText.displayText(from: "A normal description"), "A normal description")
+    }
 }

@@ -3,8 +3,11 @@ import SwiftUI
 struct TaskDetailView: View {
     @Environment(AppStore.self) private var store
     let detail: DWTaskDetail
+    private let originalDescription: String
+    private let initialDisplayDescription: String
     @State private var title: String
     @State private var description: String
+    @State private var projectID: String?
     @State private var status: String
     @State private var priority: String
     @State private var dueDate: Date
@@ -16,8 +19,13 @@ struct TaskDetailView: View {
 
     init(detail: DWTaskDetail) {
         self.detail = detail
+        let rawDescription = detail.task.description ?? ""
+        let displayDescription = RichTextPlainText.displayText(from: rawDescription)
+        originalDescription = rawDescription
+        initialDisplayDescription = displayDescription
         _title = State(initialValue: detail.task.title)
-        _description = State(initialValue: detail.task.description ?? "")
+        _description = State(initialValue: displayDescription)
+        _projectID = State(initialValue: detail.task.projectId)
         _status = State(initialValue: detail.task.status)
         _priority = State(initialValue: detail.task.priority)
         _dueDate = State(initialValue: detail.task.dueDate ?? .now)
@@ -31,6 +39,12 @@ struct TaskDetailView: View {
                 HStack {
                     Picker("Status", selection: $status) { ForEach(TaskStatus.allCases) { Text($0.label).tag($0.rawValue) } }
                     Picker("Priority", selection: $priority) { ForEach(TaskPriority.allCases) { Text($0.label).tag($0.rawValue) } }
+                }
+                Picker("Project", selection: $projectID) {
+                    Text("Personal").tag(String?.none)
+                    ForEach(store.bootstrap?.projects ?? []) { project in
+                        Text(project.clientName.map { "\($0) — \(project.name)" } ?? project.name).tag(Optional(project.id))
+                    }
                 }
                 TextEditor(text: $description).frame(minHeight: 90).overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
                 Toggle("Due date", isOn: $hasDueDate)
@@ -48,8 +62,11 @@ struct TaskDetailView: View {
         .toolbar {
             ToolbarItemGroup {
                 Link(destination: URL(string: "https://digitalworkday.ai/my-tasks?task=\(detail.task.id)")!) { Label("Open in Web", systemImage: "safari") }
-                Button("Save") { Task { await store.updateTask(detail.task, title: title, description: description, status: status,
-                                                               priority: priority, dueDate: hasDueDate ? dueDate : nil) } }
+                Button("Save") { Task {
+                    let descriptionToSave = description == initialDisplayDescription ? originalDescription : description
+                    await store.updateTask(detail.task, title: title, description: descriptionToSave, status: status,
+                                           priority: priority, dueDate: hasDueDate ? dueDate : nil, projectID: projectID)
+                } }
                     .buttonStyle(.borderedProminent).disabled(!store.connectivity.isOnline)
             }
         }
@@ -57,8 +74,10 @@ struct TaskDetailView: View {
     }
 
     private var context: some View {
-        HStack { Label(detail.task.projectName ?? "Personal", systemImage: detail.task.isPersonal ? "person" : "folder")
-            if let client = detail.task.clientName { Text("· \(client)") }
+        let project = store.bootstrap?.projects.first { $0.id == projectID }
+        return HStack {
+            Label(project?.name ?? "Personal", systemImage: project == nil ? "person" : "folder")
+            if let client = project?.clientName { Text("· \(client)") }
         }.font(.callout).foregroundStyle(.secondary)
     }
 
