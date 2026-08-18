@@ -21,8 +21,10 @@ export interface CreatePersonalTaskData {
   description?: string;
   dueDate?: string | null;
   priority?: "low" | "medium" | "high" | "urgent";
+  status?: "todo" | "in_progress" | "blocked" | "done";
   assigneeIds?: string[];
   personalSectionId?: string;
+  estimateMinutes?: number | null;
 }
 
 export interface CreateChildTaskData {

@@ -51,7 +51,7 @@ import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Section, Tag as TagType } from "@shared/schema";
+import type { Client, Project, Section, Tag as TagType } from "@shared/schema";
 
 const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -65,6 +65,8 @@ const createTaskSchema = z.object({
 });
 
 type CreateTaskFormData = z.infer<typeof createTaskSchema>;
+
+export type TaskCreationContext = "personal" | "project";
 
 interface TenantUser {
   id: string;
@@ -94,6 +96,8 @@ interface TaskCreateDrawerProps {
     tagIds?: string[];
     subtaskTitles?: string[];
     queuedFiles?: File[];
+    taskContext?: TaskCreationContext;
+    projectId?: string;
   }) => Promise<void>;
   sections?: Section[];
   defaultSectionId?: string;
@@ -101,6 +105,10 @@ interface TaskCreateDrawerProps {
   isLoading?: boolean;
   projectId?: string;
   workspaceId?: string;
+  projects?: Project[];
+  clients?: Client[];
+  allowTaskAssociation?: boolean;
+  defaultAssigneeIds?: string[];
 }
 
 function getFileIcon(mimeType: string) {
@@ -125,10 +133,17 @@ export function TaskCreateDrawer({
   isLoading = false,
   projectId,
   workspaceId,
+  projects = [],
+  clients = [],
+  allowTaskAssociation = false,
+  defaultAssigneeIds = [],
 }: TaskCreateDrawerProps) {
   const { toast } = useToast();
   const [hasChanges, setHasChanges] = useState(false);
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(defaultAssigneeIds);
+  const [taskContext, setTaskContext] = useState<TaskCreationContext>("personal");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
@@ -138,6 +153,19 @@ export function TaskCreateDrawer({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const defaultAssigneeKey = defaultAssigneeIds.join(",");
+  const effectiveProjectId = projectId || (taskContext === "project" ? selectedProjectId : undefined);
+  const selectedProject = projects.find((project) => project.id === effectiveProjectId);
+  const effectiveWorkspaceId = workspaceId || selectedProject?.workspaceId;
+
+  const { data: selectedProjectSections = [] } = useQuery<Section[]>({
+    queryKey: ["/api/projects", effectiveProjectId, "sections"],
+    enabled: allowTaskAssociation && !!effectiveProjectId,
+  });
+  const availableSections = projectId ? sections : selectedProjectSections;
+  const availableProjects = selectedClientId
+    ? projects.filter((project) => project.clientId === selectedClientId)
+    : projects;
 
   const form = useForm<CreateTaskFormData>({
     resolver: zodResolver(createTaskSchema),
@@ -154,17 +182,17 @@ export function TaskCreateDrawer({
   });
 
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
-    queryKey: ["/api/workspaces", workspaceId, "tags"],
-    enabled: !!workspaceId && open,
+    queryKey: ["/api/workspaces", effectiveWorkspaceId, "tags"],
+    enabled: !!effectiveWorkspaceId && open,
   });
 
   const createTagMutation = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string }) => {
-      const res = await apiRequest("POST", `/api/workspaces/${workspaceId}/tags`, { name, color });
+      const res = await apiRequest("POST", `/api/workspaces/${effectiveWorkspaceId}/tags`, { name, color });
       return res.json() as Promise<TagType>;
     },
     onSuccess: (newTag: TagType) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", workspaceId, "tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", effectiveWorkspaceId, "tags"] });
       setSelectedTagIds(prev => [...prev, newTag.id]);
       setIsCreatingTag(false);
       setNewTagName("");
@@ -185,7 +213,10 @@ export function TaskCreateDrawer({
   useEffect(() => {
     if (!open) {
       form.reset();
-      setSelectedAssignees([]);
+      setSelectedAssignees(defaultAssigneeIds);
+      setTaskContext("personal");
+      setSelectedClientId("");
+      setSelectedProjectId("");
       setSelectedTagIds([]);
       setSubtaskTitles([]);
       setNewSubtaskTitle("");
@@ -196,7 +227,7 @@ export function TaskCreateDrawer({
       setNewTagName("");
       setNewTagColor("#3b82f6");
     }
-  }, [open, form]);
+  }, [open, form, defaultAssigneeKey]);
 
   useEffect(() => {
     const subscription = form.watch(() => {
@@ -209,7 +240,8 @@ export function TaskCreateDrawer({
         values.status !== "todo" ||
         values.dueDate !== null ||
         values.sectionId !== initialSectionId ||
-        selectedAssignees.length > 0 ||
+        selectedAssignees.join(",") !== defaultAssigneeIds.join(",") ||
+        (allowTaskAssociation && taskContext !== "personal") ||
         selectedTagIds.length > 0 ||
         subtaskTitles.length > 0 ||
         queuedFiles.length > 0 ||
@@ -217,9 +249,18 @@ export function TaskCreateDrawer({
       setHasChanges(!!hasAnyChanges);
     });
     return () => subscription.unsubscribe();
-  }, [form, defaultSectionId, selectedAssignees, selectedTagIds, subtaskTitles, queuedFiles]);
+  }, [form, defaultSectionId, selectedAssignees, selectedTagIds, subtaskTitles, queuedFiles, defaultAssigneeKey, allowTaskAssociation, taskContext]);
 
   const handleSubmit = async (data: CreateTaskFormData) => {
+    if (allowTaskAssociation && taskContext === "project" && !selectedProjectId) {
+      toast({
+        title: "Select a project",
+        description: "Client and project tasks need a project so time can be tracked correctly.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await onSubmit({
         ...data,
@@ -227,9 +268,16 @@ export function TaskCreateDrawer({
         tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         subtaskTitles: subtaskTitles.length > 0 ? subtaskTitles : undefined,
         queuedFiles: queuedFiles.length > 0 ? queuedFiles.map(f => f.file) : undefined,
+        ...(allowTaskAssociation ? {
+          taskContext,
+          projectId: taskContext === "project" ? selectedProjectId : undefined,
+        } : {}),
       });
       form.reset();
-      setSelectedAssignees([]);
+      setSelectedAssignees(defaultAssigneeIds);
+      setTaskContext("personal");
+      setSelectedClientId("");
+      setSelectedProjectId("");
       setSelectedTagIds([]);
       setSubtaskTitles([]);
       setNewSubtaskTitle("");
@@ -243,7 +291,10 @@ export function TaskCreateDrawer({
 
   const handleClose = () => {
     form.reset();
-    setSelectedAssignees([]);
+    setSelectedAssignees(defaultAssigneeIds);
+    setTaskContext("personal");
+    setSelectedClientId("");
+    setSelectedProjectId("");
     setSelectedTagIds([]);
     setSubtaskTitles([]);
     setNewSubtaskTitle("");
@@ -313,7 +364,7 @@ export function TaskCreateDrawer({
   }, []);
 
   const handleCreateTag = () => {
-    if (!newTagName.trim() || !workspaceId) return;
+    if (!newTagName.trim() || !effectiveWorkspaceId) return;
     createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
   };
 
@@ -322,7 +373,7 @@ export function TaskCreateDrawer({
       open={open}
       onOpenChange={onOpenChange}
       title="Create Task"
-      description="Add a new task to your project"
+      description={allowTaskAssociation ? "Create a personal task or connect it to client work" : "Add a new task to your project"}
       hasUnsavedChanges={hasChanges}
       onConfirmClose={handleClose}
       width="xl"
@@ -337,6 +388,109 @@ export function TaskCreateDrawer({
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          {allowTaskAssociation && (
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
+              <div className={cn(
+                "grid grid-cols-1 gap-4",
+                taskContext === "project" && "md:grid-cols-2",
+              )}>
+                <FormItem>
+                  <FormLabel>Task Type</FormLabel>
+                  <Select
+                    value={taskContext}
+                    onValueChange={(value: TaskCreationContext) => {
+                      setTaskContext(value);
+                      form.setValue("sectionId", "");
+                      if (value === "personal") {
+                        setSelectedClientId("");
+                        setSelectedProjectId("");
+                        setSelectedTagIds([]);
+                        setQueuedFiles([]);
+                      }
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-task-context">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="personal">Personal</SelectItem>
+                      <SelectItem value="project">Client / Project</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Personal tasks are not tied to a project. Project tasks use the project’s time tracking context.
+                  </FormDescription>
+                </FormItem>
+
+                {taskContext === "project" && (
+                  <FormItem>
+                    <FormLabel>Client</FormLabel>
+                    <Select
+                      value={selectedClientId || "_all"}
+                      onValueChange={(value) => {
+                        setSelectedClientId(value === "_all" ? "" : value);
+                        setSelectedProjectId("");
+                        setSelectedTagIds([]);
+                        setQueuedFiles([]);
+                        form.setValue("sectionId", "");
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-task-client">
+                          <SelectValue placeholder="All clients" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="_all">All clients</SelectItem>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.displayName || client.companyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Optional filter for finding the project.</FormDescription>
+                  </FormItem>
+                )}
+              </div>
+
+              {taskContext === "project" && (
+                <FormItem>
+                  <FormLabel>Project</FormLabel>
+                  <Select
+                    value={selectedProjectId}
+                    onValueChange={(value) => {
+                      setSelectedProjectId(value);
+                      const project = projects.find((item) => item.id === value);
+                      if (project?.clientId) setSelectedClientId(project.clientId);
+                      setSelectedTagIds([]);
+                      setQueuedFiles([]);
+                      form.setValue("sectionId", "");
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-task-project">
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {availableProjects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Required for client work. Timers and time entries will inherit this project and its client.
+                  </FormDescription>
+                </FormItem>
+              )}
+            </div>
+          )}
+
           <FormField
             control={form.control}
             name="title"
@@ -380,7 +534,7 @@ export function TaskCreateDrawer({
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {sections.length > 0 && (
+            {availableSections.length > 0 && (
               <FormField
                 control={form.control}
                 name="sectionId"
@@ -394,7 +548,7 @@ export function TaskCreateDrawer({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {sections.map((section) => (
+                        {availableSections.map((section) => (
                           <SelectItem key={section.id} value={section.id}>
                             {section.name}
                           </SelectItem>
@@ -591,7 +745,7 @@ export function TaskCreateDrawer({
 
           <Separator />
 
-          {projectId && (
+          {effectiveProjectId && (
             <div 
               className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
               style={{ borderRadius: "10px" }}
@@ -734,7 +888,7 @@ export function TaskCreateDrawer({
             </div>
           </div>
 
-          {workspaceId && (
+          {effectiveWorkspaceId && (
             <div 
               className="p-3 sm:p-4 dark:bg-[hsl(var(--section-tags))] border border-[#ade8f5] dark:border-[hsl(var(--section-tags-border))] bg-[#edf4f54d]"
               style={{ borderRadius: "10px" }}

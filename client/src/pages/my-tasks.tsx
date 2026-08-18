@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useCreatePersonalTask, useCreateSubtask } from "@/hooks/use-create-task";
+import { useCreatePersonalTask, useCreateSubtask, useCreateTask } from "@/hooks/use-create-task";
 import { useDebounce } from "@/hooks/use-debounce";
 
 const MY_TASKS_FILTERS_KEY = "my-tasks-filters";
@@ -88,7 +88,7 @@ import {
 } from "@/components/ui/collapsible";
 import { SortableTaskCard } from "@/features/tasks/sortable-task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
-import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-drawer";
+import { TaskCreateDrawer, type TaskCreationContext } from "@/features/tasks/task-create-drawer";
 import { isToday, isPast, isFuture, isWithinInterval, addDays, startOfDay } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { fetchTaskDetail } from "@/lib/task-detail";
@@ -99,7 +99,7 @@ import { TaskProgressBar } from "@/components/task-progress-bar";
 import { EmptyState, LoadingState, DataToolbar, SurfacePanel } from "@/components/layout";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
-import type { Client, TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
+import type { Client, Project, TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 
 type TaskSection = {
@@ -427,7 +427,17 @@ export default function MyTasks() {
     queryKey: ["/api/clients"],
   });
 
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+  });
+
   const createPersonalTaskMutation = useCreatePersonalTask({
+    onSuccess: () => {
+      setShowNewTaskDrawer(false);
+    },
+  });
+
+  const createProjectTaskMutation = useCreateTask({
     onSuccess: () => {
       setShowNewTaskDrawer(false);
     },
@@ -538,15 +548,62 @@ export default function MyTasks() {
     }
   };
 
-  const handleCreatePersonalTask = async (data: {
+  const handleCreateTask = async (data: {
     title: string;
     description?: string;
-    priority?: "low" | "medium" | "high" | "urgent";
-    status?: "todo" | "in_progress" | "blocked" | "done";
-    dueDate?: string | null;
+    sectionId?: string;
+    priority: "low" | "medium" | "high" | "urgent";
+    status: "todo" | "in_progress" | "blocked" | "done";
+    dueDate?: Date | null;
     assigneeIds?: string[];
+    estimateMinutes?: number | null;
+    tagIds?: string[];
+    subtaskTitles?: string[];
+    queuedFiles?: File[];
+    taskContext?: TaskCreationContext;
+    projectId?: string;
   }) => {
-    await createPersonalTaskMutation.mutateAsync(data);
+    const {
+      taskContext = "personal",
+      projectId,
+      tagIds,
+      subtaskTitles,
+      queuedFiles,
+      ...taskData
+    } = data;
+    const payload = {
+      ...taskData,
+      dueDate: taskData.dueDate ? taskData.dueDate.toISOString() : null,
+    };
+
+    const createdTask = taskContext === "project" && projectId
+      ? await createProjectTaskMutation.mutateAsync({ ...payload, projectId })
+      : await createPersonalTaskMutation.mutateAsync(payload);
+
+    const postCreateOperations: Promise<unknown>[] = [];
+    for (const tagId of tagIds || []) {
+      postCreateOperations.push(apiRequest("POST", `/api/tasks/${createdTask.id}/tags`, { tagId }));
+    }
+    for (const title of subtaskTitles || []) {
+      postCreateOperations.push(apiRequest("POST", `/api/tasks/${createdTask.id}/subtasks`, { title }));
+    }
+    if (projectId) {
+      for (const file of queuedFiles || []) {
+        const formData = new FormData();
+        formData.append("file", file);
+        postCreateOperations.push(fetch(`/api/projects/${projectId}/tasks/${createdTask.id}/attachments/upload`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        }));
+      }
+    }
+
+    if (postCreateOperations.length > 0) {
+      await Promise.all(postCreateOperations);
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", createdTask.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+    }
   };
 
   const handleTaskSelect = (task: TaskWithRelations) => {
@@ -834,18 +891,18 @@ export default function MyTasks() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowNewTaskDrawer(true)}
-                data-testid="button-add-personal-task"
+                data-testid="button-add-task"
                 className="rounded-xl md:hidden"
               >
                 <Plus className="h-4 w-4" />
               </Button>
 	              <Button
 	                onClick={() => setShowNewTaskDrawer(true)}
-	                data-testid="button-add-personal-task-desktop"
+	                data-testid="button-add-task-desktop"
 	                className="hidden rounded-xl shadow-[var(--shadow-soft)] md:flex"
 	              >
 	                <Plus className="h-4 w-4 mr-1" />
-	                Personal Task
+	                New Task
 	              </Button>
 	            </div>
 	          </div>
@@ -934,7 +991,7 @@ export default function MyTasks() {
                   data-testid="button-add-first-task"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add a personal task
+                  Add a task
                 </Button>
               }
             />
@@ -956,13 +1013,17 @@ export default function MyTasks() {
         workspaceId={selectedTask?.project?.workspaceId || currentWorkspace?.id}
       />
 
-      <PersonalTaskCreateDrawer
+      <TaskCreateDrawer
         open={showNewTaskDrawer}
         onOpenChange={setShowNewTaskDrawer}
-        onSubmit={handleCreatePersonalTask}
+        onSubmit={handleCreateTask}
         tenantUsers={tenantUsers}
-        currentUserId={user?.id}
-        isLoading={createPersonalTaskMutation.isPending}
+        projects={projects.filter((project) => project.status !== "archived")}
+        clients={clients}
+        allowTaskAssociation
+        defaultAssigneeIds={user?.id ? [user.id] : []}
+        workspaceId={currentWorkspace?.id}
+        isLoading={createPersonalTaskMutation.isPending || createProjectTaskMutation.isPending}
       />
 
       {pendingCompleteTask && (
