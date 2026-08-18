@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check } from "lucide-react";
+import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Download } from "lucide-react";
 import { type Workspace } from "@shared/schema";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
@@ -210,6 +210,25 @@ function ChatToggleButton() {
   );
 }
 
+const MACOS_APP_DOWNLOAD_URL = "/downloads/macos/DigitalWorkday.zip";
+
+function DesktopAppDownloadButton() {
+  return (
+    <Button
+      asChild
+      variant="outline"
+      size="sm"
+      className="hidden lg:inline-flex gap-2"
+      data-testid="button-download-desktop-tasks-app"
+    >
+      <a href={MACOS_APP_DOWNLOAD_URL} download>
+        <Download className="h-4 w-4" />
+        Download Desktop Tasks App
+      </a>
+    </Button>
+  );
+}
+
 function MobileHeaderMenu() {
   const { toggleDrawer } = useChatDrawer();
   const { mode, setMode, resolvedTheme } = useTheme();
@@ -314,6 +333,7 @@ export function TenantLayout() {
                   <div className="flex items-center gap-1 md:gap-2">
                     <GlobalActiveTimer />
                     <div className="hidden md:flex items-center gap-1">
+                      <DesktopAppDownloadButton />
                       <ChatToggleButton />
                     </div>
                     <NotificationCenter />
