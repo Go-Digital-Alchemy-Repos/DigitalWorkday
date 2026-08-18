@@ -21,6 +21,8 @@ import { requestPerfMiddleware } from "./middleware/perfTelemetry";
 import { instrumentPool } from "./middleware/queryTelemetry";
 import { perfLoggerMiddleware, getPerfStats } from "./lib/perfLogger";
 import { csrfProtection } from "./middleware/csrf";
+import { mountDesktopPublicRoutes } from "./features/desktop/desktopPublic.routes";
+import { desktopBearerMiddleware } from "./features/desktop/desktopAuth.middleware";
 import { requireObservabilityAccess } from "./middleware/observabilityAccess";
 import { payloadGuardMiddleware } from "./middleware/payloadGuard";
 import { logMigrationStatus } from "./scripts/migration-status";
@@ -170,6 +172,12 @@ app.use(express.urlencoded({ extended: false }));
 
 // Setup authentication middleware (session + passport) - must be before Socket.IO
 setupAuth(app);
+
+// Native companion OAuth-style browser handoff and token exchange. These
+// routes intentionally sit before tenant guards; protected desktop requests
+// are authenticated by the bearer middleware below.
+mountDesktopPublicRoutes(app);
+app.use(desktopBearerMiddleware);
 
 // Initialize Socket.IO server for real-time updates (after auth for session access)
 initializeSocketIO(httpServer);

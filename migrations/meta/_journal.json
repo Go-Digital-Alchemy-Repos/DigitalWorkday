@@ -113,6 +113,13 @@
       "when": 1784775600000,
       "tag": "0053_division_project_conversions",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787083200000,
+      "tag": "0054_desktop_companion",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,47 @@
+{
+  "contractVersion": 1,
+  "serverTime": "2026-08-18T12:00:00.000Z",
+  "user": {
+    "id": "user-1",
+    "name": "Alex Rivera",
+    "email": "alex@example.com",
+    "role": "employee",
+    "avatarUrl": null
+  },
+  "workspace": {
+    "id": "workspace-1",
+    "name": "Digital Alchemy"
+  },
+  "projects": [{
+    "id": "project-1",
+    "name": "Website Launch",
+    "clientId": "client-1",
+    "clientName": "Example Client"
+  }],
+  "clients": [{
+    "id": "client-1",
+    "companyName": "Example Client"
+  }],
+  "tasks": {
+    "items": [{
+      "id": "task-1",
+      "title": "Review launch checklist",
+      "description": "Confirm the final deployment items.",
+      "status": "todo",
+      "priority": "high",
+      "dueDate": "2026-08-19T13:00:00.000Z",
+      "isPersonal": false,
+      "projectId": "project-1",
+      "projectName": "Website Launch",
+      "clientId": "client-1",
+      "clientName": "Example Client",
+      "sectionId": null,
+      "assigneeIds": ["user-1"],
+      "subtasks": [],
+      "createdAt": "2026-08-17T12:00:00.000Z",
+      "updatedAt": "2026-08-18T12:00:00.000Z"
+    }],
+    "nextCursor": null
+  },
+  "activeTimer": null
+}

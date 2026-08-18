@@ -218,8 +218,13 @@ export default function LoginPage() {
         title: "Welcome back!",
         description: "You have been logged in successfully",
       });
-      const isSuperUser = result.user?.role === UserRole.SUPER_USER;
-      setLocation(isSuperUser ? "/super-admin/dashboard" : "/");
+      const params = new URLSearchParams(searchString);
+      if (params.get("desktop") === "1") {
+        window.location.href = "/desktop/authorize/continue";
+      } else {
+        const isSuperUser = result.user?.role === UserRole.SUPER_USER;
+        setLocation(isSuperUser ? "/super-admin/dashboard" : "/");
+      }
     } else {
       toast({
         title: "Login failed",
@@ -297,7 +302,10 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = () => {
-    window.location.href = "/api/v1/auth/google";
+    const params = new URLSearchParams(searchString);
+    window.location.href = params.get("desktop") === "1"
+      ? "/api/v1/auth/google?desktop=1"
+      : "/api/v1/auth/google";
   };
 
   if (isCheckingBootstrap) {

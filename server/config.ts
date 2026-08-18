@@ -221,6 +221,7 @@ export const config = {
     enableDataRetention: optionalEnvBool("ENABLE_DATA_RETENTION", false),
     enableSoftArchive: optionalEnvBool("ENABLE_SOFT_ARCHIVE", false),
     enableRetentionAuditUi: optionalEnvBool("ENABLE_RETENTION_AUDIT_UI", true),
+    enableDesktopApi: optionalEnvBool("DESKTOP_API_ENABLED", false),
   },
 
   tenancyEnforcement: {

@@ -111,6 +111,10 @@ async function finishLogin(req: Request, res: Response, user: Express.User): Pro
 async function finishGoogleLogin(req: Request, res: Response, user: Express.User): Promise<void> {
   const workspaceId = await resolveWorkspaceIdForLogin(user);
   await establishAuthenticatedSession(req, user, workspaceId);
+  if ((req.session as any).desktopAuthorizationRequest) {
+    res.redirect("/desktop/authorize/continue");
+    return;
+  }
   const destination = user.role === UserRole.SUPER_USER ? "/super-admin/dashboard" : "/";
   res.redirect(destination);
 }
@@ -120,6 +124,7 @@ export async function establishAuthenticatedSession(
   user: Express.User,
   workspaceId?: string,
 ): Promise<void> {
+  const desktopAuthorizationRequest = (req.session as any)?.desktopAuthorizationRequest;
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => {
       if (err) reject(err);
@@ -135,6 +140,9 @@ export async function establishAuthenticatedSession(
   });
 
   req.session.workspaceId = workspaceId;
+  if (desktopAuthorizationRequest) {
+    (req.session as any).desktopAuthorizationRequest = desktopAuthorizationRequest;
+  }
 
   await new Promise<void>((resolve, reject) => {
     req.session.save((err) => {
@@ -172,6 +180,14 @@ declare global {
 declare module "express-session" {
   interface SessionData {
     workspaceId?: string;
+    desktopAuthorizationRequest?: {
+      client_id: string;
+      redirect_uri: string;
+      response_type: string;
+      code_challenge_method: string;
+      code_challenge: string;
+      state: string;
+    };
   }
 }
 
@@ -562,14 +578,14 @@ export function setupAuth(app: Express): void {
 }
 
 export const requireAuth: RequestHandler = (req, res, next) => {
-  if (!req.isAuthenticated()) {
+  if (!req.desktopAuth && !req.isAuthenticated()) {
     return res.status(401).json({ error: "Authentication required" });
   }
   next();
 };
 
 export const requireAdmin: RequestHandler = (req, res, next) => {
-  if (!req.isAuthenticated()) {
+  if (!req.desktopAuth && !req.isAuthenticated()) {
     return res.status(401).json({ error: "Authentication required" });
   }
   if (req.user?.role !== "admin") {

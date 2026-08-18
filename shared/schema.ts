@@ -1351,6 +1351,78 @@ export const activeTimers = pgTable("active_timers", {
   index("active_timers_subtask_idx").on(table.subtaskId),
 ]);
 
+/**
+ * Native desktop authorization codes are one-time PKCE grants. Only hashes are
+ * persisted so a database read cannot be turned into a usable login code.
+ */
+export const desktopAuthorizationCodes = pgTable("desktop_authorization_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  codeHash: varchar("code_hash", { length: 64 }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }).notNull(),
+  codeChallenge: varchar("code_challenge", { length: 128 }).notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("desktop_authorization_codes_hash_unique").on(table.codeHash),
+  index("desktop_authorization_codes_expiry_idx").on(table.expiresAt),
+  index("desktop_authorization_codes_user_idx").on(table.userId),
+]);
+
+/**
+ * Revocable native sessions. Access and refresh credentials are random opaque
+ * values; only their SHA-256 hashes are stored.
+ */
+export const desktopSessions = pgTable("desktop_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }).notNull(),
+  deviceName: text("device_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  accessTokenHash: varchar("access_token_hash", { length: 64 }).notNull(),
+  accessExpiresAt: timestamp("access_expires_at").notNull(),
+  refreshTokenHash: varchar("refresh_token_hash", { length: 64 }).notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at").notNull(),
+  lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("desktop_sessions_access_hash_unique").on(table.accessTokenHash),
+  uniqueIndex("desktop_sessions_refresh_hash_unique").on(table.refreshTokenHash),
+  index("desktop_sessions_user_idx").on(table.userId),
+  index("desktop_sessions_access_expiry_idx").on(table.accessExpiresAt),
+]);
+
+/**
+ * Mutation responses are retained briefly to make retrying native requests
+ * safe when the client loses the HTTP response after the server commits.
+ */
+export const desktopIdempotencyKeys = pgTable("desktop_idempotency_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").references(() => desktopSessions.id, { onDelete: "cascade" }).notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 200 }).notNull(),
+  method: varchar("method", { length: 12 }).notNull(),
+  path: text("path").notNull(),
+  responseStatus: integer("response_status"),
+  responseBody: jsonb("response_body"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("desktop_idempotency_scope_unique").on(
+    table.sessionId,
+    table.idempotencyKey,
+    table.method,
+    table.path,
+  ),
+  index("desktop_idempotency_expiry_idx").on(table.expiresAt),
+]);
+
 // Projects table
 // Note: clientId and tenantId are nullable for backward compatibility
 export const projects = pgTable("projects", {

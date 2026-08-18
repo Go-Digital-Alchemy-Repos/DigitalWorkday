@@ -263,7 +263,7 @@ export async function agreementEnforcementGuard(
   }
 
   // INVARIANT 5: Unauthenticated users bypass enforcement
-  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+  if ((!req.desktopAuth && (!req.isAuthenticated || !req.isAuthenticated())) || !req.user) {
     return next();
   }
 

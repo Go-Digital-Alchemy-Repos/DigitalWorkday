@@ -57,6 +57,8 @@ import {
 } from './typing';
 import { storage } from '../storage';
 import { withSocketPolicy, cleanupSocketMembershipCache, invalidateMembershipCache } from './socketPolicy';
+import { authenticateDesktopAccessToken } from '../features/desktop/desktopAuth.service';
+import { config } from '../config';
 
 // Extended socket interface with authenticated user data
 interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClientEvents> {
@@ -90,7 +92,39 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
 
   // Add session middleware to Socket.IO for authentication
   const sessionMiddleware = getSessionMiddleware();
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
+    const header = socket.handshake.headers.authorization;
+    const headerToken = typeof header === "string" && header.toLowerCase().startsWith("bearer ")
+      ? header.slice(7).trim()
+      : "";
+    const desktopToken = typeof socket.handshake.auth?.token === "string"
+      ? socket.handshake.auth.token.trim()
+      : headerToken;
+    if (desktopToken) {
+      if (!config.features.enableDesktopApi) {
+        return next(new Error("Desktop API disabled"));
+      }
+      try {
+        const desktopSession = await authenticateDesktopAccessToken(desktopToken);
+        if (!desktopSession) return next(new Error("Desktop session expired or revoked"));
+        const authSocket = socket as AuthenticatedSocket;
+        authSocket.userId = desktopSession.user.id;
+        authSocket.tenantId = desktopSession.tenantId;
+        socketLog.info("Desktop socket authenticated", {
+          socketId: socket.id,
+          userId: desktopSession.user.id,
+          tenantId: desktopSession.tenantId,
+        });
+        return next();
+      } catch (error) {
+        socketLog.error("Desktop socket authentication error", {
+          socketId: socket.id,
+          error: String(error),
+        });
+        return next(new Error("Desktop authentication failed"));
+      }
+    }
+
     // Wrap express session middleware for Socket.IO
     const req = socket.request as any;
     const res = { on: () => {}, end: () => {} } as any;

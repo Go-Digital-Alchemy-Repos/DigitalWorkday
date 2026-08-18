@@ -52,6 +52,7 @@ import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
 import accessRouter from "./domains/access.router";
 import retentionRouter from "./domains/retention.router";
+import desktopRouter from "../features/desktop/desktop.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -84,6 +85,13 @@ interface DomainEntry {
 }
 
 const REGISTERED_DOMAINS: DomainEntry[] = [
+  {
+    path: "/api/v1/desktop",
+    router: desktopRouter,
+    policy: "authTenant",
+    domain: "desktop-companion",
+    description: "Versioned native macOS companion contract and parity routes.",
+  },
   {
     path: "/api/v1/system",
     router: systemRouter,

@@ -1,0 +1,21 @@
+name: macOS App
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Swift package
+        run: swift test --package-path macos/DigitalWorkday
+      - name: Build application bundle
+        run: ./script/build_and_run.sh --verify

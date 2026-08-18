@@ -1154,13 +1154,35 @@ router.post("/tasks/:taskId/childtasks", async (req, res) => {
 router.patch("/tasks/:id", async (req, res) => {
   const requestId = req.requestId || 'unknown';
   try {
-    const data = validateBody(req.body, updateTaskSchema, res);
+    const { expectedUpdatedAt, ...rawUpdates } = req.body ?? {};
+    const data = validateBody(rawUpdates, updateTaskSchema, res);
     if (!data) return;
     
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     
     const taskBefore = await storage.getTaskWithRelations(req.params.id);
+
+    if (
+      typeof expectedUpdatedAt === "string" &&
+      taskBefore &&
+      (!tenantId || taskBefore.tenantId === tenantId) &&
+      new Date(expectedUpdatedAt).getTime() !== new Date(taskBefore.updatedAt).getTime()
+    ) {
+      res.status(409).json({
+        ok: false,
+        success: false,
+        requestId,
+        error: {
+          code: "CONFLICT",
+          message: "This task changed on another device. Refresh before saving.",
+          status: 409,
+          requestId,
+          details: { currentTask: taskBefore },
+        },
+      });
+      return;
+    }
     
     const updateData: any = { ...data };
     if (updateData.isPersonal === true) {

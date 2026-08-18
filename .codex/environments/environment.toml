@@ -1,0 +1,22 @@
+[environment]
+name = "Digital Workday macOS"
+
+[[actions]]
+name = "Run macOS App"
+command = "./script/build_and_run.sh --run"
+
+[[actions]]
+name = "Build macOS App"
+command = "./script/build_and_run.sh --build-only"
+
+[[actions]]
+name = "Verify macOS Bundle"
+command = "./script/build_and_run.sh --verify"
+
+[[actions]]
+name = "Stream macOS Logs"
+command = "./script/build_and_run.sh --logs"
+
+[[actions]]
+name = "Stream macOS Telemetry"
+command = "./script/build_and_run.sh --telemetry"

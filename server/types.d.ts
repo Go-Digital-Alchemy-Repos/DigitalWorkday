@@ -31,6 +31,14 @@ interface ClientAccessContext {
   createdAt: Date;
 }
 
+interface DesktopAuthContext {
+  sessionId: string;
+  userId: string;
+  tenantId: string;
+  workspaceId: string;
+  accessExpiresAt: Date;
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -57,8 +65,11 @@ declare global {
        * @deprecated Use tenant.effectiveTenantId instead
        */
       workspaceId?: string;
+
+      /** Native companion bearer-token context. */
+      desktopAuth?: DesktopAuthContext;
     }
   }
 }
 
-export { TenantContext, ClientAccessContext };
+export { TenantContext, ClientAccessContext, DesktopAuthContext };

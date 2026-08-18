@@ -1,5 +1,7 @@
 node_modules
 dist
+macos/DigitalWorkday/.build
+macos/DigitalWorkday/.swiftpm
 build
 .cache/
 .DS_Store
