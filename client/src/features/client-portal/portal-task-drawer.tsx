@@ -80,7 +80,7 @@ export function PortalTaskDrawer({ taskId, open, onOpenChange, onUpdated, sectio
 
   const save = () => update.mutate({ title: details.title.trim(), description: details.description || null, dueDate: details.dueDate || null, estimateMinutes: details.estimateMinutes ? Number(details.estimateMinutes) : null, sectionId: details.sectionId === "unsectioned" ? null : details.sectionId, assigneeIds, tagIds });
 
-  if (!task && open) return <FullScreenDrawer open={open} onOpenChange={onOpenChange} title="Task details" width="2xl"><div className="flex min-h-[50vh] items-center justify-center">{taskQuery.isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : "Task unavailable"}</div></FullScreenDrawer>;
+  if (!task && open) return <FullScreenDrawer open={open} onOpenChange={onOpenChange} title="Task details" description="Loading client-visible task details" width="2xl"><div className="flex min-h-[50vh] items-center justify-center">{taskQuery.isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : "Task unavailable"}</div></FullScreenDrawer>;
   if (!task) return null;
 
   return <FullScreenDrawer open={open} onOpenChange={onOpenChange} width="2xl" title={<span className="flex items-center gap-2"><CheckSquare className="h-5 w-5" />{task.title}</span>} description={`${task.projectName || "Project"} · Client-visible task`} footer={<FullScreenDrawerFooter onCancel={() => onOpenChange(false)} onSave={save} isLoading={update.isPending} saveLabel="Save Changes" saveDisabled={!details.title.trim()} />}>

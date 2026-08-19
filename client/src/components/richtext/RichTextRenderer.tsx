@@ -26,6 +26,8 @@ export function RichTextRenderer({
         codeBlock: false,
         blockquote: false,
         horizontalRule: false,
+        link: false,
+        underline: false,
       }),
       Underline,
       Link.configure({

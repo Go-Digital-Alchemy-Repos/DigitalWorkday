@@ -388,6 +388,8 @@ export function RichTextEditor({
       codeBlock: false,
       blockquote: false,
       horizontalRule: false,
+      link: false,
+      underline: false,
     }),
     Underline,
     Link.configure({
