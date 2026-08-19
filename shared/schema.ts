@@ -1536,6 +1536,7 @@ export const sections = pgTable("sections", {
 export const tasks = pgTable("tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }),
   projectId: varchar("project_id").references(() => projects.id),
   sectionId: varchar("section_id").references(() => sections.id),
   parentTaskId: varchar("parent_task_id"),
@@ -1563,6 +1564,7 @@ export const tasks = pgTable("tasks", {
   index("tasks_due_date").on(table.dueDate),
   index("tasks_parent_order").on(table.parentTaskId, table.orderIndex),
   index("tasks_personal_user").on(table.isPersonal, table.createdBy),
+  index("tasks_client_personal_creator_idx").on(table.clientId, table.isPersonal, table.createdBy),
   index("tasks_tenant_idx").on(table.tenantId),
   index("tasks_personal_section_idx").on(table.personalSectionId, table.personalSortOrder),
   index("tasks_tenant_project_idx").on(table.tenantId, table.projectId),
@@ -2439,6 +2441,10 @@ export const sectionsRelations = relations(sections, ({ one, many }) => ({
 }));
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  client: one(clients, {
+    fields: [tasks.clientId],
+    references: [clients.id],
+  }),
   project: one(projects, {
     fields: [tasks.projectId],
     references: [projects.id],

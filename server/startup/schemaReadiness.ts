@@ -76,6 +76,7 @@ const CRITICAL_COLUMNS: SchemaColumnCheck[] = [
   { table: "projects", column: "client_id" },
   { table: "tasks", column: "tenant_id" },
   { table: "tasks", column: "project_id" },
+  { table: "tasks", column: "client_id" },
   { table: "clients", column: "tenant_id" },
   { table: "notifications", column: "tenant_id" },
   { table: "error_logs", column: "request_id" },

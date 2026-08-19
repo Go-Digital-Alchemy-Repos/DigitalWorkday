@@ -18,12 +18,13 @@ import { PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus }
 
 type Option = { id: string; name: string; color?: string | null; avatarUrl?: string | null };
 type SectionOption = { id: string; name: string };
+type ProjectDetail = { sections: SectionOption[] };
 type PortalTag = { id?: string; name?: string; color?: string | null; tagId?: string; tag?: Option };
 type PortalAttachment = { id: string; originalFileName: string; mimeType: string; fileSizeBytes: number; createdAt: string; uploadedByName?: string | null };
 type TaskDetail = {
   id: string; title: string; description: string | null; status: string; priority: string;
-  dueDate: string | null; estimateMinutes?: number | null; createdAt?: string; clientId: string;
-  projectId: string; projectName?: string; sectionId?: string | null; assignees: Option[]; tags: PortalTag[];
+  startDate?: string | null; dueDate: string | null; estimateMinutes?: number | null; createdAt?: string; clientId: string;
+  projectId: string | null; projectName?: string; isPersonal?: boolean; sectionId?: string | null; assignees: Option[]; tags: PortalTag[];
   subtasks: Array<{ id: string; title: string; status: string; completed: boolean }>;
   comments: Array<{ id: string; body: string; createdAt: string; user: { name: string | null } | null }>;
 };
@@ -44,33 +45,40 @@ export function PortalTaskDrawer({ taskId, open, onOpenChange, onUpdated, sectio
   const queryKey = queryKeys.portal.taskDetail(taskId || "disabled");
   const taskQuery = useQuery<TaskDetail>({ queryKey, enabled: open && !!taskId });
   const task = taskQuery.data;
-  const [details, setDetails] = useState({ title: "", description: "", dueDate: "", estimateMinutes: "", sectionId: "unsectioned" });
+  const [details, setDetails] = useState({ title: "", description: "", startDate: "", dueDate: "", estimateMinutes: "", sectionId: "unsectioned" });
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [comment, setComment] = useState("");
   const [subtaskTitle, setSubtaskTitle] = useState("");
 
+  const projectDetail = useQuery<ProjectDetail>({
+    queryKey: task?.projectId ? ["portal-project-task-drawer", task.projectId] : ["portal-project-task-drawer", "disabled"],
+    enabled: open && !!task?.projectId && sections.length === 0,
+    queryFn: async () => (await apiRequest("GET", `/api/client-portal/projects/${task!.projectId}`)).json(),
+  });
+  const availableSections = sections.length ? sections : (projectDetail.data?.sections || []);
+
   const assignees = useQuery<Option[]>({
-    queryKey: task ? queryKeys.portal.projectAssignees(task.clientId, task.projectId) : ["portal-assignees", "disabled"],
-    enabled: open && !!task,
+    queryKey: task?.projectId ? queryKeys.portal.projectAssignees(task.clientId, task.projectId) : ["portal-assignees", "disabled"],
+    enabled: open && !!task?.projectId,
     queryFn: async () => (await apiRequest("GET", `/api/client-portal/clients/${task!.clientId}/projects/${task!.projectId}/assignees`)).json(),
   });
   const tags = useQuery<Option[]>({
-    queryKey: task ? queryKeys.portal.projectTags(task.clientId, task.projectId) : ["portal-tags", "disabled"],
-    enabled: open && !!task,
+    queryKey: task?.projectId ? queryKeys.portal.projectTags(task.clientId, task.projectId) : ["portal-tags", "disabled"],
+    enabled: open && !!task?.projectId,
     queryFn: async () => (await apiRequest("GET", `/api/client-portal/clients/${task!.clientId}/projects/${task!.projectId}/tags`)).json(),
   });
 
   useEffect(() => {
     if (!task) return;
-    setDetails({ title: task.title, description: task.description || "", dueDate: task.dueDate?.slice(0, 10) || "", estimateMinutes: task.estimateMinutes == null ? "" : String(task.estimateMinutes), sectionId: task.sectionId || "unsectioned" });
+    setDetails({ title: task.title, description: task.description || "", startDate: task.startDate?.slice(0, 10) || "", dueDate: task.dueDate?.slice(0, 10) || "", estimateMinutes: task.estimateMinutes == null ? "" : String(task.estimateMinutes), sectionId: task.sectionId || "unsectioned" });
     setAssigneeIds((task.assignees || []).map((item) => item.id));
     setTagIds((task.tags || []).map((item) => item.tag?.id || item.id || item.tagId).filter(Boolean) as string[]);
   }, [task]);
 
   const refresh = () => { queryClient.invalidateQueries({ queryKey }); onUpdated(); };
   const update = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => (await apiRequest("PATCH", `/api/client-portal/clients/${task!.clientId}/tasks/${task!.id}`, body)).json(),
+    mutationFn: async (body: Record<string, unknown>) => (await apiRequest("PATCH", task!.isPersonal ? `/api/client-portal/clients/${task!.clientId}/personal-tasks/${task!.id}` : `/api/client-portal/clients/${task!.clientId}/tasks/${task!.id}`, body)).json(),
     onSuccess: () => { refresh(); toast({ title: "Task updated" }); },
     onError: (error: Error) => toast({ title: "Unable to update task", description: error.message, variant: "destructive" }),
   });
@@ -78,7 +86,9 @@ export function PortalTaskDrawer({ taskId, open, onOpenChange, onUpdated, sectio
   const addSubtask = useMutation({ mutationFn: async () => (await apiRequest("POST", `/api/client-portal/clients/${task!.clientId}/tasks/${task!.id}/subtasks`, { title: subtaskTitle })).json(), onSuccess: () => { setSubtaskTitle(""); refresh(); }, onError: (error: Error) => toast({ title: "Unable to add subtask", description: error.message, variant: "destructive" }) });
   const updateSubtask = useMutation({ mutationFn: async ({ id, body }: { id: string; body: Record<string, unknown> }) => (await apiRequest("PATCH", `/api/client-portal/clients/${task!.clientId}/subtasks/${id}`, body)).json(), onSuccess: refresh });
 
-  const save = () => update.mutate({ title: details.title.trim(), description: details.description || null, dueDate: details.dueDate || null, estimateMinutes: details.estimateMinutes ? Number(details.estimateMinutes) : null, sectionId: details.sectionId === "unsectioned" ? null : details.sectionId, assigneeIds, tagIds });
+  const save = () => update.mutate(task?.isPersonal
+    ? { title: details.title.trim(), description: details.description || null, startDate: details.startDate || null, dueDate: details.dueDate || null, estimateMinutes: details.estimateMinutes ? Number(details.estimateMinutes) : null }
+    : { title: details.title.trim(), description: details.description || null, startDate: details.startDate || null, dueDate: details.dueDate || null, estimateMinutes: details.estimateMinutes ? Number(details.estimateMinutes) : null, sectionId: details.sectionId === "unsectioned" ? null : details.sectionId, assigneeIds, tagIds });
 
   if (!task && open) return <FullScreenDrawer open={open} onOpenChange={onOpenChange} title="Task details" description="Loading client-visible task details" width="2xl"><div className="flex min-h-[50vh] items-center justify-center">{taskQuery.isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : "Task unavailable"}</div></FullScreenDrawer>;
   if (!task) return null;
@@ -89,16 +99,15 @@ export function PortalTaskDrawer({ taskId, open, onOpenChange, onUpdated, sectio
       <Field label="Description"><RichTextEditor value={details.description} onChange={(description) => setDetails((value) => ({ ...value, description }))} users={(assignees.data || []) as any} placeholder="Add a detailed description... Type @ to mention someone" minHeight="140px" data-testid="editor-portal-task-description" /><p className="text-sm text-muted-foreground">Provide context and details for this task</p></Field>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <Field label="Section"><Select value={details.sectionId} onValueChange={(sectionId) => setDetails((value) => ({ ...value, sectionId }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unsectioned">Unsectioned</SelectItem>{sections.filter((item) => item.id !== "unsectioned").map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>
+        {!task.isPersonal && <Field label="Section"><Select value={details.sectionId} onValueChange={(sectionId) => setDetails((value) => ({ ...value, sectionId }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unsectioned">Unsectioned</SelectItem>{availableSections.filter((item) => item.id !== "unsectioned").map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>}
         <Field label="Priority"><PrioritySelector value={task.priority as PriorityLevel} onChange={(priority) => update.mutate({ priority })} /></Field>
         <Field label="Status"><StatusSelector value={task.status as TaskStatus} onChange={(status) => update.mutate({ status })} /></Field>
+        <Field label="Start Date"><div className="relative"><Calendar className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" type="date" value={details.startDate} onChange={(event) => setDetails((value) => ({ ...value, startDate: event.target.value }))} /></div></Field>
         <Field label="Due Date"><div className="relative"><Calendar className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" type="date" value={details.dueDate} onChange={(event) => setDetails((value) => ({ ...value, dueDate: event.target.value }))} /></div></Field>
         <Field label="Estimate (minutes)"><Input type="number" min="0" placeholder="0" value={details.estimateMinutes} onChange={(event) => setDetails((value) => ({ ...value, estimateMinutes: event.target.value }))} /></Field>
       </div>
 
-      <MultiOption label="Assignees" icon={<Users className="h-4 w-4" />} items={assignees.data || []} selected={assigneeIds} onChange={setAssigneeIds} />
-      <MultiOption label="Tags" icon={<Tag className="h-4 w-4" />} items={tags.data || []} selected={tagIds} onChange={setTagIds} tags />
-      <PortalTaskAttachments task={task} />
+      {!task.isPersonal && <><MultiOption label="Assignees" icon={<Users className="h-4 w-4" />} items={assignees.data || []} selected={assigneeIds} onChange={setAssigneeIds} /><MultiOption label="Tags" icon={<Tag className="h-4 w-4" />} items={tags.data || []} selected={tagIds} onChange={setTagIds} tags /><PortalTaskAttachments task={task} /></>}
 
       <section className="space-y-3 rounded-xl border bg-muted/20 p-4"><h3 className="flex items-center gap-2 font-medium"><Layers className="h-4 w-4" />Subtasks</h3><div className="flex gap-2"><Input value={subtaskTitle} onChange={(event) => setSubtaskTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && subtaskTitle.trim()) addSubtask.mutate(); }} placeholder="Add a subtask..." /><Button variant="outline" onClick={() => addSubtask.mutate()} disabled={!subtaskTitle.trim() || addSubtask.isPending}><Plus className="mr-2 h-4 w-4" />Add</Button></div>{task.subtasks.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border bg-background p-3 sm:grid-cols-[1fr_160px]"><Input defaultValue={item.title} className={item.completed ? "line-through text-muted-foreground" : ""} onBlur={(event) => { const title = event.target.value.trim(); if (title && title !== item.title) updateSubtask.mutate({ id: item.id, body: { title } }); }} /><StatusSelector value={item.status as TaskStatus} onChange={(status) => updateSubtask.mutate({ id: item.id, body: { status } })} /></div>)}</section>
 
@@ -117,7 +126,7 @@ function MultiOption({ label, icon, items, selected, onChange, tags = false }: {
 function PortalTaskAttachments({ task }: { task: TaskDetail }) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
-  const path = `/api/client-portal/clients/${task.clientId}/projects/${task.projectId}/tasks/${task.id}/attachments`;
+  const path = `/api/client-portal/clients/${task.clientId}/projects/${task.projectId!}/tasks/${task.id}/attachments`;
   const queryKey = [path];
   const attachments = useQuery<PortalAttachment[]>({ queryKey, queryFn: async () => (await apiRequest("GET", path)).json() });
   const upload = useMutation({ mutationFn: async (file: globalThis.File) => { const body = new FormData(); body.append("file", file); const response = await fetch(`${path}/upload`, { method: "POST", credentials: "include", body }); if (!response.ok) throw new Error((await response.json().catch(() => null))?.message || "Upload failed"); return response.json(); }, onSuccess: () => queryClient.invalidateQueries({ queryKey }), onError: (error: Error) => toast({ title: "Unable to upload file", description: error.message, variant: "destructive" }) });

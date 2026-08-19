@@ -1,6 +1,8 @@
 import { Router } from "express";
+import { and, eq, isNull } from "drizzle-orm";
+import { db } from "../../db";
 import { storage } from "../../storage";
-import { CommentVisibility, UserRole } from "@shared/schema";
+import { CommentVisibility, UserRole, tasks } from "@shared/schema";
 import type { Request, Response, NextFunction } from "express";
 import { isClientUser, getClientUserAccessibleClients } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
@@ -15,6 +17,33 @@ function isCompletedTaskStatus(status: string | null | undefined) {
 
 function portalTaskStatus(status: string) {
   return status === "done" ? "completed" : status;
+}
+
+async function getPortalTaskContext(userId: string, taskId: string) {
+  const task = await storage.getTaskWithRelations(taskId);
+  if (!task) throw AppError.notFound("Task");
+  if (task.isPersonal) {
+    if (!task.clientId || task.projectId || task.createdBy !== userId) throw AppError.notFound("Task");
+    const access = await storage.getClientUserAccessByUserAndClient(userId, task.clientId);
+    if (!access || access.status === "suspended") throw AppError.forbidden("Access denied");
+    return { task, project: null, clientId: task.clientId, access };
+  }
+  if (!task.projectId || task.visibility === "private") throw AppError.notFound("Task");
+  const project = await storage.getProject(task.projectId);
+  if (!project?.clientId || project.visibility === "private") throw AppError.notFound("Task");
+  const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
+  if (!access || access.status === "suspended") throw AppError.forbidden("Access denied");
+  return { task, project, clientId: project.clientId, access };
+}
+
+async function getClientPersonalTasks(clientId: string, userId: string) {
+  return db.select().from(tasks).where(and(
+    eq(tasks.clientId, clientId),
+    eq(tasks.createdBy, userId),
+    eq(tasks.isPersonal, true),
+    isNull(tasks.projectId),
+    isNull(tasks.archivedAt),
+  ));
 }
 
 // Middleware to ensure only client users can access these routes
@@ -87,9 +116,24 @@ router.get("/dashboard", async (req, res) => {
             dueDate: task.dueDate,
             projectId: task.projectId,
             projectName: project.name,
+            clientId,
+            isPersonal: false,
           });
         }
       }
+      const personalTasks = await getClientPersonalTasks(clientId, userId);
+      for (const task of personalTasks) allTasks.push({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: portalTaskStatus(task.status),
+        priority: task.priority,
+        dueDate: task.dueDate,
+        projectId: null,
+        projectName: "Personal Tasks",
+        clientId,
+        isPersonal: true,
+      });
     }
     
     // Get upcoming deadlines (tasks due in next 14 days)
@@ -300,6 +344,8 @@ router.get("/tasks", async (req, res) => {
             dueDate: task.dueDate,
             projectId: project.id,
             projectName: project.name,
+            clientId,
+            isPersonal: false,
             sectionId: task.sectionId,
             assignees: task.assignees?.map(a => ({
               id: a.user?.id || a.userId,
@@ -308,6 +354,28 @@ router.get("/tasks", async (req, res) => {
             })),
             subtasks: task.subtasks,
             tags: task.tags,
+          });
+        }
+      }
+      if (!projectId) {
+        const personalTasks = await getClientPersonalTasks(clientId, userId);
+        for (const task of personalTasks) {
+          if (status && portalTaskStatus(task.status) !== status) continue;
+          allTasks.push({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            status: portalTaskStatus(task.status),
+            priority: task.priority,
+            dueDate: task.dueDate,
+            projectId: null,
+            projectName: "Personal Tasks",
+            clientId,
+            isPersonal: true,
+            sectionId: null,
+            assignees: [],
+            subtasks: [],
+            tags: [],
           });
         }
       }
@@ -333,26 +401,7 @@ router.get("/tasks/:taskId", async (req, res) => {
     const userId = req.user!.id;
     const { taskId } = req.params;
     
-    const task = await storage.getTaskWithRelations(taskId);
-    if (!task || !task.projectId) {
-      throw AppError.notFound("Task");
-    }
-    if ((task as any).visibility === 'private') {
-      throw AppError.notFound("Task");
-    }
-    
-    const project = await storage.getProject(task.projectId);
-    if (!project || !project.clientId) {
-      throw AppError.notFound("Task");
-    }
-    if ((project as any).visibility === 'private') {
-      throw AppError.notFound("Task");
-    }
-    
-    const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-    if (!access || access.status === "suspended") {
-      throw AppError.forbidden("Access denied");
-    }
+    const { task, project, clientId, access } = await getPortalTaskContext(userId, taskId);
     
     const comments = await filterCommentsForPortalUser(
       await storage.getCommentsByTask(taskId),
@@ -369,8 +418,9 @@ router.get("/tasks/:taskId", async (req, res) => {
       startDate: task.startDate,
       estimateMinutes: task.estimateMinutes,
       projectId: task.projectId,
-      projectName: project.name,
-      clientId: project.clientId,
+      projectName: project?.name || "Personal Tasks",
+      clientId,
+      isPersonal: task.isPersonal,
       accessLevel: normalizePortalAccessLevel(access.accessLevel),
       capabilities: getPortalCapabilities(access.accessLevel),
       sectionId: task.sectionId,
@@ -410,28 +460,7 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
       throw AppError.badRequest("Comment body is required");
     }
     
-    const task = await storage.getTask(taskId);
-    if (!task || !task.projectId) {
-      throw AppError.notFound("Task");
-    }
-    if ((task as any).visibility === 'private') {
-      throw AppError.notFound("Task");
-    }
-    
-    const project = await storage.getProject(task.projectId);
-    if (!project || !project.clientId) {
-      throw AppError.notFound("Task");
-    }
-    if ((project as any).visibility === 'private') {
-      throw AppError.notFound("Task");
-    }
-    
-    const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-    if (!access) {
-      throw AppError.forbidden("Access denied");
-    }
-    
-    if (access.status === "suspended") throw AppError.forbidden("Active client access is required");
+    await getPortalTaskContext(userId, taskId);
     
     const comment = await storage.createComment({
       taskId,

@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
 import {
   CheckSquare,
   Search,
@@ -13,6 +13,7 @@ import {
   Calendar,
   Filter,
   FolderKanban,
+  Plus,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
@@ -23,6 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePortalClient } from "@/hooks/use-portal-client";
+import { PortalTaskCreateDrawer } from "@/features/client-portal/portal-task-create-drawer";
+import { PortalTaskDrawer } from "@/features/client-portal/portal-task-drawer";
 
 interface TaskInfo {
   id: string;
@@ -31,8 +35,10 @@ interface TaskInfo {
   status: string;
   priority: string;
   dueDate: string | null;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
+  clientId: string;
+  isPersonal?: boolean;
 }
 
 interface DashboardData {
@@ -85,9 +91,12 @@ function getDueDateClass(dateStr: string | null) {
 }
 
 export default function ClientPortalTasks() {
+  const { clientId, client } = usePortalClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: queryKeys.portal.dashboard,
@@ -97,6 +106,7 @@ export default function ClientPortalTasks() {
     if (!data?.tasks) return [];
     
     return data.tasks.filter((task) => {
+      if (clientId && task.clientId !== clientId) return false;
       const matchesSearch = !searchQuery.trim() ||
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -107,7 +117,7 @@ export default function ClientPortalTasks() {
       
       return matchesSearch && matchesStatus && matchesPriority;
     });
-  }, [data?.tasks, searchQuery, statusFilter, priorityFilter]);
+  }, [clientId, data?.tasks, searchQuery, statusFilter, priorityFilter]);
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, TaskInfo[]> = {};
@@ -164,11 +174,12 @@ export default function ClientPortalTasks() {
 
   return (
     <div className="p-6 overflow-y-auto h-full">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" data-testid="text-tasks-title">Tasks</h1>
-        <p className="text-muted-foreground">
-          View and track all your tasks across projects
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="text-tasks-title">Tasks</h1>
+          <p className="text-muted-foreground">Create personal work or collaborate across {client?.displayName || client?.companyName || "this Client"} projects</p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} disabled={!clientId} className="rounded-xl" data-testid="button-create-portal-task"><Plus className="mr-2 h-4 w-4" />Add Task</Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -234,7 +245,7 @@ export default function ClientPortalTasks() {
                       data-testid={`task-row-${task.id}`}
                     >
                       <div className="min-w-0 flex-1">
-                        <Link href={`/portal/tasks/${task.id}`} className="font-medium hover:underline">{task.title}</Link>
+                        <button type="button" onClick={() => setSelectedTaskId(task.id)} className="text-left font-medium hover:underline">{task.title}</button>
                         {task.description && (
                           <div className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
                             {task.description}
@@ -281,6 +292,8 @@ export default function ClientPortalTasks() {
           )}
         </div>
       )}
+      {clientId && <PortalTaskCreateDrawer open={createOpen} onOpenChange={setCreateOpen} clientId={clientId} projects={data?.projects || []} allowTaskAssociation onCreated={() => queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard })} />}
+      <PortalTaskDrawer taskId={selectedTaskId} open={!!selectedTaskId} onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }} onUpdated={() => queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard })} />
     </div>
   );
 }

@@ -132,6 +132,19 @@ async function getVisibleTask(userId: string, clientId: string, taskId: string) 
   return row;
 }
 
+async function getVisiblePortalTask(userId: string, clientId: string, taskId: string) {
+  await requireActivePortalAccess(userId, clientId);
+  const task = await storage.getTask(taskId);
+  if (!task) throw AppError.notFound("Task");
+  if (task.isPersonal) {
+    if (task.clientId !== clientId || task.createdBy !== userId || task.projectId) {
+      throw AppError.notFound("Task");
+    }
+    return { task, project: null };
+  }
+  return getVisibleTask(userId, clientId, taskId);
+}
+
 router.get("/clients/:clientId", async (req, res) => {
   try {
     const access = await requireActivePortalAccess(req.user!.id, req.params.clientId);
@@ -272,7 +285,7 @@ router.patch("/clients/:clientId/projects/:projectId", async (req, res) => {
 const taskFieldsSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: nullableText,
-  status: z.enum(["todo", "in_progress", "in_review", "done", "completed"]).optional(),
+  status: z.enum(["todo", "in_progress", "in_review", "blocked", "done", "completed"]).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   startDate: z.coerce.date().nullable().optional(),
   dueDate: z.coerce.date().nullable().optional(),
@@ -318,6 +331,7 @@ router.post("/clients/:clientId/projects/:projectId/tasks", async (req, res) => 
   try {
     const access = await requireActivePortalAccess(req.user!.id, req.params.clientId);
     const project = await getVisibleProject(req.user!.id, req.params.clientId, req.params.projectId);
+    if (project.status !== "active") throw AppError.badRequest("Tasks can only be added to an active project");
     const data = taskFieldsSchema.extend({ title: z.string().min(1).max(500) }).parse(req.body);
     if (data.sectionId) {
       const [section] = await db.select({ id: sections.id }).from(sections).where(and(eq(sections.id, data.sectionId), eq(sections.projectId, project.id))).limit(1);
@@ -338,6 +352,61 @@ router.post("/clients/:clientId/projects/:projectId/tasks", async (req, res) => 
     res.status(201).json({ ...task, accessLevel: normalizePortalAccessLevel(access.accessLevel) });
   } catch (error) {
     return handleRouteError(res, error, "POST /client-portal/clients/:clientId/projects/:projectId/tasks", req);
+  }
+});
+
+const personalTaskCreateSchema = taskFieldsSchema.omit({ sectionId: true, assigneeIds: true, tagIds: true }).extend({
+  title: z.string().min(1).max(500),
+  subtaskTitles: z.array(z.string().trim().min(1).max(500)).max(100).optional(),
+}).strict();
+
+router.post("/clients/:clientId/tasks/personal", async (req, res) => {
+  try {
+    const access = await requireActivePortalAccess(req.user!.id, req.params.clientId);
+    const client = await storage.getClient(req.params.clientId);
+    if (!client?.tenantId) throw AppError.notFound("Client");
+    const data = personalTaskCreateSchema.parse(req.body);
+    const { subtaskTitles = [], ...taskData } = data;
+    const task = await storage.createTaskWithTenant({
+      ...taskData,
+      status: taskData.status === "completed" ? "done" : taskData.status,
+      clientId: client.id,
+      projectId: null,
+      sectionId: null,
+      tenantId: client.tenantId,
+      visibility: "private",
+      isPersonal: true,
+      createdBy: req.user!.id,
+      personalSortOrder: 0,
+    }, client.tenantId);
+    await db.insert(taskAssignees).values({ taskId: task.id, userId: req.user!.id, tenantId: client.tenantId });
+    if (subtaskTitles.length) {
+      for (const title of subtaskTitles) await storage.createSubtask({ taskId: task.id, title, status: "todo" });
+    }
+    res.status(201).json({ ...task, accessLevel: normalizePortalAccessLevel(access.accessLevel) });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /client-portal/clients/:clientId/tasks/personal", req);
+  }
+});
+
+router.patch("/clients/:clientId/personal-tasks/:taskId", async (req, res) => {
+  try {
+    const row = await getVisiblePortalTask(req.user!.id, req.params.clientId, req.params.taskId);
+    if (!row.task.isPersonal || row.project) throw AppError.notFound("Task");
+    const data = taskFieldsSchema.omit({ sectionId: true, assigneeIds: true, tagIds: true }).parse(req.body);
+    const client = await storage.getClient(req.params.clientId);
+    if (!client?.tenantId) throw AppError.notFound("Client");
+    const updated = await storage.updateTaskWithTenant(row.task.id, client.tenantId, {
+      ...data,
+      status: data.status === "completed" ? "done" : data.status,
+      visibility: "private",
+      clientId: client.id,
+      projectId: null,
+      sectionId: null,
+    });
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /client-portal/clients/:clientId/personal-tasks/:taskId", req);
   }
 });
 
@@ -518,7 +587,7 @@ router.post("/clients/:clientId/projects/:projectId/sections/:sectionId/archive"
 const subtaskSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: z.any().optional(),
-  status: z.enum(["todo", "in_progress", "in_review", "done", "completed"]).optional(),
+  status: z.enum(["todo", "in_progress", "in_review", "blocked", "done", "completed"]).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   dueDate: z.coerce.date().nullable().optional(),
   estimateMinutes: z.number().int().nonnegative().nullable().optional(),
@@ -527,9 +596,10 @@ const subtaskSchema = z.object({
 
 router.post("/clients/:clientId/tasks/:taskId/subtasks", async (req, res) => {
   try {
-    const row = await getVisibleTask(req.user!.id, req.params.clientId, req.params.taskId);
+    const row = await getVisiblePortalTask(req.user!.id, req.params.clientId, req.params.taskId);
     const data = subtaskSchema.extend({ title: z.string().min(1).max(500) }).parse(req.body);
-    if (data.assigneeId) await validatePortalAssignees(req.params.clientId, row.project.id, [data.assigneeId]);
+    if (row.project && data.assigneeId) await validatePortalAssignees(req.params.clientId, row.project.id, [data.assigneeId]);
+    if (!row.project && data.assigneeId && data.assigneeId !== req.user!.id) throw AppError.forbidden("Personal tasks can only be assigned to you");
     const subtask = await storage.createSubtask({ ...data, status: data.status === "completed" ? "done" : data.status, taskId: row.task.id });
     res.status(201).json(subtask);
   } catch (error) {
@@ -541,9 +611,10 @@ router.patch("/clients/:clientId/subtasks/:subtaskId", async (req, res) => {
   try {
     const [subtask] = await db.select().from(subtasks).where(eq(subtasks.id, req.params.subtaskId)).limit(1);
     if (!subtask) throw AppError.notFound("Subtask");
-    const row = await getVisibleTask(req.user!.id, req.params.clientId, subtask.taskId);
+    const row = await getVisiblePortalTask(req.user!.id, req.params.clientId, subtask.taskId);
     const data = subtaskSchema.parse(req.body);
-    if (data.assigneeId) await validatePortalAssignees(req.params.clientId, row.project.id, [data.assigneeId]);
+    if (row.project && data.assigneeId) await validatePortalAssignees(req.params.clientId, row.project.id, [data.assigneeId]);
+    if (!row.project && data.assigneeId && data.assigneeId !== req.user!.id) throw AppError.forbidden("Personal tasks can only be assigned to you");
     const updated = await storage.updateSubtask(subtask.id, { ...data, status: data.status === "completed" ? "done" : data.status, completed: data.status === "done" || data.status === "completed" });
     res.json(updated);
   } catch (error) {

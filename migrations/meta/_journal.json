@@ -127,6 +127,13 @@
       "when": 1787173200000,
       "tag": "0055_two_role_client_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787259600000,
+      "tag": "0056_client_portal_personal_tasks",
+      "breakpoints": true
     }
   ]
 }
