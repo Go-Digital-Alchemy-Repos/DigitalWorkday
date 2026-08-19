@@ -121,7 +121,7 @@ export default function ClientPortalProjectDetail() {
       {view === "calendar" && <ProjectCalendar projectId={id} sections={sections} portalMode tasksOverride={tasks} tagsOverride={allTags} onTaskSelect={openTask} onDateClick={readOnly ? undefined : () => openCreateTask()} onTaskDateChange={readOnly ? undefined : async (taskId, dueDate) => { await updateTask.mutateAsync({ taskId, body: { dueDate } }); }} />}
     </div>
     <PortalTaskCreateDrawer open={createTaskOpen} onOpenChange={setCreateTaskOpen} clientId={project.clientId} projectId={id} sections={sections} defaultSectionId={defaultSectionId} onCreated={refreshProject} />
-    <PortalTaskDrawer taskId={selectedTaskId} open={!!selectedTaskId} onOpenChange={(drawerOpen) => { if (!drawerOpen) closeTask(); }} onUpdated={refreshProject} />
+    <PortalTaskDrawer taskId={selectedTaskId} open={!!selectedTaskId} onOpenChange={(drawerOpen) => { if (!drawerOpen) closeTask(); }} onUpdated={refreshProject} sections={sections} />
   </div>;
 }
 

@@ -1,5 +1,6 @@
+import crypto, { randomBytes, createHash } from "crypto";
 import { Router } from "express";
-import { randomBytes, createHash } from "crypto";
+import multer from "multer";
 import { z } from "zod";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "../../db";
@@ -22,10 +23,13 @@ import {
   subtasks,
   tags,
   taskAssignees,
+  taskAttachments,
   taskTags,
   tasks,
   users,
 } from "@shared/schema";
+import { createPresignedDownloadUrl, generateStorageKey, isS3Configured, uploadToS3, validateFile } from "../../s3";
+import { isFilenameUnsafe } from "../../http/middleware/uploadGuards";
 import { buildAppUrl } from "../../lib/appLinks";
 import {
   countActiveClientAdmins,
@@ -35,6 +39,7 @@ import {
 } from "../../services/portalAuthorization";
 
 const router = Router();
+const portalTaskUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 router.use((req, _res, next) => {
   if (!req.user || req.user.role !== UserRole.CLIENT) {
@@ -379,6 +384,87 @@ router.patch("/clients/:clientId/tasks/:taskId/move", async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "PATCH /client-portal/clients/:clientId/tasks/:taskId/move", req);
+  }
+});
+
+router.get("/clients/:clientId/projects/:projectId/tasks/:taskId/attachments", async (req, res) => {
+  try {
+    const row = await getVisibleTask(req.user!.id, req.params.clientId, req.params.taskId);
+    if (row.project.id !== req.params.projectId) throw AppError.notFound("Task");
+    const rows = await storage.getTaskAttachmentsByTask(row.task.id);
+    res.json(rows.filter((item) => item.uploadStatus === "complete" && item.uploadedByUser?.role === UserRole.CLIENT).map((item) => ({
+      id: item.id,
+      originalFileName: item.originalFileName,
+      mimeType: item.mimeType,
+      fileSizeBytes: item.fileSizeBytes,
+      createdAt: item.createdAt,
+      uploadedByName: item.uploadedByUser?.name || "Portal user",
+    })));
+  } catch (error) {
+    return handleRouteError(res, error, "GET /client-portal/clients/:clientId/projects/:projectId/tasks/:taskId/attachments", req);
+  }
+});
+
+router.post("/clients/:clientId/projects/:projectId/tasks/:taskId/attachments/upload", portalTaskUpload.single("file"), async (req, res) => {
+  try {
+    const row = await getVisibleTask(req.user!.id, req.params.clientId, req.params.taskId);
+    if (row.project.id !== req.params.projectId) throw AppError.notFound("Task");
+    if (!isS3Configured()) throw AppError.internal("File storage is not configured");
+    const file = req.file;
+    if (!file) throw AppError.badRequest("No file provided");
+    const validation = validateFile(file.mimetype, file.size, file.originalname);
+    if (!validation.valid || isFilenameUnsafe(file.originalname)) {
+      throw AppError.badRequest(validation.error || "File type is not allowed");
+    }
+    const storageKey = generateStorageKey(row.project.id, row.task.id, crypto.randomUUID(), file.originalname);
+    await uploadToS3(file.buffer, storageKey, file.mimetype, row.project.tenantId!);
+    const attachment = await storage.createTaskAttachment({
+      taskId: row.task.id,
+      projectId: row.project.id,
+      uploadedByUserId: req.user!.id,
+      originalFileName: file.originalname,
+      mimeType: file.mimetype,
+      fileSizeBytes: file.size,
+      storageKey,
+      uploadStatus: "complete",
+    });
+    res.status(201).json({
+      id: attachment.id,
+      originalFileName: attachment.originalFileName,
+      mimeType: attachment.mimeType,
+      fileSizeBytes: attachment.fileSizeBytes,
+      createdAt: attachment.createdAt,
+      uploadedByName: req.user!.name || "Portal user",
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /client-portal/clients/:clientId/projects/:projectId/tasks/:taskId/attachments/upload", req);
+  }
+});
+
+router.get("/clients/:clientId/projects/:projectId/tasks/:taskId/attachments/:attachmentId/download", async (req, res) => {
+  try {
+    const row = await getVisibleTask(req.user!.id, req.params.clientId, req.params.taskId);
+    if (row.project.id !== req.params.projectId) throw AppError.notFound("Task");
+    const [attachmentRow] = await db.select({ attachment: taskAttachments }).from(taskAttachments)
+      .innerJoin(users, eq(users.id, taskAttachments.uploadedByUserId)).where(and(
+      eq(taskAttachments.id, req.params.attachmentId),
+      eq(taskAttachments.taskId, row.task.id),
+      eq(taskAttachments.projectId, row.project.id),
+      eq(taskAttachments.uploadStatus, "complete"),
+      eq(users.role, UserRole.CLIENT),
+    )).limit(1);
+    if (!attachmentRow) throw AppError.notFound("Attachment");
+    const attachment = attachmentRow.attachment;
+    res.json({
+      url: await createPresignedDownloadUrl(attachment.storageKey, row.project.tenantId!, {
+        contentDisposition: req.query.mode === "download" ? "attachment" : "inline",
+        contentType: attachment.mimeType,
+        fileName: attachment.originalFileName,
+      }),
+      fileName: attachment.originalFileName,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /client-portal/clients/:clientId/projects/:projectId/tasks/:taskId/attachments/:attachmentId/download", req);
   }
 });
 

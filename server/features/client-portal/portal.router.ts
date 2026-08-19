@@ -208,6 +208,7 @@ router.get("/projects/:projectId", async (req, res) => {
       dueDate: task.dueDate,
       startDate: task.startDate,
       estimateMinutes: task.estimateMinutes,
+      createdAt: task.createdAt,
       sectionId: task.sectionId,
       section: task.section,
       assignees: task.assignees?.map(a => ({
