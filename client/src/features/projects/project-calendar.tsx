@@ -46,6 +46,10 @@ interface ProjectCalendarProps {
   sections: Section[];
   onTaskSelect: (task: TaskWithRelations) => void;
   onDateClick?: (date: Date) => void;
+  portalMode?: boolean;
+  tasksOverride?: TaskWithRelations[];
+  tagsOverride?: Tag[];
+  onTaskDateChange?: (taskId: string, dueDate: Date) => Promise<void> | void;
 }
 
 const priorityColors: Record<string, string> = {
@@ -67,6 +71,10 @@ export function ProjectCalendar({
   sections,
   onTaskSelect,
   onDateClick,
+  portalMode = false,
+  tasksOverride = [],
+  tagsOverride = [],
+  onTaskDateChange,
 }: ProjectCalendarProps) {
   const { toast } = useToast();
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
@@ -79,7 +87,7 @@ export function ProjectCalendar({
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const { data: calendarEvents = [], isLoading } = useQuery<CalendarEvent[]>({
+  const { data: fetchedCalendarEvents = [], isLoading } = useQuery<CalendarEvent[]>({
     queryKey: [
       "/api/projects",
       projectId,
@@ -98,12 +106,12 @@ export function ProjectCalendar({
       if (!response.ok) throw new Error("Failed to fetch calendar events");
       return response.json();
     },
-    enabled: !!projectId,
+    enabled: !!projectId && !portalMode,
   });
 
   const { data: tasks = [] } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/projects", projectId, "tasks"],
-    enabled: !!projectId,
+    enabled: !!projectId && !portalMode,
   });
 
   const { data: tags = [] } = useQuery<Tag[]>({
@@ -113,7 +121,27 @@ export function ProjectCalendar({
       if (!response.ok) throw new Error("Failed to fetch tags");
       return response.json();
     },
+    enabled: !portalMode,
   });
+
+  const calendarEvents = useMemo<CalendarEvent[]>(() => {
+    if (!portalMode) return fetchedCalendarEvents;
+    return tasksOverride.filter((task) => !!task.dueDate).map((task) => ({
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate!,
+      status: task.status || "todo",
+      priority: task.priority || "medium",
+      sectionId: task.sectionId,
+      projectId,
+      parentTaskId: null,
+      assignees: task.assignees || [],
+      tags: task.tags || [],
+      isSubtask: false,
+    }));
+  }, [fetchedCalendarEvents, portalMode, tasksOverride]);
+
+  const availableTags = portalMode ? tagsOverride : tags;
 
   const uniqueAssignees = useMemo(() => {
     const assigneeMap = new Map<string, User>();
@@ -129,10 +157,14 @@ export function ProjectCalendar({
 
   const updateTaskMutation = useMutation({
     mutationFn: async ({ taskId, data }: { taskId: string; data: Partial<TaskWithRelations> }) => {
+      if (portalMode && data.dueDate && onTaskDateChange) {
+        await onTaskDateChange(taskId, new Date(data.dueDate));
+        return;
+      }
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
+      if (!portalMode) queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
     },
@@ -142,7 +174,7 @@ export function ProjectCalendar({
         description: "Could not update the task date. Please try again.",
         variant: "destructive",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
+      if (!portalMode) queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
     },
   });
 
@@ -191,6 +223,11 @@ export function ProjectCalendar({
       const isSubtask = info.event.extendedProps.isSubtask;
       
       try {
+        if (portalMode) {
+          const task = tasksOverride.find((item) => item.id === eventId);
+          if (task) onTaskSelect(task);
+          return;
+        }
         const response = await fetch(`/api/tasks/${eventId}`);
         if (response.ok) {
           const task = await response.json();
@@ -200,7 +237,7 @@ export function ProjectCalendar({
         console.error("Failed to fetch task:", error);
       }
     },
-    [onTaskSelect]
+    [onTaskSelect, portalMode, tasksOverride]
   );
 
   const handleEventDrop = useCallback(
@@ -332,7 +369,7 @@ export function ProjectCalendar({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All tags</SelectItem>
-                      {tags.map((tag) => (
+                      {availableTags.map((tag) => (
                         <SelectItem key={tag.id} value={tag.id}>
                           <div className="flex items-center gap-2">
                             <div
@@ -396,7 +433,7 @@ export function ProjectCalendar({
               right: "dayGridMonth,timeGridWeek",
             }}
             events={fullCalendarEvents}
-            editable={true}
+            editable={!portalMode || !!onTaskDateChange}
             selectable={true}
             selectMirror={true}
             dayMaxEvents={true}

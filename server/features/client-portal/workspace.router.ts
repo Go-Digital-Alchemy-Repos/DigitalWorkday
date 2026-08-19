@@ -355,6 +355,80 @@ router.patch("/clients/:clientId/tasks/:taskId", async (req, res) => {
   }
 });
 
+router.patch("/clients/:clientId/tasks/:taskId/move", async (req, res) => {
+  try {
+    const row = await getVisibleTask(req.user!.id, req.params.clientId, req.params.taskId);
+    const data = z.object({
+      sectionId: z.string().uuid().nullable(),
+      targetIndex: z.number().int().nonnegative(),
+    }).strict().parse(req.body);
+    if (data.sectionId) {
+      const [section] = await db.select({ id: sections.id }).from(sections).where(and(
+        eq(sections.id, data.sectionId),
+        eq(sections.projectId, row.project.id),
+        isNull(sections.archivedAt),
+      )).limit(1);
+      if (!section) throw AppError.badRequest("Section does not belong to this project");
+      await storage.moveTask(row.task.id, data.sectionId, data.targetIndex);
+    } else {
+      await storage.updateTaskWithTenant(row.task.id, row.project.tenantId!, {
+        sectionId: null,
+        orderIndex: data.targetIndex,
+      });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /client-portal/clients/:clientId/tasks/:taskId/move", req);
+  }
+});
+
+const portalSectionSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
+
+router.post("/clients/:clientId/projects/:projectId/sections", async (req, res) => {
+  try {
+    await requireActivePortalAccess(req.user!.id, req.params.clientId, { admin: true });
+    const project = await getVisibleProject(req.user!.id, req.params.clientId, req.params.projectId);
+    const data = portalSectionSchema.parse(req.body);
+    const section = await storage.createSection({ projectId: project.id, name: data.name });
+    res.status(201).json(section);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /client-portal/clients/:clientId/projects/:projectId/sections", req);
+  }
+});
+
+router.patch("/clients/:clientId/projects/:projectId/sections/:sectionId", async (req, res) => {
+  try {
+    await requireActivePortalAccess(req.user!.id, req.params.clientId, { admin: true });
+    await getVisibleProject(req.user!.id, req.params.clientId, req.params.projectId);
+    const data = portalSectionSchema.parse(req.body);
+    const [section] = await db.select().from(sections).where(and(
+      eq(sections.id, req.params.sectionId),
+      eq(sections.projectId, req.params.projectId),
+      isNull(sections.archivedAt),
+    )).limit(1);
+    if (!section) throw AppError.notFound("Section");
+    res.json(await storage.updateSection(section.id, data));
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /client-portal/clients/:clientId/projects/:projectId/sections/:sectionId", req);
+  }
+});
+
+router.post("/clients/:clientId/projects/:projectId/sections/:sectionId/archive", async (req, res) => {
+  try {
+    await requireActivePortalAccess(req.user!.id, req.params.clientId, { admin: true });
+    await getVisibleProject(req.user!.id, req.params.clientId, req.params.projectId);
+    const [section] = await db.select().from(sections).where(and(
+      eq(sections.id, req.params.sectionId),
+      eq(sections.projectId, req.params.projectId),
+      isNull(sections.archivedAt),
+    )).limit(1);
+    if (!section) throw AppError.notFound("Section");
+    res.json(await storage.archiveSection(section.id, req.user!.id));
+  } catch (error) {
+    return handleRouteError(res, error, "POST /client-portal/clients/:clientId/projects/:projectId/sections/:sectionId/archive", req);
+  }
+});
+
 const subtaskSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: z.any().optional(),

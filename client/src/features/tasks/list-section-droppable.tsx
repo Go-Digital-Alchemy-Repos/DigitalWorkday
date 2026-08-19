@@ -11,6 +11,7 @@ interface ListSectionDroppableProps {
   onAddTask?: () => void;
   onTaskSelect?: (task: TaskWithRelations) => void;
   onTaskStatusChange?: (taskId: string, completed: boolean) => void;
+  portalMode?: boolean;
 }
 
 export function ListSectionDroppable({
@@ -18,6 +19,7 @@ export function ListSectionDroppable({
   onAddTask,
   onTaskSelect,
   onTaskStatusChange,
+  portalMode = false,
 }: ListSectionDroppableProps) {
   const tasks = section.tasks || [];
   const taskIds = tasks.map((t) => t.id);
@@ -53,6 +55,7 @@ export function ListSectionDroppable({
               view="list"
               onSelect={() => onTaskSelect?.(task)}
               onStatusChange={(completed) => onTaskStatusChange?.(task.id, completed)}
+              portalMode={portalMode}
             />
           ))}
           {tasks.length === 0 && (

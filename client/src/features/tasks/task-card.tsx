@@ -50,15 +50,16 @@ interface TaskCardProps {
   showContextBadges?: boolean;
   clientName?: string | null;
   projectId?: string;
+  portalMode?: boolean;
 }
 
-function useTaskLink(task: TaskWithRelations, projectId?: string) {
+function useTaskLink(task: TaskWithRelations, projectId?: string, portalMode?: boolean) {
   const { toast } = useToast();
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
     const pid = projectId || task.projectId;
     if (!pid) return;
-    const url = `${window.location.origin}/projects/${pid}?task=${task.id}`;
+    const url = `${window.location.origin}${portalMode ? "/portal" : ""}/projects/${pid}?task=${task.id}`;
     navigator.clipboard.writeText(url).then(() => {
       toast({ title: "Link copied", description: "Task link copied to clipboard" });
     });
@@ -80,14 +81,15 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
     showContextBadges = false,
     clientName,
     projectId,
+    portalMode = false,
   },
   ref
 ) {
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
-  const isCompleted = task.status === "done";
+  const isCompleted = task.status === "done" || task.status === "completed";
   const { prefetch: prefetchTask, cancel: cancelPrefetch } = usePrefetchTask();
   const isMobile = useIsMobile();
-  const { copyLink, hasProject } = useTaskLink(task, projectId);
+  const { copyLink, hasProject } = useTaskLink(task, projectId, portalMode);
   const [justCompleted, setJustCompleted] = useState(false);
   const [showTimeDialog, setShowTimeDialog] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -113,6 +115,10 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
   }, [onStatusChange]);
 
   const handleStatusChange = (checked: boolean) => {
+    if (portalMode) {
+      onStatusChange?.(checked);
+      return;
+    }
     if (checked && !isCompleted) {
       setShowTimeDialog(true);
     } else {
@@ -120,7 +126,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
     }
   };
 
-  const timeDialog = (
+  const timeDialog = portalMode ? null : (
     <LogTimeOnCompleteDialog
       open={showTimeDialog}
       onOpenChange={setShowTimeDialog}
@@ -148,8 +154,8 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           justCompleted && "task-complete-pulse"
         )}
         onClick={onSelect}
-        onMouseEnter={() => prefetchTask(task.id)}
-        onMouseLeave={cancelPrefetch}
+        onMouseEnter={() => { if (!portalMode) prefetchTask(task.id); }}
+        onMouseLeave={() => { if (!portalMode) cancelPrefetch(); }}
         data-testid={`task-card-${task.id}`}
       >
         <div className="flex flex-col gap-2">

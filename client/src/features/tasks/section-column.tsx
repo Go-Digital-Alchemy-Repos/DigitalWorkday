@@ -33,6 +33,7 @@ interface SectionColumnProps {
   onArchiveSection?: (sectionId: string) => void;
   onDeleteSection?: (sectionId: string) => void;
   onClearSectionTasks?: (sectionId: string) => void;
+  portalMode?: boolean;
 }
 
 export function SectionColumn({
@@ -44,6 +45,7 @@ export function SectionColumn({
   onArchiveSection,
   onDeleteSection,
   onClearSectionTasks,
+  portalMode = false,
 }: SectionColumnProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
@@ -97,7 +99,7 @@ export function SectionColumn({
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
-            <DropdownMenu>
+            {(onEditSection || onArchiveSection || onDeleteSection || onClearSectionTasks) && <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -155,7 +157,7 @@ export function SectionColumn({
                   </>
                 )}
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu>}
           </div>
         </div>
 
@@ -171,6 +173,7 @@ export function SectionColumn({
                 view="board"
                 onSelect={() => onTaskSelect?.(task)}
                 onStatusChange={(completed) => onTaskStatusChange?.(task.id, completed)}
+                portalMode={portalMode}
               />
             ))}
           </SortableContext>

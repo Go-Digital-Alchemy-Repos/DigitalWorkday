@@ -189,8 +189,15 @@ router.get("/projects/:projectId", async (req, res) => {
     }
     
     const client = await storage.getClient(project.clientId);
-    const allTasks = await storage.getTasksByProject(projectId);
-    const tasks = allTasks.filter(t => (t as any).visibility !== 'private');
+    const [allTasks, activeSections] = await Promise.all([
+      storage.getTasksByProject(projectId),
+      storage.getSectionsByProject(projectId),
+    ]);
+    const activeSectionIds = new Set(activeSections.map((section) => section.id));
+    const tasks = allTasks.filter(t =>
+      (t as any).visibility !== 'private'
+      && (!t.sectionId || activeSectionIds.has(t.sectionId)),
+    );
     
     const tasksForClient = tasks.map(task => ({
       id: task.id,
@@ -204,17 +211,41 @@ router.get("/projects/:projectId", async (req, res) => {
       sectionId: task.sectionId,
       section: task.section,
       assignees: task.assignees?.map(a => ({
-        id: a.user?.id || a.userId,
-        name: a.user?.name || "Unknown",
-        avatarUrl: a.user?.avatarUrl,
+        userId: a.user?.id || a.userId,
+        user: {
+          id: a.user?.id || a.userId,
+          name: a.user?.name || "Unknown",
+          avatarUrl: a.user?.avatarUrl,
+        },
       })),
       subtasks: task.subtasks,
       tags: task.tags?.map((item) => ({
-        id: item.tag?.id || item.tagId,
-        name: item.tag?.name || "Tag",
-        color: item.tag?.color,
+        tagId: item.tag?.id || item.tagId,
+        tag: {
+          id: item.tag?.id || item.tagId,
+          name: item.tag?.name || "Tag",
+          color: item.tag?.color,
+        },
       })),
     }));
+
+    const unsectionedTasks = tasksForClient.filter((task) => !task.sectionId);
+    const portalSections = activeSections.map((section) => ({
+      ...section,
+      tasks: tasksForClient.filter((task) => task.sectionId === section.id),
+    }));
+    if (unsectionedTasks.length) {
+      portalSections.unshift({
+        id: "unsectioned",
+        projectId: project.id,
+        name: "Unsectioned",
+        orderIndex: -1,
+        createdAt: project.createdAt,
+        archivedAt: null,
+        archivedBy: null,
+        tasks: unsectionedTasks,
+      });
+    }
     
     res.json({
       id: project.id,
@@ -224,9 +255,11 @@ router.get("/projects/:projectId", async (req, res) => {
       createdAt: project.createdAt,
       clientId: project.clientId,
       clientName: client?.companyName,
+      color: project.color,
       accessLevel: normalizePortalAccessLevel(access.accessLevel),
       capabilities: getPortalCapabilities(access.accessLevel),
       tasks: tasksForClient,
+      sections: portalSections,
       taskCount: tasks.length,
       completedCount: tasks.filter(t => isCompletedTaskStatus(t.status)).length,
     });

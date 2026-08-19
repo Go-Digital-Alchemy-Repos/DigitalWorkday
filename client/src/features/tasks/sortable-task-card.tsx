@@ -14,6 +14,7 @@ interface SortableTaskCardProps {
   showContextBadges?: boolean;
   clientName?: string | null;
   projectId?: string;
+  portalMode?: boolean;
 }
 
 export function SortableTaskCard({
@@ -27,6 +28,7 @@ export function SortableTaskCard({
   showContextBadges = false,
   clientName,
   projectId,
+  portalMode = false,
 }: SortableTaskCardProps) {
   const {
     attributes,
@@ -57,6 +59,7 @@ export function SortableTaskCard({
         showContextBadges={showContextBadges}
         clientName={clientName}
         projectId={projectId}
+        portalMode={portalMode}
       />
     </div>
   );

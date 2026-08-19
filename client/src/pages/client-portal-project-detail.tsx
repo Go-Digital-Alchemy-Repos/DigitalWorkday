@@ -1,338 +1,130 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { queryKeys } from "@/lib/queryKeys";
 import { useParams, Link } from "wouter";
-import { RichTextRenderer, getPreviewText } from "@/components/richtext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
+import { Activity, AlertCircle, AlertTriangle, Calendar as CalendarIcon, ChevronRight, LayoutGrid, List, MoreHorizontal, Plus, Settings, Users } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  CheckSquare,
-  AlertCircle,
-  Calendar,
-  ArrowLeft,
-  MessageCircle,
-  FolderKanban,
-  Clock,
-  Plus,
-} from "lucide-react";
-import { format, isPast, isToday, isTomorrow } from "date-fns";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { RichTextRenderer } from "@/components/richtext";
+import { SectionColumn } from "@/features/tasks/section-column";
+import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
+import { TaskCard } from "@/features/tasks/task-card";
+import { ProjectCalendar } from "@/features/projects/project-calendar";
+import { PortalTaskCreateDrawer } from "@/features/client-portal/portal-task-create-drawer";
+import { PortalTaskDrawer } from "@/features/client-portal/portal-task-drawer";
+import type { SectionWithTasks, Tag, TaskWithRelations } from "@shared/schema";
 
-interface ProjectDetail {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  clientId: string;
-  createdAt: string;
-}
-
-interface TaskInfo {
-  id: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: string;
-  dueDate: string | null;
-  assignees: { name: string }[];
-}
-
-interface ProjectData {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  clientId: string;
-  clientName: string | null;
-  createdAt: string;
-  tasks: TaskInfo[];
-  taskCount: number;
-  completedCount: number;
-  capabilities?: { manageProjects?: boolean };
-}
-
-function getStatusColor(status: string) {
-  switch (status) {
-    case "completed":
-      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-    case "in_progress":
-    case "active":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
-    case "on_hold":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
-    case "blocked":
-    case "cancelled":
-      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
-function getPriorityColor(priority: string) {
-  switch (priority) {
-    case "urgent":
-      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
-    case "high":
-      return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400";
-    case "medium":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
-    case "low":
-      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
-function formatDueDate(dateStr: string | null) {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  if (isToday(date)) return "Today";
-  if (isTomorrow(date)) return "Tomorrow";
-  return format(date, "MMM d, yyyy");
-}
-
-function getDueDateClass(dateStr: string | null) {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  if (isPast(date) && !isToday(date)) return "text-destructive";
-  if (isToday(date)) return "text-orange-600 dark:text-orange-400";
-  return "text-muted-foreground";
-}
+type ViewType = "board" | "list" | "calendar";
+type ProjectData = {
+  id: string; name: string; description: string | null; status: string; color?: string | null; clientId: string; clientName: string | null;
+  tasks: TaskWithRelations[]; sections: SectionWithTasks[]; taskCount: number; completedCount: number;
+  capabilities: { manageProjects?: boolean; manageTasks?: boolean };
+};
+const isDone = (status?: string | null) => status === "done" || status === "completed";
 
 export default function ClientPortalProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [view, setView] = useState<ViewType>("board");
+  const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("task"));
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [defaultSectionId, setDefaultSectionId] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
 
-  const { data, isLoading, error } = useQuery<ProjectData>({
-    queryKey: queryKeys.portal.projectDetail(id),
-    enabled: !!id,
-  });
-  const createTask = useMutation({
-    mutationFn: async () => (await apiRequest("POST", `/api/client-portal/clients/${data!.clientId}/projects/${id}/tasks`, { title: newTaskTitle })).json(),
-    onSuccess: () => { setNewTaskTitle(""); queryClient.invalidateQueries({ queryKey: queryKeys.portal.projectDetail(id) }); queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard }); toast({ title: "Task created" }); },
-    onError: (error: Error) => toast({ title: "Unable to create task", description: error.message, variant: "destructive" }),
-  });
-  const updateProject = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => (await apiRequest("PATCH", `/api/client-portal/clients/${data!.clientId}/projects/${id}`, body)).json(),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.portal.projectDetail(id) }); queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard }); },
-    onError: (error: Error) => toast({ title: "Unable to update project", description: error.message, variant: "destructive" }),
-  });
+  const projectQuery = useQuery<ProjectData>({ queryKey: queryKeys.portal.projectDetail(id), enabled: !!id });
+  const project = projectQuery.data;
+  useEffect(() => setLocalSections(null), [project]);
+  const sections = localSections || project?.sections || [];
+  const tasks = useMemo(() => sections.flatMap((section) => section.tasks || []), [sections]);
+  const activeTask = tasks.find((task) => task.id === activeTaskId);
+  const canManageProject = !!project?.capabilities?.manageProjects;
+  const readOnly = project?.status === "archived" || project?.status === "completed";
 
-  if (isLoading) {
-    return (
-      <div className="p-6 overflow-y-auto h-full">
-        <div className="mb-6">
-          <Skeleton className="h-8 w-64 mb-2" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const refreshProject = useCallback(() => {
+    setLocalSections(null);
+    queryClient.invalidateQueries({ queryKey: queryKeys.portal.projectDetail(id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard });
+    queryClient.invalidateQueries({ queryKey: queryKeys.portal.tasks });
+  }, [id]);
 
-  if (error || !data) {
-    return (
-      <div className="p-6 flex items-center justify-center h-full">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              Error Loading Project
-            </CardTitle>
-            <CardDescription>
-              There was a problem loading the project. You may not have access to this project.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" asChild>
-              <Link href="/portal/projects">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Projects
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const updateTask = useMutation({ mutationFn: async ({ taskId, body }: { taskId: string; body: Record<string, unknown> }) => (await apiRequest("PATCH", `/api/client-portal/clients/${project!.clientId}/tasks/${taskId}`, body)).json(), onSuccess: refreshProject, onError: (error: Error) => toast({ title: "Unable to update task", description: error.message, variant: "destructive" }) });
+  const moveTask = useMutation({ mutationFn: async ({ taskId, sectionId, targetIndex }: { taskId: string; sectionId: string | null; targetIndex: number }) => (await apiRequest("PATCH", `/api/client-portal/clients/${project!.clientId}/tasks/${taskId}/move`, { sectionId, targetIndex })).json(), onSuccess: refreshProject, onError: () => { refreshProject(); toast({ title: "Unable to move task", variant: "destructive" }); } });
+  const updateProject = useMutation({ mutationFn: async (body: Record<string, unknown>) => (await apiRequest("PATCH", `/api/client-portal/clients/${project!.clientId}/projects/${id}`, body)).json(), onSuccess: refreshProject, onError: (error: Error) => toast({ title: "Unable to update project", description: error.message, variant: "destructive" }) });
+  const createSection = useMutation({ mutationFn: async (name: string) => (await apiRequest("POST", `/api/client-portal/clients/${project!.clientId}/projects/${id}/sections`, { name })).json(), onSuccess: refreshProject });
+  const updateSection = useMutation({ mutationFn: async ({ sectionId, name }: { sectionId: string; name: string }) => (await apiRequest("PATCH", `/api/client-portal/clients/${project!.clientId}/projects/${id}/sections/${sectionId}`, { name })).json(), onSuccess: refreshProject });
+  const archiveSection = useMutation({ mutationFn: async (sectionId: string) => (await apiRequest("POST", `/api/client-portal/clients/${project!.clientId}/projects/${id}/sections/${sectionId}/archive`)).json(), onSuccess: refreshProject });
 
-  const project = data;
-  const tasks = data.tasks || [];
-  const completedTasks = data.completedCount || tasks.filter((t) => t.status === "completed").length;
-  const totalTasks = data.taskCount || tasks.length;
-  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const openTask = (task: TaskWithRelations) => { setSelectedTaskId(task.id); const url = new URL(window.location.href); url.searchParams.set("task", task.id); window.history.replaceState({}, "", `${url.pathname}${url.search}`); };
+  const closeTask = () => { setSelectedTaskId(null); const url = new URL(window.location.href); url.searchParams.delete("task"); window.history.replaceState({}, "", `${url.pathname}${url.search}`); };
+  const openCreateTask = (sectionId?: string | null) => { setDefaultSectionId(sectionId === "unsectioned" ? null : sectionId || null); setCreateTaskOpen(true); };
 
-  const todoTasks = tasks.filter((t) => t.status === "todo");
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
-  const completedTasksList = tasks.filter((t) => t.status === "completed");
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveTaskId(null);
+    if (!event.over) return;
+    const activeData = event.active.data.current as { type?: string; task?: TaskWithRelations } | undefined;
+    const overData = event.over.data.current as { type?: string; task?: TaskWithRelations; section?: SectionWithTasks } | undefined;
+    if (activeData?.type !== "task" || !activeData.task) return;
+    const active = activeData.task;
+    const targetKey = overData?.type === "section" ? String(event.over.id) : overData?.task?.sectionId || "unsectioned";
+    const target = sections.find((section) => section.id === targetKey);
+    const source = sections.find((section) => section.id === (active.sectionId || "unsectioned"));
+    if (!target || !source) return;
+    const sourceIndex = (source.tasks || []).findIndex((task) => task.id === active.id);
+    const targetIndex = overData?.type === "task" ? Math.max(0, (target.tasks || []).findIndex((task) => task.id === event.over!.id)) : (target.tasks || []).length;
+    if (source.id === target.id) {
+      if (sourceIndex === targetIndex) return;
+      setLocalSections(sections.map((section) => section.id === source.id ? { ...section, tasks: arrayMove(section.tasks || [], sourceIndex, targetIndex) } : section));
+    } else {
+      const moving = { ...active, sectionId: target.id === "unsectioned" ? null : target.id };
+      setLocalSections(sections.map((section) => {
+        if (section.id === source.id) return { ...section, tasks: (section.tasks || []).filter((task) => task.id !== active.id) };
+        if (section.id === target.id) { const next = [...(section.tasks || [])]; next.splice(targetIndex, 0, moving); return { ...section, tasks: next }; }
+        return section;
+      }));
+    }
+    moveTask.mutate({ taskId: active.id, sectionId: target.id === "unsectioned" ? null : target.id, targetIndex });
+  };
 
-  return (
-    <div className="p-6 overflow-y-auto h-full">
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-2">
-          <Link href="/portal/projects" data-testid="link-back-to-projects">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Projects
-          </Link>
-        </Button>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-project-name">
-              <FolderKanban className="h-6 w-6" />
-              {project.name}
-            </h1>
-            {project.description && (
-              <RichTextRenderer
-                value={project.description}
-                className="text-muted-foreground mt-1 [&>*]:m-0"
-                data-testid="text-project-description"
-              />
-            )}
-          </div>
-          {project.capabilities?.manageProjects ? <div className="flex gap-2"><Button variant="outline" onClick={() => { const name = window.prompt("Project name", project.name); if (name?.trim()) { const description = window.prompt("Project description", project.description || ""); updateProject.mutate({ name: name.trim(), description: description || null }); } }}>Edit project</Button><Select value={project.status} onValueChange={(status) => updateProject.mutate({ status })}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="on_hold">On hold</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent></Select></div> : <Badge variant="outline" className={getStatusColor(project.status)}>{project.status.replace(/_/g, ' ')}</Badge>}
-        </div>
-      </div>
+  if (projectQuery.isLoading) return <div className="space-y-5 p-6"><Skeleton className="h-28 w-full rounded-2xl" /><Skeleton className="h-20 w-full rounded-2xl" /><Skeleton className="h-[480px] w-full rounded-2xl" /></div>;
+  if (!project) return <div className="flex h-full items-center justify-center p-6"><div className="rounded-2xl border p-8 text-center"><AlertCircle className="mx-auto mb-3 h-8 w-8 text-destructive" /><h1 className="font-semibold">Project unavailable</h1><Button variant="outline" asChild className="mt-4"><Link href="/portal/projects">Back to projects</Link></Button></div></div>;
 
-      <Card className="mb-6"><CardContent className="p-4 flex gap-2"><Input placeholder="Create a task in this project" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} /><Button onClick={() => createTask.mutate()} disabled={!newTaskTitle.trim() || createTask.isPending}><Plus className="h-4 w-4 mr-2" />Add task</Button></CardContent></Card>
+  const total = tasks.length;
+  const completed = tasks.filter((task) => isDone(task.status)).length;
+  const progress = total ? Math.round(completed / total * 100) : 0;
+  const openCount = total - completed;
+  const overdue = tasks.filter((task) => !isDone(task.status) && task.dueDate && new Date(task.dueDate) < new Date()).length;
+  const contributorIds = new Set(tasks.flatMap((task) => (task.assignees || []).map((item) => item.user?.id).filter(Boolean)));
+  const allTags = [...tasks.flatMap((task) => task.tags || []).reduce((tagMap, item) => {
+    if (item.tag?.id) tagMap.set(item.tag.id, item.tag);
+    return tagMap;
+  }, new Map<string, Tag>()).values()];
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Total Tasks</CardTitle>
-            <CheckSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-total-tasks">
-              {totalTasks}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Completed</CardTitle>
-            <CheckSquare className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-completed-tasks">
-              {completedTasks}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="font-medium">Progress</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-progress">
-              {completionRate}%
-            </div>
-            <div className="mt-1 h-2 bg-secondary rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary transition-all"
-                style={{ width: `${completionRate}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all" data-testid="tab-all-tasks">
-            All ({tasks.length})
-          </TabsTrigger>
-          <TabsTrigger value="todo" data-testid="tab-todo-tasks">
-            To Do ({todoTasks.length})
-          </TabsTrigger>
-          <TabsTrigger value="in_progress" data-testid="tab-in-progress-tasks">
-            In Progress ({inProgressTasks.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed" data-testid="tab-completed-tasks">
-            Completed ({completedTasksList.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="space-y-2">
-          <TaskList tasks={tasks} />
-        </TabsContent>
-
-        <TabsContent value="todo" className="space-y-2">
-          <TaskList tasks={todoTasks} emptyMessage="No tasks to do" />
-        </TabsContent>
-
-        <TabsContent value="in_progress" className="space-y-2">
-          <TaskList tasks={inProgressTasks} emptyMessage="No tasks in progress" />
-        </TabsContent>
-
-        <TabsContent value="completed" className="space-y-2">
-          <TaskList tasks={completedTasksList} emptyMessage="No completed tasks" />
-        </TabsContent>
-      </Tabs>
+  return <div className="flex h-full min-w-0 flex-col overflow-hidden bg-background">
+    <div className="shrink-0 border-b bg-background">
+      <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground sm:px-5 lg:px-8"><Link href="/portal/projects" className="hover:text-foreground">Projects</Link><ChevronRight className="h-4 w-4" /><span>{project.clientName || "Client"}</span><ChevronRight className="h-4 w-4" /><span className="text-foreground">{project.name}</span></div>
+      <div className="px-4 pb-4 sm:px-5 lg:px-8"><div className="flex items-start justify-between gap-4 rounded-2xl border border-border/70 bg-card/85 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5"><div className="flex min-w-0 items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-base font-semibold text-white" style={{ backgroundColor: project.color || "#3B82F6" }}>{project.name.charAt(0).toUpperCase()}</div><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight md:text-[1.7rem]">{project.name}</h1>{project.description && <RichTextRenderer value={project.description} className="mt-1 hidden max-h-12 overflow-hidden text-sm text-muted-foreground md:block [&>*]:m-0" />}</div></div><div className="flex items-center gap-2"><Badge variant="outline" className="hidden rounded-full px-3 py-1 lg:flex">{readOnly ? "Read-only" : "Active workspace"}</Badge>{canManageProject && <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="rounded-xl"><Settings className="mr-2 h-4 w-4" />Manage</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { const name = window.prompt("Project name", project.name); if (name?.trim()) updateProject.mutate({ name: name.trim() }); }}>Rename project</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem onClick={() => updateProject.mutate({ status: "active" })}>Mark active</DropdownMenuItem><DropdownMenuItem onClick={() => updateProject.mutate({ status: "on_hold" })}>Put on hold</DropdownMenuItem><DropdownMenuItem onClick={() => updateProject.mutate({ status: "completed" })}>Complete project</DropdownMenuItem><DropdownMenuItem onClick={() => updateProject.mutate({ status: "archived" })}>Archive project</DropdownMenuItem></DropdownMenuContent></DropdownMenu>}</div></div></div>
+      <div className="grid grid-cols-2 border-y md:grid-cols-4"><Metric icon={<Activity className="h-5 w-5" />} label="Progress" value={`${progress}%`} /><Metric icon={<List className="h-5 w-5" />} label="Open tasks" value={String(openCount)} /><Metric icon={<AlertTriangle className="h-5 w-5" />} label="Overdue" value={String(overdue)} /><Metric icon={<Users className="h-5 w-5" />} label="Contributors" value={String(contributorIds.size)} /></div>
+      <div className="px-4 py-4 sm:px-5 lg:px-8"><div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/90 px-3 py-3 shadow-[var(--shadow-soft)]"><Tabs value={view} onValueChange={(value) => setView(value as ViewType)}><TabsList className="h-10 rounded-2xl border bg-muted/60 p-1"><TabsTrigger value="board" className="gap-1.5"><LayoutGrid className="h-4 w-4" /><span className="hidden sm:inline">Board</span></TabsTrigger><TabsTrigger value="list" className="gap-1.5"><List className="h-4 w-4" /><span className="hidden sm:inline">List</span></TabsTrigger><TabsTrigger value="calendar" className="gap-1.5"><CalendarIcon className="h-4 w-4" /><span className="hidden sm:inline">Calendar</span></TabsTrigger></TabsList></Tabs><div className="flex items-center gap-2">{canManageProject && !readOnly && <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => { const name = window.prompt("Section name"); if (name?.trim()) createSection.mutate(name.trim()); }} title="Add section"><MoreHorizontal className="h-4 w-4" /></Button>}<Button className="rounded-xl" onClick={() => openCreateTask()} disabled={readOnly}><Plus className="mr-2 h-4 w-4" />Add Task</Button></div></div></div>
     </div>
-  );
+    <div className="min-h-0 flex-1 overflow-hidden">
+      {view === "board" && <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event: DragStartEvent) => setActiveTaskId(String(event.active.id))} onDragEnd={handleDragEnd}><div className="flex h-full gap-4 overflow-x-auto px-4 py-5 sm:px-5 lg:px-8">{sections.map((section) => <SectionColumn key={section.id} section={section} portalMode onAddTask={readOnly ? undefined : () => openCreateTask(section.id)} onTaskSelect={openTask} onTaskStatusChange={readOnly ? undefined : (taskId, checked) => updateTask.mutate({ taskId, body: { status: checked ? "completed" : "todo" } })} onEditSection={canManageProject && section.id !== "unsectioned" ? (sectionId, name) => updateSection.mutate({ sectionId, name }) : undefined} onArchiveSection={canManageProject && section.id !== "unsectioned" ? (sectionId) => archiveSection.mutate(sectionId) : undefined} />)}{canManageProject && !readOnly && <div className="min-w-[280px]"><Button variant="outline" className="h-14 w-full rounded-2xl border-dashed" onClick={() => { const name = window.prompt("Section name"); if (name?.trim()) createSection.mutate(name.trim()); }}><Plus className="mr-2 h-4 w-4" />Add Section</Button></div>}</div><DragOverlay>{activeTask && <TaskCard task={activeTask} view="board" isDragging portalMode />}</DragOverlay></DndContext>}
+      {view === "list" && <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event: DragStartEvent) => setActiveTaskId(String(event.active.id))} onDragEnd={handleDragEnd}><div className="h-full overflow-y-auto px-4 py-5 sm:px-5 lg:px-8">{sections.map((section) => <ListSectionDroppable key={section.id} section={section} portalMode onAddTask={readOnly ? undefined : () => openCreateTask(section.id)} onTaskSelect={openTask} onTaskStatusChange={readOnly ? undefined : (taskId, checked) => updateTask.mutate({ taskId, body: { status: checked ? "completed" : "todo" } })} />)}</div></DndContext>}
+      {view === "calendar" && <ProjectCalendar projectId={id} sections={sections} portalMode tasksOverride={tasks} tagsOverride={allTags} onTaskSelect={openTask} onDateClick={readOnly ? undefined : () => openCreateTask()} onTaskDateChange={readOnly ? undefined : async (taskId, dueDate) => { await updateTask.mutateAsync({ taskId, body: { dueDate } }); }} />}
+    </div>
+    <PortalTaskCreateDrawer open={createTaskOpen} onOpenChange={setCreateTaskOpen} clientId={project.clientId} projectId={id} sections={sections} defaultSectionId={defaultSectionId} onCreated={refreshProject} />
+    <PortalTaskDrawer taskId={selectedTaskId} open={!!selectedTaskId} onOpenChange={(drawerOpen) => { if (!drawerOpen) closeTask(); }} onUpdated={refreshProject} />
+  </div>;
 }
 
-function TaskList({ tasks, emptyMessage = "No tasks" }: { tasks: TaskInfo[]; emptyMessage?: string }) {
-  if (tasks.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-        <CheckSquare className="h-8 w-8 mb-2 opacity-50" />
-        <p>{emptyMessage}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {tasks.map((task) => (
-        <Card key={task.id} data-testid={`task-card-${task.id}`}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <Link href={`/portal/tasks/${task.id}`} className="font-medium hover:underline">{task.title}</Link>
-                {task.description && (
-                  <div className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                    {getPreviewText(task.description as string)}
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <Badge variant="outline" className={getPriorityColor(task.priority)}>
-                    {task.priority}
-                  </Badge>
-                  <Badge variant="outline" className={getStatusColor(task.status)}>
-                    {task.status.replace(/_/g, ' ')}
-                  </Badge>
-                  {task.assignees && task.assignees.length > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      Assigned to: {task.assignees.map((a) => a.name).join(", ")}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {task.dueDate && (
-                <div className={`flex items-center gap-1 text-sm whitespace-nowrap ${getDueDateClass(task.dueDate)}`}>
-                  <Calendar className="h-3 w-3" />
-                  {formatDueDate(task.dueDate)}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return <div className="flex items-center gap-3 border-r px-5 py-4 last:border-r-0"><span className="text-muted-foreground">{icon}</span><div><div className="text-sm text-muted-foreground">{label}</div><div className="text-xl font-semibold">{value}</div></div></div>;
 }
