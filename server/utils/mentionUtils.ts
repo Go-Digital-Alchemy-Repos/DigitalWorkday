@@ -45,18 +45,26 @@ export function getMentionDelta(
   return { added, removed };
 }
 
-export function getPlainTextFromTipTapJson(content: string | null | undefined): string {
-  if (!content) return "";
+export function getPlainTextFromTipTapJson(content: unknown): string {
+  if (content === null || content === undefined || content === "") return "";
+
+  if (typeof content === "object") {
+    return extractTextFromNode(content as TipTapNode).trim();
+  }
+
+  if (typeof content !== "string") return String(content);
 
   try {
     const doc = JSON.parse(content) as TipTapNode;
-    return extractTextFromNode(doc);
+    return extractTextFromNode(doc).trim();
   } catch {
     return content;
   }
 }
 
-function extractTextFromNode(node: TipTapNode): string {
+function extractTextFromNode(node: TipTapNode | null | undefined): string {
+  if (!node || typeof node !== "object") return "";
+
   if (node.type === "text" && node.text) {
     return node.text;
   }
@@ -66,9 +74,12 @@ function extractTextFromNode(node: TipTapNode): string {
   }
 
   if (node.content && Array.isArray(node.content)) {
+    const separator = node.type === "doc" || node.type === "bulletList" || node.type === "orderedList"
+      ? "\n"
+      : "";
     return node.content
       .map((child) => extractTextFromNode(child))
-      .join(node.type === "paragraph" ? "\n" : "");
+      .join(separator);
   }
 
   return "";

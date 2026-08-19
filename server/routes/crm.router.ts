@@ -26,6 +26,7 @@ import {
 } from "@shared/schema";
 import { getCurrentUserId } from "./helpers";
 import { verifyClientTenancy, isAdminOrSuper } from "./modules/crm/crm.helpers";
+import { getPlainTextFromTipTapJson } from "../utils/mentionUtils";
 
 import crmSubModules from "./modules/crm";
 
@@ -555,11 +556,14 @@ router.get("/crm/clients/:clientId/activity", requireAuth, async (req: Request, 
 
       for (const te of timeEvents) {
         const hours = ((te.durationSeconds || 0) / 3600).toFixed(1);
+        const description = getPlainTextFromTipTapJson(te.description)
+          .replace(/\s+/g, " ")
+          .trim();
         events.push({
           id: `time-${te.id}`,
           type: "time_entry",
           entityId: te.id,
-          summary: `${te.userName || "Someone"} logged ${hours}h${te.description ? `: ${te.description}` : ""}`,
+          summary: `${te.userName || "Someone"} logged ${hours}h${description ? `: ${description}` : ""}`,
           actorUserId: te.userId,
           actorName: te.userName,
           createdAt: te.createdAt,
@@ -590,8 +594,11 @@ router.get("/crm/clients/:clientId/activity", requireAuth, async (req: Request, 
         .limit(limit);
 
       for (const c of commentEvents) {
-        const preview = typeof c.body === "string"
-          ? c.body.slice(0, 80) + (c.body.length > 80 ? "..." : "")
+        const commentText = getPlainTextFromTipTapJson(c.body)
+          .replace(/\s+/g, " ")
+          .trim();
+        const preview = commentText
+          ? commentText.slice(0, 80) + (commentText.length > 80 ? "..." : "")
           : "commented";
         events.push({
           id: `comment-${c.id}`,

@@ -75,6 +75,11 @@ describe("mentionUtils – extractMentionsFromTipTapJson", () => {
 });
 
 describe("mentionUtils – getPlainTextFromTipTapJson", () => {
+  it("returns an empty string for null fields", () => {
+    expect(getPlainTextFromTipTapJson(null)).toBe("");
+    expect(getPlainTextFromTipTapJson(undefined)).toBe("");
+  });
+
   it("converts mention node to @label", () => {
     const doc = makeTipTapDoc(
       textNode("Hey "),
@@ -85,6 +90,39 @@ describe("mentionUtils – getPlainTextFromTipTapJson", () => {
     expect(result).toContain("@Alice");
     expect(result).toContain("Hey");
     expect(result).toContain(", check this");
+  });
+
+  it("returns an empty string for an empty rich-text document", () => {
+    const doc = JSON.stringify({
+      type: "doc",
+      content: [{ type: "paragraph", attrs: { textAlign: null } }],
+    });
+
+    expect(getPlainTextFromTipTapJson(doc)).toBe("");
+  });
+
+  it("extracts readable text from a populated rich-text document", () => {
+    const doc = JSON.stringify({
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        attrs: { textAlign: null },
+        content: [{ type: "text", text: "Explaining Project to Developers" }],
+      }],
+    });
+
+    expect(getPlainTextFromTipTapJson(doc)).toBe("Explaining Project to Developers");
+  });
+
+  it("accepts rich-text documents that are already parsed", () => {
+    expect(getPlainTextFromTipTapJson({
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "Task detail" }] }],
+    })).toBe("Task detail");
+  });
+
+  it("keeps legacy plain-text content unchanged", () => {
+    expect(getPlainTextFromTipTapJson("Legacy activity detail")).toBe("Legacy activity detail");
   });
 });
 
