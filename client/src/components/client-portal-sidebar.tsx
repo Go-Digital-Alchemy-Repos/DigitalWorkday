@@ -80,9 +80,9 @@ export function ClientPortalSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-border h-12 flex items-center">
-        <div className="flex items-center gap-2 px-2">
-          <img src={appLogo} alt="Digital Workday" className="h-6 w-6" />
+      <SidebarHeader className="h-14 items-stretch justify-center border-b border-border">
+        <div className="flex w-full items-center justify-start gap-2 px-2">
+          <img src={appLogo} alt="Digital Workday" className="h-7 w-7 shrink-0" />
           <span className="font-semibold text-sm truncate group-data-[collapsible=icon]:hidden">
             Client Portal
           </span>

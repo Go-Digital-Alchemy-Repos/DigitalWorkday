@@ -126,7 +126,7 @@ export default function ClientPortalDashboard() {
     return (
       <div className="p-6 overflow-y-auto h-full">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">Project Dashboard</h1>
           <p className="text-muted-foreground">Welcome to your client portal</p>
         </div>
         <DashboardSkeleton />
@@ -167,7 +167,7 @@ export default function ClientPortalDashboard() {
   return (
     <div className="p-6 overflow-y-auto h-full">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Dashboard</h1>
+        <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Project Dashboard</h1>
         <p className="text-muted-foreground">
           Welcome to your client portal. Track your projects and tasks here.
         </p>
@@ -341,11 +341,12 @@ export default function ClientPortalDashboard() {
           </CardHeader>
           <CardContent>
             {data?.projects && data.projects.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-5">
                 {data.projects.slice(0, 5).map((project) => (
                   <Link
                     key={project.id}
                     href={`/portal/projects/${project.id}`}
+                    className="block"
                     data-testid={`project-card-${project.id}`}
                   >
                     <div className="flex items-center justify-between p-3 rounded-lg border bg-card hover-elevate cursor-pointer">
