@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import multer from "multer";
 import { createApiRouter } from "../routerFactory";
+import { blockClientUsers } from "../../middleware/clientAccess";
 import { assetService } from "../../features/assetLibrary/asset.service";
 import { AppError, handleRouteError } from "../../lib/errors";
 import { getCurrentUserId } from "../helpers";
@@ -27,6 +28,7 @@ const router = createApiRouter({
   policy: "authTenant",
   skipEnvelope: true,
 });
+router.use("/assets", blockClientUsers);
 
 function getEffectiveTenantId(req: Request): string | null {
   const user = req.user as any;

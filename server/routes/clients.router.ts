@@ -9,6 +9,7 @@ import { AppError, handleRouteError, sendError, validateBody } from "../lib/erro
 import { canDeleteClientInTenant } from "../lib/clientDeleteAuthorization";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { requireAuth } from "../auth";
+import { blockClientUsers } from "../middleware/clientAccess";
 import {
   insertClientSchema,
   insertClientContactSchema,
@@ -44,6 +45,10 @@ import {
 } from "../realtime/events";
 
 const router = createApiRouter({ policy: "authTenant" });
+router.use("/projects", blockClientUsers);
+router.use("/clients", blockClientUsers);
+router.use("/v1/clients", blockClientUsers);
+router.use("/v1/divisions", blockClientUsers);
 
 // =============================================================================
 // PROJECT CLIENT ASSIGNMENT

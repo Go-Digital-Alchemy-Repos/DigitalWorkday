@@ -91,8 +91,13 @@ export const InvitationStatus = {
 
 // Client access level enum (for client portal users)
 export const ClientAccessLevel = {
-  VIEWER: "viewer",
   COLLABORATOR: "collaborator",
+  CLIENT_ADMIN: "client_admin",
+} as const;
+
+export const ClientAccessStatus = {
+  ACTIVE: "active",
+  SUSPENDED: "suspended",
 } as const;
 
 export const CommentVisibility = {
@@ -771,6 +776,7 @@ export const assetFolders = pgTable("asset_folders", {
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   parentFolderId: varchar("parent_folder_id"),
   name: text("name").notNull(),
+  visibility: text("visibility").notNull().default("internal"),
   path: text("path"),
   sortOrder: integer("sort_order"),
   createdByUserId: varchar("created_by_user_id").references(() => users.id),
@@ -958,7 +964,7 @@ export const clientInvites = pgTable("client_invites", {
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   contactId: varchar("contact_id").references(() => clientContacts.id).notNull(),
   email: text("email").notNull(),
-  roleHint: text("role_hint").default("client"),
+  roleHint: text("role_hint").default("collaborator"),
   status: text("status").notNull().default("draft"),
   tokenPlaceholder: text("token_placeholder"),
   accessClientIds: jsonb("access_client_ids").$type<string[]>().default([]),
@@ -1954,7 +1960,10 @@ export const clientUserAccess = pgTable("client_user_access", {
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
-  accessLevel: text("access_level").notNull().default("viewer"),
+  accessLevel: text("access_level").notNull().default("collaborator"),
+  status: text("status").notNull().default("active"),
+  suspendedAt: timestamp("suspended_at"),
+  suspendedByUserId: varchar("suspended_by_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("client_user_access_unique").on(table.clientId, table.userId),
@@ -3141,7 +3150,8 @@ export const insertClientUserAccessSchema = createInsertSchema(clientUserAccess)
   id: true,
   createdAt: true,
 }).extend({
-  accessLevel: z.enum([ClientAccessLevel.VIEWER, ClientAccessLevel.COLLABORATOR]).default(ClientAccessLevel.VIEWER),
+  accessLevel: z.enum([ClientAccessLevel.COLLABORATOR, ClientAccessLevel.CLIENT_ADMIN]).default(ClientAccessLevel.COLLABORATOR),
+  status: z.enum([ClientAccessStatus.ACTIVE, ClientAccessStatus.SUSPENDED]).default(ClientAccessStatus.ACTIVE),
 });
 
 export const insertAppSettingSchema = createInsertSchema(appSettings).omit({

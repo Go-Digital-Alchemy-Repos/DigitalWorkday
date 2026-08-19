@@ -27,12 +27,14 @@ import {
 import { getCurrentUserId } from "./helpers";
 import { verifyClientTenancy, isAdminOrSuper } from "./modules/crm/crm.helpers";
 import { getPlainTextFromTipTapJson } from "../utils/mentionUtils";
+import { blockClientUsers } from "../middleware/clientAccess";
 
 import crmSubModules from "./modules/crm";
 
 const router = createApiRouter({ policy: "authTenant" });
 
 router.use(crmSubModules);
+router.use("/crm", blockClientUsers);
 
 // =============================================================================
 // CLIENT SUMMARY & METRICS

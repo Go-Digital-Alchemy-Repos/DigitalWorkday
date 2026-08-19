@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { blockClientUsers } from "../../../middleware/clientAccess";
 import { z } from "zod";
 import { db } from "../../../db";
 import { eq, and, desc } from "drizzle-orm";
@@ -16,6 +17,8 @@ import { getCurrentUserId } from "../../helpers";
 import { verifyClientTenancy } from "./crm.helpers";
 
 const router = Router();
+router.use("/crm/clients/:clientId/files", blockClientUsers);
+router.use("/crm/files", blockClientUsers);
 
 router.get("/crm/clients/:clientId/files", requireAuth, async (req: Request, res: Response) => {
   try {

@@ -246,7 +246,7 @@ export class ClientsRepository {
     for (const access of accessRecords) {
       const client = await this.getClient(access.clientId);
       if (client) {
-        result.push({ client, access });
+        result.push({ client, access: { ...access, accessLevel: access.accessLevel === "viewer" ? "collaborator" : access.accessLevel } });
       }
     }
     return result;

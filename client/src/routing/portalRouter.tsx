@@ -22,6 +22,10 @@ const ClientPortalMessages = lazy(trackChunkLoad("PortalMessages", () => import(
 const ClientPortalSupport = lazy(trackChunkLoad("PortalSupport", () => import("@/pages/client-portal-support")));
 const ClientPortalSupportNew = lazy(trackChunkLoad("PortalSupportNew", () => import("@/pages/client-portal-support-new")));
 const ClientPortalSupportDetail = lazy(trackChunkLoad("PortalSupportDetail", () => import("@/pages/client-portal-support-detail")));
+const ClientPortalAccount = lazy(trackChunkLoad("PortalAccount", () => import("@/pages/client-portal-account")));
+const ClientPortalAssets = lazy(trackChunkLoad("PortalAssets", () => import("@/pages/client-portal-assets")));
+const ClientPortalActivity = lazy(trackChunkLoad("PortalActivity", () => import("@/pages/client-portal-activity")));
+const ClientPortalTaskDetail = lazy(trackChunkLoad("PortalTaskDetail", () => import("@/pages/client-portal-task-detail")));
 
 function ClientPortalRouter() {
   return (
@@ -38,6 +42,18 @@ function ClientPortalRouter() {
         </Route>
         <Route path="/portal/tasks">
           {() => <ClientPortalRouteGuard component={ClientPortalTasks} />}
+        </Route>
+        <Route path="/portal/tasks/:id">
+          {() => <ClientPortalRouteGuard component={ClientPortalTaskDetail} />}
+        </Route>
+        <Route path="/portal/account">
+          {() => <ClientPortalRouteGuard component={ClientPortalAccount} />}
+        </Route>
+        <Route path="/portal/assets">
+          {() => <ClientPortalRouteGuard component={ClientPortalAssets} />}
+        </Route>
+        <Route path="/portal/activity">
+          {() => <ClientPortalRouteGuard component={ClientPortalActivity} />}
         </Route>
         <Route path="/portal/approvals">
           {() => <ClientPortalRouteGuard component={ClientPortalApprovals} />}

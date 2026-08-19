@@ -47,6 +47,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { createApiRouter } from "../routerFactory";
+import { blockClientUsers } from "../../middleware/clientAccess";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import { captureError } from "../../middleware/errorLogging";
@@ -82,6 +83,8 @@ import {
 import { evaluateAutomation } from "../../features/automation/clientStageAutomation.service";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
+router.use("/tasks", blockClientUsers);
+router.use("/v1/my-tasks", blockClientUsers);
 
 function isAssignedToTask(task: any, userId: string): boolean {
   return Boolean(task?.assignees?.some((assignee: any) => assignee.userId === userId || assignee.user?.id === userId));

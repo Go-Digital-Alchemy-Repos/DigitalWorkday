@@ -26,7 +26,7 @@ export type PortalAccessOption = Omit<PortalAccessMatrixEntry, "access">;
 export type PortalAccessScopeInput = {
   entries: Array<{
     clientId: string;
-    accessLevel: typeof ClientAccessLevel.VIEWER | typeof ClientAccessLevel.COLLABORATOR;
+    accessLevel: typeof ClientAccessLevel.COLLABORATOR | typeof ClientAccessLevel.CLIENT_ADMIN;
   }>;
 };
 

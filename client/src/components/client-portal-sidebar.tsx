@@ -9,6 +9,9 @@ import {
   Building2,
   ClipboardCheck,
   LifeBuoy,
+  PackageOpen,
+  Activity,
+  Users,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -32,6 +35,7 @@ interface ClientInfo {
   companyName: string;
   displayName: string | null;
   accessLevel: string;
+  capabilities?: { viewActivity?: boolean };
 }
 
 interface DashboardData {
@@ -43,8 +47,10 @@ interface DashboardData {
 
 const mainNavItems = [
   { title: "Dashboard", url: "/portal", icon: LayoutDashboard },
+  { title: "Client Account", url: "/portal/account", icon: Users },
   { title: "Projects", url: "/portal/projects", icon: FolderKanban },
   { title: "Tasks", url: "/portal/tasks", icon: CheckSquare },
+  { title: "Asset Library", url: "/portal/assets", icon: PackageOpen },
 ];
 
 export function ClientPortalSidebar() {
@@ -101,6 +107,13 @@ export function ClientPortalSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {dashboardData?.clients?.some((client) => client.capabilities?.viewActivity) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActiveRoute("/portal/activity")}>
+                    <Link href="/portal/activity" data-testid="nav-portal-activity"><Activity className="h-4 w-4" /><span>Activity</span></Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               {crmFlags.approvals && (
                 <SidebarMenuItem>
                   <SidebarMenuButton

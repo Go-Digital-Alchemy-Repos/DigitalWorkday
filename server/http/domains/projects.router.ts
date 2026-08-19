@@ -40,6 +40,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { createApiRouter } from "../routerFactory";
+import { blockClientUsers } from "../../middleware/clientAccess";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import {
@@ -96,6 +97,8 @@ import {
 import { evaluateAutomation, type AutomationEvent } from "../../features/automation/clientStageAutomation.service";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
+router.use("/projects", blockClientUsers);
+router.use("/sections", blockClientUsers);
 
 function getProjectUpdateDescription(updates: Record<string, unknown>): string | null {
   const descriptions: string[] = [];

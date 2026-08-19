@@ -1,4 +1,5 @@
 import { createApiRouter } from "../routerFactory";
+import { blockClientUsers } from "../../middleware/clientAccess";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
 import { getCurrentUserId, getCurrentWorkspaceId } from "../helpers";
@@ -21,6 +22,7 @@ const router = createApiRouter({
   policy: "authTenant",
   skipEnvelope: true,
 });
+router.use("/tasks", blockClientUsers);
 
 router.get("/tasks/:taskId/comments", async (req, res) => {
   try {

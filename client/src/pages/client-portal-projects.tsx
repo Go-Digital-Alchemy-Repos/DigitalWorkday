@@ -1,10 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText, toPlainText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
   FolderKanban,
@@ -12,6 +15,7 @@ import {
   AlertCircle,
   ArrowRight,
   CheckSquare,
+  Plus,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -28,6 +32,7 @@ interface ClientInfo {
   companyName: string;
   displayName: string | null;
   accessLevel: string;
+  capabilities?: { manageProjects?: boolean };
 }
 
 interface DashboardData {
@@ -54,6 +59,9 @@ function getStatusColor(status: string) {
 
 export default function ClientPortalProjects() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newProject, setNewProject] = useState({ name: "", description: "", clientId: "" });
+  const { toast } = useToast();
   
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: queryKeys.portal.dashboard,
@@ -75,6 +83,15 @@ export default function ClientPortalProjects() {
     const client = data?.clients.find((c) => c.id === clientId);
     return client?.displayName || client?.companyName || "Unknown";
   };
+  const adminClients = data?.clients.filter((client) => client.capabilities?.manageProjects) || [];
+  const createProject = useMutation({
+    mutationFn: async () => {
+      const clientId = newProject.clientId || adminClients[0]?.id;
+      return (await apiRequest("POST", `/api/client-portal/clients/${clientId}/projects`, { name: newProject.name, description: newProject.description || null })).json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard }); setShowCreate(false); setNewProject({ name: "", description: "", clientId: "" }); toast({ title: "Project created" }); },
+    onError: (error: Error) => toast({ title: "Unable to create project", description: error.message, variant: "destructive" }),
+  });
 
   if (isLoading) {
     return (
@@ -119,6 +136,8 @@ export default function ClientPortalProjects() {
             View and track all your projects
           </p>
         </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+        {adminClients.length > 0 && <Button onClick={() => setShowCreate(!showCreate)}><Plus className="h-4 w-4 mr-2" />New project</Button>}
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -129,7 +148,10 @@ export default function ClientPortalProjects() {
             data-testid="input-search-projects"
           />
         </div>
+        </div>
       </div>
+
+      {showCreate && <Card className="mb-5"><CardHeader><CardTitle className="text-base">Create project</CardTitle></CardHeader><CardContent className="grid sm:grid-cols-3 gap-3"><Input placeholder="Project name" value={newProject.name} onChange={(event) => setNewProject((draft) => ({ ...draft, name: event.target.value }))} /><Input placeholder="Description" value={newProject.description} onChange={(event) => setNewProject((draft) => ({ ...draft, description: event.target.value }))} />{adminClients.length > 1 ? <select className="h-10 rounded-md border bg-background px-3" value={newProject.clientId} onChange={(event) => setNewProject((draft) => ({ ...draft, clientId: event.target.value }))}><option value="">Select Client</option>{adminClients.map((client) => <option key={client.id} value={client.id}>{client.displayName || client.companyName}</option>)}</select> : <Button onClick={() => createProject.mutate()} disabled={!newProject.name.trim() || createProject.isPending}>Create</Button>}{adminClients.length > 1 && <Button onClick={() => createProject.mutate()} disabled={!newProject.name.trim() || !newProject.clientId || createProject.isPending}>Create</Button>}</CardContent></Card>}
 
       {filteredProjects.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

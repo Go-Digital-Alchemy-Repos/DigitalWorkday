@@ -1,4 +1,5 @@
 import { createApiRouter } from "../routerFactory";
+import { blockClientUsers } from "../../middleware/clientAccess";
 import { z } from "zod";
 import { storage } from "../../storage";
 import { AppError, handleRouteError, sendError, validateBody } from "../../lib/errors";
@@ -31,6 +32,8 @@ const router = createApiRouter({
   policy: "authTenant",
   skipEnvelope: true,
 });
+router.use("/tasks", blockClientUsers);
+router.use("/subtasks", blockClientUsers);
 
 function normalizeReviewStatus(status: string | null | undefined): string | null {
   if (!status) return null;

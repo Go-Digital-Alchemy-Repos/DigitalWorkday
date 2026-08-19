@@ -302,7 +302,7 @@ describe("client portal invitations", () => {
       .set("X-Forwarded-Proto", "https")
       .send({
         contactId: contact.id,
-        accessLevel: ClientAccessLevel.VIEWER,
+        accessLevel: ClientAccessLevel.COLLABORATOR,
         accessClientIds: ["client-1", "child-1", "not-a-child"],
       });
 
@@ -413,7 +413,7 @@ describe("client portal invitations", () => {
         firstName: "New",
         lastName: "Contact",
         setupMethod: "invite_link",
-        accessLevel: ClientAccessLevel.VIEWER,
+        accessLevel: ClientAccessLevel.COLLABORATOR,
       });
 
     expect(response.status).toBe(201);
@@ -440,7 +440,7 @@ describe("client portal invitations", () => {
         lastName: "Portal",
         setupMethod: "create_now",
         password: "password123",
-        accessLevel: ClientAccessLevel.VIEWER,
+        accessLevel: ClientAccessLevel.COLLABORATOR,
       });
 
     expect(response.status).toBe(201);
@@ -457,7 +457,7 @@ describe("client portal invitations", () => {
       "workspace-1",
       "client-1",
       "portal-user-1",
-      { entries: [{ clientId: "client-1", accessLevel: ClientAccessLevel.VIEWER }] },
+      { entries: [{ clientId: "client-1", accessLevel: ClientAccessLevel.COLLABORATOR }] },
     );
     expect(storageMocks.createInvitation).not.toHaveBeenCalled();
     expect(storageMocks.createClientInvite).not.toHaveBeenCalled();

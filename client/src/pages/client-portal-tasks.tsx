@@ -234,7 +234,7 @@ export default function ClientPortalTasks() {
                       data-testid={`task-row-${task.id}`}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium">{task.title}</div>
+                        <Link href={`/portal/tasks/${task.id}`} className="font-medium hover:underline">{task.title}</Link>
                         {task.description && (
                           <div className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
                             {task.description}

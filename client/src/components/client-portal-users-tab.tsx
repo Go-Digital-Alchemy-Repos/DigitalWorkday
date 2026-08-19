@@ -99,7 +99,7 @@ interface PortalAccessScopeEntry {
   access: {
     clientId: string;
     userId: string;
-    accessLevel: "viewer" | "collaborator";
+    accessLevel: "collaborator" | "client_admin";
   } | null;
   relationship: "current" | "child" | "descendant" | "other";
 }
@@ -120,7 +120,7 @@ const createUserSchema = z.object({
   setupMethod: z.enum(["invite_email", "invite_link", "create_now"]),
   password: z.string().optional().default(""),
   confirmPassword: z.string().optional().default(""),
-  accessLevel: z.enum(["viewer", "collaborator"]),
+  accessLevel: z.enum(["collaborator", "client_admin"]),
 }).refine((data) => data.setupMethod !== "create_now" || data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -134,7 +134,7 @@ type CreateUserFormData = z.infer<typeof createUserSchema>;
 const editUserSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().optional().default(""),
-  accessLevel: z.enum(["viewer", "collaborator"]),
+  accessLevel: z.enum(["collaborator", "client_admin"]),
   password: z.string().optional().default(""),
   confirmPassword: z.string().optional().default(""),
 }).refine((data) => {
@@ -168,7 +168,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const [userToRevoke, setUserToRevoke] = useState<ClientUser | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
-  const [accessScopeDraft, setAccessScopeDraft] = useState<Record<string, "viewer" | "collaborator" | null>>({});
+  const [accessScopeDraft, setAccessScopeDraft] = useState<Record<string, "collaborator" | "client_admin" | null>>({});
   const [createAccessClientIds, setCreateAccessClientIds] = useState<string[]>([clientId]);
   const [lastInviteLink, setLastInviteLink] = useState<{ email: string; registrationUrl: string; emailSent: boolean; emailError?: string | null } | null>(null);
 
@@ -181,7 +181,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       setupMethod: "invite_email",
       password: "",
       confirmPassword: "",
-      accessLevel: "viewer",
+      accessLevel: "collaborator",
     },
   });
 
@@ -190,7 +190,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     defaultValues: {
       firstName: "",
       lastName: "",
-      accessLevel: "viewer",
+      accessLevel: "collaborator",
       password: "",
       confirmPassword: "",
     },
@@ -350,7 +350,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       setupMethod: "invite_email",
       password: "",
       confirmPassword: "",
-      accessLevel: "viewer",
+      accessLevel: "collaborator",
     });
     setShowPassword(false);
     setCreateAccessClientIds([clientId]);
@@ -365,7 +365,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       setupMethod: "invite_email",
       password: "",
       confirmPassword: "",
-      accessLevel: "viewer",
+      accessLevel: "collaborator",
     });
     setShowPassword(false);
     setCreateAccessClientIds([clientId]);
@@ -379,7 +379,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     editForm.reset({
       firstName: portalUser.user.firstName || portalUser.user.name?.split(" ")[0] || "",
       lastName: portalUser.user.lastName || portalUser.user.name?.split(" ").slice(1).join(" ") || "",
-      accessLevel: portalUser.accessLevel as "viewer" | "collaborator",
+      accessLevel: portalUser.accessLevel as "collaborator" | "client_admin",
       password: "",
       confirmPassword: "",
     });
@@ -401,7 +401,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     setCreateAccessClientIds((current) => (current.length > 0 ? current : [currentClientId]));
   }, [addUserOpen, accessScopeOptions, clientId]);
 
-  const resolvedAccessScopeDraft = accessScopeEntries.reduce<Record<string, "viewer" | "collaborator" | null>>((acc, entry) => {
+  const resolvedAccessScopeDraft = accessScopeEntries.reduce<Record<string, "collaborator" | "client_admin" | null>>((acc, entry) => {
     acc[entry.client.id] = Object.prototype.hasOwnProperty.call(accessScopeDraft, entry.client.id)
       ? accessScopeDraft[entry.client.id]
       : entry.access?.accessLevel || null;
@@ -411,11 +411,11 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const toggleScopeClient = (entry: PortalAccessScopeEntry, checked: boolean) => {
     setAccessScopeDraft((current) => ({
       ...current,
-      [entry.client.id]: checked ? entry.access?.accessLevel || "viewer" : null,
+      [entry.client.id]: checked ? (entry.access?.accessLevel === "client_admin" ? "client_admin" : "collaborator") : null,
     }));
   };
 
-  const updateScopeAccessLevel = (entry: PortalAccessScopeEntry, accessLevel: "viewer" | "collaborator") => {
+  const updateScopeAccessLevel = (entry: PortalAccessScopeEntry, accessLevel: "collaborator" | "client_admin") => {
     setAccessScopeDraft((current) => ({
       ...current,
       [entry.client.id]: accessLevel,
@@ -450,11 +450,11 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const getAccessLevelBadge = (level: string) => {
     switch (level) {
+      case "client_admin":
+        return <Badge variant="default">Client Admin</Badge>;
       case "collaborator":
-        return <Badge variant="default">Collaborator</Badge>;
-      case "viewer":
       default:
-        return <Badge variant="secondary">Viewer</Badge>;
+        return <Badge variant="secondary">Collaborator</Badge>;
     }
   };
 
@@ -813,22 +813,22 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="viewer">
-                              <div className="flex items-center gap-2">
-                                <Eye className="h-4 w-4" />
-                                <span>Viewer - View projects and tasks only</span>
-                              </div>
-                            </SelectItem>
                             <SelectItem value="collaborator">
                               <div className="flex items-center gap-2">
                                 <Edit3 className="h-4 w-4" />
-                                <span>Collaborator - Add comments and feedback</span>
+                                <span>Collaborator - Work across the client portal</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="client_admin">
+                              <div className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                <span>Client Admin - Manage projects and portal users</span>
                               </div>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Viewers can see projects and tasks. Collaborators can also add comments.
+                          Client Admins can also manage projects, contacts, and portal users.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -991,22 +991,22 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="viewer">
-                              <div className="flex items-center gap-2">
-                                <Eye className="h-4 w-4" />
-                                <span>Viewer - View projects and tasks only</span>
-                              </div>
-                            </SelectItem>
                             <SelectItem value="collaborator">
                               <div className="flex items-center gap-2">
                                 <Edit3 className="h-4 w-4" />
-                                <span>Collaborator - Add comments and feedback</span>
+                                <span>Collaborator - Work across the client portal</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="client_admin">
+                              <div className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                <span>Client Admin - Manage projects and portal users</span>
                               </div>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Viewers can see projects and tasks. Collaborators can also add comments.
+                          Client Admins can also manage projects, contacts, and portal users.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -1052,16 +1052,16 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                                 </div>
                               </div>
                               <Select
-                                value={selectedAccess || "viewer"}
+                                value={selectedAccess || "collaborator"}
                                 disabled={!selectedAccess}
-                                onValueChange={(value) => updateScopeAccessLevel(entry, value as "viewer" | "collaborator")}
+                                onValueChange={(value) => updateScopeAccessLevel(entry, value as "collaborator" | "client_admin")}
                               >
                                 <SelectTrigger className="h-8 w-36" data-testid={`select-portal-scope-level-${entry.client.id}`}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="viewer">Viewer</SelectItem>
                                   <SelectItem value="collaborator">Collaborator</SelectItem>
+                                  <SelectItem value="client_admin">Client Admin</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>

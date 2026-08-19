@@ -1334,9 +1334,9 @@ export function setupTenantInviteEndpoints(app: Express): void {
           });
         }
 
-        const accessLevel = clientInviteAudit?.roleHint === ClientAccessLevel.COLLABORATOR
-          ? ClientAccessLevel.COLLABORATOR
-          : ClientAccessLevel.VIEWER;
+        const accessLevel = clientInviteAudit?.roleHint === ClientAccessLevel.CLIENT_ADMIN
+          ? ClientAccessLevel.CLIENT_ADMIN
+          : ClientAccessLevel.COLLABORATOR;
         const auditAccessClientIds: string[] = Array.isArray(clientInviteAudit?.accessClientIds) && clientInviteAudit.accessClientIds.length > 0
           ? clientInviteAudit.accessClientIds
           : [invite.clientId];
@@ -1354,6 +1354,7 @@ export function setupTenantInviteEndpoints(app: Express): void {
               clientId: scopedClientId,
               userId: user.id,
               accessLevel,
+              status: "active",
             });
           }
         }

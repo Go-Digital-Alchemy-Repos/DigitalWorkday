@@ -1,4 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { queryKeys } from "@/lib/queryKeys";
 import { useParams, Link } from "wouter";
 import { RichTextRenderer, getPreviewText } from "@/components/richtext";
@@ -6,7 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CheckSquare,
   AlertCircle,
@@ -15,6 +20,7 @@ import {
   MessageCircle,
   FolderKanban,
   Clock,
+  Plus,
 } from "lucide-react";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
 
@@ -48,6 +54,7 @@ interface ProjectData {
   tasks: TaskInfo[];
   taskCount: number;
   completedCount: number;
+  capabilities?: { manageProjects?: boolean };
 }
 
 function getStatusColor(status: string) {
@@ -100,10 +107,22 @@ function getDueDateClass(dateStr: string | null) {
 
 export default function ClientPortalProjectDetail() {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  const [newTaskTitle, setNewTaskTitle] = useState("");
 
   const { data, isLoading, error } = useQuery<ProjectData>({
     queryKey: queryKeys.portal.projectDetail(id),
     enabled: !!id,
+  });
+  const createTask = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/client-portal/clients/${data!.clientId}/projects/${id}/tasks`, { title: newTaskTitle })).json(),
+    onSuccess: () => { setNewTaskTitle(""); queryClient.invalidateQueries({ queryKey: queryKeys.portal.projectDetail(id) }); queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard }); toast({ title: "Task created" }); },
+    onError: (error: Error) => toast({ title: "Unable to create task", description: error.message, variant: "destructive" }),
+  });
+  const updateProject = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => (await apiRequest("PATCH", `/api/client-portal/clients/${data!.clientId}/projects/${id}`, body)).json(),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.portal.projectDetail(id) }); queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard }); },
+    onError: (error: Error) => toast({ title: "Unable to update project", description: error.message, variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -181,11 +200,11 @@ export default function ClientPortalProjectDetail() {
               />
             )}
           </div>
-          <Badge variant="outline" className={getStatusColor(project.status)}>
-            {project.status.replace(/_/g, ' ')}
-          </Badge>
+          {project.capabilities?.manageProjects ? <div className="flex gap-2"><Button variant="outline" onClick={() => { const name = window.prompt("Project name", project.name); if (name?.trim()) { const description = window.prompt("Project description", project.description || ""); updateProject.mutate({ name: name.trim(), description: description || null }); } }}>Edit project</Button><Select value={project.status} onValueChange={(status) => updateProject.mutate({ status })}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="on_hold">On hold</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent></Select></div> : <Badge variant="outline" className={getStatusColor(project.status)}>{project.status.replace(/_/g, ' ')}</Badge>}
         </div>
       </div>
+
+      <Card className="mb-6"><CardContent className="p-4 flex gap-2"><Input placeholder="Create a task in this project" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} /><Button onClick={() => createTask.mutate()} disabled={!newTaskTitle.trim() || createTask.isPending}><Plus className="h-4 w-4 mr-2" />Add task</Button></CardContent></Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
@@ -284,7 +303,7 @@ function TaskList({ tasks, emptyMessage = "No tasks" }: { tasks: TaskInfo[]; emp
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <div className="font-medium">{task.title}</div>
+                <Link href={`/portal/tasks/${task.id}`} className="font-medium hover:underline">{task.title}</Link>
                 {task.description && (
                   <div className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
                     {getPreviewText(task.description as string)}

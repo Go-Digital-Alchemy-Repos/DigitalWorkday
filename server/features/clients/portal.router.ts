@@ -33,7 +33,7 @@ const router = Router();
 
 const portalAccessEntrySchema = z.object({
   clientId: z.string().min(1),
-  accessLevel: z.enum([ClientAccessLevel.VIEWER, ClientAccessLevel.COLLABORATOR]).default(ClientAccessLevel.VIEWER),
+  accessLevel: z.enum([ClientAccessLevel.COLLABORATOR, ClientAccessLevel.CLIENT_ADMIN]).default(ClientAccessLevel.COLLABORATOR),
 });
 
 const portalAccessScopeSchema = z.object({
@@ -46,7 +46,7 @@ const portalUserSetupSchema = z.object({
   lastName: z.string().optional().default(""),
   password: z.string().optional().default(""),
   setupMethod: z.enum(["invite_email", "invite_link", "create_now"]).default("invite_email"),
-  accessLevel: z.enum([ClientAccessLevel.VIEWER, ClientAccessLevel.COLLABORATOR]).default(ClientAccessLevel.VIEWER),
+  accessLevel: z.enum([ClientAccessLevel.COLLABORATOR, ClientAccessLevel.CLIENT_ADMIN]).default(ClientAccessLevel.COLLABORATOR),
   accessClientIds: z.array(z.string()).optional(),
 }).refine((data) => data.setupMethod !== "create_now" || data.password.length >= 8, {
   message: "Password must be at least 8 characters when creating the account now",
@@ -164,7 +164,7 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId } = req.params;
-    const { contactId, accessLevel = ClientAccessLevel.VIEWER, sendEmail = true } = req.body;
+    const { contactId, accessLevel = ClientAccessLevel.COLLABORATOR, sendEmail = true } = req.body;
     
     // Validate request
     if (!contactId) {
@@ -526,7 +526,7 @@ router.post("/:clientId/users/create", requireTenantAdminAccess, async (req, res
       firstName: z.string().min(1, "First name is required"),
       lastName: z.string().optional().default(""),
       password: z.string().min(8, "Password must be at least 8 characters"),
-      accessLevel: z.enum(["viewer", "collaborator"]).default("viewer"),
+      accessLevel: z.enum(["collaborator", "client_admin"]).default("collaborator"),
       accessClientIds: z.array(z.string()).optional(),
     });
 
@@ -643,7 +643,7 @@ router.patch("/:clientId/users/:userId", requireTenantAdminAccess, async (req, r
     const { clientId, userId } = req.params;
 
     const schema = z.object({
-      accessLevel: z.enum(["viewer", "collaborator"]).optional(),
+      accessLevel: z.enum(["collaborator", "client_admin"]).optional(),
       firstName: z.string().min(1).optional(),
       lastName: z.string().optional(),
       password: z.string().min(8, "Password must be at least 8 characters").optional(),
@@ -829,9 +829,9 @@ router.post("/register/complete", async (req, res) => {
     });
     
     // Create client user access
-    const accessLevel = (invite.roleHint === "collaborator" 
-      ? ClientAccessLevel.COLLABORATOR 
-      : ClientAccessLevel.VIEWER) as "viewer" | "collaborator";
+    const accessLevel = (invite.roleHint === ClientAccessLevel.CLIENT_ADMIN
+      ? ClientAccessLevel.CLIENT_ADMIN
+      : ClientAccessLevel.COLLABORATOR) as "collaborator" | "client_admin";
     
     const inviteAccessClientIds: string[] = Array.isArray(invite.accessClientIds) && invite.accessClientIds.length > 0
       ? invite.accessClientIds
@@ -849,6 +849,7 @@ router.post("/register/complete", async (req, res) => {
         clientId: scopedClientId,
         userId: user.id,
         accessLevel,
+        status: "active",
       });
     }
     

@@ -5,8 +5,17 @@ import type { Request, Response, NextFunction } from "express";
 import { isClientUser, getClientUserAccessibleClients } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { filterCommentsForPortalUser } from "../../services/customerAccessPermissions";
+import { getPortalCapabilities, normalizePortalAccessLevel } from "../../services/portalAuthorization";
 
 const router = Router();
+
+function isCompletedTaskStatus(status: string | null | undefined) {
+  return status === "completed" || status === "done";
+}
+
+function portalTaskStatus(status: string) {
+  return status === "done" ? "completed" : status;
+}
 
 // Middleware to ensure only client users can access these routes
 function requireClientRole(req: Request, res: Response, next: NextFunction) {
@@ -39,12 +48,14 @@ router.get("/dashboard", async (req, res) => {
     }
     
     // Get all accessible clients
-    const clientsData = await storage.getClientsForUser(userId);
+    const clientsData = (await storage.getClientsForUser(userId)).filter((cd) => cd.access.status !== "suspended");
     const clients = clientsData.map(cd => ({
       id: cd.client.id,
       companyName: cd.client.companyName,
       displayName: cd.client.displayName,
-      accessLevel: cd.access.accessLevel,
+      accessLevel: normalizePortalAccessLevel(cd.access.accessLevel),
+      status: cd.access.status,
+      capabilities: getPortalCapabilities(cd.access.accessLevel),
     }));
     
     const allProjects: any[] = [];
@@ -71,7 +82,7 @@ router.get("/dashboard", async (req, res) => {
             id: task.id,
             title: task.title,
             description: task.description,
-            status: task.status,
+            status: portalTaskStatus(task.status),
             priority: task.priority,
             dueDate: task.dueDate,
             projectId: task.projectId,
@@ -96,12 +107,12 @@ router.get("/dashboard", async (req, res) => {
       totalProjects: allProjects.length,
       activeProjects: allProjects.filter(p => p.status === "active" || p.status === "in_progress").length,
       totalTasks: allTasks.length,
-      completedTasks: allTasks.filter(t => t.status === "completed").length,
-      pendingTasks: allTasks.filter(t => t.status !== "completed").length,
+      completedTasks: allTasks.filter(t => isCompletedTaskStatus(t.status)).length,
+      pendingTasks: allTasks.filter(t => !isCompletedTaskStatus(t.status)).length,
       overdueTasks: allTasks.filter(t => 
         t.dueDate && 
         new Date(t.dueDate) < now && 
-        t.status !== "completed"
+        !isCompletedTaskStatus(t.status)
       ).length,
     };
     
@@ -134,7 +145,7 @@ router.get("/projects", async (req, res) => {
         const tasks = await storage.getTasksByProject(project.id);
         const visibleTasks = tasks.filter(t => (t as any).visibility !== 'private');
         const taskCount = visibleTasks.length;
-        const completedCount = visibleTasks.filter(t => t.status === "completed").length;
+        const completedCount = visibleTasks.filter(t => isCompletedTaskStatus(t.status)).length;
         
         allProjects.push({
           id: project.id,
@@ -173,7 +184,7 @@ router.get("/projects/:projectId", async (req, res) => {
     }
     
     const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-    if (!access) {
+    if (!access || access.status === "suspended") {
       throw AppError.forbidden("Access denied");
     }
     
@@ -185,9 +196,11 @@ router.get("/projects/:projectId", async (req, res) => {
       id: task.id,
       title: task.title,
       description: task.description,
-      status: task.status,
+      status: portalTaskStatus(task.status),
       priority: task.priority,
       dueDate: task.dueDate,
+      startDate: task.startDate,
+      estimateMinutes: task.estimateMinutes,
       sectionId: task.sectionId,
       section: task.section,
       assignees: task.assignees?.map(a => ({
@@ -196,7 +209,11 @@ router.get("/projects/:projectId", async (req, res) => {
         avatarUrl: a.user?.avatarUrl,
       })),
       subtasks: task.subtasks,
-      tags: task.tags,
+      tags: task.tags?.map((item) => ({
+        id: item.tag?.id || item.tagId,
+        name: item.tag?.name || "Tag",
+        color: item.tag?.color,
+      })),
     }));
     
     res.json({
@@ -207,9 +224,11 @@ router.get("/projects/:projectId", async (req, res) => {
       createdAt: project.createdAt,
       clientId: project.clientId,
       clientName: client?.companyName,
+      accessLevel: normalizePortalAccessLevel(access.accessLevel),
+      capabilities: getPortalCapabilities(access.accessLevel),
       tasks: tasksForClient,
       taskCount: tasks.length,
-      completedCount: tasks.filter(t => t.status === "completed").length,
+      completedCount: tasks.filter(t => isCompletedTaskStatus(t.status)).length,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /projects/:projectId", req);
@@ -236,13 +255,13 @@ router.get("/tasks", async (req, res) => {
         
         for (const task of tasks) {
           if ((task as any).visibility === 'private') continue;
-          if (status && task.status !== status) continue;
+          if (status && portalTaskStatus(task.status) !== status) continue;
           
           allTasks.push({
             id: task.id,
             title: task.title,
             description: task.description,
-            status: task.status,
+            status: portalTaskStatus(task.status),
             priority: task.priority,
             dueDate: task.dueDate,
             projectId: project.id,
@@ -297,7 +316,7 @@ router.get("/tasks/:taskId", async (req, res) => {
     }
     
     const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-    if (!access) {
+    if (!access || access.status === "suspended") {
       throw AppError.forbidden("Access denied");
     }
     
@@ -310,11 +329,16 @@ router.get("/tasks/:taskId", async (req, res) => {
       id: task.id,
       title: task.title,
       description: task.description,
-      status: task.status,
+      status: portalTaskStatus(task.status),
       priority: task.priority,
       dueDate: task.dueDate,
+      startDate: task.startDate,
+      estimateMinutes: task.estimateMinutes,
       projectId: task.projectId,
       projectName: project.name,
+      clientId: project.clientId,
+      accessLevel: normalizePortalAccessLevel(access.accessLevel),
+      capabilities: getPortalCapabilities(access.accessLevel),
       sectionId: task.sectionId,
       section: task.section,
       assignees: task.assignees?.map(a => ({
@@ -373,9 +397,7 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
       throw AppError.forbidden("Access denied");
     }
     
-    if (access.accessLevel !== "collaborator") {
-      throw AppError.forbidden("Collaborator access required to add comments");
-    }
+    if (access.status === "suspended") throw AppError.forbidden("Active client access is required");
     
     const comment = await storage.createComment({
       taskId,
@@ -411,7 +433,7 @@ router.get("/profile", async (req, res) => {
       throw AppError.notFound("User");
     }
     
-    const clientsAccess = await storage.getClientsForUser(userId);
+    const clientsAccess = (await storage.getClientsForUser(userId)).filter((ca) => ca.access.status !== "suspended");
     
     res.json({
       id: user.id,
@@ -424,7 +446,9 @@ router.get("/profile", async (req, res) => {
         id: ca.client.id,
         companyName: ca.client.companyName,
         displayName: ca.client.displayName,
-        accessLevel: ca.access.accessLevel,
+        accessLevel: normalizePortalAccessLevel(ca.access.accessLevel),
+        status: ca.access.status,
+        capabilities: getPortalCapabilities(ca.access.accessLevel),
       })),
     });
   } catch (error) {

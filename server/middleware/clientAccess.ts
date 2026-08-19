@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { UserRole } from "@shared/schema";
+import { ClientAccessStatus } from "@shared/schema";
 
 // Check if the current user is a client user
 export function isClientUser(req: Request): boolean {
@@ -10,7 +11,9 @@ export function isClientUser(req: Request): boolean {
 // Get the client IDs that a client user has access to
 export async function getClientUserAccessibleClients(userId: string): Promise<string[]> {
   const clientsAccess = await storage.getClientsForUser(userId);
-  return clientsAccess.map(ca => ca.client.id);
+  return clientsAccess
+    .filter((ca) => ca.access.status !== ClientAccessStatus.SUSPENDED)
+    .map(ca => ca.client.id);
 }
 
 // Middleware to restrict client users to only their accessible clients
@@ -35,7 +38,7 @@ export function requireClientAccess(
       // Check if client user has access to this client
       const access = await storage.getClientUserAccessByUserAndClient(user.id, clientId as string);
       
-      if (!access) {
+      if (!access || access.status === ClientAccessStatus.SUSPENDED) {
         return res.status(403).json({ 
           error: "Access denied",
           message: "You do not have access to this client"

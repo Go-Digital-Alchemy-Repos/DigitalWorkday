@@ -682,7 +682,7 @@ export default function ClientDetailPage() {
     mutationFn: async (contact: ClientContact) => {
       const res = await apiRequest("POST", `/api/clients/${clientId}/users/invite`, {
         contactId: contact.id,
-        accessLevel: "viewer",
+        accessLevel: "collaborator",
       });
       return res.json() as Promise<{
         message?: string;
@@ -743,7 +743,7 @@ export default function ClientDetailPage() {
         firstName,
         lastName,
         password,
-        accessLevel: "viewer",
+        accessLevel: "collaborator",
       });
       await res.json();
       return { email, password };

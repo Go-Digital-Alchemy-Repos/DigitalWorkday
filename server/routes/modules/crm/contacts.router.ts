@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { blockClientUsers } from "../../../middleware/clientAccess";
 import { z } from "zod";
 import { db } from "../../../db";
 import { eq, and, desc } from "drizzle-orm";
@@ -12,6 +13,8 @@ import {
 import { verifyClientTenancy } from "./crm.helpers";
 
 const router = Router();
+router.use("/crm/clients/:clientId/contacts", blockClientUsers);
+router.use("/crm/contacts", blockClientUsers);
 
 const crmContactCreateSchema = z.object({
   firstName: z.string().min(1).optional(),

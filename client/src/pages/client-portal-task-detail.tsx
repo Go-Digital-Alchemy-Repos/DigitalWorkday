@@ -1,0 +1,51 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "wouter";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { queryKeys } from "@/lib/queryKeys";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, CheckSquare, MessageCircle, Plus } from "lucide-react";
+
+type TaskDetail = {
+  id: string; title: string; description: string | null; status: string; priority: string; dueDate: string | null; startDate?: string | null; estimateMinutes?: number | null; clientId: string; projectId: string; projectName: string;
+  subtasks: Array<{ id: string; title: string; status: string; completed: boolean }>;
+  comments: Array<{ id: string; body: string; createdAt: string; user: { name: string | null } | null }>;
+  assignees: Array<{ id: string; name: string; avatarUrl?: string | null }>;
+  tags: Array<{ id: string; name: string; color?: string | null }>;
+};
+
+type TaskOption = { id: string; name: string; color?: string | null };
+
+export default function ClientPortalTaskDetail() {
+  const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  const [comment, setComment] = useState("");
+  const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [details, setDetails] = useState({ title: "", description: "", startDate: "", dueDate: "", estimateMinutes: "" });
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const queryKey = queryKeys.portal.taskDetail(id);
+  const taskQuery = useQuery<TaskDetail>({ queryKey, enabled: !!id });
+  const task = taskQuery.data;
+  useEffect(() => { if (task) { setDetails({ title: task.title, description: task.description || "", startDate: task.startDate?.slice(0, 10) || "", dueDate: task.dueDate?.slice(0, 10) || "", estimateMinutes: task.estimateMinutes == null ? "" : String(task.estimateMinutes) }); setAssigneeIds(task.assignees?.map((item) => item.id) || []); setTagIds(task.tags?.map((item) => item.id) || []); } }, [task]);
+  const assigneesQuery = useQuery<TaskOption[]>({ queryKey: task ? queryKeys.portal.projectAssignees(task.clientId, task.projectId) : ["portal-project-assignees", "disabled"], enabled: !!task, queryFn: async () => (await apiRequest("GET", `/api/client-portal/clients/${task!.clientId}/projects/${task!.projectId}/assignees`)).json() });
+  const tagsQuery = useQuery<TaskOption[]>({ queryKey: task ? queryKeys.portal.projectTags(task.clientId, task.projectId) : ["portal-project-tags", "disabled"], enabled: !!task, queryFn: async () => (await apiRequest("GET", `/api/client-portal/clients/${task!.clientId}/projects/${task!.projectId}/tags`)).json() });
+  const updateTask = useMutation({ mutationFn: async (body: Record<string, unknown>) => (await apiRequest("PATCH", `/api/client-portal/clients/${task!.clientId}/tasks/${id}`, body)).json(), onSuccess: () => { queryClient.invalidateQueries({ queryKey }); queryClient.invalidateQueries({ queryKey: queryKeys.portal.dashboard }); }, onError: (error: Error) => toast({ title: "Unable to update task", description: error.message, variant: "destructive" }) });
+  const addComment = useMutation({ mutationFn: async () => (await apiRequest("POST", `/api/client-portal/tasks/${id}/comments`, { body: comment })).json(), onSuccess: () => { setComment(""); queryClient.invalidateQueries({ queryKey }); }, onError: (error: Error) => toast({ title: "Unable to add comment", description: error.message, variant: "destructive" }) });
+  const addSubtask = useMutation({ mutationFn: async () => (await apiRequest("POST", `/api/client-portal/clients/${task!.clientId}/tasks/${id}/subtasks`, { title: subtaskTitle })).json(), onSuccess: () => { setSubtaskTitle(""); queryClient.invalidateQueries({ queryKey }); }, onError: (error: Error) => toast({ title: "Unable to add subtask", description: error.message, variant: "destructive" }) });
+  const updateSubtask = useMutation({ mutationFn: async ({ subtaskId, status }: { subtaskId: string; status: string }) => (await apiRequest("PATCH", `/api/client-portal/clients/${task!.clientId}/subtasks/${subtaskId}`, { status })).json(), onSuccess: () => queryClient.invalidateQueries({ queryKey }) });
+  if (taskQuery.isLoading) return <div className="p-6">Loading task…</div>;
+  if (!task) return <div className="p-6">Task not found.</div>;
+  return <div className="p-3 sm:p-6 overflow-y-auto h-full space-y-5"><Button variant="ghost" asChild><Link href={`/portal/projects/${task.projectId}`}><ArrowLeft className="h-4 w-4 mr-2" />Back to project</Link></Button>
+    <Card><CardHeader><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><CardTitle className="flex items-center gap-2"><CheckSquare className="h-5 w-5" />{task.title}</CardTitle><div className="flex gap-2"><Select value={task.status === "done" ? "completed" : task.status} onValueChange={(status) => updateTask.mutate({ status })}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todo">To do</SelectItem><SelectItem value="in_progress">In progress</SelectItem><SelectItem value="in_review">In review</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent></Select><Select value={task.priority} onValueChange={(priority) => updateTask.mutate({ priority })}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></div></div></CardHeader><CardContent className="space-y-3"><Input value={details.title} onChange={(event) => setDetails((draft) => ({ ...draft, title: event.target.value }))} /><Textarea value={details.description} onChange={(event) => setDetails((draft) => ({ ...draft, description: event.target.value }))} /><div className="grid sm:grid-cols-3 gap-3"><Input type="date" value={details.startDate} onChange={(event) => setDetails((draft) => ({ ...draft, startDate: event.target.value }))} /><Input type="date" value={details.dueDate} onChange={(event) => setDetails((draft) => ({ ...draft, dueDate: event.target.value }))} /><Input type="number" min="0" placeholder="Estimate (minutes)" value={details.estimateMinutes} onChange={(event) => setDetails((draft) => ({ ...draft, estimateMinutes: event.target.value }))} /></div><div className="grid sm:grid-cols-2 gap-4"><div><p className="text-sm font-medium mb-2">Assignees</p><div className="space-y-2 rounded-md border p-3">{assigneesQuery.data?.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><Checkbox checked={assigneeIds.includes(item.id)} onCheckedChange={(checked) => setAssigneeIds((current) => checked ? [...current, item.id] : current.filter((value) => value !== item.id))} />{item.name}</label>)}{!assigneesQuery.data?.length && <span className="text-sm text-muted-foreground">No available assignees</span>}</div></div><div><p className="text-sm font-medium mb-2">Tags</p><div className="space-y-2 rounded-md border p-3">{tagsQuery.data?.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><Checkbox checked={tagIds.includes(item.id)} onCheckedChange={(checked) => setTagIds((current) => checked ? [...current, item.id] : current.filter((value) => value !== item.id))} /><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color || "#6B7280" }} />{item.name}</label>)}{!tagsQuery.data?.length && <span className="text-sm text-muted-foreground">No available tags</span>}</div></div></div><Button onClick={() => updateTask.mutate({ title: details.title, description: details.description || null, startDate: details.startDate || null, dueDate: details.dueDate || null, estimateMinutes: details.estimateMinutes ? Number(details.estimateMinutes) : null, assigneeIds, tagIds })} disabled={!details.title.trim() || updateTask.isPending}>Save task details</Button></CardContent></Card>
+    <Card><CardHeader><CardTitle className="text-base">Subtasks</CardTitle></CardHeader><CardContent className="space-y-3"><div className="flex gap-2"><Input placeholder="New subtask" value={subtaskTitle} onChange={(event) => setSubtaskTitle(event.target.value)} /><Button onClick={() => addSubtask.mutate()} disabled={!subtaskTitle.trim()}><Plus className="h-4 w-4 mr-2" />Add</Button></div>{task.subtasks?.map((subtask) => <div key={subtask.id} className="flex items-center justify-between rounded-md border p-3"><span>{subtask.title}</span><Select value={subtask.status === "done" ? "completed" : subtask.status} onValueChange={(status) => updateSubtask.mutate({ subtaskId: subtask.id, status })}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todo">To do</SelectItem><SelectItem value="in_progress">In progress</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent></Select></div>)}</CardContent></Card>
+    <Card><CardHeader><CardTitle className="text-base flex items-center gap-2"><MessageCircle className="h-4 w-4" />Comments</CardTitle></CardHeader><CardContent className="space-y-3"><Textarea placeholder="Leave a client-visible comment" value={comment} onChange={(event) => setComment(event.target.value)} /><Button onClick={() => addComment.mutate()} disabled={!comment.trim()}>Post comment</Button>{task.comments?.map((item) => <div key={item.id} className="rounded-md border p-3"><div className="flex gap-2 items-center mb-1"><span className="text-sm font-medium">{item.user?.name || "Portal user"}</span><Badge variant="outline">Client visible</Badge></div><p className="text-sm whitespace-pre-wrap">{item.body}</p></div>)}</CardContent></Card>
+  </div>;
+}

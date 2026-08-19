@@ -60,6 +60,7 @@ export const queryKeys = {
     projects: ["/api/client-portal/projects"] as const,
     projectDetail: (id: string) => ["/api/client-portal/projects", id] as const,
     tasks: ["/api/client-portal/tasks"] as const,
+    taskDetail: (id: string) => ["/api/client-portal/tasks", id] as const,
     supportTicketsAll: ["/api/v1/portal/support/tickets"] as const,
     supportTickets: (status?: string) =>
       ["/api/v1/portal/support/tickets", { status: status !== "all" ? status : undefined }] as const,
@@ -69,6 +70,16 @@ export const queryKeys = {
     messageTemplates: ["/api/crm/portal/message-templates"] as const,
     conversations: ["/api/crm/portal/conversations"] as const,
     conversationMessages: (id: string) => ["/api/crm/conversations", id, "messages"] as const,
+    clientAccount: (clientId: string) => ["/api/client-portal/clients", clientId] as const,
+    clientContacts: (clientId: string) => ["/api/client-portal/clients", clientId, "contacts"] as const,
+    clientDivisions: (clientId: string) => ["/api/client-portal/clients", clientId, "divisions"] as const,
+    clientUsers: (clientId: string) => ["/api/client-portal/clients", clientId, "users"] as const,
+    clientActivity: (clientId: string) => ["/api/client-portal/clients", clientId, "activity"] as const,
+    clientAssets: (clientId: string) => ["/api/client-portal/clients", clientId, "assets"] as const,
+    clientAssetFolders: (clientId: string) => ["/api/client-portal/clients", clientId, "assets", "folders"] as const,
+    clientDefaultAssets: (clientId: string) => ["/api/client-portal/clients", clientId, "assets", "defaults"] as const,
+    projectAssignees: (clientId: string, projectId: string) => ["/api/client-portal/clients", clientId, "projects", projectId, "assignees"] as const,
+    projectTags: (clientId: string, projectId: string) => ["/api/client-portal/clients", clientId, "projects", projectId, "tags"] as const,
   },
 
   activities: {

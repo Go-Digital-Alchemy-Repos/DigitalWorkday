@@ -29,6 +29,7 @@ import {
   taskAssignees,
   comments,
   workspaceMembers,
+  UserRole,
 } from "@shared/schema";
 import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
@@ -48,12 +49,16 @@ const requireAdmin: RequestHandler = (req, res, next) => {
   }
   next();
 };
+const requireInternalUser: RequestHandler = (req, res, next) => {
+  if (req.user?.role === UserRole.CLIENT) return res.status(403).json({ error: "This internal directory is not available in the client portal" });
+  next();
+};
 
 // ============================================
 // USER MANAGEMENT ENDPOINTS (Admin Only)
 // ============================================
 
-router.get("/users", async (req, res) => {
+router.get("/users", requireInternalUser, async (req, res) => {
   try {
     const currentUser = req.user as any;
     const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
@@ -76,7 +81,7 @@ router.get("/users", async (req, res) => {
   }
 });
 
-router.get("/tenant/users", async (req, res) => {
+router.get("/tenant/users", requireInternalUser, async (req, res) => {
   try {
     const currentUser = req.user as any;
     const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
@@ -156,7 +161,8 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
           workspaceId: resolvedWorkspaceId,
           clientId,
           userId: user.id,
-          accessLevel: "viewer",
+          accessLevel: "collaborator",
+          status: "active",
         });
       }
     }

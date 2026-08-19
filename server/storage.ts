@@ -2377,7 +2377,7 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
       
-      result.push({ client, access });
+      result.push({ client, access: { ...access, accessLevel: access.accessLevel === "viewer" ? "collaborator" : access.accessLevel } });
     }
     return result;
   }
