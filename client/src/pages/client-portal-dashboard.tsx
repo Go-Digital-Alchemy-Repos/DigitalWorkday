@@ -447,7 +447,7 @@ export default function ClientPortalDashboard() {
             </CardHeader>
             <CardContent className="px-5 pb-5 md:px-6 md:pb-6">
               {data?.projects && data.projects.length > 0 ? (
-                <div className="space-y-5">
+                <div className="space-y-2.5">
                   {data.projects.slice(0, 5).map((project, index) => (
                     <Link
                       key={project.id}
