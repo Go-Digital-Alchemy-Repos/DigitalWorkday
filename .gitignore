@@ -4,6 +4,7 @@ macos/DigitalWorkday/.build
 macos/DigitalWorkday/.swiftpm
 build
 .cache/
+/artifacts/
 .DS_Store
 server/public
 vite.config.ts.*
@@ -42,6 +43,7 @@ yarn-error.log*
 *.swp
 *.swo
 *.zip
+!client/public/downloads/macos/DigitalWorkday.zip
 
 # Root-level cache archive accidentally committed during workstation/project transfers
 /zitnan1z

@@ -210,7 +210,7 @@ function ChatToggleButton() {
   );
 }
 
-const MACOS_APP_DOWNLOAD_URL = "/downloads/macos/DigitalWorkday.zip";
+const MACOS_APP_DOWNLOAD_URL = "/downloads/macos/DigitalWorkday.zip?v=2026.08.20.1";
 
 function DesktopAppDownloadButton() {
   return (
@@ -223,7 +223,7 @@ function DesktopAppDownloadButton() {
     >
       <a href={MACOS_APP_DOWNLOAD_URL} download>
         <Download className="h-4 w-4" />
-        Download Desktop Tasks App
+        Download Desktop (MacOS) Tasks App
       </a>
     </Button>
   );

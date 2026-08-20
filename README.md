@@ -122,6 +122,8 @@ npm start
 - [Security & Tenancy](docs/SECURITY_TENANCY.md) - Multi-tenant isolation
 - [Regression Checklist](docs/REGRESSION_CHECKLIST.md) - Manual test plan
 - [Audit Findings](docs/AUDIT_FINDINGS.md) - Latest audit report
+- [Mac Desktop App](macos/DigitalWorkday/README.md) - Native client development and packaging
+- [Desktop App Handoff](docs/DESKTOP_APP_HANDOFF.md) - Architecture, workstation transfer, signing, notarization, and releases
 
 ## Testing
 

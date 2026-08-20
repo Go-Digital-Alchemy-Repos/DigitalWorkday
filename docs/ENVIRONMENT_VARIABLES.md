@@ -74,6 +74,7 @@ This document lists all environment variables used in the application, grouped b
 | Variable | Required | Secret | Description | Default |
 |----------|----------|--------|-------------|---------|
 | `AGREEMENT_GUARD_ENABLED` | No | No | Enable Phase 3C agreement gating | `false` |
+| `DESKTOP_API_ENABLED` | No | No | Enable the native Mac desktop API after migration `0054_desktop_companion.sql` is applied | `false` |
 | `BOOTSTRAP_TOKEN` | No | Yes | One-time token for super admin creation | - |
 
 ---

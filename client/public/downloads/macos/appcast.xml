@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>DigitalWorkday</title>
+        <item>
+            <title>1.2.2</title>
+            <pubDate>Thu, 20 Aug 2026 09:40:25 -0400</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://digitalworkday.ai/downloads/macos/DigitalWorkday.zip" length="3770001" type="application/octet-stream" sparkle:edSignature="fjMb2uyTdQZKC0SbT3aHYFmbNRh+AG/dSGASwKuaJd/epH6eqxw+8em71b9YYco7HFiJm55cyl9+j9vz1JVZBw=="/>
+        </item>
+    </channel>
+</rss>

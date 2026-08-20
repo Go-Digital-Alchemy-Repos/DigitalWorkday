@@ -1157,7 +1157,7 @@ router.post("/tasks/:taskId/childtasks", async (req, res) => {
 router.patch("/tasks/:id", async (req, res) => {
   const requestId = req.requestId || 'unknown';
   try {
-    const { expectedUpdatedAt, ...rawUpdates } = req.body ?? {};
+    const { expectedUpdatedAt, assigneeIds: requestedAssigneeIds, ...rawUpdates } = req.body ?? {};
     const data = validateBody(rawUpdates, updateTaskSchema, res);
     if (!data) return;
     
@@ -1221,6 +1221,26 @@ router.patch("/tasks/:id", async (req, res) => {
     
     if (!task) {
       return sendError(res, AppError.notFound("Task"), req);
+    }
+
+    if (requestedAssigneeIds !== undefined) {
+      if (!Array.isArray(requestedAssigneeIds) || requestedAssigneeIds.some((id) => typeof id !== "string")) {
+        return sendError(res, AppError.badRequest("assigneeIds must be an array of user IDs"), req);
+      }
+      const requested = Array.from(new Set(requestedAssigneeIds as string[]));
+      const allowedUsers = tenantId ? await storage.getUsersByTenant(tenantId) : [];
+      const allowedIDs = new Set(allowedUsers.filter((candidate) => candidate.isActive).map((candidate) => candidate.id));
+      if (tenantId && requested.some((id) => !allowedIDs.has(id))) {
+        return sendError(res, AppError.forbidden("One or more assignees are outside this workspace"), req);
+      }
+      const current = await storage.getTaskAssignees(task.id);
+      const currentIDs = new Set(current.map((assignee) => assignee.userId));
+      await Promise.all([
+        ...current.filter((assignee) => !requested.includes(assignee.userId))
+          .map((assignee) => storage.removeTaskAssignee(task.id, assignee.userId)),
+        ...requested.filter((id) => !currentIDs.has(id))
+          .map((id) => storage.addTaskAssignee({ taskId: task.id, userId: id, tenantId: tenantId || undefined })),
+      ]);
     }
 
     if (updateData.visibility === 'private' && config.features.enablePrivateTasks && tenantId) {

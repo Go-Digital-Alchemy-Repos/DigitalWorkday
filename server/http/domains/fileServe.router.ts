@@ -20,7 +20,7 @@ function getEffectiveTenantId(req: Request): string | null {
 }
 
 function isAuthenticated(req: Request): boolean {
-  return typeof req.isAuthenticated === "function" && req.isAuthenticated();
+  return Boolean(req.desktopAuth) || (typeof req.isAuthenticated === "function" && req.isAuthenticated());
 }
 
 function authorizeFileKey(req: Request, key: string): { ok: true; tenantId: string | null } | { ok: false; status: number; error: string } {

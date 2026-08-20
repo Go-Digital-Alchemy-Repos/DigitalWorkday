@@ -5,43 +5,95 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if store.bootstrap == nil {
-                SignInView()
-            } else {
-                NavigationSplitView {
-                    TaskListView()
-                        .navigationSplitViewColumnWidth(min: 300, ideal: 380)
-                } detail: {
-                    if let detail = store.taskDetail { TaskDetailView(detail: detail) }
-                    else { ContentUnavailableView("Select a Task", systemImage: "checklist", description: Text("Choose a task to work on it.")) }
-                }
-                .navigationSplitViewStyle(.balanced)
-            }
+            if store.bootstrap == nil { SignInView() }
+            else { commandCenter }
         }
         .overlay(alignment: .top) { if store.isStale || !store.connectivity.isOnline { OfflineBanner() } }
-        .alert("Digital Workday", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
-            Button("OK") { store.errorMessage = nil }
-        } message: { Text(store.errorMessage ?? "") }
+        .alert("Digital Workday", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) { Button("OK") { store.errorMessage = nil } } message: { Text(store.errorMessage ?? "") }
+        .onReceive(NotificationCenter.default.publisher(for: .dwRefresh)) { _ in Task { await store.refresh() } }
+        .onReceive(NotificationCenter.default.publisher(for: .dwCommandBar)) { _ in store.showingCommandBar = true }
+        .sheet(isPresented: Binding(get: { store.showingCommandBar }, set: { store.showingCommandBar = $0 })) { CommandBarView() }
+    }
+
+    private var commandCenter: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            VStack(spacing: 0) {
+                WorkspaceToolbarView()
+                if width >= 720 {
+                    HStack(spacing: 0) {
+                        NavigationRailView()
+                        if width >= 900 {
+                            primaryPane
+                                .frame(width: min(DWDesign.primaryPaneWidth, max(350, width * 0.36)))
+                            Divider()
+                            detailPane
+                        } else {
+                            primaryPane
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                } else {
+                    VStack(spacing: 0) { compactPane; CompactNavigationBar() }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+        }
+    }
+
+    @ViewBuilder private var primaryPane: some View {
+        switch store.destination {
+        case .today: TodayView()
+        case .tasks: TaskListView()
+        case .upcoming: UpcomingView()
+        case .notifications: NotificationInboxView()
+        }
+    }
+
+    private var detailPane: some View {
+        Group {
+            if let detail = store.taskDetail { TaskDetailView(detail: detail) }
+            else { EmptyTaskDetailView() }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder private var compactPane: some View {
+        if store.taskDetail != nil && store.destination == .tasks { detailPane }
+        else { primaryPane }
     }
 }
 
 private struct SignInView: View {
     @Environment(AppStore.self) private var store
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "checklist.checked").font(.system(size: 54)).foregroundStyle(.tint)
-            Text("Digital Workday").font(.largeTitle.bold())
-            Text("Your tasks, time, and updates in a focused Mac workspace.").multilineTextAlignment(.center).foregroundStyle(.secondary)
-            Button("Sign In in Browser") { Task { await store.signIn() } }.buttonStyle(.borderedProminent).controlSize(.large)
-            if store.isLoading { ProgressView() }
-        }.padding(40).frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack {
+            DWDesign.canvas.ignoresSafeArea()
+            VStack(spacing: 20) {
+                BrandLogoView(size: 88)
+                    .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
+                Text("Digital Workday").font(.system(.largeTitle, design: .rounded, weight: .bold))
+                Text("Your daily command center for tasks, time, and momentum.").multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 380)
+                Button("Sign In in Browser") { Task { await store.signIn() } }.buttonStyle(.borderedProminent).controlSize(.large)
+                if store.isLoading { ProgressView("Connecting…").controlSize(.small) }
+            }.padding(48)
+        }
+    }
+}
+
+private struct EmptyTaskDetailView: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "checklist").font(.system(size: 42)).foregroundStyle(DWDesign.accent)
+            Text("Plan the day, then do the work").font(.title2.bold())
+            Text("Choose a task to see its description, subtasks, comments, and time controls.").foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 360)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(DWDesign.canvas)
     }
 }
 
 private struct OfflineBanner: View {
     var body: some View {
-        Label("Offline snapshot — changes are disabled", systemImage: "wifi.slash")
-            .font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 6)
-            .background(.orange.opacity(0.9), in: Capsule()).padding(8)
+        Label("Offline snapshot — changes are disabled", systemImage: "wifi.slash").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 7).background(.orange, in: Capsule()).shadow(radius: 8, y: 3).padding(8)
     }
 }

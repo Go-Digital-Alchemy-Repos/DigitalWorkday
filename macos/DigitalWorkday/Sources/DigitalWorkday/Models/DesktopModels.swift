@@ -3,9 +3,28 @@ import Foundation
 struct DWUser: Codable, Equatable, Sendable {
     let id: String
     let name: String?
+    let firstName: String?
+    let lastName: String?
     let email: String
     let role: String
     let avatarUrl: String?
+}
+
+extension DWUser {
+    var displayName: String {
+        let components = [firstName, lastName].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return components.isEmpty ? (name?.nonEmpty ?? email) : components.joined(separator: " ")
+    }
+
+    var initials: String {
+        let words = displayName.split(separator: " ").prefix(2)
+        let value = words.compactMap(\.first).map(String.init).joined()
+        return value.isEmpty ? "DW" : value.uppercased()
+    }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }
 
 struct DWWorkspace: Codable, Equatable, Sendable {
@@ -23,6 +42,20 @@ struct DWProject: Codable, Identifiable, Hashable, Sendable {
     let name: String
     let clientId: String?
     let clientName: String?
+}
+
+struct DWMember: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String?
+    let email: String
+    let role: String
+    let avatarUrl: String?
+
+    var displayName: String { name?.nonEmpty ?? email }
+    var initials: String {
+        let value = displayName.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return value.isEmpty ? "DW" : value.uppercased()
+    }
 }
 
 struct DWSubtask: Codable, Identifiable, Hashable, Sendable {
@@ -49,6 +82,8 @@ struct DWTask: Codable, Identifiable, Hashable, Sendable {
     let clientName: String?
     let sectionId: String?
     let assigneeIds: [String]
+    let assignees: [DWMember]?
+    var estimateMinutes: Int?
     var subtasks: [DWSubtask]
     let createdAt: Date
     var updatedAt: Date
@@ -87,8 +122,54 @@ struct DWBootstrap: Codable, Equatable, Sendable {
     let workspace: DWWorkspace
     let projects: [DWProject]
     let clients: [DWClient]
+    let members: [DWMember]?
     let tasks: DWTaskPage
     let activeTimer: DWTimer?
+}
+
+struct DWToday: Codable, Equatable, Sendable {
+    let start: Date
+    let end: Date
+    let overdue: [DWTask]
+    let today: [DWTask]
+    let agenda: [DWTask]
+    let trackedSeconds: Int
+}
+
+struct DWNotification: Codable, Identifiable, Equatable, Sendable {
+    let id: String
+    let type: String
+    let title: String
+    let message: String?
+    let severity: String
+    let entityType: String?
+    let entityId: String?
+    let readAt: Date?
+    let createdAt: Date
+    let lastEventAt: Date
+    let eventCount: Int
+
+    var isUnread: Bool { readAt == nil }
+}
+
+struct DWNotificationPage: Codable, Equatable, Sendable {
+    let items: [DWNotification]
+    let nextCursor: String?
+    let unreadCount: Int
+}
+
+enum AppDestination: String, CaseIterable, Identifiable, Sendable {
+    case today, tasks, upcoming, notifications
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+    var systemImage: String {
+        switch self {
+        case .today: "sun.max"
+        case .tasks: "checkmark.circle"
+        case .upcoming: "calendar"
+        case .notifications: "bell"
+        }
+    }
 }
 
 struct DWComment: Codable, Identifiable, Hashable, Sendable {
