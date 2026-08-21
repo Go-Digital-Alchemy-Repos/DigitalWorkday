@@ -11,6 +11,8 @@ import {
 } from "@/components/layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToastClose } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 
 function render(node: React.ReactElement) {
   return renderToStaticMarkup(node);
@@ -60,5 +62,22 @@ describe("design-system primitive SSR smoke", () => {
     expect(markup).toContain('aria-label="Loading content"');
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('aria-label="Close notification"');
+  });
+
+  it("marks shared cards and buttons for theme-specific styling", () => {
+    const markup = render(
+      <Card>
+        <CardTitle>Editorial title</CardTitle>
+        <CardContent>Card copy</CardContent>
+        <Button>Save</Button>
+        <Button variant="outline">Cancel</Button>
+      </Card>,
+    );
+
+    expect(markup).toContain('data-ui="card"');
+    expect(markup).toContain('data-ui="card-title"');
+    expect(markup).toContain('data-ui="card-content"');
+    expect(markup).toContain('data-variant="default"');
+    expect(markup).toContain('data-variant="outline"');
   });
 });

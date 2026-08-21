@@ -2,12 +2,13 @@ import SwiftUI
 
 struct NavigationRailView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(spacing: 10) {
             BrandLogoView(size: 46)
-                .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
+                .shadow(color: theme.isEditorial ? .clear : .black.opacity(0.12), radius: 5, y: 2)
                 .padding(.bottom, 8)
 
             ForEach(AppDestination.allCases) { destination in
@@ -17,7 +18,7 @@ struct NavigationRailView: View {
                             Image(systemName: destination.systemImage).font(.system(size: 19, weight: .medium))
                             if destination == .notifications, store.unreadNotificationCount > 0 {
                                 Text("\(min(store.unreadNotificationCount, 99))")
-                                    .font(.system(size: 8, weight: .bold)).foregroundStyle(DWDesign.navigation)
+                                    .font(.system(size: 8, weight: .bold)).foregroundStyle(theme.navigation)
                                     .padding(3).background(.white, in: Circle()).offset(x: 8, y: -7)
                             }
                         }
@@ -27,7 +28,7 @@ struct NavigationRailView: View {
                             .minimumScaleFactor(0.72)
                             .allowsTightening(true)
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.navigationForeground)
                     .frame(width: 76, height: 60)
                     .contentShape(Rectangle())
                     .background(store.destination == destination ? .white.opacity(0.17) : .clear,
@@ -43,22 +44,23 @@ struct NavigationRailView: View {
                 Image(systemName: "gearshape").font(.title3).frame(width: 46, height: 42).contentShape(Rectangle())
             }.buttonStyle(.plain).help("Profile & Settings")
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(theme.navigationForeground)
         .padding(.vertical, 14)
         .frame(width: DWDesign.railWidth)
-        .background(DWDesign.navigation)
+        .background(theme.navigation)
     }
 }
 
 struct CompactNavigationBar: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     var body: some View {
         HStack {
             ForEach(AppDestination.allCases) { destination in
                 Button { store.destination = destination } label: {
                     Label(destination.label, systemImage: destination.systemImage)
                         .labelStyle(.iconOnly).frame(maxWidth: .infinity).contentShape(Rectangle())
-                }.buttonStyle(.plain).foregroundStyle(store.destination == destination ? DWDesign.accent : .secondary)
+                }.buttonStyle(.plain).foregroundStyle(store.destination == destination ? theme.emphasis : .secondary)
             }
         }.padding(.horizontal, 12).frame(height: 44).background(.bar)
     }

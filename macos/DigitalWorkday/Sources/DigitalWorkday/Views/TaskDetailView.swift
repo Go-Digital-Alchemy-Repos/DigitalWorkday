@@ -8,6 +8,7 @@ struct TaskDetailViewIdentity: Hashable {
 
 struct TaskDetailView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let detail: DWTaskDetail
     private let originalDescription: String
 
@@ -68,7 +69,7 @@ struct TaskDetailView: View {
             .padding(18)
             .frame(maxWidth: 980, alignment: .leading)
         }
-        .background(DWDesign.detailCanvas)
+        .background(theme.detailCanvas)
         .onReceive(NotificationCenter.default.publisher(for: .dwSaveTask)) { _ in if isDirty { save() } }
     }
 
@@ -88,7 +89,7 @@ struct TaskDetailView: View {
                 if store.isSavingTask { ProgressView().controlSize(.small) }
                 else { Label(isDirty ? "Save" : "Saved", systemImage: isDirty ? "square.and.arrow.down" : "checkmark") }
             }
-            .buttonStyle(.borderedProminent)
+            .dwPrimaryActionStyle()
             .disabled(!store.connectivity.isOnline || !isDirty || store.isSavingTask)
         }
         .font(.caption)
@@ -101,7 +102,7 @@ struct TaskDetailView: View {
             HStack(alignment: .center, spacing: 10) {
                 Button { Task { await store.toggleComplete(detail.task) } } label: {
                     Image(systemName: detail.task.isDone ? "checkmark.circle.fill" : "circle")
-                        .font(.title2).foregroundStyle(detail.task.isDone ? DWDesign.accent : .secondary)
+                        .font(.title2).foregroundStyle(detail.task.isDone ? theme.emphasis : .secondary)
                         .frame(width: 32, height: 32).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).help(detail.task.isDone ? "Mark incomplete" : "Mark complete")
@@ -117,7 +118,7 @@ struct TaskDetailView: View {
                     Image(systemName: detail.task.isDone ? "arrow.uturn.backward" : "checkmark")
                         .frame(width: 28, height: 28).contentShape(Rectangle())
                 }
-                .buttonStyle(.borderedProminent)
+                .dwPrimaryActionStyle()
                 .disabled(!store.connectivity.isOnline)
                 .help(detail.task.isDone ? "Reopen task" : "Mark complete")
                 Menu {
@@ -182,7 +183,7 @@ struct TaskDetailView: View {
                     DatePicker("Due", selection: $dueDate, displayedComponents: [.date, .hourAndMinute])
                         .labelsHidden().onChange(of: dueDate) { markDirty() }
                 } else {
-                    Button("Add date") { hasDueDate = true; markDirty() }.buttonStyle(.plain).foregroundStyle(DWDesign.accent)
+                    Button("Add date") { hasDueDate = true; markDirty() }.buttonStyle(.plain).foregroundStyle(theme.emphasis)
                 }
             }
             metadataField("Status", systemImage: "circle.dotted") {
@@ -198,8 +199,8 @@ struct TaskDetailView: View {
             }
             metadataField("Timer", systemImage: "timer") { TimerInlineControl(task: detail.task) }
         }
-        .background(DWDesign.elevated.opacity(0.38), in: RoundedRectangle(cornerRadius: 9))
-        .overlay { RoundedRectangle(cornerRadius: 9).stroke(DWDesign.divider) }
+        .background(theme.elevated.opacity(theme.isEditorial ? 1 : 0.38), in: RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 9))
+        .overlay { RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 9).stroke(theme.divider) }
     }
 
     private func metadataField<Content: View>(_ label: String, systemImage: String,
@@ -209,7 +210,7 @@ struct TaskDetailView: View {
             content().font(.caption).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(11).frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
-        .overlay(alignment: .trailing) { Rectangle().fill(DWDesign.divider).frame(width: 1) }
+        .overlay(alignment: .trailing) { Rectangle().fill(theme.divider).frame(width: 1) }
     }
 
     private var currentProject: DWProject? { store.bootstrap?.projects.first { $0.id == projectID } }
@@ -248,6 +249,7 @@ private struct DescriptionPanel: View {
 
 private struct SubtasksPanel: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Binding var isExpanded: Bool
     let items: [DWSubtask]
     @Binding var draft: String
@@ -262,7 +264,7 @@ private struct SubtasksPanel: View {
                 Button("Add", action: add).buttonStyle(.bordered)
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.connectivity.isOnline)
             }
-            .padding(.horizontal, 9).frame(height: 34).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, 9).frame(height: 34).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
         }
     }
     private func add() {
@@ -274,6 +276,7 @@ private struct SubtasksPanel: View {
 
 private struct SubtaskEditorRow: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let item: DWSubtask
     @State private var title: String
     init(item: DWSubtask) { self.item = item; _title = State(initialValue: item.title) }
@@ -281,7 +284,7 @@ private struct SubtaskEditorRow: View {
         HStack(spacing: 9) {
             Button { Task { await store.updateSubtask(item, completed: !item.completed) } } label: {
                 Image(systemName: item.completed ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(item.completed ? DWDesign.accent : .secondary)
+                    .foregroundStyle(item.completed ? theme.emphasis : .secondary)
                     .frame(width: 26, height: 26).contentShape(Rectangle())
             }.buttonStyle(.plain)
             TextField("Subtask", text: $title).textFieldStyle(.plain).font(.caption)
@@ -294,7 +297,7 @@ private struct SubtaskEditorRow: View {
             .menuStyle(.borderlessButton)
         }
         .padding(.horizontal, 8).frame(height: 36)
-        .background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 7))
+        .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
     }
     private func saveTitle() {
         let value = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -305,6 +308,7 @@ private struct SubtaskEditorRow: View {
 
 private struct CommentsPanel: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Binding var isExpanded: Bool
     let comments: [DWComment]
     @Binding var draft: String
@@ -323,14 +327,14 @@ private struct CommentsPanel: View {
                         Text(RichTextPlainText.displayText(from: item.body)).font(.caption).textSelection(.enabled)
                     }
                 }
-                .padding(9).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 7))
+                .padding(9).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
             }
             HStack {
                 TextField("Write a comment", text: $draft).textFieldStyle(.plain).onSubmit(send)
                 Button("Send", systemImage: "paperplane.fill", action: send).labelStyle(.iconOnly).buttonStyle(.bordered)
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.connectivity.isOnline)
             }
-            .padding(.horizontal, 9).frame(height: 34).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, 9).frame(height: 34).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
         }
     }
     private func send() {
@@ -342,6 +346,7 @@ private struct CommentsPanel: View {
 
 private struct TimeEntriesPanel: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Binding var isExpanded: Bool
     let entries: [DWTimeEntry]
     let task: DWTask
@@ -359,15 +364,16 @@ private struct TimeEntriesPanel: View {
                     let value = note; note = ""
                     Task { await store.logTime(task: task, minutes: minutes, description: value) }
                 }
-                .buttonStyle(.borderedProminent).disabled(!store.connectivity.isOnline)
+                .dwPrimaryActionStyle().disabled(!store.connectivity.isOnline)
             }
-            .padding(.horizontal, 9).frame(height: 38).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, 9).frame(height: 38).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
         }
     }
 }
 
 private struct TimeEntryRow: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let entry: DWTimeEntry
     @State private var editing = false
     var body: some View {
@@ -385,7 +391,7 @@ private struct TimeEntryRow: View {
             } label: { Image(systemName: "ellipsis").frame(width: 26, height: 26).contentShape(Rectangle()) }
             .menuStyle(.borderlessButton)
         }
-        .padding(.horizontal, 8).frame(height: 42).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 7))
+        .padding(.horizontal, 8).frame(height: 42).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
         .sheet(isPresented: $editing) { EditTimeEntrySheet(entry: entry) }
     }
 }
@@ -406,7 +412,7 @@ private struct EditTimeEntrySheet: View {
             Text("Edit Time Entry").font(.title2.bold())
             TextField("Description", text: $description)
             Stepper("Duration: \(minutes) minutes", value: $minutes, in: 1...720, step: 5)
-            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Save") { Task { await store.updateTimeEntry(entry, minutes: minutes, description: description); dismiss() } }.buttonStyle(.borderedProminent) }
+            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Save") { Task { await store.updateTimeEntry(entry, minutes: minutes, description: description); dismiss() } }.dwPrimaryActionStyle() }
         }
         .padding(22).frame(width: 420)
     }
@@ -414,6 +420,7 @@ private struct EditTimeEntrySheet: View {
 
 private struct TimerInlineControl: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let task: DWTask
     var body: some View {
         if let timer = store.bootstrap?.activeTimer {
@@ -427,12 +434,13 @@ private struct TimerInlineControl: View {
             }
         } else {
             Button("Start", systemImage: "play.fill") { Task { await store.timer(action: "start", task: task) } }
-                .buttonStyle(.plain).foregroundStyle(DWDesign.accent)
+                .buttonStyle(.plain).foregroundStyle(theme.emphasis)
         }
     }
 }
 
 private struct CollapsibleDetailPanel<Content: View>: View {
+    @Environment(\.dwTheme) private var theme
     let title: String
     let count: Int?
     let systemImage: String
@@ -452,7 +460,7 @@ private struct CollapsibleDetailPanel<Content: View>: View {
                 HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right").font(.caption2).foregroundStyle(.secondary)
                     Label(title, systemImage: systemImage).font(.subheadline.weight(.semibold))
-                    if let count { Text("\(count)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 6).padding(.vertical, 2).background(DWDesign.subtleFill, in: Capsule()) }
+                    if let count { Text("\(count)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 6).padding(.vertical, 2).background(theme.subtleFill, in: Capsule()) }
                     Spacer()
                     if let trailing { Text(trailing).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 }
@@ -464,8 +472,8 @@ private struct CollapsibleDetailPanel<Content: View>: View {
                     .overlay(alignment: .top) { Divider() }
             }
         }
-        .background(DWDesign.elevated.opacity(0.42), in: RoundedRectangle(cornerRadius: 9))
-        .overlay { RoundedRectangle(cornerRadius: 9).stroke(DWDesign.divider) }
+        .background(theme.elevated.opacity(theme.isEditorial ? 1 : 0.42), in: RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 9))
+        .overlay { RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 9).stroke(theme.divider) }
     }
 }
 

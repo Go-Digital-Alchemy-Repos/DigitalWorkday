@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskListView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @State private var showingQuickAdd = false
 
     var body: some View {
@@ -21,7 +22,7 @@ struct TaskListView: View {
                 Button { showingQuickAdd = true } label: { Image(systemName: "plus") }.buttonStyle(.borderedProminent).buttonBorderShape(.circle)
             }.padding(16)
             HStack { Image(systemName: "magnifyingglass").foregroundStyle(.secondary); TextField("Search tasks", text: $store.search).textFieldStyle(.plain) }
-                .padding(.horizontal, 11).frame(height: 34).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal, 16).padding(.bottom, 12)
+                .padding(.horizontal, 11).frame(height: 34).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius)).padding(.horizontal, 16).padding(.bottom, 12)
             Divider()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
@@ -35,7 +36,7 @@ struct TaskListView: View {
                     } label: {
                         HStack { Label(store.showCompleted ? "Hide completed" : "Show completed", systemImage: "checkmark.circle"); Spacer(); Image(systemName: store.showCompleted ? "chevron.up" : "chevron.down") }
                             .padding(.horizontal, 10).frame(height: 34).contentShape(Rectangle())
-                    }.buttonStyle(.plain).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 8))
+                    }.buttonStyle(.plain).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
                     if store.showCompleted {
                         let completed = TaskGrouping.sorted(store.filteredTasks.filter(\.isDone), by: store.taskSort)
                         if !completed.isEmpty { TaskGroupBlock(title: "Completed", tasks: completed) }
@@ -44,7 +45,7 @@ struct TaskListView: View {
             }
             .overlay { if store.filteredTasks.isEmpty { ContentUnavailableView(store.search.isEmpty ? "All clear" : "No matching tasks", systemImage: store.search.isEmpty ? "checkmark.circle" : "magnifyingglass") } }
         }
-        .background(DWDesign.canvas)
+        .background(theme.canvas)
         .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
         .onReceive(NotificationCenter.default.publisher(for: .dwNewTask)) { _ in showingQuickAdd = true }
     }

@@ -147,7 +147,7 @@ export default function ClientPortalDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full flex-col overflow-auto bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+      <div className="app-page-surface flex h-full flex-col overflow-auto">
         <div className="border-b border-border/70 bg-background/95 backdrop-blur-xl">
           <div className="px-4 py-4 sm:px-5 md:py-5 lg:px-8">
             <div className={`${dashboardPanelClass} px-4 py-4 md:px-5`}>
@@ -199,7 +199,7 @@ export default function ClientPortalDashboard() {
       : 0;
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+    <div className="app-page-surface flex h-full flex-col overflow-auto">
       <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
         <div className="px-4 py-4 sm:px-5 md:py-5 lg:px-8">
           <div className={`${dashboardPanelClass} px-4 py-4 md:px-5`}>

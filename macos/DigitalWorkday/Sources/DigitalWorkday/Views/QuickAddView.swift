@@ -2,6 +2,7 @@ import SwiftUI
 
 struct QuickAddView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var projectID = "personal"
@@ -15,7 +16,7 @@ struct QuickAddView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill").font(.title).foregroundStyle(DWDesign.accent)
+                Image(systemName: "plus.circle.fill").font(.title).foregroundStyle(theme.emphasis)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Quick Add").font(.title2.bold())
                     Text("Capture it now and keep moving.").foregroundStyle(.secondary)
@@ -52,7 +53,7 @@ struct QuickAddView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Create Task") { create() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .dwPrimaryActionStyle().keyboardShortcut(.defaultAction)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.connectivity.isOnline)
             }
         }

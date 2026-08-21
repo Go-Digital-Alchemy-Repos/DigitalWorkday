@@ -1,37 +1,154 @@
 import SwiftUI
 
 enum DWDesign {
-    static let accent = Color(red: 0.01, green: 0.38, blue: 0.23)
-    static let accentBright = Color(red: 0.06, green: 0.68, blue: 0.42)
-    static let navigation = Color(red: 0.015, green: 0.34, blue: 0.22)
-    static let selection = accent.opacity(0.10)
-    static let selectedBorder = accent.opacity(0.72)
-    static let elevated = Color(nsColor: .controlBackgroundColor)
-    static let canvas = Color(nsColor: .windowBackgroundColor)
-    static let detailCanvas = Color.primary.opacity(0.018)
-    static let subtleFill = Color.primary.opacity(0.035)
-    static let divider = Color.primary.opacity(0.085)
-    static let hover = Color.primary.opacity(0.055)
-    static let cornerRadius: CGFloat = 14
-    static let compactRadius: CGFloat = 9
     static let railWidth: CGFloat = 86
     static let primaryPaneWidth: CGFloat = 460
     static let sectionSpacing: CGFloat = 16
     static let contentPadding: CGFloat = 20
 }
 
+struct DWTheme: Equatable {
+    let id: String
+    let isEditorial: Bool
+    let action: Color
+    let actionPressed: Color
+    let actionForeground: Color
+    let emphasis: Color
+    let emphasisBright: Color
+    let navigation: Color
+    let navigationForeground: Color
+    let selection: Color
+    let selectedBorder: Color
+    let elevated: Color
+    let canvas: Color
+    let detailCanvas: Color
+    let subtleFill: Color
+    let divider: Color
+    let hover: Color
+    let mutedText: Color
+    let cardRadius: CGFloat
+    let compactRadius: CGFloat
+
+    static let standard = DWTheme(
+        id: "standard",
+        isEditorial: false,
+        action: Color(red: 0.01, green: 0.38, blue: 0.23),
+        actionPressed: Color(red: 0.008, green: 0.31, blue: 0.19),
+        actionForeground: .white,
+        emphasis: Color(red: 0.01, green: 0.38, blue: 0.23),
+        emphasisBright: Color(red: 0.06, green: 0.68, blue: 0.42),
+        navigation: Color(red: 0.015, green: 0.34, blue: 0.22),
+        navigationForeground: .white,
+        selection: Color(red: 0.01, green: 0.38, blue: 0.23).opacity(0.10),
+        selectedBorder: Color(red: 0.01, green: 0.38, blue: 0.23).opacity(0.72),
+        elevated: Color(nsColor: .controlBackgroundColor),
+        canvas: Color(nsColor: .windowBackgroundColor),
+        detailCanvas: Color.primary.opacity(0.018),
+        subtleFill: Color.primary.opacity(0.035),
+        divider: Color.primary.opacity(0.085),
+        hover: Color.primary.opacity(0.055),
+        mutedText: .secondary,
+        cardRadius: 14,
+        compactRadius: 9
+    )
+
+    static let anthropic = DWTheme(
+        id: "anthropic",
+        isEditorial: true,
+        action: Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x57 / 255),
+        actionPressed: Color(red: 0xC6 / 255, green: 0x61 / 255, blue: 0x3F / 255),
+        actionForeground: Color(red: 0x14 / 255, green: 0x14 / 255, blue: 0x13 / 255),
+        emphasis: Color(red: 0x14 / 255, green: 0x14 / 255, blue: 0x13 / 255),
+        emphasisBright: Color(red: 0x3D / 255, green: 0x3D / 255, blue: 0x3A / 255),
+        navigation: Color(red: 0x14 / 255, green: 0x14 / 255, blue: 0x13 / 255),
+        navigationForeground: Color(red: 0xFA / 255, green: 0xF9 / 255, blue: 0xF5 / 255),
+        selection: Color(red: 0xE3 / 255, green: 0xDA / 255, blue: 0xCC / 255),
+        selectedBorder: Color(red: 0x87 / 255, green: 0x86 / 255, blue: 0x7F / 255),
+        elevated: Color(red: 0xFA / 255, green: 0xF9 / 255, blue: 0xF5 / 255),
+        canvas: Color(red: 0xF0 / 255, green: 0xEE / 255, blue: 0xE6 / 255),
+        detailCanvas: Color(red: 0xF5 / 255, green: 0xE3 / 255, blue: 0xC7 / 255).opacity(0.34),
+        subtleFill: Color(red: 0xE3 / 255, green: 0xDA / 255, blue: 0xCC / 255).opacity(0.72),
+        divider: Color(red: 0xCC / 255, green: 0xCB / 255, blue: 0xC8 / 255),
+        hover: Color(red: 0xE3 / 255, green: 0xDA / 255, blue: 0xCC / 255).opacity(0.82),
+        mutedText: Color(red: 0x3D / 255, green: 0x3D / 255, blue: 0x3A / 255),
+        cardRadius: 24,
+        compactRadius: 12
+    )
+
+    func contentFont(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
+        let font = Font.system(style, design: isEditorial ? .serif : .default)
+        return weight.map { font.weight($0) } ?? font
+    }
+}
+
+private struct DWThemeEnvironmentKey: EnvironmentKey {
+    static let defaultValue = DWTheme.standard
+}
+
+extension EnvironmentValues {
+    var dwTheme: DWTheme {
+        get { self[DWThemeEnvironmentKey.self] }
+        set { self[DWThemeEnvironmentKey.self] = newValue }
+    }
+}
+
+private struct AnthropicPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.dwTheme) private var theme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(.body, design: .default).weight(.medium))
+            .foregroundStyle(theme.actionForeground)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                configuration.isPressed ? theme.actionPressed : theme.action,
+                in: UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 8,
+                    topTrailingRadius: 0,
+                    style: .continuous
+                )
+            )
+            .opacity(isEnabled ? 1 : 0.48)
+    }
+}
+
+private struct DWPrimaryActionModifier: ViewModifier {
+    @Environment(\.dwTheme) private var theme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if theme.isEditorial {
+            content.buttonStyle(AnthropicPrimaryButtonStyle())
+        } else {
+            content.buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+extension View {
+    func dwPrimaryActionStyle() -> some View {
+        modifier(DWPrimaryActionModifier())
+    }
+}
+
 struct DWPanel<Content: View>: View {
+    @Environment(\.dwTheme) private var theme
     @ViewBuilder let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
         content
             .padding(14)
-            .background(DWDesign.elevated.opacity(0.72), in: RoundedRectangle(cornerRadius: DWDesign.cornerRadius, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: DWDesign.cornerRadius, style: .continuous).stroke(DWDesign.divider) }
+            .background(theme.elevated.opacity(theme.isEditorial ? 1 : 0.72), in: RoundedRectangle(cornerRadius: theme.cardRadius, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: theme.cardRadius, style: .continuous).stroke(theme.divider) }
     }
 }
 
 struct DWSectionCard<Content: View>: View {
+    @Environment(\.dwTheme) private var theme
     let title: String
     let systemImage: String
     @ViewBuilder let content: Content
@@ -45,32 +162,40 @@ struct DWSectionCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             Label(title, systemImage: systemImage)
-                .font(.headline)
+                .font(theme.contentFont(.headline, weight: .semibold))
                 .foregroundStyle(.primary)
             content
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DWDesign.elevated.opacity(0.38), in: RoundedRectangle(cornerRadius: DWDesign.compactRadius, style: .continuous))
-        .overlay(alignment: .bottom) { Divider() }
+        .background(theme.elevated.opacity(theme.isEditorial ? 1 : 0.38), in: RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : theme.compactRadius, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : theme.compactRadius, style: .continuous).stroke(theme.divider) }
     }
 }
 
 struct DWBadge: View {
+    @Environment(\.dwTheme) private var theme
     let text: String
-    var color: Color = DWDesign.accent
+    var color: Color?
     var systemImage: String?
 
+    init(text: String, color: Color? = nil, systemImage: String? = nil) {
+        self.text = text
+        self.color = color
+        self.systemImage = systemImage
+    }
+
     var body: some View {
+        let resolvedColor = color ?? theme.emphasis
         HStack(spacing: 4) {
             if let systemImage { Image(systemName: systemImage) }
             Text(text)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(color)
+        .foregroundStyle(resolvedColor)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(color.opacity(0.11), in: Capsule())
+        .background(resolvedColor.opacity(0.11), in: Capsule())
         .accessibilityElement(children: .combine)
     }
 }

@@ -1,69 +1,58 @@
-# My Time — New Time Entry Design QA
+# Digital Workday Command Center — Design QA
 
-## Evidence
+## Scope
 
-- Source visual truth: `/Users/mike/.codex/attachments/9ea9f4b7-a1a4-4224-8b18-e7e44de0f78a/Screenshot 2026-07-23 at 8.03.22 PM.png`
-- Browser-rendered desktop implementation: `/tmp/digitalworkday-my-time-qa/qa-my-time-desktop-1433.png`
-- Browser-rendered mobile implementation: `/tmp/digitalworkday-my-time-qa/qa-my-time-mobile.png`
-- Desktop entry drawer: `/tmp/digitalworkday-my-time-qa/qa-new-time-entry-desktop.png`
-- Mobile entry drawer: `/tmp/digitalworkday-my-time-qa/qa-new-time-entry-mobile.png`
-- Combined full-view comparison: `/tmp/digitalworkday-my-time-qa/qa-my-time-comparison.png`
+- Native macOS command-center redesign for Today, dense task browsing, and task detail.
+- Source visual truth:
+  - `/Users/mike/Desktop/Digital Workday Assets/light.png`
+  - `/Users/mike/Desktop/Digital Workday Assets/dark.png`
+- Implementation evidence:
+  - `.codex/design-qa/implementation-command-center-light.jpeg`
+  - `.codex/design-qa/implementation-command-center-dark.jpeg`
+- Comparison evidence:
+  - `.codex/design-qa/comparison-command-center-light.jpg`
+  - `.codex/design-qa/comparison-command-center-dark.jpg`
+  - `.codex/design-qa/focus-command-center-dashboard-dark.jpg`
+  - `.codex/design-qa/focus-command-center-detail-dark.jpg`
 
-## Viewport and Normalization
+## Comparison setup
 
-- Source pixels: 1639 × 1427.
-- Desktop implementation pixels and CSS viewport: 1433 × 1427 at device scale factor 1.
-- Mobile implementation pixels and CSS viewport: 390 × 844 at device scale factor 1.
-- Desktop drawer pixels: 1280 × 720 at device scale factor 1.
-- Mobile drawer pixels: 390 × 844 at device scale factor 1.
-- The source and implementation were normalized to equal-height panels in the 1640 × 714 comparison image. The narrower desktop implementation capture reflects the in-app browser's maximum stable capture width; layout geometry was separately checked in a 1640px CSS viewport.
-- State: authenticated tenant team member, light theme, Dashboard tab, representative time statistics, no warnings, synthetic local QA data.
+- Source dimensions: 1487 × 1058 pixels.
+- Implementation viewport: 952 × 768 pixels.
+- Full-view composites normalize both images to a common height while preserving aspect ratio. Focused comparisons crop the command-center column and task-detail workspace independently so typography, spacing, controls, and hierarchy remain readable.
+- State: authenticated native app, Today selected, one task selected, real sparse account data. Both Light and Dark appearances were checked. The source mockup intentionally contains denser illustrative workload, agenda, tags, avatars, and time-entry content.
 
-## Findings
+## Visual findings and fixes
 
-No actionable P0, P1, or P2 differences remain.
+1. **Task title truncation at medium width — P2, fixed.** The complete action was changed to a compact icon treatment at constrained widths, restoring the full task title hierarchy.
+2. **Completed drawer control displaced by a long completed list — P2, fixed.** The persistent show/hide control now remains above the completed group.
+3. **Zero-data charts lacked a visual frame — P2, fixed.** Workload retains a baseline track and seven-day time bars retain subtle accessible zero-value marks and weekday labels.
+4. **Legacy task detail response raised a missing-data alert — P2, fixed.** Native decoding now treats absent `timeEntries` as an empty collection while retaining the new contract.
+5. **Reference content is richer than the live account — P3, accepted.** The implemented structure matches the reference, while the live screenshot truthfully reflects the available production data. Tags and activity remain deliberate follow-up features.
 
-- Fonts and typography: the implementation retains the application's existing font family, weights, sizes, and hierarchy. New headings, labels, helper copy, and buttons follow the established My Time and task-drawer typography.
-- Spacing and layout rhythm: Quick Actions is now directly below the My Time title panel and shares its full content width. The title actions remain aligned on desktop and wrap into a balanced two-button row on mobile. Card radii, borders, padding, and section gaps match the existing surface system.
-- Colors and visual tokens: the implementation uses existing background, border, primary, muted, destructive, and shadow tokens. Billable and task-close controls retain readable contrast in light mode.
-- Image quality and asset fidelity: no new raster imagery was required. Existing product branding remains unchanged, and all new interface icons come from the application's established Lucide icon set.
-- Copy and content: both requested entry points are present. The drawer clearly describes the no-timer workflow, required client/project selection, task creation, manual time, billable toggle, and immediate close option.
-- Responsiveness: the 390 × 844 pass shows no horizontal overflow or clipped primary controls. The entry drawer becomes full-width, scrolls independently, and keeps Cancel and Create actions available in its fixed footer.
-- Accessibility and interaction: required fields are labeled, dependent controls remain disabled until their prerequisites are selected, switches expose accessible names and checked state, and save remains disabled until required data and a valid duration are present.
+## Interaction and accessibility QA
 
-## Focused Region Evidence
+- Verified full-row hit targets for rail navigation, workload filters, task rows, completion controls, and disclosure sections.
+- Verified task search, filters, sorting/grouping menu, completed-task loading, task selection, previous/next controls, task completion action, metadata controls, description editor, subtasks, comments, and time-entry sections are represented in the accessibility tree with labels.
+- Collapsed and reopened the Description section.
+- Loaded the completed-task drawer with 24 completed tasks and verified its persistent close control.
+- Switched between Light and Dark appearances and restored Dark after QA.
+- Chart exposes a readable seven-day accessibility summary; workload exposes overdue/today/upcoming counts.
+- No production task, subtask, timer, comment, or time-entry data was mutated during visual QA.
 
-- Title and Quick Actions: `/tmp/digitalworkday-my-time-qa/qa-my-time-desktop-1433.png`
-- Desktop drawer hierarchy and fixed footer: `/tmp/digitalworkday-my-time-qa/qa-new-time-entry-desktop.png`
-- Mobile title, Quick Actions, tabs, and cards: `/tmp/digitalworkday-my-time-qa/qa-my-time-mobile.png`
-- Mobile drawer fields and fixed footer: `/tmp/digitalworkday-my-time-qa/qa-new-time-entry-mobile.png`
+## Build and automated verification
 
-Focused regions were necessary because the source-sized full-view comparison makes form labels and mobile behavior too small to judge reliably.
+- `npm run check` — passed.
+- `npm test` — passed: 82 files, 702 tests.
+- `npx vitest run server/tests/desktop-contract.test.ts` — passed: 8 tests, including command-center contract and 23/25-hour daylight-saving boundaries.
+- `swift build` — passed.
+- `./script/build_and_run.sh --verify` — passed; the app bundle is valid on disk and satisfies its designated requirement.
+- `git diff --check` — passed.
+- `swift test` — unavailable in this local Command Line Tools environment because the `XCTest` module is missing. The production target still compiles successfully through both `swift build` and the verified app-bundle workflow.
 
-## Interaction and Console Checks
+## Release readiness
 
-- Header `New Time Entry` opens the creation drawer.
-- Quick Actions `Create New Time Entry` opens the same creation drawer.
-- Selecting a client enables and populates the project control.
-- Selecting a project enables and populates the section control.
-- Title, description, date, duration, billable, and close-task controls update correctly.
-- The synthetic end-to-end save created the mock task and time entry, then opened the standard task detail panel with assignees, due date, priority, status, estimate, description, and normal task actions.
-- The isolated QA server does not host Socket.IO, so expected connection warnings were present. After correcting the synthetic task fixture, no feature-related runtime errors were observed.
-
-## Comparison History
-
-### Pass 1
-
-- Earlier P0/P1/P2 findings: none.
-- Fixes made from comparison: none required.
-- Post-fix evidence: not applicable; the first source-plus-implementation comparison passed.
-
-## Residual Test Gaps
-
-- Production was intentionally not used for creation testing.
-- The local database has pending unrelated migrations, so data-flow validation used an isolated synthetic server rather than mutating local or production data.
-- Dark theme was not visually captured; the implementation uses existing semantic tokens and compiled successfully.
-
-## Final Result
+- No P0, P1, or P2 design discrepancies remain.
+- The server endpoint and native fallback are included in source. Until the server portion is deployed, the native app continues to derive workload and grouped tasks from cached data and marks agenda/tracked-time data unavailable as designed.
 
 final result: passed

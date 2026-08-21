@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WorkspaceToolbarView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Environment(\.openSettings) private var openSettings
     @State private var now = Date.now
     @State private var showingAccountMenu = false
@@ -15,10 +16,10 @@ struct WorkspaceToolbarView: View {
                     Image(systemName: "magnifyingglass")
                     Text("Search or type a command…").lineLimit(1)
                     Text("⌘K").font(.caption2.monospaced()).padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 5))
+                        .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 5))
                 }
                 .foregroundStyle(.secondary).padding(.horizontal, 11).frame(height: 32)
-                .background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius, style: .continuous))
             }.buttonStyle(.plain).frame(maxWidth: 390)
             Spacer(minLength: 12)
             TimerPillView()
@@ -26,7 +27,7 @@ struct WorkspaceToolbarView: View {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell").font(.body)
                     if store.unreadNotificationCount > 0 {
-                        Circle().fill(DWDesign.accent).frame(width: 7, height: 7).offset(x: 3, y: -2)
+                        Circle().fill(theme.emphasis).frame(width: 7, height: 7).offset(x: 3, y: -2)
                     }
                 }.frame(width: 28, height: 28)
             }.buttonStyle(.plain).help("Notifications")
@@ -77,10 +78,11 @@ struct WorkspaceToolbarView: View {
 
 struct TimerPillView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     var body: some View {
         if let timer = store.bootstrap?.activeTimer {
             HStack(spacing: 8) {
-                Circle().fill(DWDesign.accent).frame(width: 7, height: 7)
+                Circle().fill(theme.emphasis).frame(width: 7, height: 7)
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(DurationFormatter.short(timer.elapsed(at: context.date))).monospacedDigit().font(.caption.bold())
                 }
@@ -91,7 +93,7 @@ struct TimerPillView: View {
                 Button { Task { await store.timer(action: "stop") } } label: { Image(systemName: "stop.fill") }.buttonStyle(.plain)
             }
             .padding(.horizontal, 10).frame(height: 30)
-            .background(DWDesign.selection, in: Capsule()).overlay { Capsule().stroke(DWDesign.divider) }
+            .background(theme.selection, in: Capsule()).overlay { Capsule().stroke(theme.divider) }
         }
     }
 }

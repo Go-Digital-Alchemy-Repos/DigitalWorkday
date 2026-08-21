@@ -356,7 +356,7 @@ export default function MyTimePage() {
   }
   
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+    <div className="app-page-surface flex h-full flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border/70 bg-background/95 backdrop-blur-xl">
         <div className="space-y-3 px-4 py-4 sm:px-5 lg:px-8 md:py-5">
           <SurfacePanel padding="none" className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">

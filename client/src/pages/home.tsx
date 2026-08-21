@@ -892,7 +892,7 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+    <div className="app-page-surface flex h-full flex-col overflow-auto">
       <div className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur-xl">
         <div className="px-4 py-4 sm:px-5 lg:px-8 md:py-5">
           <div className="rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-[var(--shadow-soft)] md:px-5">

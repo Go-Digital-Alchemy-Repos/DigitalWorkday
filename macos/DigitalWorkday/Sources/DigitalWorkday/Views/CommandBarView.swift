@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CommandBarView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var captureTitle = ""
@@ -28,7 +29,7 @@ struct CommandBarView: View {
                             }.buttonStyle(.plain)
                         }
                         Divider()
-                        Button { captureTitle = query } label: { Label("Create “\(query)”", systemImage: "plus.circle.fill").frame(maxWidth: .infinity, alignment: .leading).padding(10) }.buttonStyle(.plain).foregroundStyle(DWDesign.accent)
+                        Button { captureTitle = query } label: { Label("Create “\(query)”", systemImage: "plus.circle.fill").frame(maxWidth: .infinity, alignment: .leading).padding(10) }.buttonStyle(.plain).foregroundStyle(theme.emphasis)
                     }
                 }.frame(maxHeight: 250)
             }
@@ -46,7 +47,7 @@ struct CommandBarView: View {
                     }
                     Toggle("Due date", isOn: $hasDueDate)
                     if hasDueDate { DatePicker("", selection: $dueDate).labelsHidden() }
-                    HStack { Spacer(); Button("Create Task") { let title = captureTitle; Task { await store.createTask(title: title, projectID: projectID, dueDate: hasDueDate ? dueDate : nil, priority: priority, assigneeIDs: Array(assigneeIDs), estimateMinutes: estimateMinutes == 0 ? nil : estimateMinutes); dismiss() } }.buttonStyle(.borderedProminent).disabled(captureTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                    HStack { Spacer(); Button("Create Task") { let title = captureTitle; Task { await store.createTask(title: title, projectID: projectID, dueDate: hasDueDate ? dueDate : nil, priority: priority, assigneeIDs: Array(assigneeIDs), estimateMinutes: estimateMinutes == 0 ? nil : estimateMinutes); dismiss() } }.dwPrimaryActionStyle().disabled(captureTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
                 }.padding(16)
             }
             if query.isEmpty && captureTitle.isEmpty {

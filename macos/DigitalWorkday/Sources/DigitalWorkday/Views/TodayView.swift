@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @State private var showingQuickAdd = false
 
     private var openTasks: [DWTask] { store.tasks.filter { !$0.isDone } }
@@ -45,7 +46,7 @@ struct TodayView: View {
             }
             .padding(14)
         }
-        .background(DWDesign.canvas)
+        .background(theme.canvas)
         .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
         .onReceive(NotificationCenter.default.publisher(for: .dwNewTask)) { _ in showingQuickAdd = true }
     }
@@ -78,7 +79,7 @@ struct TodayView: View {
                     }
                 }
                 .padding(.horizontal, 10).frame(height: 32)
-                .background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 8))
+                .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
 
                 Menu {
                     Picker("Group", selection: $store.taskGroup) {
@@ -115,11 +116,11 @@ struct TodayView: View {
             HStack {
                 Text("Tasks").font(.headline)
                 Text("\(store.filteredTasks.count)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                    .padding(.horizontal, 6).padding(.vertical, 2).background(DWDesign.subtleFill, in: Capsule())
+                    .padding(.horizontal, 6).padding(.vertical, 2).background(theme.subtleFill, in: Capsule())
                 Spacer()
                 if store.workloadFilter != .all {
                     Button("Show all") { store.workloadFilter = .all }
-                        .buttonStyle(.plain).font(.caption).foregroundStyle(DWDesign.accent)
+                        .buttonStyle(.plain).font(.caption).foregroundStyle(theme.emphasis)
                 }
             }
         }
@@ -157,11 +158,12 @@ struct TodayView: View {
             }
             .font(.caption.weight(.medium)).padding(.horizontal, 11).frame(height: 34).contentShape(Rectangle())
         }
-        .buttonStyle(.plain).background(DWDesign.subtleFill, in: RoundedRectangle(cornerRadius: 8))
+        .buttonStyle(.plain).background(theme.subtleFill, in: RoundedRectangle(cornerRadius: theme.compactRadius))
     }
 }
 
 private struct WorkloadPanel: View {
+    @Environment(\.dwTheme) private var theme
     let workload: DWCommandCenter.Workload
     @Binding var selection: WorkloadFilter
     private var total: CGFloat { CGFloat(max(1, workload.overdue + workload.today + workload.upcoming)) }
@@ -171,16 +173,16 @@ private struct WorkloadPanel: View {
             HStack(spacing: 0) {
                 metric("Overdue", count: workload.overdue, color: .red, filter: .overdue)
                 Divider().frame(height: 38)
-                metric("Today", count: workload.today, color: DWDesign.accentBright, filter: .today)
+                metric("Today", count: workload.today, color: theme.emphasisBright, filter: .today)
                 Divider().frame(height: 38)
                 metric("Upcoming", count: workload.upcoming, color: .secondary, filter: .upcoming)
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(DWDesign.divider)
+                    Capsule().fill(theme.divider)
                     HStack(spacing: 2) {
                         segment(count: workload.overdue, totalWidth: proxy.size.width, color: .red)
-                        segment(count: workload.today, totalWidth: proxy.size.width, color: DWDesign.accentBright)
+                        segment(count: workload.today, totalWidth: proxy.size.width, color: theme.emphasisBright)
                         segment(count: workload.upcoming, totalWidth: proxy.size.width, color: .secondary.opacity(0.55))
                     }
                 }
@@ -209,6 +211,7 @@ private struct WorkloadPanel: View {
 }
 
 private struct TrackedTimePanel: View {
+    @Environment(\.dwTheme) private var theme
     let days: [DWTrackedDay]
     let todaySeconds: Int
     let weekSeconds: Int
@@ -231,7 +234,7 @@ private struct TrackedTimePanel: View {
                     .frame(width: 96, alignment: .leading)
                     Chart(days) { day in
                         BarMark(x: .value("Day", day.date), y: .value("Seconds", max(180, day.seconds)))
-                            .foregroundStyle(day.date == selectedDate ? DWDesign.accentBright : DWDesign.accent)
+                            .foregroundStyle(day.date == selectedDate ? theme.emphasisBright : theme.emphasis)
                             .opacity(day.seconds == 0 ? 0.22 : 1)
                             .cornerRadius(2)
                     }
@@ -258,6 +261,7 @@ private struct TrackedTimePanel: View {
 
 private struct AgendaTimeline: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let events: [DWAgendaEvent]
     let isAvailable: Bool
 
@@ -281,9 +285,9 @@ private struct AgendaTimeline: View {
                                     .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                                     .frame(width: 54, alignment: .leading)
                                 VStack(spacing: 0) {
-                                    Circle().fill(event.kind == "time_entry" ? DWDesign.accentBright : DWDesign.accent)
+                                    Circle().fill(event.kind == "time_entry" ? theme.emphasisBright : theme.emphasis)
                                         .frame(width: 7, height: 7).padding(.top, 4)
-                                    if index < min(events.count, 6) - 1 { Rectangle().fill(DWDesign.divider).frame(width: 1, height: 29) }
+                                    if index < min(events.count, 6) - 1 { Rectangle().fill(theme.divider).frame(width: 1, height: 29) }
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(event.title).font(.caption.weight(.medium)).lineLimit(1)
@@ -303,6 +307,7 @@ private struct AgendaTimeline: View {
 }
 
 private struct DashboardCard<Content: View>: View {
+    @Environment(\.dwTheme) private var theme
     let title: String
     let systemImage: String
     @ViewBuilder let content: Content
@@ -313,22 +318,25 @@ private struct DashboardCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Label(title, systemImage: systemImage).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Label(title, systemImage: systemImage)
+                .font(theme.contentFont(.caption, weight: .semibold))
+                .foregroundStyle(.secondary)
             content
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(DWDesign.elevated.opacity(0.58), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(DWDesign.divider) }
+        .background(theme.elevated.opacity(theme.isEditorial ? 1 : 0.58), in: RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 10, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 10, style: .continuous).stroke(theme.divider) }
     }
 }
 
 struct TaskGroupBlock: View {
+    @Environment(\.dwTheme) private var theme
     let title: String
     let tasks: [DWTask]
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(title).font(.caption.weight(.semibold))
+                Text(title).font(theme.contentFont(.caption, weight: .semibold))
                 Text("\(tasks.count)").font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
                 Spacer()
             }
@@ -338,21 +346,22 @@ struct TaskGroupBlock: View {
                     if task.id != tasks.last?.id { Divider().padding(.leading, 37) }
                 }
             }
-            .background(DWDesign.elevated.opacity(0.48), in: RoundedRectangle(cornerRadius: 9))
-            .overlay { RoundedRectangle(cornerRadius: 9).stroke(DWDesign.divider) }
+            .background(theme.elevated.opacity(theme.isEditorial ? 1 : 0.48), in: RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 9))
+            .overlay { RoundedRectangle(cornerRadius: theme.isEditorial ? theme.cardRadius : 9).stroke(theme.divider) }
         }
     }
 }
 
 struct CompactTaskRow: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let task: DWTask
     @State private var hovering = false
     var body: some View {
         HStack(spacing: 0) {
             Button { Task { await store.toggleComplete(task) } } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.body).foregroundStyle(task.isDone ? DWDesign.accent : .secondary)
+                    .font(.body).foregroundStyle(task.isDone ? theme.emphasis : .secondary)
                     .frame(width: 36, height: 48).contentShape(Rectangle())
             }
             .buttonStyle(.plain).help(task.isDone ? "Mark incomplete" : "Mark complete")
@@ -380,8 +389,8 @@ struct CompactTaskRow: View {
             .buttonStyle(.plain)
         }
         .padding(.trailing, 9).frame(height: 48).contentShape(Rectangle())
-        .background(store.selectedTaskID == task.id ? DWDesign.selection : (hovering ? DWDesign.hover : .clear))
-        .overlay(alignment: .leading) { if store.selectedTaskID == task.id { Rectangle().fill(DWDesign.accent).frame(width: 3) } }
+        .background(store.selectedTaskID == task.id ? theme.selection : (hovering ? theme.hover : .clear))
+        .overlay(alignment: .leading) { if store.selectedTaskID == task.id { Rectangle().fill(theme.emphasis).frame(width: 3) } }
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Open Task") { Task { await store.selectTask(task.id) } }
@@ -398,6 +407,7 @@ struct CompactTaskRow: View {
 
 struct MemberAvatar: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     let member: DWMember
     let size: CGFloat
     @State private var image: NSImage?
@@ -407,7 +417,7 @@ struct MemberAvatar: View {
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fill).frame(width: size, height: size).clipped()
             } else {
                 Text(member.initials).font(.system(size: size * 0.34, weight: .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity).background(DWDesign.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.emphasis)
             }
         }
         .frame(width: size, height: size).clipShape(Circle()).overlay { Circle().stroke(.background, lineWidth: 1) }

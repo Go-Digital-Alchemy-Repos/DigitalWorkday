@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UpcomingView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     private var groups: [(Date, [DWTask])] {
         let calendar = Calendar.autoupdatingCurrent
         return Dictionary(grouping: store.filteredTasks.filter { $0.dueDate.map { !calendar.isDateInToday($0) && $0 >= calendar.startOfDay(for: .now) } ?? false }) {
@@ -17,10 +18,10 @@ struct UpcomingView: View {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.caption.bold()).foregroundStyle(.secondary)
                         VStack(spacing: 0) { ForEach(tasks) { task in CompactTaskRow(task: task); if task.id != tasks.last?.id { Divider().padding(.leading, 40) } } }
-                            .background(DWDesign.elevated, in: RoundedRectangle(cornerRadius: 11)).overlay { RoundedRectangle(cornerRadius: 11).stroke(DWDesign.divider) }
+                            .background(theme.elevated, in: RoundedRectangle(cornerRadius: theme.cardRadius)).overlay { RoundedRectangle(cornerRadius: theme.cardRadius).stroke(theme.divider) }
                     }
                 }
             }.padding(16)
-        }.background(DWDesign.canvas)
+        }.background(theme.canvas)
     }
 }

@@ -111,6 +111,17 @@ func testInvalidAppearanceFallsBackToSystem() {
     XCTAssertNil(mode.colorScheme)
 }
 
+func testAnthropicAppearanceUsesWarmLightTheme() {
+    let mode = AppearanceMode.anthropic
+    XCTAssertEqual(mode.colorScheme, .light)
+    XCTAssertEqual(mode.systemImage, "book.closed.fill")
+    XCTAssertEqual(mode.theme.id, "anthropic")
+    XCTAssertTrue(mode.theme.isEditorial)
+    XCTAssertEqual(mode.theme.cardRadius, 24)
+    XCTAssertEqual(mode.theme.compactRadius, 12)
+    XCTAssertEqual(AppearanceMode.allCases.map(\.rawValue), ["system", "light", "dark", "anthropic"])
+}
+
 func testAdditiveDesktopTaskFieldsDecode() throws {
     let data = Data(#"{"id":"task","title":"Plan","description":null,"status":"todo","priority":"high","dueDate":null,"isPersonal":false,"projectId":"p","projectName":"Launch","clientId":"c","clientName":"Acme","sectionId":null,"assigneeIds":["u"],"assignees":[{"id":"u","name":"Alex","email":"alex@example.com","role":"employee","avatarUrl":null}],"estimateMinutes":90,"subtasks":[],"createdAt":"2026-08-19T12:00:00Z","updatedAt":"2026-08-19T12:00:00Z"}"#.utf8)
     let task = try JSONCoding.decoder.decode(DWTask.self, from: data)
