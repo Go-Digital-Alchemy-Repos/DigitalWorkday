@@ -4,6 +4,8 @@
   "user": {
     "id": "user-1",
     "name": "Alex Rivera",
+    "firstName": "Alex",
+    "lastName": "Rivera",
     "email": "alex@example.com",
     "role": "employee",
     "avatarUrl": null
@@ -22,6 +24,13 @@
     "id": "client-1",
     "companyName": "Example Client"
   }],
+  "members": [{
+    "id": "user-1",
+    "name": "Alex Rivera",
+    "email": "alex@example.com",
+    "role": "employee",
+    "avatarUrl": null
+  }],
   "tasks": {
     "items": [{
       "id": "task-1",
@@ -37,6 +46,14 @@
       "clientName": "Example Client",
       "sectionId": null,
       "assigneeIds": ["user-1"],
+      "assignees": [{
+        "id": "user-1",
+        "name": "Alex Rivera",
+        "email": "alex@example.com",
+        "role": "employee",
+        "avatarUrl": null
+      }],
+      "estimateMinutes": 90,
       "subtasks": [],
       "createdAt": "2026-08-17T12:00:00.000Z",
       "updatedAt": "2026-08-18T12:00:00.000Z"

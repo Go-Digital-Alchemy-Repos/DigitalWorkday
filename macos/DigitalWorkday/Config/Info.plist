@@ -8,8 +8,8 @@
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>Digital Workday</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>1.2.3</string>
+  <key>CFBundleVersion</key><string>7</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleURLTypes</key><array><dict>
@@ -18,5 +18,5 @@
   </dict></array>
   <key>SUEnableAutomaticChecks</key><false/>
   <key>SUFeedURL</key><string>https://digitalworkday.ai/downloads/macos/appcast.xml</string>
-  <key>SUPublicEDKey</key><string>SPARKLE_PUBLIC_KEY_REQUIRED_FOR_RELEASE</string>
+  <key>SUPublicEDKey</key><string>+2y8n3NVr+gRki0RA1jbq4sjyEJf0y08KOO3DDR1ofA=</string>
 </dict></plist>

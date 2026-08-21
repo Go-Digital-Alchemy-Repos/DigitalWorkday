@@ -29,6 +29,22 @@ function anonymous(): RequestHandler {
   };
 }
 
+function desktopAuth(user: Record<string, any>, tenantId = user.tenantId): RequestHandler {
+  return (req, _res, next) => {
+    (req as any).isAuthenticated = () => false;
+    (req as any).user = user;
+    (req as any).desktopAuth = {
+      sessionId: "session-1",
+      userId: user.id,
+      tenantId,
+      workspaceId: "workspace-1",
+      accessExpiresAt: new Date(Date.now() + 60_000),
+    };
+    (req as any).tenant = { tenantId, effectiveTenantId: tenantId, isSuperUser: false };
+    next();
+  };
+}
+
 function buildApp(middleware: RequestHandler) {
   const app = express();
   app.use(middleware);
@@ -53,6 +69,15 @@ describe("file serving authorization", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("File access denied");
+  });
+
+  it("accepts desktop bearer-authenticated users for their tenant files", async () => {
+    const app = buildApp(desktopAuth({ id: "user-1", tenantId: "tenant-a", role: "employee" }));
+
+    const res = await request(app).get("/api/v1/files/serve/tenants/tenant-a/users/user-1/avatar/photo.png");
+
+    expect(res.status).not.toBe(401);
+    expect(res.status).not.toBe(403);
   });
 
   it("allows tenant branding assets to remain public", async () => {

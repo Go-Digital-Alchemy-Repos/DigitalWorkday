@@ -4,12 +4,29 @@ import type {
   Comment,
   Project,
   TaskWithRelations,
+  TimeEntryWithRelations,
   User,
 } from "@shared/schema";
 import type {
   DesktopTask,
   DesktopTaskPage,
+  DesktopTimeEntry,
+  DesktopUser,
 } from "@shared/desktopContracts";
+
+type DesktopUserSource = Pick<User, "id" | "name" | "firstName" | "lastName" | "email" | "role" | "avatarUrl">;
+
+export function toDesktopUser(user: DesktopUserSource): DesktopUser {
+  return {
+    id: user.id,
+    name: user.name ?? null,
+    firstName: user.firstName ?? null,
+    lastName: user.lastName ?? null,
+    email: user.email,
+    role: user.role,
+    avatarUrl: user.avatarUrl ?? null,
+  };
+}
 
 function iso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -36,6 +53,14 @@ export function toDesktopTask(
     clientName: client?.companyName ?? null,
     sectionId: task.sectionId ?? null,
     assigneeIds: (task.assignees ?? []).map((value: any) => value.userId || value.user?.id).filter(Boolean),
+    assignees: (task.assignees ?? []).map((value: any) => value.user).filter(Boolean).map((user: User) => ({
+      id: user.id,
+      name: user.name ?? null,
+      email: user.email,
+      role: user.role,
+      avatarUrl: user.avatarUrl ?? null,
+    })),
+    estimateMinutes: task.estimateMinutes ?? null,
     subtasks: (task.subtasks ?? []).map((subtask) => ({
       id: subtask.id,
       taskId: subtask.taskId,
@@ -63,6 +88,23 @@ export function toDesktopTaskPage(
     nextCursor: nextOffset < tasks.length
       ? Buffer.from(String(nextOffset), "utf8").toString("base64url")
       : null,
+  };
+}
+
+export function toDesktopTimeEntry(entry: TimeEntryWithRelations): DesktopTimeEntry {
+  return {
+    id: entry.id,
+    taskId: entry.taskId ?? null,
+    projectId: entry.projectId ?? null,
+    title: entry.title ?? null,
+    description: entry.description ?? null,
+    startTime: iso(entry.startTime)!,
+    endTime: iso(entry.endTime),
+    durationSeconds: Math.max(0, entry.durationSeconds ?? 0),
+    isManual: entry.isManual,
+    projectName: entry.project?.name ?? null,
+    taskTitle: entry.task?.title ?? null,
+    updatedAt: iso(entry.updatedAt)!,
   };
 }
 
@@ -103,6 +145,8 @@ export function toDesktopComment(comment: Comment & { user?: User }) {
     user: comment.user ? {
       id: comment.user.id,
       name: comment.user.name ?? null,
+      firstName: comment.user.firstName ?? null,
+      lastName: comment.user.lastName ?? null,
       email: comment.user.email,
       avatarUrl: comment.user.avatarUrl ?? null,
     } : null,

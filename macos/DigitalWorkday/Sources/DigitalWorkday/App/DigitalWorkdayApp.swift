@@ -7,30 +7,77 @@ struct DigitalWorkdayApp: App {
     @State private var updater = UpdaterController()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("alwaysOnTop") private var alwaysOnTop = false
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+
+    private var preferredScheme: ColorScheme? { AppearanceMode(rawValue: appearanceMode)?.colorScheme }
 
     var body: some Scene {
         WindowGroup("Digital Workday", id: "tasks") {
             ContentView()
                 .environment(store)
+                .tint(DWDesign.accent)
+                .preferredColorScheme(preferredScheme)
                 .background(WindowPinningView(isPinned: alwaysOnTop))
-                .frame(minWidth: 360, idealWidth: 420, minHeight: 520, idealHeight: 700)
+                .frame(minWidth: 620, idealWidth: 1180, minHeight: 560, idealHeight: 760)
                 .task { await store.start() }
                 .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh() } } }
         }
-        .defaultSize(width: 420, height: 700)
+        .defaultSize(width: 1180, height: 760)
         .windowResizability(.contentMinSize)
+        .commands {
+            CommandMenu("Tasks") {
+                Button("Command Bar") { NotificationCenter.default.post(name: .dwCommandBar, object: nil) }
+                    .keyboardShortcut("k")
+                Button("New Task") { NotificationCenter.default.post(name: .dwNewTask, object: nil) }
+                    .keyboardShortcut("n")
+                Button("Save Task") { NotificationCenter.default.post(name: .dwSaveTask, object: nil) }
+                    .keyboardShortcut("s")
+                Divider()
+                Button("Refresh") { NotificationCenter.default.post(name: .dwRefresh, object: nil) }
+                    .keyboardShortcut("r")
+            }
+        }
 
         MenuBarExtra {
             MenuBarView()
                 .environment(store)
+                .tint(DWDesign.accent)
+                .preferredColorScheme(preferredScheme)
         } label: {
-            Image(systemName: store.bootstrap?.activeTimer == nil ? "checklist" : "timer")
+            if store.bootstrap?.activeTimer == nil {
+                MenuBarSymbol()
+            } else {
+                Image(systemName: "timer")
+            }
         }
         .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView(updater: updater)
                 .environment(store)
+                .tint(DWDesign.accent)
+                .preferredColorScheme(preferredScheme)
+        }
+    }
+}
+
+private struct MenuBarSymbol: View {
+    private let image: NSImage? = {
+        guard let url = Bundle.main.url(forResource: "menuBarSymbol", withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = true
+        return image
+    }()
+
+    var body: some View {
+        if let image {
+            Image(nsImage: image)
+                .renderingMode(.template)
+                .frame(width: 18, height: 18)
+                .accessibilityLabel("Digital Workday")
+        } else {
+            Image(systemName: "checkmark.circle")
         }
     }
 }
