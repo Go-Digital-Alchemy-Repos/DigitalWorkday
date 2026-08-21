@@ -69,6 +69,7 @@ export const queryKeys = {
     approvals: ["/api/crm/portal/approvals"] as const,
     messageTemplates: ["/api/crm/portal/message-templates"] as const,
     conversations: ["/api/crm/portal/conversations"] as const,
+    conversationRecipients: (clientId: string) => ["/api/crm/portal/conversation-recipients", { clientId }] as const,
     conversationMessages: (id: string) => ["/api/crm/conversations", id, "messages"] as const,
     clientAccount: (clientId: string) => ["/api/client-portal/clients", clientId] as const,
     clientContacts: (clientId: string) => ["/api/client-portal/clients", clientId, "contacts"] as const,

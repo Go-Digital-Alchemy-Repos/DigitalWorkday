@@ -23,6 +23,7 @@ const ClientPortalSupport = lazy(trackChunkLoad("PortalSupport", () => import("@
 const ClientPortalSupportNew = lazy(trackChunkLoad("PortalSupportNew", () => import("@/pages/client-portal-support-new")));
 const ClientPortalSupportDetail = lazy(trackChunkLoad("PortalSupportDetail", () => import("@/pages/client-portal-support-detail")));
 const ClientPortalAccount = lazy(trackChunkLoad("PortalAccount", () => import("@/pages/client-portal-account")));
+const ClientPortalProfile = lazy(trackChunkLoad("PortalProfile", () => import("@/pages/client-portal-profile")));
 const ClientPortalAssets = lazy(trackChunkLoad("PortalAssets", () => import("@/pages/client-portal-assets")));
 const ClientPortalActivity = lazy(trackChunkLoad("PortalActivity", () => import("@/pages/client-portal-activity")));
 const ClientPortalTaskDetail = lazy(trackChunkLoad("PortalTaskDetail", () => import("@/pages/client-portal-task-detail")));
@@ -48,6 +49,9 @@ function ClientPortalRouter() {
         </Route>
         <Route path="/portal/account">
           {() => <ClientPortalRouteGuard component={ClientPortalAccount} />}
+        </Route>
+        <Route path="/portal/profile">
+          {() => <ClientPortalRouteGuard component={ClientPortalProfile} />}
         </Route>
         <Route path="/portal/assets">
           {() => <ClientPortalRouteGuard component={ClientPortalAssets} />}

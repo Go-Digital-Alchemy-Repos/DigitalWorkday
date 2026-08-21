@@ -80,6 +80,14 @@ function checkPermission(perms: MessagePermissions, action: keyof MessagePermiss
   return false;
 }
 
+function portalParticipantHasAccess(
+  conversation: typeof clientConversations.$inferSelect,
+  userId: string,
+): boolean {
+  const participants = conversation.portalParticipantUserIds;
+  return !Array.isArray(participants) || participants.includes(userId);
+}
+
 function buildSearchConditions(search: string, tenantId: string) {
   const tsQuery = search.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, '')).filter(Boolean).join(' & ');
   if (!tsQuery) return null;
@@ -795,7 +803,7 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
     if (user.role === UserRole.CLIENT) {
       const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
       const accessibleClients = await getClientUserAccessibleClients(user.id);
-      if (!accessibleClients.includes(conversation.clientId)) {
+      if (!accessibleClients.includes(conversation.clientId) || !portalParticipantHasAccess(conversation, user.id)) {
         return sendError(res, AppError.forbidden("Access denied"), req);
       }
     }
@@ -807,6 +815,15 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
         .where(and(eq(users.id, conversation.assignedToUserId), eq(users.tenantId, tenantId)))
         .limit(1);
       assigneeName = assignee?.name || null;
+    }
+
+    let recipientName: string | null = null;
+    if (conversation.recipientUserId) {
+      const [recipient] = await db.select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, conversation.recipientUserId))
+        .limit(1);
+      recipientName = recipient?.name || null;
     }
 
     const perms = await getMessagePermissions(tenantId);
@@ -846,7 +863,7 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       slaPolicy = policy || null;
     }
 
-    res.json({ conversation: { ...conversation, assigneeName, slaPolicy }, messages });
+    res.json({ conversation: { ...conversation, assigneeName, recipientName, slaPolicy }, messages });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/messages", req);
   }
@@ -860,12 +877,21 @@ router.post("/crm/conversations/:conversationId/read", requireAuth, async (req: 
     const { conversationId } = req.params;
     const userId = getCurrentUserId(req);
 
-    const [conversation] = await db.select({ id: clientConversations.id })
+    const [conversation] = await db.select()
       .from(clientConversations)
       .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
       .limit(1);
 
     if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
+
+    const user = req.user!;
+    if (user.role === UserRole.CLIENT) {
+      const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
+      const accessibleClients = await getClientUserAccessibleClients(user.id);
+      if (!accessibleClients.includes(conversation.clientId) || !portalParticipantHasAccess(conversation, user.id)) {
+        return sendError(res, AppError.forbidden("Access denied"), req);
+      }
+    }
 
     const now = new Date();
     const [existing] = await db.select({ id: clientConversationReads.id })
@@ -915,7 +941,7 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
     if (user.role === UserRole.CLIENT) {
       const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
       const accessibleClients = await getClientUserAccessibleClients(user.id);
-      if (!accessibleClients.includes(conversation.clientId)) {
+      if (!accessibleClients.includes(conversation.clientId) || !portalParticipantHasAccess(conversation, user.id)) {
         return sendError(res, AppError.forbidden("Access denied"), req);
       }
     }
@@ -993,6 +1019,35 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
               href: buildClientConversationHref(conversation.clientId, conversationId, message.id),
             });
             emitNotificationNew(conversation.assignedToUserId, toNotificationPayload(notification));
+          } catch {}
+        }
+      }
+
+      if (Array.isArray(conversation.portalParticipantUserIds)) {
+        const portalRecipients = conversation.portalParticipantUserIds.filter((participantId) => participantId !== userId);
+        for (const participantId of portalRecipients) {
+          emitToUser(participantId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
+            conversationId,
+            tenantId,
+            clientId: conversation.clientId,
+            subject: conversation.subject,
+            assignedToUserId: conversation.assignedToUserId,
+            authorUserId: userId,
+            messageId: message.id,
+          });
+          try {
+            const notification = await storage.createNotification({
+              tenantId,
+              userId: participantId,
+              type: "client_message",
+              title: "New portal message",
+              message: `New reply on “${conversation.subject}”`,
+              payloadJson: { conversationId, clientId: conversation.clientId, messageId: message.id } as any,
+              entityType: "client_thread",
+              entityId: conversationId,
+              href: "/portal/messages",
+            });
+            emitNotificationNew(participantId, toNotificationPayload(notification));
           } catch {}
         }
       }
@@ -1248,7 +1303,11 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
         and(
           eq(clientConversations.tenantId, tenantId),
           inArray(clientConversations.clientId, clientIds),
-          isNull(clientConversations.mergedIntoId)
+          isNull(clientConversations.mergedIntoId),
+          or(
+            isNull(clientConversations.portalParticipantUserIds),
+            dsql`${clientConversations.portalParticipantUserIds} @> ${JSON.stringify([user.id])}::jsonb`,
+          ),
         )
       )
       .orderBy(desc(clientConversations.updatedAt));
@@ -1274,10 +1333,20 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
         .orderBy(desc(clientMessages.createdAt))
         .limit(1);
 
+      let recipientName: string | null = null;
+      if (r.conversation.recipientUserId) {
+        const [recipient] = await db.select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, r.conversation.recipientUserId))
+          .limit(1);
+        recipientName = recipient?.name || null;
+      }
+
       return {
         ...r.conversation,
         creatorName: r.creatorName || "Unknown",
         clientName: r.clientName || "Unknown",
+        recipientName,
         messageCount: msgCount?.value || 0,
         lastMessage: lastMsg || null,
       };

@@ -70,6 +70,8 @@ export function UserMenu() {
           onClick={() => {
             if (user?.role === "super_user") {
               setLocation("/super-admin/profile");
+            } else if (user?.role === "client") {
+              setLocation("/portal/profile");
             } else {
               setLocation("/profile");
             }
