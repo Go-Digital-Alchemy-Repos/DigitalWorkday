@@ -33,6 +33,7 @@ import { repairDemoWorkspaceMembers } from "./startup/repairWorkspaceMembers";
 import { storage } from "./storage";
 import { evaluateSlaPolicies } from "./http/domains/support.router";
 import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
+import { startActivitySessionRetentionJob } from "./features/activity/userActivitySession.service";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -644,6 +645,7 @@ httpServer.listen(port, host, () => {
   // This ensures health checks pass quickly - diagnostics run in background
   setPhase("ready");
   appReady = true;
+  startActivitySessionRetentionJob();
   const totalDuration = Date.now() - serverStartTime;
   console.log(`[startup] Phase 4/4: App READY in ${totalDuration}ms`);
   log(`[boot] Application ready - running background diagnostics...`);

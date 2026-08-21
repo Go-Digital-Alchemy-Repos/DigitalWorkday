@@ -41,6 +41,7 @@ export async function desktopBearerMiddleware(
       tenantId: authenticated.tenantId,
       workspaceId: authenticated.workspaceId,
       accessExpiresAt: authenticated.accessExpiresAt,
+      deviceName: authenticated.deviceName,
     };
     next();
   } catch (error) {

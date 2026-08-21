@@ -20,7 +20,19 @@ struct DigitalWorkdayApp: App {
                 .background(WindowPinningView(isPinned: alwaysOnTop))
                 .frame(minWidth: 620, idealWidth: 1180, minHeight: 560, idealHeight: 760)
                 .task { await store.start() }
-                .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh() } } }
+                .onChange(of: scenePhase) { _, phase in
+                    Task {
+                        switch phase {
+                        case .active:
+                            await store.setActivityState("active")
+                            await store.refresh()
+                        case .inactive, .background:
+                            await store.setActivityState("hidden")
+                        @unknown default:
+                            break
+                        }
+                    }
+                }
         }
         .defaultSize(width: 1180, height: 760)
         .windowResizability(.contentMinSize)

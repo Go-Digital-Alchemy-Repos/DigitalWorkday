@@ -1406,6 +1406,37 @@ export const desktopSessions = pgTable("desktop_sessions", {
 ]);
 
 /**
+ * Privacy-minimized activity telemetry used by the Super Admin activity log.
+ * Raw cookies, bearer tokens, IP addresses, and user-agent strings never enter
+ * this table. sourceSessionId is an internal, non-secret correlation key.
+ */
+export const userActivitySessions = pgTable("user_activity_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+  platform: text("platform").notNull(),
+  deviceLabel: text("device_label").notNull(),
+  sourceSessionId: varchar("source_session_id", { length: 128 }),
+  state: text("state").notNull().default("active"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+  lastActiveAt: timestamp("last_active_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+  activeSeconds: integer("active_seconds").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("user_activity_sessions_user_started_idx").on(table.userId, table.startedAt),
+  index("user_activity_sessions_tenant_started_idx").on(table.tenantId, table.startedAt),
+  index("user_activity_sessions_source_idx").on(table.sourceSessionId),
+  uniqueIndex("user_activity_sessions_open_source_unique")
+    .on(table.sourceSessionId)
+    .where(sql`${table.sourceSessionId} IS NOT NULL AND ${table.endedAt} IS NULL`),
+  index("user_activity_sessions_last_seen_idx").on(table.lastSeenAt),
+]);
+
+/**
  * Mutation responses are retained briefly to make retrying native requests
  * safe when the client loses the HTTP response after the server commits.
  */

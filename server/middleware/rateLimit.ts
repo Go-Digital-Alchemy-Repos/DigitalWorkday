@@ -365,6 +365,26 @@ export const clientMessageRateLimiter = rateLimit({
   handler: rateLimitHandler("client-message", "Too many messages. Please slow down."),
 });
 
+/**
+ * Heartbeats normally arrive once per minute plus a small number of immediate
+ * state transitions. Keying by the authenticated source keeps one noisy
+ * client from consuming an unbounded number of database writes.
+ */
+export const ACTIVITY_HEARTBEAT_RATE_LIMIT_MAX = 120;
+export function createActivityHeartbeatRateLimiter(options?: { max?: number; skip?: () => boolean }) {
+  return rateLimit({
+    windowMs: 60_000,
+    max: options?.max ?? ACTIVITY_HEARTBEAT_RATE_LIMIT_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: options?.skip ?? shouldSkipRateLimit,
+    keyGenerator: (req: Request) => req.desktopAuth?.sessionId || req.sessionID || req.user?.id || "unauthenticated",
+    handler: rateLimitHandler("activity-heartbeat", "Too many activity updates. Please slow down."),
+  });
+}
+
+export const activityHeartbeatRateLimiter = createActivityHeartbeatRateLimiter();
+
 export function resetRateLimitStores(): void {
   emailStore.clear();
   activeStore.clear();

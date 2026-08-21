@@ -39,6 +39,7 @@ function desktopAuth(user: Record<string, any>, tenantId = user.tenantId): Reque
       tenantId,
       workspaceId: "workspace-1",
       accessExpiresAt: new Date(Date.now() + 60_000),
+      deviceName: "Test Mac",
     };
     (req as any).tenant = { tenantId, effectiveTenantId: tenantId, isSuperUser: false };
     next();

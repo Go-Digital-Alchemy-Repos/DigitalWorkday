@@ -37,6 +37,7 @@ interface DesktopAuthContext {
   tenantId: string;
   workspaceId: string;
   accessExpiresAt: Date;
+  deviceName: string | null;
 }
 
 declare global {

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,8 @@ import { Redirect } from "wouter";
 import { 
   Loader2, Shield, Save, Mail, Plus, Link, Copy, MoreHorizontal, Camera,
   UserCheck, UserX, Clock, AlertCircle, KeyRound, Eye, EyeOff, Trash2, Send,
-  Search, Building2, Users, ChevronLeft, ChevronRight, Activity, Edit, X
+  Search, Building2, Users, ChevronLeft, ChevronRight, Activity, Edit, X,
+  Monitor, Laptop, ExternalLink
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -114,6 +115,27 @@ interface UserActivity {
   }>;
 }
 
+type ActivityLogItem = {
+  id: string;
+  kind: "session" | "task";
+  occurredAt: string;
+  title: string;
+  detail: string | null;
+  platform?: "browser" | "macos";
+  deviceLabel?: string;
+  activeSeconds?: number;
+  task?: { id: string; title: string; projectName: string | null } | null;
+  isTaskAvailable?: boolean;
+};
+
+interface ActivityLogPage {
+  range: { from: string; to: string };
+  trackingStartedAt: string | null;
+  summary: { lastLoginAt: string | null; activeSeconds: number; sessionCount: number; distinctTasksTouched: number };
+  items: ActivityLogItem[];
+  nextCursor: string | null;
+}
+
 export default function SuperAdminUsers() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -163,6 +185,8 @@ export default function SuperAdminUsers() {
   const [appUserStatusFilter, setAppUserStatusFilter] = useState("all");
   const [appUserRoleFilter, setAppUserRoleFilter] = useState("all");
   const [appUserPage, setAppUserPage] = useState(1);
+  const [activityRange, setActivityRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [activityCategory, setActivityCategory] = useState<"all" | "sessions" | "tasks">("all");
   const [selectedAppUser, setSelectedAppUser] = useState<AppUser | null>(null);
   const [appUserDrawerOpen, setAppUserDrawerOpen] = useState(false);
   const [appUserPasswordDrawerOpen, setAppUserPasswordDrawerOpen] = useState(false);
@@ -226,6 +250,20 @@ export default function SuperAdminUsers() {
   const { data: userActivity, isLoading: activityLoading } = useQuery<UserActivity>({
     queryKey: ["/api/v1/super/users", selectedAppUser?.id, "activity"],
     enabled: appUserDrawerOpen && !!selectedAppUser,
+  });
+
+  const activityLogQuery = useInfiniteQuery<ActivityLogPage>({
+    queryKey: ["/api/v1/super/users", selectedAppUser?.id, "activity-log", activityRange, activityCategory],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ range: activityRange, category: activityCategory, limit: "25" });
+      if (typeof pageParam === "string") params.set("cursor", pageParam);
+      const response = await fetch(`/api/v1/super/users/${selectedAppUser!.id}/activity-log?${params}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to load activity log");
+      return response.json();
+    },
+    initialPageParam: undefined,
+    getNextPageParam: (page) => page.nextCursor || undefined,
+    enabled: appUserDrawerOpen && !!selectedAppUser && !selectedAppUser.isPendingInvite,
   });
 
   // User workspace memberships query
@@ -810,6 +848,23 @@ export default function SuperAdminUsers() {
       year: "numeric" 
     });
   };
+
+  const formatActiveTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${Math.max(0, seconds)}s`;
+  };
+
+  const activityPages = activityLogQuery.data?.pages || [];
+  const activityLogSummary = activityPages[0]?.summary;
+  const activityLogItems = activityPages.flatMap((page) => page.items);
+  const groupedActivityItems = activityLogItems.reduce<Record<string, ActivityLogItem[]>>((groups, item) => {
+    const day = new Date(item.occurredAt).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+    (groups[day] ||= []).push(item);
+    return groups;
+  }, {});
 
   // Handle app user selection
   const handleViewAppUser = (appUser: AppUser) => {
@@ -1511,6 +1566,117 @@ export default function SuperAdminUsers() {
                   <div className="text-sm text-muted-foreground">No activity data available</div>
                 )}
               </div>
+
+              {/* Activity Log */}
+              {!selectedAppUser.isPendingInvite && (
+                <div className="border-t pt-4 space-y-4" data-testid="section-user-activity-log">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      <h4 className="font-medium">Activity Log</h4>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Select value={activityRange} onValueChange={(value) => setActivityRange(value as typeof activityRange)}>
+                        <SelectTrigger className="h-8 w-[105px]" aria-label="Activity date range"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="7d">7 days</SelectItem>
+                          <SelectItem value="30d">30 days</SelectItem>
+                          <SelectItem value="90d">90 days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={activityCategory} onValueChange={(value) => setActivityCategory(value as typeof activityCategory)}>
+                        <SelectTrigger className="h-8 w-[115px]" aria-label="Activity category"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All activity</SelectItem>
+                          <SelectItem value="sessions">Sessions</SelectItem>
+                          <SelectItem value="tasks">Tasks</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {activityLogQuery.isLoading ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {[0, 1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-lg bg-muted" />)}
+                    </div>
+                  ) : activityLogQuery.isError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+                      <p>Activity could not be loaded.</p>
+                      <Button className="mt-2" size="sm" variant="outline" onClick={() => activityLogQuery.refetch()}>Try again</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <div className="text-xs text-muted-foreground">Last Login</div>
+                          <div className="mt-1 text-sm font-semibold">{activityLogSummary?.lastLoginAt ? new Date(activityLogSummary.lastLoginAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Not tracked"}</div>
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <div className="text-xs text-muted-foreground">Active Time</div>
+                          <div className="mt-1 text-lg font-semibold">{formatActiveTime(activityLogSummary?.activeSeconds || 0)}</div>
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <div className="text-xs text-muted-foreground">Sessions</div>
+                          <div className="mt-1 text-lg font-semibold">{activityLogSummary?.sessionCount || 0}</div>
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <div className="text-xs text-muted-foreground">Tasks Touched</div>
+                          <div className="mt-1 text-lg font-semibold">{activityLogSummary?.distinctTasksTouched || 0}</div>
+                        </div>
+                      </div>
+
+                      {activityLogItems.length === 0 ? (
+                        <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          No activity in this range. Session timing begins after this feature is deployed.
+                        </div>
+                      ) : (
+                        <ScrollArea className="h-[360px] rounded-lg border">
+                          <div className="space-y-5 p-3">
+                            {Object.entries(groupedActivityItems).map(([day, items]) => (
+                              <div key={day}>
+                                <div className="sticky top-0 z-10 bg-background/95 py-1 text-xs font-medium text-muted-foreground backdrop-blur">{day}</div>
+                                <div className="mt-1 divide-y">
+                                  {items.map((item) => (
+                                    <button
+                                      key={`${item.kind}-${item.id}`}
+                                      type="button"
+                                      disabled={item.kind !== "task" || !item.isTaskAvailable || !item.task}
+                                      onClick={() => item.task && window.open(`/super-admin/tasks/${item.task.id}`, "_blank", "noopener,noreferrer")}
+                                      className="flex w-full items-start gap-3 py-3 text-left disabled:cursor-default enabled:hover:bg-muted/50"
+                                    >
+                                      <div className="mt-0.5 rounded-full bg-muted p-2">
+                                        {item.kind === "session" ? (item.platform === "macos" ? <Laptop className="h-3.5 w-3.5" /> : <Monitor className="h-3.5 w-3.5" />) : <Activity className="h-3.5 w-3.5" />}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <p className="text-sm font-medium leading-5">{item.kind === "session" ? `${item.title} · ${item.deviceLabel} · ${formatActiveTime(item.activeSeconds || 0)} active` : item.title}</p>
+                                          {item.kind === "task" && item.isTaskAvailable && <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                                        </div>
+                                        {item.kind === "task" && item.detail && <p className="text-xs text-muted-foreground">{item.detail}</p>}
+                                        <div className="mt-1 flex items-center gap-2">
+                                          {item.kind === "session" && <Badge variant="outline" className="h-5 text-[10px]">{item.platform === "macos" ? "Mac" : "Browser"}</Badge>}
+                                          {item.kind === "task" && !item.isTaskAvailable && <Badge variant="secondary" className="h-5 text-[10px]">Deleted</Badge>}
+                                          <span className="text-xs text-muted-foreground">{new Date(item.occurredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            {activityLogQuery.hasNextPage && (
+                              <Button className="w-full" variant="outline" size="sm" disabled={activityLogQuery.isFetchingNextPage} onClick={() => activityLogQuery.fetchNextPage()}>
+                                {activityLogQuery.isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Load more
+                              </Button>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </SheetContent>

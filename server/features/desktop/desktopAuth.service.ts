@@ -168,6 +168,7 @@ export interface AuthenticatedDesktopSession {
   tenantId: string;
   workspaceId: string;
   accessExpiresAt: Date;
+  deviceName: string | null;
   user: Omit<User, "passwordHash">;
 }
 
@@ -199,6 +200,7 @@ export async function authenticateDesktopAccessToken(
     tenantId: result.session.tenantId,
     workspaceId: result.session.workspaceId,
     accessExpiresAt: result.session.accessExpiresAt,
+    deviceName: result.session.deviceName,
     user: safeUser,
   };
 }
@@ -211,6 +213,10 @@ export async function revokeDesktopSessionByRefreshToken(refreshToken: string): 
     eq(desktopSessions.refreshTokenHash, hashDesktopToken(refreshToken)),
     isNull(desktopSessions.revokedAt),
   )).returning({ id: desktopSessions.id });
+  if (revoked) {
+    const { closeActivitySessionsBySource } = await import("../activity/userActivitySession.service");
+    await closeActivitySessionsBySource(revoked.id);
+  }
   return Boolean(revoked);
 }
 
@@ -228,5 +234,9 @@ export async function revokeDesktopSessionById(sessionId: string, userId: string
   const [revoked] = await db.update(desktopSessions).set({ revokedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(desktopSessions.id, sessionId), eq(desktopSessions.userId, userId), isNull(desktopSessions.revokedAt)))
     .returning({ id: desktopSessions.id });
+  if (revoked) {
+    const { closeActivitySessionsBySource } = await import("../activity/userActivitySession.service");
+    await closeActivitySessionsBySource(revoked.id);
+  }
   return Boolean(revoked);
 }

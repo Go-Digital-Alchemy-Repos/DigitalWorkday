@@ -30,15 +30,61 @@ interface PresenceContextType {
 const PresenceContext = createContext<PresenceContextType | null>(null);
 
 const PING_INTERVAL_MS = 25000; // 25 seconds
+const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const ACTIVITY_TABS_KEY = "digitalworkday:activity-tabs";
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const auth = useAuthSafe();
   const user = auth?.user;
   const queryClient = useQueryClient();
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activityStateRef = useRef<"active" | "idle" | "hidden">("active");
+  const activityTabIdRef = useRef(globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceState>>(new Map());
   const [isConnected, setIsConnected] = useState(() => isSocketConnected());
+
+  const sendActivityHeartbeat = useCallback((state: "active" | "idle" | "hidden", keepalive = false) => {
+    if (!user) return;
+    const activityTabsKey = `${ACTIVITY_TABS_KEY}:${user.id}`;
+    activityStateRef.current = state;
+    const now = Date.now();
+    let tabs: Record<string, { state: "active" | "idle" | "hidden"; seenAt: number }> = {};
+    try { tabs = JSON.parse(localStorage.getItem(activityTabsKey) || "{}"); } catch { tabs = {}; }
+    for (const [id, tab] of Object.entries(tabs)) {
+      if (!tab || now - tab.seenAt > ACTIVITY_HEARTBEAT_INTERVAL_MS * 2) delete tabs[id];
+    }
+    tabs[activityTabIdRef.current] = { state, seenAt: now };
+    try { localStorage.setItem(activityTabsKey, JSON.stringify(tabs)); } catch { /* telemetry remains best effort */ }
+    const states = Object.values(tabs).map((tab) => tab.state);
+    const aggregateState = states.includes("active") ? "active" : states.includes("idle") ? "idle" : "hidden";
+    void fetch("/api/v1/activity/session/heartbeat", {
+      method: "POST",
+      credentials: "include",
+      keepalive,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: aggregateState }),
+    }).catch(() => undefined);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const initialState = document.hidden ? "hidden" : "active";
+    sendActivityHeartbeat(initialState);
+    const interval = setInterval(() => sendActivityHeartbeat(activityStateRef.current), ACTIVITY_HEARTBEAT_INTERVAL_MS);
+    const handlePageHide = () => sendActivityHeartbeat("hidden", true);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("pagehide", handlePageHide);
+      try {
+        const activityTabsKey = `${ACTIVITY_TABS_KEY}:${user.id}`;
+        const tabs = JSON.parse(localStorage.getItem(activityTabsKey) || "{}");
+        delete tabs[activityTabIdRef.current];
+        localStorage.setItem(activityTabsKey, JSON.stringify(tabs));
+      } catch { /* telemetry remains best effort */ }
+    };
+  }, [user, sendActivityHeartbeat]);
 
   // Track socket connection state and refetch presence on reconnect
   useEffect(() => {
@@ -161,6 +207,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       if (isIdleRef.current) {
         isIdleRef.current = false;
         socket.emit(PRESENCE_EVENTS.IDLE, { isIdle: false });
+        sendActivityHeartbeat("active");
       }
 
       // Set new idle timeout
@@ -168,6 +215,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         if (isSocketConnected() && !isIdleRef.current) {
           isIdleRef.current = true;
           socket.emit(PRESENCE_EVENTS.IDLE, { isIdle: true });
+          sendActivityHeartbeat("idle");
         }
       }, IDLE_TIMEOUT_MS);
     };
@@ -186,8 +234,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           isIdleRef.current = true;
           socket.emit(PRESENCE_EVENTS.IDLE, { isIdle: true });
         }
+        sendActivityHeartbeat("hidden", true);
       } else {
         // User came back
+        sendActivityHeartbeat("active");
         resetIdleTimer();
       }
     };
@@ -227,7 +277,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [isConnected]);
+  }, [isConnected, sendActivityHeartbeat]);
 
   const isOnline = useCallback((userId: string): boolean => {
     const state = presenceMap.get(userId);

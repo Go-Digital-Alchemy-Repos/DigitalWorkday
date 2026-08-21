@@ -53,15 +53,67 @@ import {
   platformAuditEvents,
   platformInvitations,
   errorLogs,
+  userActivitySessions,
 } from '@shared/schema';
 import * as schema from '@shared/schema';
 import { cleanupUserReferences } from '../../../utils/userDeletion';
-import { eq, sql, desc, and, count, gte, isNull, ne, inArray } from 'drizzle-orm';
+import { eq, sql, desc, and, count, gte, isNull, ne, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const superUsersRouter = Router();
 
 const SUPER_ADMIN_FILTERABLE_USER_ROLES = ["admin", "project_manager", "employee"] as const;
+
+const activityLogQuerySchema = z.object({
+  range: z.enum(["7d", "30d", "90d"]).default("30d"),
+  category: z.enum(["all", "sessions", "tasks"]).default("all"),
+  cursor: z.string().max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+});
+
+type ActivityCursor = {
+  occurredAt: string;
+  kind: "session" | "task";
+  id: string;
+  range: "7d" | "30d" | "90d";
+  category: "all" | "sessions" | "tasks";
+  from: string;
+  to: string;
+};
+
+function encodeActivityCursor(cursor: ActivityCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeActivityCursor(value?: string): ActivityCursor | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (!parsed || !["session", "task"].includes(parsed.kind) || typeof parsed.id !== "string"
+      || !["7d", "30d", "90d"].includes(parsed.range) || !["all", "sessions", "tasks"].includes(parsed.category)
+      || Number.isNaN(Date.parse(parsed.occurredAt)) || Number.isNaN(Date.parse(parsed.from)) || Number.isNaN(Date.parse(parsed.to))) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function activitySortKey(item: { occurredAt: string; kind: "session" | "task"; id: string }): string {
+  return `${item.occurredAt}|${item.kind}|${item.id}`;
+}
+
+function actionSummary(action: string, metadata: Record<string, unknown>, title: string): string {
+  if (action === "status_changed") return `Changed status on ${title}`;
+  if (action === "comment_added") return `Added a comment to ${title}`;
+  if (action.includes("attachment") || action.includes("file")) return `Added a file to ${title}`;
+  if (action === "time_logged") return `Logged time on ${title}`;
+  if (action === "created") return `Created ${title}`;
+  if (action === "completed") return `Completed ${title}`;
+  if (action === "updated" && typeof metadata.field === "string") return `Updated ${metadata.field.replaceAll("_", " ")} on ${title}`;
+  return `${action.replaceAll("_", " ")} · ${title}`;
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
@@ -355,6 +407,222 @@ superUsersRouter.get("/users/:userId/activity", requireSuperUser, async (req, re
   } catch (error) {
     console.error("[super/users/activity] Error:", error);
     res.status(500).json({ error: "Failed to fetch user activity" });
+  }
+});
+
+superUsersRouter.get("/users/:userId/activity-log", requireSuperUser, async (req, res) => {
+  const parsed = activityLogQuerySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid activity-log query" });
+  const cursor = decodeActivityCursor(parsed.data.cursor);
+  if (parsed.data.cursor && !cursor) return res.status(400).json({ error: "Invalid activity cursor" });
+  if (cursor && (cursor.range !== parsed.data.range || cursor.category !== parsed.data.category)) {
+    return res.status(400).json({ error: "Activity cursor does not match the requested filters" });
+  }
+
+  try {
+    const { userId } = req.params;
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const days = Number.parseInt(parsed.data.range, 10);
+    const to = cursor ? new Date(cursor.to) : new Date();
+    const from = cursor ? new Date(cursor.from) : new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    const cursorDate = cursor ? new Date(cursor.occurredAt) : null;
+    const fetchLimit = parsed.data.limit + 1;
+
+    const [sessionSummary] = await db.select({
+      activeSeconds: sql<number>`COALESCE(SUM(${userActivitySessions.activeSeconds}), 0)::int`,
+      sessionCount: sql<number>`COUNT(*)::int`,
+    }).from(userActivitySessions).where(and(
+      eq(userActivitySessions.userId, userId),
+      gte(userActivitySessions.startedAt, from),
+      lte(userActivitySessions.startedAt, to),
+    ));
+
+    const [lastLogin] = await db.select({ startedAt: userActivitySessions.startedAt })
+      .from(userActivitySessions)
+      .where(eq(userActivitySessions.userId, userId))
+      .orderBy(desc(userActivitySessions.startedAt))
+      .limit(1);
+    const [trackingStart] = await db.select({
+      startedAt: sql<Date | null>`MIN(${userActivitySessions.startedAt})`,
+    }).from(userActivitySessions).where(eq(userActivitySessions.userId, userId));
+
+    const touchedResult = await db.execute(sql`
+      SELECT COUNT(DISTINCT CASE
+        WHEN al.entity_type = 'task' THEN al.entity_id
+        WHEN al.entity_type = 'subtask' THEN COALESCE(al.diff_json->>'taskId', st.task_id)
+      END)::int AS count
+      FROM activity_log al
+      LEFT JOIN subtasks st ON al.entity_type = 'subtask' AND st.id = al.entity_id
+      WHERE al.actor_user_id = ${userId}
+        AND al.created_at >= ${from}
+        AND al.created_at <= ${to}
+        AND al.entity_type IN ('task', 'subtask')
+        AND al.action NOT IN ('viewed', 'opened')
+    `);
+    const distinctTasksTouched = Number((touchedResult.rows[0] as { count?: number | string } | undefined)?.count || 0);
+
+    const sessionRows = parsed.data.category === "tasks" ? [] : await db.select({
+      id: userActivitySessions.id,
+      platform: userActivitySessions.platform,
+      deviceLabel: userActivitySessions.deviceLabel,
+      state: userActivitySessions.state,
+      startedAt: userActivitySessions.startedAt,
+      endedAt: userActivitySessions.endedAt,
+      lastSeenAt: userActivitySessions.lastSeenAt,
+      activeSeconds: userActivitySessions.activeSeconds,
+    }).from(userActivitySessions).where(and(
+      eq(userActivitySessions.userId, userId),
+      gte(userActivitySessions.startedAt, from),
+      lte(userActivitySessions.startedAt, to),
+      cursorDate ? sql`(${userActivitySessions.startedAt}, 'session', ${userActivitySessions.id}) < (${cursorDate}, ${cursor!.kind}, ${cursor!.id})` : undefined,
+    )).orderBy(desc(userActivitySessions.startedAt), desc(userActivitySessions.id)).limit(fetchLimit);
+
+    const activityRows = parsed.data.category === "sessions" ? [] : await db.select({
+      id: activityLog.id,
+      entityType: activityLog.entityType,
+      entityId: activityLog.entityId,
+      action: activityLog.action,
+      metadata: activityLog.diffJson,
+      createdAt: activityLog.createdAt,
+    }).from(activityLog).where(and(
+      eq(activityLog.actorUserId, userId),
+      inArray(activityLog.entityType, ["task", "subtask"]),
+      sql`${activityLog.action} NOT IN ('viewed', 'opened')`,
+      gte(activityLog.createdAt, from),
+      lte(activityLog.createdAt, to),
+      cursorDate ? sql`(${activityLog.createdAt}, 'task', ${activityLog.id}) < (${cursorDate}, ${cursor!.kind}, ${cursor!.id})` : undefined,
+    )).orderBy(desc(activityLog.createdAt), desc(activityLog.id)).limit(fetchLimit);
+
+    const subtaskIds = activityRows.filter((row) => row.entityType === "subtask").map((row) => row.entityId);
+    const subtaskRows = subtaskIds.length ? await db.select({ id: subtasks.id, taskId: subtasks.taskId })
+      .from(subtasks).where(inArray(subtasks.id, subtaskIds)) : [];
+    const subtaskParent = new Map(subtaskRows.map((row) => [row.id, row.taskId]));
+    const taskIdFor = (row: typeof activityRows[number]) => {
+      const metadata = metadataRecord(row.metadata);
+      return row.entityType === "task" ? row.entityId
+        : typeof metadata.taskId === "string" ? metadata.taskId
+        : subtaskParent.get(row.entityId) || null;
+    };
+    const taskIds = Array.from(new Set(activityRows.map(taskIdFor).filter((id): id is string => Boolean(id))));
+    const taskRows = taskIds.length ? await db.select({
+      id: tasks.id,
+      title: tasks.title,
+      projectId: tasks.projectId,
+    }).from(tasks).where(inArray(tasks.id, taskIds)) : [];
+    const projectIds = Array.from(new Set(taskRows.map((task) => task.projectId).filter((id): id is string => Boolean(id))));
+    const projectRows = projectIds.length ? await db.select({ id: projects.id, name: projects.name })
+      .from(projects).where(inArray(projects.id, projectIds)) : [];
+    const projectsById = new Map(projectRows.map((project) => [project.id, project.name]));
+    const tasksById = new Map(taskRows.map((task) => [task.id, task]));
+
+    const items: Array<any> = [
+      ...sessionRows.map((session) => ({
+        id: session.id,
+        kind: "session" as const,
+        occurredAt: session.startedAt.toISOString(),
+        title: `${session.platform === "macos" ? "Mac" : "Browser"} session`,
+        detail: `${session.deviceLabel} · ${Math.max(0, session.activeSeconds)}s active`,
+        platform: session.platform,
+        deviceLabel: session.deviceLabel,
+        startedAt: session.startedAt.toISOString(),
+        endedAt: session.endedAt?.toISOString() || null,
+        activeSeconds: session.activeSeconds,
+        state: session.state,
+      })),
+      ...activityRows.map((activity) => {
+        const metadata = metadataRecord(activity.metadata);
+        const taskId = taskIdFor(activity);
+        const task = taskId ? tasksById.get(taskId) : undefined;
+        const fallbackTitle = typeof metadata.entityTitle === "string" ? metadata.entityTitle : "Deleted task";
+        const title = task?.title || fallbackTitle;
+        return {
+          id: activity.id,
+          kind: "task" as const,
+          occurredAt: activity.createdAt.toISOString(),
+          title: actionSummary(activity.action, metadata, title),
+          detail: task?.projectId ? projectsById.get(task.projectId) || null : null,
+          action: activity.action,
+          task: task ? { id: task.id, title: task.title, projectName: task.projectId ? projectsById.get(task.projectId) || null : null } : null,
+          isTaskAvailable: Boolean(task),
+        };
+      }),
+    ].sort((a, b) => activitySortKey(b).localeCompare(activitySortKey(a)));
+
+    const page = items.slice(0, parsed.data.limit + 1);
+    const hasMore = page.length > parsed.data.limit;
+    const visible = page.slice(0, parsed.data.limit);
+    const tail = visible.at(-1);
+
+    res.set("Cache-Control", "private, no-store");
+    res.json({
+      range: { from: from.toISOString(), to: to.toISOString() },
+      trackingStartedAt: trackingStart?.startedAt?.toISOString() || null,
+      summary: {
+        lastLoginAt: lastLogin?.startedAt.toISOString() || null,
+        activeSeconds: Number(sessionSummary?.activeSeconds || 0),
+        sessionCount: Number(sessionSummary?.sessionCount || 0),
+        distinctTasksTouched,
+      },
+      items: visible,
+      nextCursor: hasMore && tail ? encodeActivityCursor({
+        occurredAt: tail.occurredAt,
+        kind: tail.kind,
+        id: tail.id,
+        range: parsed.data.range,
+        category: parsed.data.category,
+        from: from.toISOString(),
+        to: to.toISOString(),
+      }) : null,
+    });
+  } catch (error) {
+    console.error("[super/users/activity-log] Error:", error);
+    res.status(500).json({ error: "Failed to fetch user activity log" });
+  }
+});
+
+superUsersRouter.get("/tasks/:taskId", requireSuperUser, async (req, res) => {
+  try {
+    const [task] = await db.select({
+      id: tasks.id,
+      title: tasks.title,
+      description: tasks.description,
+      status: tasks.status,
+      priority: tasks.priority,
+      startDate: tasks.startDate,
+      dueDate: tasks.dueDate,
+      completedAt: tasks.completedAt,
+      archivedAt: tasks.archivedAt,
+      createdAt: tasks.createdAt,
+      updatedAt: tasks.updatedAt,
+      tenantId: tasks.tenantId,
+      projectId: tasks.projectId,
+      projectName: projects.name,
+    }).from(tasks).leftJoin(projects, eq(tasks.projectId, projects.id))
+      .where(eq(tasks.id, req.params.taskId)).limit(1);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const [assignees, history] = await Promise.all([
+      db.select({ id: users.id, name: users.name, email: users.email, avatarUrl: users.avatarUrl })
+        .from(taskAssignees).innerJoin(users, eq(taskAssignees.userId, users.id))
+        .where(eq(taskAssignees.taskId, task.id)),
+      db.select({
+        id: activityLog.id,
+        action: activityLog.action,
+        metadata: activityLog.diffJson,
+        createdAt: activityLog.createdAt,
+      }).from(activityLog).where(sql`(
+        (${activityLog.entityType} = 'task' AND ${activityLog.entityId} = ${task.id}) OR
+        (${activityLog.entityType} = 'subtask' AND ${activityLog.diffJson}->>'taskId' = ${task.id})
+      )`)
+        .orderBy(desc(activityLog.createdAt)).limit(100),
+    ]);
+    res.set("Cache-Control", "private, no-store");
+    res.json({ task, assignees, history });
+  } catch (error) {
+    console.error("[super/tasks/detail] Error:", error);
+    res.status(500).json({ error: "Failed to fetch task detail" });
   }
 });
 

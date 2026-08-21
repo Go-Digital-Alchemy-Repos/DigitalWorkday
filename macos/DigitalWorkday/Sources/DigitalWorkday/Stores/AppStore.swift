@@ -13,6 +13,10 @@ final class AppStore {
     private let realtime = RealtimeService()
     private let notifications = NotificationService()
     private var avatarCache: [String: NSImage] = [:]
+    private var activityHeartbeatTask: Task<Void, Never>?
+    private var activityIdleTask: Task<Void, Never>?
+    private var activityEventMonitor: Any?
+    private var activityState = "active"
 
     var bootstrap: DWBootstrap?
     var selectedTaskID: String?
@@ -61,7 +65,12 @@ final class AppStore {
         if let first = bootstrap?.tasks.items.first {
             await selectTask(first.id)
         }
-        if await api.isAuthenticated { await refresh() }
+        if await api.isAuthenticated {
+            startActivityHeartbeat()
+            installActivityMonitor()
+            await setActivityState("active")
+            await refresh()
+        }
     }
 
     func signIn() async {
@@ -71,6 +80,9 @@ final class AppStore {
             try await api.setEnvironment(environment)
             let result = try await auth.signIn(environment: environment)
             try await api.exchange(code: result.code, verifier: result.verifier, redirectURI: "digitalworkday://auth/callback")
+            startActivityHeartbeat()
+            installActivityMonitor()
+            await setActivityState("active")
             await notifications.requestAuthorization()
             await refresh()
             logger.info("Browser authentication completed")
@@ -79,11 +91,70 @@ final class AppStore {
     }
 
     func signOut() async {
+        activityHeartbeatTask?.cancel()
+        activityHeartbeatTask = nil
+        activityIdleTask?.cancel()
+        activityIdleTask = nil
+        if let activityEventMonitor { NSEvent.removeMonitor(activityEventMonitor) }
+        activityEventMonitor = nil
         realtime.disconnect()
         await api.revoke()
         try? cache.clear()
         bootstrap = nil; taskDetail = nil; selectedTaskID = nil; commandCenter = nil
         completedTasks = []; isStale = false
+    }
+
+    func setActivityState(_ state: String) async {
+        activityState = state
+        if state == "active" { scheduleIdleTransition() }
+        else { activityIdleTask?.cancel(); activityIdleTask = nil }
+        await sendActivityHeartbeat()
+    }
+
+    private func startActivityHeartbeat() {
+        activityHeartbeatTask?.cancel()
+        activityHeartbeatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled, let self else { return }
+                await self.sendActivityHeartbeat()
+            }
+        }
+    }
+
+    private func sendActivityHeartbeat() async {
+        guard await api.isAuthenticated else { return }
+        try? await api.heartbeatActivity(state: activityState)
+    }
+
+    private func installActivityMonitor() {
+        guard activityEventMonitor == nil else { return }
+        let events: NSEvent.EventTypeMask = [
+            .keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown,
+            .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .scrollWheel,
+        ]
+        activityEventMonitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
+            Task { @MainActor in self?.recordUserActivity() }
+            return event
+        }
+    }
+
+    private func recordUserActivity() {
+        guard activityState != "hidden" else { return }
+        let resumedFromIdle = activityState == "idle"
+        activityState = "active"
+        scheduleIdleTransition()
+        if resumedFromIdle { Task { await sendActivityHeartbeat() } }
+    }
+
+    private func scheduleIdleTransition() {
+        activityIdleTask?.cancel()
+        activityIdleTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(300))
+            guard !Task.isCancelled, let self, self.activityState == "active" else { return }
+            self.activityState = "idle"
+            await self.sendActivityHeartbeat()
+        }
     }
 
     func refresh() async {

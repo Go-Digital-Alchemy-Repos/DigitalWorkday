@@ -98,6 +98,11 @@ actor APIClient {
         let _: EmptyResponse = try await request("/api/v1/desktop/notifications/mark-all-read", method: "POST", body: Data("{}".utf8), idempotencyKey: UUID().uuidString)
     }
 
+    func heartbeatActivity(state: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["state": state])
+        let _: EmptyResponse = try await request("/api/v1/desktop/activity/heartbeat", method: "POST", body: body)
+    }
+
     nonisolated static func resolvedAvatarURL(_ value: String?, relativeTo baseURL: URL = APIEnvironment.production.baseURL) -> URL? {
         AvatarRequestPolicy.resolvedURL(value, relativeTo: baseURL)
     }

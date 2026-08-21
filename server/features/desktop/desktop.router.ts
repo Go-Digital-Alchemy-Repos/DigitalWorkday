@@ -18,6 +18,8 @@ import timeRouter from "../../http/domains/time.router";
 import { deleteFromStorageByUrl } from "../../services/uploads/s3UploadService";
 import { generateAvatarKey, isS3Configured, uploadToS3, validateAvatar } from "../../s3";
 import { AppError } from "../../lib/errors";
+import { friendlyMacDevice, heartbeatActivitySession } from "../activity/userActivitySession.service";
+import { activityHeartbeatRateLimiter } from "../../middleware/rateLimit";
 
 const router = Router();
 const desktopAvatarUpload = multer({
@@ -42,6 +44,23 @@ router.use((req, res, next) => {
     return;
   }
   next();
+});
+
+router.post("/activity/heartbeat", activityHeartbeatRateLimiter, async (req, res, next) => {
+  const parsed = z.object({ state: z.enum(["active", "idle", "hidden"]) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid activity state" }); return; }
+  try {
+    const auth = req.desktopAuth!;
+    await heartbeatActivitySession({
+      userId: req.user!.id,
+      tenantId: auth.tenantId,
+      workspaceId: auth.workspaceId,
+      platform: "macos",
+      deviceLabel: friendlyMacDevice(auth.deviceName),
+      sourceSessionId: auth.sessionId,
+    }, parsed.data.state);
+    res.status(204).end();
+  } catch (error) { next(error); }
 });
 
 router.use(desktopIdempotencyMiddleware);

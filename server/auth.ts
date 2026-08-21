@@ -17,14 +17,13 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy, type Profile as GoogleProfile } from "passport-google-oauth20";
 import session from "express-session";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { db } from "./db";
 import { users, UserRole, ClientAccessLevel, platformInvitations, platformAuditEvents, invitations, clientInvites, tenants, tenantSettings, systemSettings, workspaces, passwordResetTokens } from "@shared/schema";
 import { getWorkspaceMembershipRoleForUserRole } from "@shared/roles";
 import { eq, sql, and, desc } from "drizzle-orm";
-import { createHash } from "crypto";
 import type { User } from "@shared/schema";
 import type { Express, Request, RequestHandler, Response } from "express";
 import connectPgSimple from "connect-pg-simple";
@@ -39,10 +38,25 @@ import {
   forgotPasswordRateLimiter,
   userCreateRateLimiter 
 } from "./middleware/rateLimit";
+import { activityHeartbeatRateLimiter } from "./middleware/rateLimit";
+import { csrfProtection } from "./middleware/csrf";
 import { getClientDescendantIds } from "./services/customerAccessPermissions";
+import { z } from "zod";
+import {
+  closeActivitySession,
+  friendlyBrowserDevice,
+  heartbeatActivitySession,
+  opaqueActivitySourceId,
+  startActivitySession,
+} from "./features/activity/userActivitySession.service";
 
 const scryptAsync = promisify(scrypt);
 const GOOGLE_CALLBACK_PATH = "/api/v1/auth/google/callback";
+
+export function browserActivitySourceId(sessionId: string): string {
+  const secret = process.env.SESSION_SECRET || "dasana-dev-secret-key";
+  return opaqueActivitySourceId("web", sessionId, secret);
+}
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
@@ -140,6 +154,20 @@ export async function establishAuthenticatedSession(
   });
 
   req.session.workspaceId = workspaceId;
+  if (typeof req.get === "function") {
+    try {
+      req.session.activitySessionId = await startActivitySession({
+        userId: user.id,
+        tenantId: user.tenantId,
+        workspaceId,
+        platform: "browser",
+        deviceLabel: friendlyBrowserDevice(req.get("user-agent")),
+        sourceSessionId: browserActivitySourceId(req.sessionID),
+      });
+    } catch (error) {
+      console.error("[activity-session] failed to start browser session", error);
+    }
+  }
   if (desktopAuthorizationRequest) {
     (req.session as any).desktopAuthorizationRequest = desktopAuthorizationRequest;
   }
@@ -180,6 +208,7 @@ declare global {
 declare module "express-session" {
   interface SessionData {
     workspaceId?: string;
+    activitySessionId?: string;
     desktopAuthorizationRequest?: {
       client_id: string;
       redirect_uri: string;
@@ -428,10 +457,14 @@ export function setupAuth(app: Express): void {
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    const activitySessionId = req.session.activitySessionId;
     req.logout((err) => {
       if (err) {
         return res.status(500).json({ error: "Logout failed" });
       }
+      void closeActivitySession(activitySessionId).catch((closeError) => {
+        console.error("[activity-session] failed to close browser session", closeError);
+      });
       req.session.destroy((sessionErr) => {
         if (sessionErr) {
           console.error("Session destroy error:", sessionErr);
@@ -447,6 +480,36 @@ export function setupAuth(app: Express): void {
         res.json({ success: true });
       });
     });
+  });
+
+  app.post("/api/v1/activity/session/heartbeat", csrfProtection, activityHeartbeatRateLimiter, async (req, res, next) => {
+    if (!req.isAuthenticated() || !req.user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const parsed = z.object({ state: z.enum(["active", "idle", "hidden"]) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid activity state" });
+      return;
+    }
+    try {
+      const activitySessionId = await heartbeatActivitySession({
+        userId: req.user.id,
+        tenantId: req.user.tenantId,
+        workspaceId: req.session.workspaceId,
+        platform: "browser",
+        deviceLabel: friendlyBrowserDevice(req.get("user-agent")),
+        sourceSessionId: browserActivitySourceId(req.sessionID),
+      }, parsed.data.state, req.session.activitySessionId);
+      if (activitySessionId) req.session.activitySessionId = activitySessionId;
+      else delete req.session.activitySessionId;
+      req.session.save((error) => {
+        if (error) return next(error);
+        res.status(204).end();
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/api/auth/me", (req, res) => {
