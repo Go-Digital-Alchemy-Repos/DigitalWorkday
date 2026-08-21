@@ -4,6 +4,11 @@ import { storage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { AppError, handleRouteError } from "../../lib/errors";
 import { SupportTicketStatus, SupportTicketPriority, SupportTicketCategory, SupportTicketAuthorType, SupportTicketEventType, SupportTicketSource } from "@shared/schema";
+import {
+  createCommunicationAttachmentDownload,
+  findCommunicationAttachment,
+  toPublicCommunicationAttachments,
+} from "../../services/communicationAttachments";
 
 const router = createApiRouter({ policy: "authTenant" });
 
@@ -105,7 +110,12 @@ router.get("/tickets/:id", async (req, res) => {
     const messagesWithAuthors = messages.map((m) => {
       const authorId = m.authorUserId || m.authorPortalUserId;
       const author = authorId ? allUsersMap.get(authorId) : null;
-      return { ...m, author: author ? { id: author.id, name: author.name, email: author.email } : null };
+      return {
+        ...m,
+        attachmentsJson: undefined,
+        attachments: toPublicCommunicationAttachments(m.attachmentsJson),
+        author: author ? { id: author.id, name: author.name, email: author.email } : null,
+      };
     });
 
     const eventsWithActors = events.map((e) => {
@@ -124,6 +134,27 @@ router.get("/tickets/:id", async (req, res) => {
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/v1/support/tickets/:id", req);
+  }
+});
+
+router.get("/tickets/:id/attachments/:attachmentId/download", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const ticket = await storage.getSupportTicket(req.params.id);
+    if (!ticket || ticket.tenantId !== tenantId) throw AppError.notFound("Support ticket");
+
+    const messages = await storage.getSupportTicketMessages(ticket.id, tenantId, true);
+    const attachment = findCommunicationAttachment(
+      messages.map((message) => message.attachmentsJson),
+      req.params.attachmentId,
+    );
+    if (!attachment) throw AppError.notFound("Attachment");
+
+    res.json(await createCommunicationAttachmentDownload(attachment, tenantId));
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/tickets/:id/attachments/:attachmentId/download", req);
   }
 });
 

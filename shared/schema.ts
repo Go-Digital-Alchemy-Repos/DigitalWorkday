@@ -3911,6 +3911,14 @@ export const ClientMessageVisibility = {
   INTERNAL: "internal",
 } as const;
 
+export type CommunicationAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+};
+
 export const clientMessages = pgTable("client_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
@@ -3918,6 +3926,7 @@ export const clientMessages = pgTable("client_messages", {
   authorUserId: varchar("author_user_id").references(() => users.id).notNull(),
   bodyText: text("body_text").notNull(),
   bodyRich: text("body_rich"),
+  attachmentsJson: jsonb("attachments_json").$type<CommunicationAttachment[] | null>(),
   visibility: varchar("visibility", { length: 20 }).default("public").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -4175,6 +4184,7 @@ export const supportTicketMessages = pgTable("support_ticket_messages", {
   authorUserId: varchar("author_user_id").references(() => users.id),
   authorPortalUserId: varchar("author_portal_user_id").references(() => users.id),
   bodyText: text("body_text").notNull(),
+  attachmentsJson: jsonb("attachments_json").$type<CommunicationAttachment[] | null>(),
   visibility: text("visibility").notNull().default("public"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -4187,7 +4197,7 @@ export const insertSupportTicketMessageSchema = createInsertSchema(supportTicket
   createdAt: true,
   updatedAt: true,
 });
-export type InsertSupportTicketMessage = z.infer<typeof insertSupportTicketMessageSchema>;
+export type InsertSupportTicketMessage = typeof supportTicketMessages.$inferInsert;
 export type SupportTicketMessage = typeof supportTicketMessages.$inferSelect;
 
 export const supportTicketEvents = pgTable("support_ticket_events", {

@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { RichTextEditor, RichTextPreview, RichTextRenderer } from "@/components/richtext";
 import { appendRichTextValue, isRichTextContentEmpty, normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
+import { MessageAttachments, type CommunicationAttachment } from "@/components/communication-attachments";
 
 interface TicketMessage {
   id: string;
@@ -24,6 +25,7 @@ interface TicketMessage {
   bodyText: string;
   visibility: string;
   createdAt: string;
+  attachments?: CommunicationAttachment[];
   author: { id: string; name: string | null; email: string } | null;
 }
 
@@ -329,6 +331,10 @@ export default function SupportTicketDetail() {
                                 <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                               </div>
                               <RichTextRenderer value={msg.bodyText} className="mt-1 text-sm" />
+                              <MessageAttachments
+                                attachments={msg.attachments}
+                                downloadPath={(attachmentId) => `/api/v1/support/tickets/${ticket.id}/attachments/${attachmentId}/download`}
+                              />
                             </div>
                           </div>
                         </CardContent>

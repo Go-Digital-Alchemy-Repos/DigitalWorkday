@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
+import multer from "multer";
 import { db } from "../../../db";
 import { eq, and, desc, asc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt, lte, or, ilike, exists } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
@@ -31,8 +32,21 @@ import { emitNotificationNew } from "../../../realtime/events";
 import { storage } from "../../../storage";
 import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 import type { NotificationPayload } from "@shared/events";
+import {
+  MAX_COMMUNICATION_ATTACHMENTS,
+  MAX_COMMUNICATION_ATTACHMENT_BYTES,
+  createCommunicationAttachmentDownload,
+  deleteCommunicationAttachments,
+  findCommunicationAttachment,
+  toPublicCommunicationAttachments,
+  uploadCommunicationAttachments,
+} from "../../../services/communicationAttachments";
 
 const router = Router();
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_COMMUNICATION_ATTACHMENT_BYTES, files: MAX_COMMUNICATION_ATTACHMENTS },
+});
 
 function toNotificationPayload(notification: Notification): NotificationPayload {
   return {
@@ -835,6 +849,7 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       authorUserId: clientMessages.authorUserId,
       bodyText: clientMessages.bodyText,
       bodyRich: clientMessages.bodyRich,
+      attachmentsJson: clientMessages.attachmentsJson,
       visibility: clientMessages.visibility,
       createdAt: clientMessages.createdAt,
       authorName: users.name,
@@ -849,7 +864,12 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       )
       .orderBy(clientMessages.createdAt);
 
-    const messages = await messagesQuery;
+    const messageRows = await messagesQuery;
+    const messages = messageRows.map((message) => ({
+      ...message,
+      attachmentsJson: undefined,
+      attachments: toPublicCommunicationAttachments(message.attachmentsJson),
+    }));
 
     let slaPolicy = null;
     if (user.role !== UserRole.CLIENT) {
@@ -866,6 +886,45 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
     res.json({ conversation: { ...conversation, assigneeName, recipientName, slaPolicy }, messages });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/messages", req);
+  }
+});
+
+router.get("/crm/conversations/:conversationId/attachments/:attachmentId/download", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const { conversationId, attachmentId } = req.params;
+    const [conversation] = await db.select()
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
+
+    const user = req.user!;
+    if (user.role === UserRole.CLIENT) {
+      const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
+      const accessibleClients = await getClientUserAccessibleClients(user.id);
+      if (!accessibleClients.includes(conversation.clientId) || !portalParticipantHasAccess(conversation, user.id)) {
+        return sendError(res, AppError.forbidden("Access denied"), req);
+      }
+    }
+
+    const perms = await getMessagePermissions(tenantId);
+    const canViewInternal = checkPermission(perms, "viewInternalNotes", user.role);
+    const rows = await db.select({ attachmentsJson: clientMessages.attachmentsJson })
+      .from(clientMessages)
+      .where(
+        canViewInternal
+          ? eq(clientMessages.conversationId, conversationId)
+          : and(eq(clientMessages.conversationId, conversationId), eq(clientMessages.visibility, ClientMessageVisibility.PUBLIC)),
+      );
+    const attachment = findCommunicationAttachment(rows.map((row) => row.attachmentsJson), attachmentId);
+    if (!attachment) return sendError(res, AppError.notFound("Attachment"), req);
+
+    res.json(await createCommunicationAttachmentDownload(attachment, tenantId));
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/attachments/:attachmentId/download", req);
   }
 });
 
@@ -919,7 +978,14 @@ router.post("/crm/conversations/:conversationId/read", requireAuth, async (req: 
   }
 });
 
-router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMessageRateLimiter, async (req: Request, res: Response) => {
+router.post(
+  "/crm/conversations/:conversationId/messages",
+  requireAuth,
+  clientMessageRateLimiter,
+  attachmentUpload.array("files", MAX_COMMUNICATION_ATTACHMENTS),
+  async (req: Request, res: Response) => {
+  let uploadedAttachments: Awaited<ReturnType<typeof uploadCommunicationAttachments>> = [];
+  let attachmentsPersisted = false;
   try {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
@@ -947,13 +1013,17 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
     }
 
     const schema = z.object({
-      bodyText: z.string().min(1),
+      bodyText: z.string().optional().default(""),
       bodyRich: z.string().optional(),
       visibility: z.enum(["public", "internal"]).optional().default("public"),
     });
 
     const data = validateBody(req.body, schema, res);
     if (!data) return;
+    const files = ((req as any).files || []) as Express.Multer.File[];
+    if (!data.bodyText.trim() && files.length === 0) {
+      return sendError(res, AppError.badRequest("A message or attachment is required"), req);
+    }
 
     const userId = getCurrentUserId(req);
 
@@ -964,14 +1034,22 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
       }
     }
 
+    uploadedAttachments = await uploadCommunicationAttachments(files, {
+      tenantId,
+      kind: "client-message",
+      contextId: conversationId,
+    });
+
     const [message] = await db.insert(clientMessages).values({
       tenantId,
       conversationId,
       authorUserId: userId,
       bodyText: data.bodyText,
       bodyRich: data.bodyRich || null,
+      attachmentsJson: uploadedAttachments.length > 0 ? uploadedAttachments : null,
       visibility: data.visibility,
     }).returning();
+    attachmentsPersisted = true;
 
     const updateFields: Record<string, any> = { updatedAt: new Date() };
 
@@ -1053,8 +1131,16 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
       }
     }
 
-    res.status(201).json(message);
+    res.status(201).json({
+      ...message,
+      attachmentsJson: undefined,
+      attachments: toPublicCommunicationAttachments(message.attachmentsJson),
+    });
   } catch (error) {
+    if (!attachmentsPersisted && uploadedAttachments.length > 0) {
+      const tenantId = getEffectiveTenantId(req);
+      if (tenantId) await deleteCommunicationAttachments(uploadedAttachments, tenantId);
+    }
     return handleRouteError(res, error, "POST /api/crm/conversations/:conversationId/messages", req);
   }
 });

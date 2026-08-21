@@ -8,11 +8,16 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Send, Clock, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
 import { isRichTextContentEmpty, normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
+import {
+  AttachmentPicker,
+  MessageAttachments,
+  multipartRequest,
+  type CommunicationAttachment,
+} from "@/components/communication-attachments";
 
 interface TicketMessage {
   id: string;
@@ -20,6 +25,7 @@ interface TicketMessage {
   bodyText: string;
   visibility: string;
   createdAt: string;
+  attachments?: CommunicationAttachment[];
   author: { id: string; name: string; email: string } | null;
 }
 
@@ -71,6 +77,7 @@ export default function ClientPortalSupportDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [replyText, setReplyText] = useState("");
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
 
   const { data: ticket, isLoading } = useQuery<TicketDetail>({
     queryKey: queryKeys.portal.supportTicket(params.id),
@@ -83,12 +90,13 @@ export default function ClientPortalSupportDetail() {
 
   const replyMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/v1/portal/support/tickets/${params.id}/messages`, {
+      return multipartRequest("POST", `/api/v1/portal/support/tickets/${params.id}/messages`, {
         bodyText: normalizeRichTextForStorage(replyText),
-      });
+      }, replyFiles);
     },
     onSuccess: () => {
       setReplyText("");
+      setReplyFiles([]);
       queryClient.invalidateQueries({ queryKey: queryKeys.portal.supportTicket(params.id) });
       toast({ title: "Message sent" });
     },
@@ -99,7 +107,7 @@ export default function ClientPortalSupportDetail() {
 
   const handleReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isRichTextContentEmpty(replyText)) return;
+    if (isRichTextContentEmpty(replyText) && replyFiles.length === 0) return;
     replyMutation.mutate();
   };
 
@@ -179,6 +187,10 @@ export default function ClientPortalSupportDetail() {
                           <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                         </div>
                         <RichTextRenderer value={msg.bodyText} className="mt-1 text-sm" />
+                        <MessageAttachments
+                          attachments={msg.attachments}
+                          downloadPath={(attachmentId) => `/api/v1/portal/support/tickets/${ticket.id}/attachments/${attachmentId}/download`}
+                        />
                       </div>
                     </div>
                   </CardContent>
@@ -199,8 +211,9 @@ export default function ClientPortalSupportDetail() {
                 minHeight="120px"
                 data-testid="input-reply"
               />
+              <AttachmentPicker files={replyFiles} onFilesChange={setReplyFiles} disabled={replyMutation.isPending} />
               <div className="flex justify-end">
-                <Button type="submit" disabled={isRichTextContentEmpty(replyText) || replyMutation.isPending} data-testid="button-send-reply">
+                <Button type="submit" disabled={(isRichTextContentEmpty(replyText) && replyFiles.length === 0) || replyMutation.isPending} data-testid="button-send-reply">
                   {replyMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                   Send Message
                 </Button>

@@ -1,13 +1,19 @@
 import { useState, useRef, useEffect } from "react";
 import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useAuth } from "@/lib/auth";
 import { formatDistanceToNow } from "date-fns";
 import { Redirect, useLocation } from "wouter";
+import {
+  AttachmentPicker,
+  MessageAttachments,
+  multipartRequest,
+  type CommunicationAttachment,
+} from "@/components/communication-attachments";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +107,7 @@ function NewRequestDialog({
   const [messageType, setMessageType] = useState<PortalMessageType>("everyday");
   const [priority, setPriority] = useState("normal");
   const [recipient, setRecipient] = useState("service_team");
+  const [files, setFiles] = useState<File[]>([]);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<PortalTemplate[]>({
     queryKey: queryKeys.portal.messageTemplates,
@@ -133,13 +140,13 @@ function NewRequestDialog({
   const createMutation = useMutation({
     mutationFn: async (data: { clientId: string; subject: string; initialMessage: string; templateId?: string; type: PortalMessageType; priority: string; recipient: string }) => {
       if (data.type === "support_ticket") {
-        const res = await apiRequest("POST", "/api/v1/portal/support/tickets", {
+        const res = await multipartRequest("POST", "/api/v1/portal/support/tickets", {
           clientId: data.clientId,
           title: data.subject,
           description: data.initialMessage,
           category: "support",
           priority: data.priority,
-        });
+        }, files);
         const ticket = await res.json();
         return { kind: "support_ticket" as const, id: ticket.id };
       }
@@ -147,7 +154,7 @@ function NewRequestDialog({
       const [recipientKind, recipientUserId] = data.recipient === "service_team"
         ? ["service_team", null]
         : data.recipient.split(":");
-      const res = await apiRequest("POST", "/api/crm/portal/conversations", {
+      const res = await multipartRequest("POST", "/api/crm/portal/conversations", {
         clientId: data.clientId,
         subject: data.subject,
         initialMessage: data.initialMessage,
@@ -156,7 +163,7 @@ function NewRequestDialog({
         priority: data.priority,
         recipientKind,
         recipientUserId,
-      });
+      }, files);
       const conversation = await res.json();
       return { kind: data.type, id: conversation.id };
     },
@@ -186,6 +193,7 @@ function NewRequestDialog({
     setMessageType("everyday");
     setPriority("normal");
     setRecipient("service_team");
+    setFiles([]);
   };
 
   const handleSelectTemplate = (template: PortalTemplate) => {
@@ -203,8 +211,8 @@ function NewRequestDialog({
   };
 
   const handleSubmit = () => {
-    if (!subject.trim() || !message.trim()) {
-      toast({ title: "Please fill in the subject and message", variant: "destructive" });
+    if (!subject.trim() || (!message.trim() && files.length === 0)) {
+      toast({ title: "Please add a subject and a message or attachment", variant: "destructive" });
       return;
     }
     if (!selectedClientId) {
@@ -394,6 +402,7 @@ function NewRequestDialog({
                 data-testid="input-new-request-message"
               />
             </div>
+            <AttachmentPicker files={files} onFilesChange={setFiles} disabled={createMutation.isPending} />
           </div>
         )}
 
@@ -446,6 +455,7 @@ interface Message {
   bodyText: string;
   bodyRich: string | null;
   createdAt: string;
+  attachments?: CommunicationAttachment[];
   authorName: string | null;
   authorRole: string | null;
 }
@@ -544,6 +554,7 @@ function ConversationThread({
 }) {
   const { toast } = useToast();
   const [replyText, setReplyText] = useState("");
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
@@ -560,11 +571,12 @@ function ConversationThread({
 
   const sendMutation = useMutation({
     mutationFn: async (bodyText: string) => {
-      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/messages`, { bodyText });
+      const res = await multipartRequest("POST", `/api/crm/conversations/${conversationId}/messages`, { bodyText }, replyFiles);
       return res.json();
     },
     onSuccess: () => {
       setReplyText("");
+      setReplyFiles([]);
       queryClient.invalidateQueries({ queryKey: queryKeys.portal.conversationMessages(conversationId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.portal.conversations });
     },
@@ -580,7 +592,7 @@ function ConversationThread({
 
   const handleSend = () => {
     const trimmed = replyText.trim();
-    if (!trimmed) return;
+    if (!trimmed && replyFiles.length === 0) return;
     sendMutation.mutate(trimmed);
   };
 
@@ -656,6 +668,10 @@ function ConversationThread({
                       <p className="text-sm whitespace-pre-wrap" data-testid={`message-text-${msg.id}`}>
                         {msg.bodyText}
                       </p>
+                      <MessageAttachments
+                        attachments={msg.attachments}
+                        downloadPath={(attachmentId) => `/api/crm/conversations/${conversationId}/attachments/${attachmentId}/download`}
+                      />
                     </CardContent>
                   </Card>
                 </div>
@@ -667,26 +683,29 @@ function ConversationThread({
       </div>
 
       {!isClosed && (
-        <div className="flex gap-2 items-end border-t pt-3">
-          <Textarea
-            ref={textareaRef}
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            {...compositionHandlers}
-            placeholder="Type your reply..."
-            className="resize-none min-h-[60px]"
-            data-testid="input-reply-message"
-          />
-          <Button
-            onClick={handleSend}
-            disabled={!replyText.trim() || sendMutation.isPending}
-            size="icon"
-            aria-label="Send message"
-            data-testid="button-send-reply"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+        <div className="space-y-2 border-t pt-3">
+          <AttachmentPicker files={replyFiles} onFilesChange={setReplyFiles} disabled={sendMutation.isPending} />
+          <div className="flex gap-2 items-end">
+            <Textarea
+              ref={textareaRef}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              {...compositionHandlers}
+              placeholder="Type your reply..."
+              className="resize-none min-h-[60px]"
+              data-testid="input-reply-message"
+            />
+            <Button
+              onClick={handleSend}
+              disabled={(!replyText.trim() && replyFiles.length === 0) || sendMutation.isPending}
+              size="icon"
+              aria-label="Send message"
+              data-testid="button-send-reply"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
       {isClosed && (

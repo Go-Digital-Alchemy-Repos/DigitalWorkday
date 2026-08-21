@@ -100,6 +100,7 @@ import {
 import { ClientReportsTab } from "@/components/client-reports-tab";
 import { useAuth } from "@/lib/auth";
 import { hasTenantAdminAccess } from "@shared/roles";
+import { MessageAttachments } from "@/components/communication-attachments";
 
 interface CrmSummary {
   client: {
@@ -1872,6 +1873,10 @@ function MessagesTab({ clientId }: { clientId: string }) {
                     </span>
                   </div>
                   <p className="text-sm mt-0.5 whitespace-pre-wrap">{msg.bodyText}</p>
+                  <MessageAttachments
+                    attachments={msg.attachments}
+                    downloadPath={(attachmentId) => `/api/crm/conversations/${selectedConvoId}/attachments/${attachmentId}/download`}
+                  />
                 </div>
               </div>
             );

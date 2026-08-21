@@ -11,10 +11,10 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { RichTextEditor } from "@/components/richtext";
 import { normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
+import { AttachmentPicker, multipartRequest } from "@/components/communication-attachments";
 
 interface ClientInfo {
   id: string;
@@ -56,6 +56,7 @@ export default function ClientPortalSupportNew() {
   const [priority, setPriority] = useState("normal");
   const [clientId, setClientId] = useState("");
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  const [files, setFiles] = useState<File[]>([]);
 
   const { data: dashboardData } = useQuery<DashboardData>({
     queryKey: queryKeys.portal.dashboard,
@@ -81,14 +82,14 @@ export default function ClientPortalSupportNew() {
       const metadataJson = dynamicFields.length > 0 ? customFields : null;
       const normalizedDescription = normalizeRichTextForStorage(description);
 
-      return apiRequest("POST", "/api/v1/portal/support/tickets", {
+      return multipartRequest("POST", "/api/v1/portal/support/tickets", {
         clientId: selectedClient,
         title,
         description: normalizedDescription || null,
         category,
         priority,
         metadataJson,
-      });
+      }, files);
     },
     onSuccess: async (res) => {
       const ticket = await res.json();
@@ -170,6 +171,8 @@ export default function ClientPortalSupportNew() {
                   data-testid="input-ticket-description"
                 />
               </div>
+
+              <AttachmentPicker files={files} onFilesChange={setFiles} disabled={createMutation.isPending} />
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

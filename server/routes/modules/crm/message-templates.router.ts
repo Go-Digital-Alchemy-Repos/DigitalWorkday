@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
+import multer from "multer";
 import { db } from "../../../db";
 import { eq, and, asc, inArray, ne } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
@@ -22,8 +23,18 @@ import { emitNotificationNew } from "../../../realtime/events";
 import { storage } from "../../../storage";
 import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 import type { NotificationPayload } from "@shared/events";
+import {
+  MAX_COMMUNICATION_ATTACHMENTS,
+  MAX_COMMUNICATION_ATTACHMENT_BYTES,
+  deleteCommunicationAttachments,
+  uploadCommunicationAttachments,
+} from "../../../services/communicationAttachments";
 
 const router = Router();
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_COMMUNICATION_ATTACHMENT_BYTES, files: MAX_COMMUNICATION_ATTACHMENTS },
+});
 
 function toNotificationPayload(notification: Notification): NotificationPayload {
   return {
@@ -246,7 +257,13 @@ router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Reque
   }
 });
 
-router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
+router.post(
+  "/crm/portal/conversations",
+  requireAuth,
+  attachmentUpload.array("files", MAX_COMMUNICATION_ATTACHMENTS),
+  async (req: Request, res: Response) => {
+  let uploadedAttachments: Awaited<ReturnType<typeof uploadCommunicationAttachments>> = [];
+  let attachmentsPersisted = false;
   try {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
@@ -259,7 +276,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
     const schema = z.object({
       clientId: z.string().uuid(),
       subject: z.string().min(1).max(500),
-      initialMessage: z.string().min(1).max(5000),
+      initialMessage: z.string().max(5000).optional().default(""),
       templateId: z.string().uuid().optional(),
       type: z.enum(["everyday", "service_request"]).optional().default("everyday"),
       priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
@@ -269,6 +286,10 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
 
     const data = validateBody(req.body, schema, res);
     if (!data) return;
+    const files = ((req as any).files || []) as Express.Multer.File[];
+    if (!data.initialMessage.trim() && files.length === 0) {
+      return sendError(res, AppError.badRequest("A message or attachment is required"), req);
+    }
 
     const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
     const clientIds = await getClientUserAccessibleClients(user.id);
@@ -327,24 +348,36 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       portalParticipantUserIds.push(target.id);
     }
 
-    const [conversation] = await db.insert(clientConversations).values({
+    uploadedAttachments = await uploadCommunicationAttachments(files, {
       tenantId,
-      clientId: data.clientId,
-      subject: data.subject,
-      type: data.type,
-      priority: data.priority,
-      createdByUserId: userId,
-      recipientUserId,
-      portalParticipantUserIds,
-      assignedToUserId: autoAssigneeId,
-    }).returning();
+      kind: "client-message",
+      contextId: data.clientId,
+    });
 
-    const [msg] = await db.insert(clientMessages).values({
-      tenantId,
-      conversationId: conversation.id,
-      authorUserId: userId,
-      bodyText: data.initialMessage,
-    }).returning();
+    const { conversation, msg } = await db.transaction(async (tx) => {
+      const [createdConversation] = await tx.insert(clientConversations).values({
+        tenantId,
+        clientId: data.clientId,
+        subject: data.subject,
+        type: data.type,
+        priority: data.priority,
+        createdByUserId: userId,
+        recipientUserId,
+        portalParticipantUserIds,
+        assignedToUserId: autoAssigneeId,
+      }).returning();
+
+      const [createdMessage] = await tx.insert(clientMessages).values({
+        tenantId,
+        conversationId: createdConversation.id,
+        authorUserId: userId,
+        bodyText: data.initialMessage,
+        attachmentsJson: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+      }).returning();
+
+      return { conversation: createdConversation, msg: createdMessage };
+    });
+    attachmentsPersisted = true;
 
     emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
       conversationId: conversation.id,
@@ -411,6 +444,10 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
 
     res.status(201).json(conversation);
   } catch (error) {
+    if (!attachmentsPersisted && uploadedAttachments.length > 0) {
+      const tenantId = getEffectiveTenantId(req);
+      if (tenantId) await deleteCommunicationAttachments(uploadedAttachments, tenantId);
+    }
     return handleRouteError(res, error, "POST /api/crm/portal/conversations", req);
   }
 });
