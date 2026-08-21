@@ -271,7 +271,7 @@ export default function ClientPortalTasks() {
   if (error) return <div className="flex h-full items-center justify-center p-6"><SurfacePanel className="max-w-md text-center"><AlertCircle className="mx-auto mb-3 h-8 w-8 text-destructive" /><h1 className="text-lg font-semibold">Unable to load tasks</h1><p className="mt-1 text-sm text-muted-foreground">Please refresh the page and try again.</p></SurfacePanel></div>;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_42%)]">
+    <div className="app-page-surface flex h-full flex-col overflow-hidden">
       <div className="border-b border-border/70 bg-background/95 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8">
         <div className="space-y-4">
           <SurfacePanel className="px-4 py-4 md:px-5">

@@ -4,11 +4,13 @@ import type {
   Comment,
   Project,
   TaskWithRelations,
+  TimeEntryWithRelations,
   User,
 } from "@shared/schema";
 import type {
   DesktopTask,
   DesktopTaskPage,
+  DesktopTimeEntry,
   DesktopUser,
 } from "@shared/desktopContracts";
 
@@ -86,6 +88,23 @@ export function toDesktopTaskPage(
     nextCursor: nextOffset < tasks.length
       ? Buffer.from(String(nextOffset), "utf8").toString("base64url")
       : null,
+  };
+}
+
+export function toDesktopTimeEntry(entry: TimeEntryWithRelations): DesktopTimeEntry {
+  return {
+    id: entry.id,
+    taskId: entry.taskId ?? null,
+    projectId: entry.projectId ?? null,
+    title: entry.title ?? null,
+    description: entry.description ?? null,
+    startTime: iso(entry.startTime)!,
+    endTime: iso(entry.endTime),
+    durationSeconds: Math.max(0, entry.durationSeconds ?? 0),
+    isManual: entry.isManual,
+    projectName: entry.project?.name ?? null,
+    taskTitle: entry.task?.title ?? null,
+    updatedAt: iso(entry.updatedAt)!,
   };
 }
 

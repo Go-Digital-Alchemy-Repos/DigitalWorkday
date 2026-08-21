@@ -24,6 +24,31 @@ func testGroupsUndatedPersonalTaskWithoutLosingIt() {
 
 func testDurationFormatting() { XCTAssertEqual(DurationFormatter.short(3_661), "1:01:01") }
 
+func testTaskSortingAndCompletedGrouping() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let open = DWTask(id: "open", title: "Open", description: nil, status: "todo", priority: "medium",
+                      dueDate: now, isPersonal: true, projectId: nil, projectName: nil, clientId: nil, clientName: nil,
+                      sectionId: nil, assigneeIds: [], assignees: nil, estimateMinutes: nil,
+                      subtasks: [], createdAt: now, updatedAt: now)
+    let done = DWTask(id: "done", title: "Done", description: nil, status: "done", priority: "high",
+                      dueDate: now, isPersonal: true, projectId: nil, projectName: nil, clientId: nil, clientName: nil,
+                      sectionId: nil, assigneeIds: [], assignees: nil, estimateMinutes: nil,
+                      subtasks: [], createdAt: now, updatedAt: now)
+    let grouped = TaskGrouping.grouped([open, done], now: now)
+    XCTAssertEqual(grouped.first(where: { $0.0 == .completed })?.1.map(\.id), ["done"])
+    XCTAssertEqual(TaskGrouping.sorted([open, done], by: .priority).first?.id, "done")
+    XCTAssertEqual(TaskSelection.preferredID(current: done.id, prioritized: [done.id], visibleTasks: [open]), open.id)
+    XCTAssertNil(TaskSelection.preferredID(current: done.id, prioritized: [done.id], visibleTasks: []))
+}
+
+func testOptimisticLockTimestampPreservesMilliseconds() throws {
+    let source = "2026-08-20T13:46:54.123Z"
+    let data = Data("\"\(source)\"".utf8)
+    let decoded = try JSONCoding.decoder.decode(Date.self, from: data)
+
+    XCTAssertEqual(JSONCoding.iso8601String(from: decoded), source)
+}
+
 @MainActor func testTipTapRichTextRendersAndRoundTripsFormatting() {
     let value = #"{"type":"doc","content":[{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"First item","marks":[{"type":"bold"}]}]}]},{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Second item"}]}]}]}]}"#
     let attributed = TipTapRichText.attributedString(from: value)
@@ -63,10 +88,28 @@ func testInvalidAppearanceFallsBackToSystem() {
     XCTAssertNil(mode.colorScheme)
 }
 
+func testAnthropicAppearanceUsesWarmLightTheme() {
+    let mode = AppearanceMode.anthropic
+    XCTAssertEqual(mode.colorScheme, .light)
+    XCTAssertEqual(mode.systemImage, "book.closed.fill")
+    XCTAssertEqual(mode.theme.id, "anthropic")
+    XCTAssertTrue(mode.theme.isEditorial)
+    XCTAssertEqual(mode.theme.cardRadius, 24)
+    XCTAssertEqual(mode.theme.compactRadius, 12)
+    XCTAssertEqual(AppearanceMode.allCases.map(\.rawValue), ["system", "light", "dark", "anthropic"])
+}
+
 func testAdditiveDesktopTaskFieldsDecode() throws {
     let data = Data(#"{"id":"task","title":"Plan","description":null,"status":"todo","priority":"high","dueDate":null,"isPersonal":false,"projectId":"p","projectName":"Launch","clientId":"c","clientName":"Acme","sectionId":null,"assigneeIds":["u"],"assignees":[{"id":"u","name":"Alex","email":"alex@example.com","role":"employee","avatarUrl":null}],"estimateMinutes":90,"subtasks":[],"createdAt":"2026-08-19T12:00:00Z","updatedAt":"2026-08-19T12:00:00Z"}"#.utf8)
     let task = try JSONCoding.decoder.decode(DWTask.self, from: data)
     XCTAssertEqual(task.assignees?.first?.displayName, "Alex")
     XCTAssertEqual(task.estimateMinutes, 90)
+}
+
+func testLegacyTaskDetailWithoutTimeEntriesStillDecodes() throws {
+    let data = Data(#"{"task":{"id":"task","title":"Plan","description":null,"status":"todo","priority":"medium","dueDate":null,"isPersonal":true,"projectId":null,"projectName":null,"clientId":null,"clientName":null,"sectionId":null,"assigneeIds":[],"assignees":[],"estimateMinutes":null,"subtasks":[],"createdAt":"2026-08-19T12:00:00Z","updatedAt":"2026-08-19T12:00:00Z"},"comments":[]}"#.utf8)
+    let detail = try JSONCoding.decoder.decode(DWTaskDetail.self, from: data)
+    XCTAssertEqual(detail.task.id, "task")
+    XCTAssertTrue(detail.timeEntries.isEmpty)
 }
 }

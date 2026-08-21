@@ -5,8 +5,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
+import { useAuth } from "@/lib/auth";
 import { formatDistanceToNow } from "date-fns";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ import {
   Plus,
   FileText,
   Loader2,
+  LifeBuoy,
 } from "lucide-react";
 
 interface PortalTemplate {
@@ -66,6 +68,20 @@ interface PortalDashboard {
   recentActivity: unknown[];
 }
 
+interface MessageRecipient {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+interface RecipientDirectory {
+  tenantUsers: MessageRecipient[];
+  portalUsers: MessageRecipient[];
+}
+
+type PortalMessageType = "everyday" | "service_request" | "support_ticket";
+
 function NewRequestDialog({
   open,
   onOpenChange,
@@ -76,11 +92,15 @@ function NewRequestDialog({
   onCreated: (conversationId: string) => void;
 }) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [step, setStep] = useState<"templates" | "compose">("templates");
   const [selectedTemplate, setSelectedTemplate] = useState<PortalTemplate | null>(null);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [messageType, setMessageType] = useState<PortalMessageType>("everyday");
+  const [priority, setPriority] = useState("normal");
+  const [recipient, setRecipient] = useState("service_team");
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<PortalTemplate[]>({
     queryKey: queryKeys.portal.messageTemplates,
@@ -94,6 +114,16 @@ function NewRequestDialog({
 
   const clients = dashboard?.clients || [];
 
+  const { data: recipients, isLoading: recipientsLoading } = useQuery<RecipientDirectory>({
+    queryKey: queryKeys.portal.conversationRecipients(selectedClientId),
+    queryFn: async () => {
+      const res = await fetch(`/api/crm/portal/conversation-recipients?clientId=${selectedClientId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Unable to load message recipients");
+      return res.json();
+    },
+    enabled: open && step === "compose" && !!selectedClientId && messageType !== "support_ticket",
+  });
+
   useEffect(() => {
     if (clients.length === 1 && !selectedClientId) {
       setSelectedClientId(clients[0].id);
@@ -101,16 +131,46 @@ function NewRequestDialog({
   }, [clients, selectedClientId]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: { clientId: string; subject: string; initialMessage: string; templateId?: string }) => {
-      const res = await apiRequest("POST", "/api/crm/portal/conversations", data);
-      return res.json();
+    mutationFn: async (data: { clientId: string; subject: string; initialMessage: string; templateId?: string; type: PortalMessageType; priority: string; recipient: string }) => {
+      if (data.type === "support_ticket") {
+        const res = await apiRequest("POST", "/api/v1/portal/support/tickets", {
+          clientId: data.clientId,
+          title: data.subject,
+          description: data.initialMessage,
+          category: "support",
+          priority: data.priority,
+        });
+        const ticket = await res.json();
+        return { kind: "support_ticket" as const, id: ticket.id };
+      }
+
+      const [recipientKind, recipientUserId] = data.recipient === "service_team"
+        ? ["service_team", null]
+        : data.recipient.split(":");
+      const res = await apiRequest("POST", "/api/crm/portal/conversations", {
+        clientId: data.clientId,
+        subject: data.subject,
+        initialMessage: data.initialMessage,
+        templateId: data.templateId,
+        type: data.type,
+        priority: data.priority,
+        recipientKind,
+        recipientUserId,
+      });
+      const conversation = await res.json();
+      return { kind: data.type, id: conversation.id };
     },
-    onSuccess: (data: { id: string }) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.portal.conversations });
-      toast({ title: "Request submitted" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.portal.supportTicketsAll });
+      toast({ title: data.kind === "support_ticket" ? "Support ticket created" : data.kind === "service_request" ? "Service request submitted" : "Message sent" });
       onOpenChange(false);
       resetState();
-      onCreated(data.id);
+      if (data.kind === "support_ticket") {
+        navigate(`/portal/support/${data.id}`);
+      } else {
+        onCreated(data.id);
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -123,6 +183,9 @@ function NewRequestDialog({
     setSubject("");
     setMessage("");
     setSelectedClientId(clients.length === 1 ? clients[0]?.id || "" : "");
+    setMessageType("everyday");
+    setPriority("normal");
+    setRecipient("service_team");
   };
 
   const handleSelectTemplate = (template: PortalTemplate) => {
@@ -153,6 +216,9 @@ function NewRequestDialog({
       subject: subject.trim(),
       initialMessage: message.trim(),
       templateId: selectedTemplate?.id,
+      type: messageType,
+      priority,
+      recipient,
     });
   };
 
@@ -168,7 +234,7 @@ function NewRequestDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {step === "templates" ? "Start a New Request" : "Compose Your Message"}
+            {step === "templates" ? "Start a New Message" : "Compose Your Message"}
           </DialogTitle>
           <DialogDescription>
             {step === "templates"
@@ -251,6 +317,64 @@ function NewRequestDialog({
                 </Select>
               </div>
             )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message Type</label>
+                <Select value={messageType} onValueChange={(value) => setMessageType(value as PortalMessageType)}>
+                  <SelectTrigger data-testid="select-portal-message-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="everyday">General Message</SelectItem>
+                    <SelectItem value="service_request">Service Request</SelectItem>
+                    <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Priority</label>
+                <Select value={priority} onValueChange={setPriority}>
+                  <SelectTrigger data-testid="select-portal-message-priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {messageType === "support_ticket" ? (
+              <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-3 text-sm">
+                <LifeBuoy className="h-4 w-4 text-muted-foreground" />
+                This will create a ticket for the support team.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">To</label>
+                <Select value={recipient} onValueChange={setRecipient} disabled={recipientsLoading}>
+                  <SelectTrigger data-testid="select-portal-message-recipient">
+                    <SelectValue placeholder={recipientsLoading ? "Loading recipients…" : "Select a recipient"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="service_team">Service Team</SelectItem>
+                    {recipients?.tenantUsers.map((person) => (
+                      <SelectItem key={`tenant-${person.id}`} value={`tenant_user:${person.id}`}>
+                        Team · {person.name || person.email}
+                      </SelectItem>
+                    ))}
+                    {recipients?.portalUsers.map((person) => (
+                      <SelectItem key={`portal-${person.id}`} value={`portal_user:${person.id}`}>
+                        Portal · {person.name || person.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Choose the service team, a specific team member, or another portal user.</p>
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium">Subject</label>
               <Input
@@ -282,7 +406,7 @@ function NewRequestDialog({
           {step === "compose" && (
             <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="button-submit-request">
               {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Submit Request
+              {messageType === "support_ticket" ? "Create Ticket" : messageType === "service_request" ? "Submit Request" : "Send Message"}
             </Button>
           )}
         </DialogFooter>
@@ -297,7 +421,11 @@ interface ConversationSummary {
   clientId: string;
   projectId: string | null;
   subject: string;
+  type: "everyday" | "service_request" | "support_ticket";
+  priority: "low" | "normal" | "high" | "urgent";
   createdByUserId: string;
+  recipientUserId: string | null;
+  recipientName?: string | null;
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -329,6 +457,12 @@ interface ConversationDetail {
 
 function getInitials(name: string): string {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function getMessageTypeLabel(type: ConversationSummary["type"]): string {
+  if (type === "service_request") return "Service Request";
+  if (type === "support_ticket") return "Support Ticket";
+  return "General Message";
 }
 
 function ConversationList({
@@ -366,12 +500,15 @@ function ConversationList({
                   <h3 className="font-medium truncate" data-testid={`conversation-subject-${convo.id}`}>
                     {convo.subject}
                   </h3>
+                  <Badge variant="outline" className="text-xs">
+                    {getMessageTypeLabel(convo.type)}
+                  </Badge>
                   {convo.closedAt && (
                     <Badge variant="secondary" className="text-xs">Closed</Badge>
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">
-                  Started by {convo.creatorName}
+                  Started by {convo.creatorName} · To {convo.recipientName || "Service Team"}
                 </p>
                 {convo.lastMessage && (
                   <p className="text-sm text-muted-foreground truncate">
@@ -483,8 +620,8 @@ function ConversationThread({
             {conversation?.subject}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Started by {(conversation as any)?.creatorName || "team member"}{" "}
-            {conversation?.createdAt && formatDistanceToNow(new Date(conversation.createdAt), { addSuffix: true })}
+            {conversation && getMessageTypeLabel(conversation.type)} · To {conversation?.recipientName || "Service Team"}
+            {conversation?.createdAt && ` · ${formatDistanceToNow(new Date(conversation.createdAt), { addSuffix: true })}`}
           </p>
         </div>
         {isClosed && <Badge variant="secondary">Closed</Badge>}
@@ -563,21 +700,13 @@ function ConversationThread({
 
 export default function ClientPortalMessages() {
   const crmFlags = useCrmFlags();
+  const { user: currentUser } = useAuth();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
 
   const { data: conversations = [], isLoading } = useQuery<ConversationSummary[]>({
     queryKey: queryKeys.portal.conversations,
     enabled: crmFlags.clientMessaging,
-  });
-
-  const { data: currentUser } = useQuery<{ id: string }>({
-    queryKey: ["/api/auth/me"],
-    queryFn: async () => {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) throw new Error("Not authenticated");
-      return res.json();
-    },
   });
 
   if (!crmFlags.clientMessaging) {
@@ -605,7 +734,7 @@ export default function ClientPortalMessages() {
         </div>
         <Button onClick={() => setNewRequestOpen(true)} data-testid="button-new-request">
           <Plus className="h-4 w-4 mr-1" />
-          New Request
+          New Message
         </Button>
       </div>
 

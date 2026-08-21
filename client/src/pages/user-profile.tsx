@@ -443,8 +443,6 @@ function PackPreview({ pack, isActive, onClick }: { pack: ThemePack; isActive: b
 
 function AppearanceCard() {
   const { packId, setPackId, availablePacks } = useTheme();
-  const lightPack = availablePacks.find((pack) => pack.id === "light");
-  const darkPack = availablePacks.find((pack) => pack.id === "dark");
 
   return (
     <Card>
@@ -454,25 +452,19 @@ function AppearanceCard() {
           Appearance
         </CardTitle>
         <CardDescription>
-          Choose between the default light and dark themes
+          Choose Light, Dark, or the warm editorial Anthropic theme
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2 flex-wrap">
-          {lightPack && (
+          {availablePacks.map((pack) => (
             <PackPreview
-              pack={lightPack}
-              isActive={packId === lightPack.id}
-              onClick={() => setPackId(lightPack.id)}
+              key={pack.id}
+              pack={pack}
+              isActive={packId === pack.id}
+              onClick={() => setPackId(pack.id)}
             />
-          )}
-          {darkPack && (
-            <PackPreview
-              pack={darkPack}
-              isActive={packId === darkPack.id}
-              onClick={() => setPackId(darkPack.id)}
-            />
-          )}
+          ))}
         </div>
 
         <p className="text-xs text-muted-foreground">

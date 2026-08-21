@@ -4,19 +4,19 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Send, Clock, Building2, User2, Loader2, EyeOff, MessageSquareText, Zap, ChevronDown, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { RichTextEditor, RichTextPreview, RichTextRenderer } from "@/components/richtext";
+import { appendRichTextValue, isRichTextContentEmpty, normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
 
 interface TicketMessage {
   id: string;
@@ -135,7 +135,6 @@ export default function SupportTicketDetail() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [replyText, setReplyText] = useState("");
-  const [isInternal, setIsInternal] = useState(false);
   const [macroPreview, setMacroPreview] = useState<Macro | null>(null);
 
   const { data: cannedReplies = [] } = useQuery<CannedReply[]>({
@@ -150,7 +149,7 @@ export default function SupportTicketDetail() {
     mutationFn: async (macro: Macro) => {
       return apiRequest("POST", `/api/v1/support/tickets/${params.id}/apply-macro`, {
         macroId: macro.id,
-        mode: isInternal ? "internal" : "public",
+        mode: "public",
       });
     },
     onSuccess: () => {
@@ -176,14 +175,14 @@ export default function SupportTicketDetail() {
   const replyMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("POST", `/api/v1/support/tickets/${params.id}/messages`, {
-        bodyText: replyText,
-        visibility: isInternal ? "internal" : "public",
+        bodyText: normalizeRichTextForStorage(replyText),
+        visibility: "public",
       });
     },
     onSuccess: () => {
       setReplyText("");
       queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
-      toast({ title: isInternal ? "Internal note added" : "Reply sent" });
+      toast({ title: "Message sent" });
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -232,7 +231,7 @@ export default function SupportTicketDetail() {
 
   const handleReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
+    if (isRichTextContentEmpty(replyText)) return;
     replyMutation.mutate();
   };
 
@@ -258,6 +257,8 @@ export default function SupportTicketDetail() {
 
   const isClosed = ticket.status === "closed";
   const createdBy = ticket.createdByPortalUser || ticket.createdByUser;
+  const publicCannedReplies = cannedReplies.filter((reply) => reply.visibility === "public");
+  const publicMacros = macros.filter((macro) => macro.visibility === "public");
 
   return (
     <div className="h-full overflow-y-auto">
@@ -292,7 +293,7 @@ export default function SupportTicketDetail() {
                     <span className="font-medium">{createdBy?.name || createdBy?.email || "Unknown"}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</span>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap" data-testid="text-ticket-description">{ticket.description}</p>
+                  <RichTextRenderer value={ticket.description} className="text-sm" data-testid="text-ticket-description" />
                 </CardContent>
               </Card>
             )}
@@ -327,7 +328,7 @@ export default function SupportTicketDetail() {
                                 )}
                                 <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                               </div>
-                              <p className="text-sm mt-1 whitespace-pre-wrap">{msg.bodyText}</p>
+                              <RichTextRenderer value={msg.bodyText} className="mt-1 text-sm" />
                             </div>
                           </div>
                         </CardContent>
@@ -342,21 +343,9 @@ export default function SupportTicketDetail() {
               <>
                 <Separator />
                 <form onSubmit={handleReply} className="space-y-3" data-testid="form-reply">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="internal"
-                        checked={isInternal}
-                        onCheckedChange={setIsInternal}
-                        data-testid="switch-internal"
-                      />
-                      <Label htmlFor="internal" className="text-sm cursor-pointer flex items-center gap-1">
-                        {isInternal ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        {isInternal ? "Internal note" : "Public reply"}
-                      </Label>
-                    </div>
+                  <div className="flex items-center justify-end gap-2 flex-wrap">
                     <div className="flex items-center gap-1">
-                      {cannedReplies.length > 0 && (
+                      {publicCannedReplies.length > 0 && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" data-testid="button-insert-reply">
@@ -368,25 +357,24 @@ export default function SupportTicketDetail() {
                           <DropdownMenuContent align="end" className="w-64">
                             <DropdownMenuLabel>Canned Replies</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            {cannedReplies.map((r) => (
+                            {publicCannedReplies.map((r) => (
                               <DropdownMenuItem
                                 key={r.id}
                                 onClick={() => {
-                                  setReplyText((prev) => prev ? prev + "\n" + r.bodyText : r.bodyText);
-                                  if (r.visibility === "internal") setIsInternal(true);
+                                  setReplyText((prev) => appendRichTextValue(prev, r.bodyText));
                                 }}
                                 data-testid={`menu-insert-reply-${r.id}`}
                               >
                                 <div className="flex flex-col gap-0.5 w-full">
                                   <span className="text-sm font-medium truncate">{r.title}</span>
-                                  <span className="text-xs text-muted-foreground line-clamp-1">{r.bodyText}</span>
+                                  <RichTextPreview value={r.bodyText} maxLength={80} className="text-xs line-clamp-1" />
                                 </div>
                               </DropdownMenuItem>
                             ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
-                      {macros.length > 0 && (
+                      {publicMacros.length > 0 && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" data-testid="button-apply-macro">
@@ -398,7 +386,7 @@ export default function SupportTicketDetail() {
                           <DropdownMenuContent align="end" className="w-64">
                             <DropdownMenuLabel>Macros</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            {macros.map((m) => (
+                            {publicMacros.map((m) => (
                               <DropdownMenuItem
                                 key={m.id}
                                 onClick={() => setMacroPreview(m)}
@@ -406,7 +394,7 @@ export default function SupportTicketDetail() {
                               >
                                 <div className="flex flex-col gap-0.5 w-full">
                                   <span className="text-sm font-medium truncate">{m.title}</span>
-                                  <span className="text-xs text-muted-foreground line-clamp-1">{m.bodyText}</span>
+                                  <RichTextPreview value={m.bodyText} maxLength={80} className="text-xs line-clamp-1" />
                                 </div>
                               </DropdownMenuItem>
                             ))}
@@ -415,17 +403,17 @@ export default function SupportTicketDetail() {
                       )}
                     </div>
                   </div>
-                  <Textarea
-                    placeholder={isInternal ? "Add an internal note (not visible to client)..." : "Type your reply..."}
+                  <RichTextEditor
+                    placeholder="Type your message..."
                     value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    className="min-h-[80px]"
+                    onChange={setReplyText}
+                    minHeight="120px"
                     data-testid="input-reply"
                   />
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={!replyText.trim() || replyMutation.isPending} data-testid="button-send-reply">
+                    <Button type="submit" disabled={isRichTextContentEmpty(replyText) || replyMutation.isPending} data-testid="button-send-reply">
                       {replyMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-                      {isInternal ? "Add Note" : "Send Reply"}
+                      Send Message
                     </Button>
                   </div>
                 </form>
@@ -442,7 +430,9 @@ export default function SupportTicketDetail() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs text-muted-foreground">Message</Label>
-                      <div className="rounded-md border p-3 text-sm whitespace-pre-wrap bg-muted/30">{macroPreview.bodyText}</div>
+                      <div className="rounded-md border p-3 bg-muted/30">
+                        <RichTextRenderer value={macroPreview.bodyText} className="text-sm" />
+                      </div>
                     </div>
                     {macroPreview.actionsJson && Object.keys(macroPreview.actionsJson).length > 0 && (
                       <div className="space-y-1.5">

@@ -1,4 +1,5 @@
 export type ThemePackKind = "light" | "dark";
+export type PrimaryThemePackId = "light" | "dark" | "anthropic";
 
 export type ThemePack = {
   id: string;
@@ -8,7 +9,25 @@ export type ThemePack = {
   tokens: Record<string, string>;
 };
 
+const SHARED_STYLE_TOKENS = {
+  "--action-primary": "221 83% 53%",
+  "--action-primary-foreground": "210 40% 98%",
+  "--action-primary-hover": "221 83% 47%",
+  "--font-content": "Inter, system-ui, sans-serif",
+  "--font-ui": "Inter, system-ui, sans-serif",
+  "--theme-card-radius": "1rem",
+  "--theme-control-radius": "0.375rem",
+  "--theme-outline-radius": "0.75rem",
+  "--theme-featured-surface": "0 0% 100%",
+  "--theme-page-background-image": "radial-gradient(circle at top, hsl(var(--surface-2)) 0%, transparent 40%)",
+  "--shadow-soft": "0 1px 2px 0 rgba(0,0,0,0.04), 0 1px 3px 0 rgba(0,0,0,0.06)",
+  "--shadow-medium": "0 2px 4px -1px rgba(0,0,0,0.06), 0 4px 6px -1px rgba(0,0,0,0.08)",
+  "--shadow-float": "0 4px 12px -2px rgba(0,0,0,0.08), 0 8px 20px -4px rgba(0,0,0,0.12)",
+  "--specular-opacity": "0.7",
+};
+
 const SHARED_TOKENS_LIGHT = {
+  ...SHARED_STYLE_TOKENS,
   "--button-outline": "rgba(0,0,0, .10)",
   "--badge-outline": "rgba(0,0,0, .05)",
   "--opaque-button-border-intensity": "-8",
@@ -25,6 +44,7 @@ const SHARED_TOKENS_LIGHT = {
 };
 
 const SHARED_TOKENS_DARK = {
+  ...SHARED_STYLE_TOKENS,
   "--button-outline": "rgba(255,255,255, .10)",
   "--badge-outline": "rgba(255,255,255, .05)",
   "--opaque-button-border-intensity": "9",
@@ -38,6 +58,10 @@ const SHARED_TOKENS_DARK = {
   "--warning-foreground": "0 0% 9%",
   "--info": "199 89% 48%",
   "--info-foreground": "0 0% 98%",
+  "--shadow-soft": "0 1px 2px 0 rgba(0,0,0,0.20), 0 1px 3px 0 rgba(0,0,0,0.30)",
+  "--shadow-medium": "0 2px 4px -1px rgba(0,0,0,0.30), 0 4px 6px -1px rgba(0,0,0,0.35)",
+  "--shadow-float": "0 4px 12px -2px rgba(0,0,0,0.35), 0 8px 20px -4px rgba(0,0,0,0.45)",
+  "--specular-opacity": "0.4",
 };
 
 export const THEME_PACKS: ThemePack[] = [
@@ -141,6 +165,82 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "215 14% 22%",
       "--section-time": "30 18% 14%",
       "--section-time-border": "30 14% 22%",
+    },
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    description: "Warm parchment surfaces with editorial typography",
+    kind: "light",
+    tokens: {
+      ...SHARED_TOKENS_LIGHT,
+      "--background": "48 25% 92.2%",
+      "--foreground": "60 2.6% 7.6%",
+      "--border": "45 3.8% 79.2%",
+      "--card": "48 33.3% 97.1%",
+      "--card-foreground": "60 2.6% 7.6%",
+      "--card-border": "45 3.8% 79.2%",
+      "--sidebar": "36.5 29.1% 84.5%",
+      "--sidebar-foreground": "60 2.6% 7.6%",
+      "--sidebar-border": "45 3.8% 79.2%",
+      "--sidebar-accent": "36.5 69.7% 87.1%",
+      "--sidebar-accent-foreground": "60 2.6% 7.6%",
+      "--popover": "48 33.3% 97.1%",
+      "--popover-foreground": "60 2.6% 7.6%",
+      "--popover-border": "45 3.8% 79.2%",
+      "--secondary": "36.5 29.1% 84.5%",
+      "--secondary-foreground": "60 2.6% 7.6%",
+      "--muted": "36.5 29.1% 84.5%",
+      "--muted-foreground": "60 2.5% 23.3%",
+      "--input": "52.5 3.2% 51.4%",
+      "--primary": "60 2.6% 7.6%",
+      "--primary-foreground": "48 33.3% 97.1%",
+      "--accent": "36.5 29.1% 84.5%",
+      "--accent-foreground": "60 2.6% 7.6%",
+      "--ring": "15.1 54.2% 51.2%",
+      "--sidebar-primary": "60 2.6% 7.6%",
+      "--sidebar-primary-foreground": "48 33.3% 97.1%",
+      "--sidebar-ring": "15.1 54.2% 51.2%",
+      "--action-primary": "14.8 63.1% 59.6%",
+      "--action-primary-foreground": "60 2.6% 7.6%",
+      "--action-primary-hover": "15.1 54.2% 51.2%",
+      "--chart-1": "14.8 63.1% 59.6%",
+      "--chart-2": "86 30% 35%",
+      "--chart-3": "35 55% 45%",
+      "--chart-4": "60 2.5% 23.3%",
+      "--chart-5": "8 50% 48%",
+      "--surface-0": "48 25% 92.2%",
+      "--surface-1": "48 33.3% 97.1%",
+      "--surface-2": "36.5 29.1% 84.5%",
+      "--border-subtle": "45 3.8% 79.2%",
+      "--border-strong": "52.5 3.2% 51.4%",
+      "--ring-soft": "14.8 63.1% 72%",
+      "--ring-strong": "15.1 54.2% 51.2%",
+      "--specular": "48 33.3% 97.1%",
+      "--font-content": "Georgia, 'Source Serif Pro', Charter, serif",
+      "--font-ui": "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "--theme-card-radius": "1.5rem",
+      "--theme-control-radius": "0 0 0.5rem 0.5rem",
+      "--theme-outline-radius": "0.75rem",
+      "--theme-featured-surface": "36.5 69.7% 87.1%",
+      "--theme-page-background-image": "none",
+      "--shadow-soft": "none",
+      "--shadow-medium": "none",
+      "--shadow-float": "none",
+      "--specular-opacity": "0",
+      "--noise-opacity": "0",
+      "--elevate-1": "rgba(20,20,19,.035)",
+      "--elevate-2": "rgba(20,20,19,.07)",
+      "--section-attachments": "36.5 69.7% 92%",
+      "--section-attachments-border": "36.5 29.1% 74%",
+      "--section-subtasks": "36.5 29.1% 88%",
+      "--section-subtasks-border": "45 3.8% 72%",
+      "--section-tags": "48 25% 89%",
+      "--section-tags-border": "45 3.8% 72%",
+      "--section-comments": "36.5 45% 91%",
+      "--section-comments-border": "36.5 29.1% 74%",
+      "--section-time": "30 55% 89%",
+      "--section-time-border": "30 35% 70%",
     },
   },
   {
@@ -761,15 +861,21 @@ export const THEME_PACK_MAP = new Map<string, ThemePack>(
   THEME_PACKS.map((p) => [p.id, p])
 );
 
-export const PRIMARY_THEME_PACK_IDS = ["light", "dark"] as const;
+export const PRIMARY_THEME_PACK_IDS = ["light", "dark", "anthropic"] as const satisfies readonly PrimaryThemePackId[];
 
-export const PRIMARY_THEME_PACKS: ThemePack[] = PRIMARY_THEME_PACK_IDS.map(
-  (id) => THEME_PACK_MAP.get(id)!
+export type PrimaryThemePack = ThemePack & { id: PrimaryThemePackId };
+
+export const PRIMARY_THEME_PACKS: PrimaryThemePack[] = PRIMARY_THEME_PACK_IDS.map(
+  (id) => THEME_PACK_MAP.get(id)! as PrimaryThemePack
 );
 
-export function normalizeThemePackId(id: string | null | undefined): string {
+export function normalizeThemePackId(id: string | null | undefined): PrimaryThemePackId {
   if (!id) return "light";
   if (id === "system") return "light";
+
+  if ((PRIMARY_THEME_PACK_IDS as readonly string[]).includes(id)) {
+    return id as PrimaryThemePackId;
+  }
 
   const pack = THEME_PACK_MAP.get(id);
   if (!pack) return "light";

@@ -5,6 +5,9 @@ actor APIClient {
     private let session: URLSession
     private(set) var environment: APIEnvironment
     private var credentials: StoredCredentials?
+    // Actor methods can interleave while awaiting URLSession. Refresh tokens rotate
+    // after one use, so every concurrent request must share the same rotation.
+    private var refreshTask: Task<OAuthTokenResponse, Error>?
 
     init(environment: APIEnvironment = .defaultEnvironment, session: URLSession = .shared) {
         self.environment = environment
@@ -36,13 +39,28 @@ actor APIClient {
         let query = "start=\(formatter.string(from: start).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&end=\(formatter.string(from: end).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
         return try await request("/api/v1/desktop/today?\(query)")
     }
+    func commandCenter(date: Date, timeZone: TimeZone = .autoupdatingCurrent) async throws -> DWCommandCenter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let day = formatter.string(from: date)
+        let encodedDay = day.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? day
+        let zone = timeZone.identifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? timeZone.identifier
+        return try await request("/api/v1/desktop/command-center?date=\(encodedDay)&timeZone=\(zone)")
+    }
     func notifications(cursor: String? = nil) async throws -> DWNotificationPage {
         let value = cursor.flatMap { $0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) }
         return try await request("/api/v1/desktop/notifications?limit=50\(value.map { "&cursor=\($0)" } ?? "")")
     }
-    func taskPage(cursor: String) async throws -> DWTaskPage {
+    func taskPage(cursor: String, status: String = "open") async throws -> DWTaskPage {
         let value = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor
-        return try await request("/api/v1/desktop/tasks/page?status=open&limit=100&cursor=\(value)")
+        return try await request("/api/v1/desktop/tasks/page?status=\(status)&limit=100&cursor=\(value)")
+    }
+    func completedTaskPage(cursor: String? = nil) async throws -> DWTaskPage {
+        let suffix = cursor.flatMap { $0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) }.map { "&cursor=\($0)" } ?? ""
+        return try await request("/api/v1/desktop/tasks/page?status=done&limit=100\(suffix)")
     }
     func taskDetail(_ id: String) async throws -> DWTaskDetail { try await request("/api/v1/desktop/task-details/\(id)") }
 
@@ -136,11 +154,23 @@ actor APIClient {
     }
 
     private func refresh() async throws {
+        if let refreshTask {
+            let token = try await refreshTask.value
+            try store(token)
+            return
+        }
         guard let value = credentials else { throw APIError.unauthorized }
-        let body = ["grant_type": "refresh_token", "refresh_token": value.refreshToken,
-                    "client_id": "digital-workday-macos"]
-        let token: OAuthTokenResponse = try await publicRequest("/api/v1/desktop/auth/token", method: "POST", body: body)
+        let task = Task { try await requestRefreshedToken(using: value.refreshToken) }
+        refreshTask = task
+        defer { refreshTask = nil }
+        let token = try await task.value
         try store(token)
+    }
+
+    private func requestRefreshedToken(using refreshToken: String) async throws -> OAuthTokenResponse {
+        let body = ["grant_type": "refresh_token", "refresh_token": refreshToken,
+                    "client_id": "digital-workday-macos"]
+        return try await publicRequest("/api/v1/desktop/auth/token", method: "POST", body: body)
     }
 
     private func request<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil,

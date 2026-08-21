@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
 
     var body: some View {
         Group {
@@ -23,9 +24,9 @@ struct ContentView: View {
                 if width >= 720 {
                     HStack(spacing: 0) {
                         NavigationRailView()
-                        if width >= 900 {
+                        if width >= 980 {
                             primaryPane
-                                .frame(width: min(DWDesign.primaryPaneWidth, max(350, width * 0.36)))
+                                .frame(width: min(DWDesign.primaryPaneWidth, max(390, width * 0.37)))
                             Divider()
                             detailPane
                         } else {
@@ -67,15 +68,16 @@ struct ContentView: View {
 
 private struct SignInView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     var body: some View {
         ZStack {
-            DWDesign.canvas.ignoresSafeArea()
+            theme.canvas.ignoresSafeArea()
             VStack(spacing: 20) {
                 BrandLogoView(size: 88)
-                    .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
+                    .shadow(color: theme.isEditorial ? .clear : .black.opacity(0.12), radius: 12, y: 5)
                 Text("Digital Workday").font(.system(.largeTitle, design: .rounded, weight: .bold))
                 Text("Your daily command center for tasks, time, and momentum.").multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 380)
-                Button("Sign In in Browser") { Task { await store.signIn() } }.buttonStyle(.borderedProminent).controlSize(.large)
+                Button("Sign In in Browser") { Task { await store.signIn() } }.dwPrimaryActionStyle().controlSize(.large)
                 if store.isLoading { ProgressView("Connecting…").controlSize(.small) }
             }.padding(48)
         }
@@ -83,12 +85,13 @@ private struct SignInView: View {
 }
 
 private struct EmptyTaskDetailView: View {
+    @Environment(\.dwTheme) private var theme
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "checklist").font(.system(size: 42)).foregroundStyle(DWDesign.accent)
+            Image(systemName: "checklist").font(.system(size: 42)).foregroundStyle(theme.emphasis)
             Text("Plan the day, then do the work").font(.title2.bold())
             Text("Choose a task to see its description, subtasks, comments, and time controls.").foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 360)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(DWDesign.canvas)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.canvas)
     }
 }
 

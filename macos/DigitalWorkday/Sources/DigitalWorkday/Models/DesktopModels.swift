@@ -136,6 +136,57 @@ struct DWToday: Codable, Equatable, Sendable {
     let trackedSeconds: Int
 }
 
+struct DWTrackedDay: Codable, Identifiable, Equatable, Sendable {
+    let date: String
+    let seconds: Int
+    var id: String { date }
+}
+
+struct DWAgendaEvent: Codable, Identifiable, Equatable, Sendable {
+    let id: String
+    let kind: String
+    let taskId: String?
+    let title: String
+    let subtitle: String?
+    let start: Date
+    let end: Date?
+    let allDay: Bool
+    let durationSeconds: Int?
+}
+
+struct DWCommandCenter: Codable, Equatable, Sendable {
+    struct Workload: Codable, Equatable, Sendable {
+        let overdue: Int
+        let today: Int
+        let upcoming: Int
+    }
+
+    let date: String
+    let timeZone: String
+    let workload: Workload
+    let trackedTodaySeconds: Int
+    let trackedWeekSeconds: Int
+    let trackedDays: [DWTrackedDay]
+    let agenda: [DWAgendaEvent]
+}
+
+struct DWTimeEntry: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let taskId: String?
+    let projectId: String?
+    let title: String?
+    let description: String?
+    let startTime: Date
+    let endTime: Date?
+    let durationSeconds: Int
+    let isManual: Bool
+    let projectName: String?
+    let taskTitle: String?
+    let updatedAt: Date
+
+    var displayTitle: String { description?.nonEmpty ?? title?.nonEmpty ?? taskTitle?.nonEmpty ?? "Tracked work" }
+}
+
 struct DWNotification: Codable, Identifiable, Equatable, Sendable {
     let id: String
     let type: String
@@ -192,6 +243,29 @@ struct DWComment: Codable, Identifiable, Hashable, Sendable {
 struct DWTaskDetail: Codable, Equatable, Sendable {
     let task: DWTask
     let comments: [DWComment]
+    let timeEntries: [DWTimeEntry]
+
+    init(task: DWTask, comments: [DWComment], timeEntries: [DWTimeEntry] = []) {
+        self.task = task
+        self.comments = comments
+        self.timeEntries = timeEntries
+    }
+
+    private enum CodingKeys: String, CodingKey { case task, comments, timeEntries }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        task = try container.decode(DWTask.self, forKey: .task)
+        comments = try container.decode([DWComment].self, forKey: .comments)
+        timeEntries = try container.decodeIfPresent([DWTimeEntry].self, forKey: .timeEntries) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(task, forKey: .task)
+        try container.encode(comments, forKey: .comments)
+        try container.encode(timeEntries, forKey: .timeEntries)
+    }
 }
 
 enum TaskStatus: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -225,5 +299,34 @@ enum TaskGroup: String, CaseIterable, Identifiable, Sendable {
     case upcoming = "Upcoming"
     case personal = "Personal"
     case noDate = "No Due Date"
+    case completed = "Completed"
+    var id: String { rawValue }
+}
+
+enum TaskSortOption: String, CaseIterable, Identifiable, Sendable {
+    case dueDate
+    case priority
+    case title
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .dueDate: "Due date"
+        case .priority: "Priority"
+        case .title: "Title"
+        }
+    }
+}
+
+enum TaskGroupOption: String, CaseIterable, Identifiable, Sendable {
+    case dueDate
+    case project
+
+    var id: String { rawValue }
+    var label: String { self == .dueDate ? "Due date" : "Project" }
+}
+
+enum WorkloadFilter: String, CaseIterable, Identifiable, Sendable {
+    case all, overdue, today, upcoming
     var id: String { rawValue }
 }

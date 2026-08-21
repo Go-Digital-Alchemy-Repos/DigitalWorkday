@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct RichTextEditor: View {
+    @Environment(\.dwTheme) private var theme
     @Binding var value: NSAttributedString
     let isEditable: Bool
     let onChange: () -> Void
@@ -30,12 +31,12 @@ struct RichTextEditor: View {
             RichTextViewRepresentable(value: $value, isEditable: isEditable, controller: controller, onChange: onChange)
                 .frame(minHeight: 150)
         }
-        .background(.background.opacity(0.45), in: RoundedRectangle(cornerRadius: DWDesign.compactRadius, style: .continuous))
+        .background(theme.elevated.opacity(0.45), in: RoundedRectangle(cornerRadius: theme.compactRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: DWDesign.compactRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.compactRadius, style: .continuous)
                 .stroke(.primary.opacity(0.12), lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: DWDesign.compactRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: theme.compactRadius, style: .continuous))
     }
 
     private func editorButton(_ help: String, systemImage: String, action: @escaping () -> Void) -> some View {

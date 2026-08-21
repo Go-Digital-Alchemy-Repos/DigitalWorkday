@@ -48,7 +48,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <PageShell className="bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+    <PageShell className="app-page-surface">
       <PageHeader
         title="System Settings"
         subtitle="Manage integrations, automation, messaging, and tenant defaults."

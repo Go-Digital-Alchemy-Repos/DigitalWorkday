@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
-import { desktopBootstrapSchema, desktopNotificationPageSchema, desktopProfileUpdateSchema, desktopTodaySchema, desktopUserSchema } from "@shared/desktopContracts";
+import { desktopBootstrapSchema, desktopCommandCenterSchema, desktopNotificationPageSchema, desktopProfileUpdateSchema, desktopTodaySchema, desktopUserSchema } from "@shared/desktopContracts";
 import { derivePKCEChallenge, hashDesktopToken } from "../features/desktop/desktopAuth.service";
+import { trailingDateKeys, zonedDayRange } from "../features/desktop/desktopCommandCenter";
+import { toDesktopMembers } from "../features/desktop/desktop.router";
 import { validateAvatar } from "../s3";
 
 describe("desktop companion contract", () => {
@@ -11,6 +13,21 @@ describe("desktop companion contract", () => {
     expect(parsed.contractVersion).toBe(1);
     expect(parsed.user.firstName).toBe("Alex");
     expect(parsed.tasks.items[0]?.projectName).toBe("Website Launch");
+  });
+
+  it("uses active tenant users for the desktop assignee directory", () => {
+    const members = toDesktopMembers([
+      { id: "active", name: "Active User", email: "active@example.com", role: "employee", avatarUrl: null, isActive: true },
+      { id: "inactive", name: "Inactive User", email: "inactive@example.com", role: "employee", avatarUrl: null, isActive: false },
+    ]);
+
+    expect(members).toEqual([{
+      id: "active",
+      name: "Active User",
+      email: "active@example.com",
+      role: "employee",
+      avatarUrl: null,
+    }]);
   });
 
   it("derives RFC 7636 S256 challenges", () => {
@@ -52,5 +69,33 @@ describe("desktop companion contract", () => {
         createdAt: "2026-08-19T12:00:00.000Z", lastEventAt: "2026-08-19T12:00:00.000Z", eventCount: 1 }],
       nextCursor: null, unreadCount: 1,
     }).unreadCount).toBe(1);
+  });
+
+  it("validates the command-center workload, trend, and agenda contract", () => {
+    const days = trailingDateKeys("2026-08-20", 7).map((date, index) => ({ date, seconds: index * 600 }));
+    const parsed = desktopCommandCenterSchema.parse({
+      date: "2026-08-20",
+      timeZone: "America/New_York",
+      workload: { overdue: 3, today: 7, upcoming: 12 },
+      trackedTodaySeconds: 3600,
+      trackedWeekSeconds: days.reduce((total, day) => total + day.seconds, 0),
+      trackedDays: days,
+      agenda: [
+        { id: "task:1", kind: "task", taskId: "1", title: "Plan release", subtitle: "Digital Workday",
+          start: "2026-08-20T14:00:00.000Z", end: null, allDay: false, durationSeconds: 3600 },
+        { id: "task:2", kind: "personal_task", taskId: "2", title: "Plan errands", subtitle: "Personal",
+          start: "2026-08-20T18:00:00.000Z", end: null, allDay: false, durationSeconds: null },
+      ],
+    });
+    expect(parsed.trackedDays).toHaveLength(7);
+    expect(parsed.agenda[0]?.taskId).toBe("1");
+    expect(parsed.agenda[1]?.kind).toBe("personal_task");
+  });
+
+  it("uses calendar-day boundaries across daylight-saving transitions", () => {
+    const spring = zonedDayRange("2026-03-08", "America/New_York");
+    const fall = zonedDayRange("2026-11-01", "America/New_York");
+    expect((spring.end.getTime() - spring.start.getTime()) / 3_600_000).toBe(23);
+    expect((fall.end.getTime() - fall.start.getTime()) / 3_600_000).toBe(25);
   });
 });

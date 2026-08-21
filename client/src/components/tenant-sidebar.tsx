@@ -80,6 +80,12 @@ interface UiPreferences {
   sidebarProjectOrder?: string[] | null;
 }
 
+interface SupportTicketSummary {
+  total: number;
+}
+
+const ACTIVE_SUPPORT_TICKET_STATUSES = "open,in_progress,waiting_on_client";
+
 interface SortableProjectItemProps {
   project: Project;
   isActive: boolean;
@@ -186,6 +192,15 @@ export function TenantSidebar() {
     refetchInterval: 30000,
   });
   const notificationUnreadCount = notificationUnreadData?.count ?? 0;
+
+  const { data: supportTicketSummary } = useQuery<SupportTicketSummary>({
+    queryKey: [
+      "/api/v1/support/tickets",
+      { status: ACTIVE_SUPPORT_TICKET_STATUSES, limit: 1 },
+    ],
+    refetchInterval: 30000,
+  });
+  const activeSupportTicketCount = supportTicketSummary?.total ?? 0;
 
   const PROJECTS_PAGE_SIZE = 10;
   const { user } = useAuth();
@@ -471,6 +486,15 @@ export function TenantSidebar() {
                                 data-testid="badge-notifications-unread"
                               >
                                 {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
+                              </Badge>
+                            )}
+                            {item.url === "/support" && activeSupportTicketCount > 0 && (
+                              <Badge
+                                variant="destructive"
+                                className="h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center rounded-full"
+                                data-testid="badge-support-active"
+                              >
+                                {activeSupportTicketCount > 99 ? "99+" : activeSupportTicketCount}
                               </Badge>
                             )}
                           </span>

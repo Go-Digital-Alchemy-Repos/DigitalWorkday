@@ -863,7 +863,7 @@ export default function MyTasks() {
   }, [tasks]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_40%)]">
+    <div className="app-page-surface flex h-full flex-col overflow-hidden">
       {isEmployee && (
         <AccessInfoBanner variant="tasks" className="mx-4 md:mx-6 mt-4" />
       )}

@@ -104,6 +104,28 @@ export function normalizeRichTextForStorage(value: unknown): string {
   return normalizeRichTextValue(value);
 }
 
+export function appendRichTextValue(currentValue: unknown, appendedValue: unknown): string {
+  if (isRichTextContentEmpty(currentValue)) {
+    return normalizeRichTextForStorage(appendedValue);
+  }
+
+  if (isRichTextContentEmpty(appendedValue)) {
+    return normalizeRichTextForStorage(currentValue);
+  }
+
+  const currentDoc = getDocForEditor(currentValue);
+  const appendedDoc = getDocForEditor(appendedValue);
+
+  return serializeDocToString({
+    type: "doc",
+    content: [
+      ...(currentDoc.content || []),
+      { type: "paragraph" },
+      ...(appendedDoc.content || []),
+    ],
+  });
+}
+
 export function toEditablePlainText(value: unknown): string {
   const parsed = parseRichTextValue(value);
 

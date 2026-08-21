@@ -14,13 +14,14 @@ struct SettingsView: View {
             DesktopSettingsView(updater: updater)
                 .tabItem { Label("Desktop", systemImage: "macwindow") }
         }
-        .frame(width: 590, height: 510)
+        .frame(width: 590, height: 580)
         .padding(18)
     }
 }
 
 private struct ProfileSettingsView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var showingImporter = false
@@ -29,14 +30,14 @@ private struct ProfileSettingsView: View {
         ScrollView {
             if let user = store.bootstrap?.user {
                 VStack(alignment: .leading, spacing: 16) {
-                    settingsHeader("Your Profile", subtitle: "Keep your Digital Workday identity current.", systemImage: "person.crop.circle")
+                    SettingsHeader("Your Profile", subtitle: "Keep your Digital Workday identity current.", systemImage: "person.crop.circle")
                     DWSectionCard("Profile Picture", systemImage: "photo") {
                         HStack(spacing: 18) {
                             AvatarView(user: user, size: 88)
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("PNG, JPEG, WebP, or GIF · 2 MB maximum").font(.caption).foregroundStyle(.secondary)
                                 HStack {
-                                    Button("Choose Photo…") { showingImporter = true }.buttonStyle(.borderedProminent)
+                                    Button("Choose Photo…") { showingImporter = true }.dwPrimaryActionStyle()
                                     if user.avatarUrl != nil {
                                         Button("Remove", role: .destructive) { Task { await store.removeAvatar() } }
                                     }
@@ -67,14 +68,14 @@ private struct ProfileSettingsView: View {
                         }
                         HStack {
                             if let message = store.profileMessage {
-                                Label(message, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(DWDesign.accent)
+                                Label(message, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(theme.emphasis)
                             }
                             Spacer()
                             Button("Save Profile") {
                                 Task { await store.updateProfile(firstName: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
                                                                  lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines)) }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .dwPrimaryActionStyle()
                             .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                                       lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isSavingProfile)
                         }
@@ -126,13 +127,14 @@ private struct ProfileSettingsView: View {
 }
 
 private struct AppearanceSettingsView: View {
+    @Environment(\.dwTheme) private var theme
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            settingsHeader("Appearance", subtitle: "Choose how Digital Workday looks on this Mac.", systemImage: "paintbrush")
+            SettingsHeader("Appearance", subtitle: "Choose how Digital Workday looks on this Mac.", systemImage: "paintbrush")
             DWSectionCard("Color Mode", systemImage: "circle.lefthalf.filled") {
-                HStack(spacing: 14) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                     ForEach(AppearanceMode.allCases) { mode in
                         Button { appearanceMode = mode.rawValue } label: {
                             VStack(spacing: 10) {
@@ -141,7 +143,7 @@ private struct AppearanceSettingsView: View {
                                     VStack(spacing: 8) {
                                         RoundedRectangle(cornerRadius: 4).fill(previewForeground(for: mode).opacity(0.18)).frame(width: 94, height: 12)
                                         HStack(spacing: 7) {
-                                            RoundedRectangle(cornerRadius: 5).fill(DWDesign.accent).frame(width: 28, height: 48)
+                                            RoundedRectangle(cornerRadius: 5).fill(mode.theme.action).frame(width: 28, height: 48)
                                             RoundedRectangle(cornerRadius: 5).fill(previewForeground(for: mode).opacity(0.1)).frame(width: 58, height: 48)
                                         }
                                     }
@@ -151,9 +153,9 @@ private struct AppearanceSettingsView: View {
                             }
                             .padding(10)
                             .frame(maxWidth: .infinity)
-                            .background(appearanceMode == mode.rawValue ? DWDesign.accent.opacity(0.1) : .clear,
+                            .background(appearanceMode == mode.rawValue ? theme.selection : .clear,
                                         in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(appearanceMode == mode.rawValue ? DWDesign.accent : .primary.opacity(0.1)))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(appearanceMode == mode.rawValue ? theme.selectedBorder : .primary.opacity(0.1)))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Use \(mode.label) appearance")
@@ -166,8 +168,12 @@ private struct AppearanceSettingsView: View {
         }
     }
 
-    private func previewBackground(for mode: AppearanceMode) -> Color { mode == .dark ? Color.black.opacity(0.86) : Color.white }
-    private func previewForeground(for mode: AppearanceMode) -> Color { mode == .dark ? .white : .black }
+    private func previewBackground(for mode: AppearanceMode) -> Color {
+        mode == .anthropic ? mode.theme.canvas : (mode == .dark ? Color.black.opacity(0.86) : Color.white)
+    }
+    private func previewForeground(for mode: AppearanceMode) -> Color {
+        mode == .anthropic ? mode.theme.emphasis : (mode == .dark ? .white : .black)
+    }
 }
 
 private struct DesktopSettingsView: View {
@@ -179,7 +185,7 @@ private struct DesktopSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            settingsHeader("Desktop", subtitle: "Tune Digital Workday for your workstation.", systemImage: "macwindow")
+            SettingsHeader("Desktop", subtitle: "Tune Digital Workday for your workstation.", systemImage: "macwindow")
             DWSectionCard("Window & Startup", systemImage: "rectangle.on.rectangle") {
                 Toggle("Always keep the task window on top", isOn: $alwaysOnTop)
                 Toggle("Launch Digital Workday at login", isOn: $launchAtLogin)
@@ -205,12 +211,25 @@ private struct DesktopSettingsView: View {
     }
 }
 
-private func settingsHeader(_ title: String, subtitle: String, systemImage: String) -> some View {
-    HStack(spacing: 12) {
-        Image(systemName: systemImage).font(.title).foregroundStyle(DWDesign.accent).frame(width: 38)
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.title2.bold())
-            Text(subtitle).foregroundStyle(.secondary)
+private struct SettingsHeader: View {
+    @Environment(\.dwTheme) private var theme
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    init(_ title: String, subtitle: String, systemImage: String) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage).font(.title).foregroundStyle(theme.emphasis).frame(width: 38)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(theme.contentFont(.title2, weight: .bold))
+                Text(subtitle).foregroundStyle(theme.mutedText)
+            }
         }
     }
 }

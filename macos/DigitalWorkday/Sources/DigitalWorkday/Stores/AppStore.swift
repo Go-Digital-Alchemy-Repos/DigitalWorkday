@@ -18,6 +18,8 @@ final class AppStore {
     var selectedTaskID: String?
     var taskDetail: DWTaskDetail?
     var today: DWToday?
+    var commandCenter: DWCommandCenter?
+    var completedTasks: [DWTask] = []
     var inbox: [DWNotification] = []
     var unreadNotificationCount = 0
     var destination: AppDestination = .today
@@ -33,16 +35,22 @@ final class AppStore {
     var priorityFilter = "all"
     var projectFilter = "all"
     var clientFilter = "all"
+    var taskSort: TaskSortOption = .dueDate
+    var taskGroup: TaskGroupOption = .dueDate
+    var workloadFilter: WorkloadFilter = .all
+    var showCompleted = false
     var environment = APIEnvironment.defaultEnvironment
 
     var tasks: [DWTask] { bootstrap?.tasks.items ?? [] }
+    var visibleTasks: [DWTask] { tasks + (showCompleted ? completedTasks : []) }
     var filteredTasks: [DWTask] {
-        tasks.filter { task in
+        visibleTasks.filter { task in
             (search.isEmpty || task.title.localizedCaseInsensitiveContains(search) || (task.description?.localizedCaseInsensitiveContains(search) ?? false)) &&
             (statusFilter == "all" || (statusFilter == "open" ? !task.isDone : task.status == statusFilter)) &&
             (priorityFilter == "all" || task.priority == priorityFilter) &&
             (projectFilter == "all" || task.projectId == projectFilter) &&
             (clientFilter == "all" || task.clientId == clientFilter)
+            && matchesWorkloadFilter(task)
         }
     }
 
@@ -74,7 +82,8 @@ final class AppStore {
         realtime.disconnect()
         await api.revoke()
         try? cache.clear()
-        bootstrap = nil; taskDetail = nil; selectedTaskID = nil; isStale = false
+        bootstrap = nil; taskDetail = nil; selectedTaskID = nil; commandCenter = nil
+        completedTasks = []; isStale = false
     }
 
     func refresh() async {
@@ -95,6 +104,7 @@ final class AppStore {
                                 tasks: DWTaskPage(items: allTasks, nextCursor: nil), activeTimer: value.activeTimer)
             bootstrap = value; isStale = false; errorMessage = nil
             await refreshDashboard()
+            if showCompleted { await loadCompletedTasks() }
             logger.info("Task snapshot refreshed; taskCount=\(value.tasks.items.count, privacy: .public)")
             try? cache.save(value)
             if let token = await api.accessToken {
@@ -109,11 +119,12 @@ final class AppStore {
             }
             let hours = UserDefaults.standard.object(forKey: "timerReminderHours") as? Int ?? 2
             await notifications.schedule(tasks: value.tasks.items, timer: value.activeTimer, timerReminderHours: hours)
-            let focusID = selectedTaskID
-                ?? today?.overdue.first?.id
-                ?? today?.today.first?.id
-                ?? value.tasks.items.first?.id
-            if let focusID { await selectTask(focusID) }
+            let focusID = TaskSelection.preferredID(
+                current: selectedTaskID,
+                prioritized: [today?.overdue.first?.id, today?.today.first?.id],
+                visibleTasks: visibleTasks
+            )
+            await selectTask(focusID)
         } catch APIError.unauthorized {
             logger.info("Expired desktop credentials cleared")
             realtime.disconnect()
@@ -137,7 +148,7 @@ final class AppStore {
     func selectTask(_ id: String?) async {
         selectedTaskID = id
         guard let id else { taskDetail = nil; return }
-        let snapshot = tasks.first(where: { $0.id == id }).map { DWTaskDetail(task: $0, comments: []) }
+        let snapshot = visibleTasks.first(where: { $0.id == id }).map { DWTaskDetail(task: $0, comments: [], timeEntries: []) }
         taskDetail = snapshot
         guard connectivity.isOnline else { return }
         do {
@@ -181,7 +192,7 @@ final class AppStore {
         var body: [String: Any] = ["title": title, "description": description, "status": status,
                                    "priority": priority, "isPersonal": projectID == nil,
                                    "projectId": projectID ?? NSNull(),
-                                   "expectedUpdatedAt": ISO8601DateFormatter().string(from: task.updatedAt)]
+                                   "expectedUpdatedAt": JSONCoding.iso8601String(from: task.updatedAt)]
         if projectID != task.projectId { body["sectionId"] = NSNull() }
         if let assigneeIDs { body["assigneeIds"] = assigneeIDs }
         body["estimateMinutes"] = estimateMinutes ?? NSNull()
@@ -193,7 +204,14 @@ final class AppStore {
 
     func complete(_ task: DWTask) async {
         await updateTask(task, title: task.title, description: task.description ?? "", status: "done", priority: task.priority,
-                         dueDate: task.dueDate, projectID: task.projectId)
+                         dueDate: task.dueDate, projectID: task.projectId, estimateMinutes: task.estimateMinutes)
+    }
+
+    func toggleComplete(_ task: DWTask) async {
+        _ = await updateTask(task, title: task.title, description: task.description ?? "",
+                             status: task.isDone ? "todo" : "done", priority: task.priority,
+                             dueDate: task.dueDate, projectID: task.projectId,
+                             assigneeIDs: task.assigneeIds, estimateMinutes: task.estimateMinutes)
     }
 
     func reschedule(_ task: DWTask, to date: Date) async {
@@ -207,14 +225,37 @@ final class AppStore {
         let calendar = Calendar.autoupdatingCurrent
         let start = calendar.startOfDay(for: .now)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        do {
-            async let todayValue = api.today(start: start, end: end)
-            async let inboxValue = api.notifications()
-            let (dashboard, notifications) = try await (todayValue, inboxValue)
-            today = dashboard
+        async let todayValue = try? api.today(start: start, end: end)
+        async let commandCenterValue = try? api.commandCenter(date: start)
+        async let inboxValue = try? api.notifications()
+        let (dashboard, center, notifications) = await (todayValue, commandCenterValue, inboxValue)
+        if let dashboard { today = dashboard }
+        commandCenter = center
+        if let notifications {
             inbox = notifications.items
             unreadNotificationCount = notifications.unreadCount
-        } catch { logger.error("Dashboard refresh failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    func loadCompletedTasks() async {
+        guard connectivity.isOnline else { return }
+        do {
+            var page = try await api.completedTaskPage()
+            var values = page.items
+            while let cursor = page.nextCursor {
+                page = try await api.completedTaskPage(cursor: cursor)
+                values.append(contentsOf: page.items)
+            }
+            completedTasks = values
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func selectAdjacentTask(offset: Int) async {
+        let ordered = TaskGrouping.sorted(filteredTasks, by: taskSort)
+        guard !ordered.isEmpty else { return }
+        let index = selectedTaskID.flatMap { id in ordered.firstIndex(where: { $0.id == id }) } ?? 0
+        let destination = min(max(index + offset, 0), ordered.count - 1)
+        await selectTask(ordered[destination].id)
     }
 
     func openNotification(_ notification: DWNotification) async {
@@ -289,6 +330,24 @@ final class AppStore {
         catch { errorMessage = error.localizedDescription }
     }
 
+    func updateSubtask(_ item: DWSubtask, title: String? = nil, completed: Bool? = nil) async {
+        guard await canMutate() else { return }
+        var body: [String: Any] = [:]
+        if let title { body["title"] = title }
+        if let completed {
+            body["completed"] = completed
+            body["status"] = completed ? "done" : "todo"
+        }
+        do { try await api.mutate("/api/v1/desktop/subtasks/\(item.id)", method: "PATCH", body: try json(body)); await selectTask(item.taskId) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func deleteSubtask(_ item: DWSubtask) async {
+        guard await canMutate() else { return }
+        do { try await api.mutate("/api/v1/desktop/subtasks/\(item.id)", method: "DELETE", body: Data()); await selectTask(item.taskId) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
     func timer(action: String, task: DWTask? = nil) async {
         guard await canMutate() else { return }
         var body: [String: Any] = [:]
@@ -303,8 +362,46 @@ final class AppStore {
         var body: [String: Any] = ["taskId": task.id, "description": description,
                                    "startTime": ISO8601DateFormatter().string(from: start), "durationSeconds": minutes * 60]
         if let projectID = task.projectId { body["projectId"] = projectID }
-        do { try await api.mutate("/api/v1/desktop/time-entries", body: try json(body)); await refresh() }
+        do {
+            try await api.mutate("/api/v1/desktop/time-entries", body: try json(body))
+            await refreshDashboard()
+            await selectTask(task.id)
+        }
         catch { errorMessage = error.localizedDescription }
+    }
+
+
+    func updateTimeEntry(_ entry: DWTimeEntry, minutes: Int, description: String) async {
+        guard await canMutate() else { return }
+        let body: [String: Any] = ["durationSeconds": max(60, minutes * 60), "description": description]
+        do {
+            try await api.mutate("/api/v1/desktop/time-entries/\(entry.id)", method: "PATCH", body: try json(body))
+            await refreshDashboard()
+            await selectTask(entry.taskId)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func deleteTimeEntry(_ entry: DWTimeEntry) async {
+        guard await canMutate() else { return }
+        do {
+            try await api.mutate("/api/v1/desktop/time-entries/\(entry.id)", method: "DELETE", body: Data())
+            await refreshDashboard()
+            await selectTask(entry.taskId)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func matchesWorkloadFilter(_ task: DWTask) -> Bool {
+        guard workloadFilter != .all else { return true }
+        guard let due = task.dueDate, !task.isDone else { return false }
+        let calendar = Calendar.autoupdatingCurrent
+        let start = calendar.startOfDay(for: .now)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        switch workloadFilter {
+        case .all: return true
+        case .overdue: return due < start
+        case .today: return due >= start && due < end
+        case .upcoming: return due >= end
+        }
     }
 
     private func canMutate() async -> Bool {

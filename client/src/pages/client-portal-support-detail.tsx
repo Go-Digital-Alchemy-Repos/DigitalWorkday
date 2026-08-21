@@ -4,7 +4,6 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Send, Clock, Loader2 } from "lucide-react";
@@ -12,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
+import { isRichTextContentEmpty, normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
 
 interface TicketMessage {
   id: string;
@@ -83,13 +84,13 @@ export default function ClientPortalSupportDetail() {
   const replyMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("POST", `/api/v1/portal/support/tickets/${params.id}/messages`, {
-        bodyText: replyText,
+        bodyText: normalizeRichTextForStorage(replyText),
       });
     },
     onSuccess: () => {
       setReplyText("");
       queryClient.invalidateQueries({ queryKey: queryKeys.portal.supportTicket(params.id) });
-      toast({ title: "Reply sent" });
+      toast({ title: "Message sent" });
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -98,7 +99,7 @@ export default function ClientPortalSupportDetail() {
 
   const handleReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
+    if (isRichTextContentEmpty(replyText)) return;
     replyMutation.mutate();
   };
 
@@ -150,7 +151,7 @@ export default function ClientPortalSupportDetail() {
         {ticket.description && (
           <Card>
             <CardContent className="p-4">
-              <p className="text-sm whitespace-pre-wrap" data-testid="text-ticket-description">{ticket.description}</p>
+              <RichTextRenderer value={ticket.description} className="text-sm" data-testid="text-ticket-description" />
             </CardContent>
           </Card>
         )}
@@ -177,7 +178,7 @@ export default function ClientPortalSupportDetail() {
                           {isStaff && <Badge variant="secondary" className="text-xs">Staff</Badge>}
                           <span className="text-xs text-muted-foreground">{formatDate(msg.createdAt)}</span>
                         </div>
-                        <p className="text-sm mt-1 whitespace-pre-wrap">{msg.bodyText}</p>
+                        <RichTextRenderer value={msg.bodyText} className="mt-1 text-sm" />
                       </div>
                     </div>
                   </CardContent>
@@ -191,17 +192,17 @@ export default function ClientPortalSupportDetail() {
           <>
             <Separator />
             <form onSubmit={handleReply} className="space-y-3" data-testid="form-reply">
-              <Textarea
-                placeholder="Type your reply..."
+              <RichTextEditor
+                placeholder="Type your message..."
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="min-h-[80px]"
+                onChange={setReplyText}
+                minHeight="120px"
                 data-testid="input-reply"
               />
               <div className="flex justify-end">
-                <Button type="submit" disabled={!replyText.trim() || replyMutation.isPending} data-testid="button-send-reply">
+                <Button type="submit" disabled={isRichTextContentEmpty(replyText) || replyMutation.isPending} data-testid="button-send-reply">
                   {replyMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-                  Send Reply
+                  Send Message
                 </Button>
               </div>
             </form>

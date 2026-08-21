@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var title = ""
@@ -37,14 +38,14 @@ struct MenuBarView: View {
                 HStack {
                     TextField("What needs doing?", text: $title, onCommit: add).textFieldStyle(.roundedBorder)
                     Button { add() } label: { Image(systemName: "arrow.up.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(DWDesign.accent)
+                        .buttonStyle(.plain).foregroundStyle(theme.emphasis)
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.connectivity.isOnline)
                 }
             }
             Divider()
             HStack {
                 Button("Open Tasks") { openWindow(id: "tasks"); NSApp.activate(ignoringOtherApps: true) }
-                    .buttonStyle(.borderedProminent)
+                    .dwPrimaryActionStyle()
                 Spacer()
                 Button("Refresh") { Task { await store.refresh() } }
                 Button("Quit") { NSApp.terminate(nil) }

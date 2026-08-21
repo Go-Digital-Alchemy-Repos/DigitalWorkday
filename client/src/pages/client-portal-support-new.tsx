@@ -13,6 +13,8 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
+import { RichTextEditor } from "@/components/richtext";
+import { normalizeRichTextForStorage } from "@/components/richtext/richTextUtils";
 
 interface ClientInfo {
   id: string;
@@ -77,11 +79,12 @@ export default function ClientPortalSupportNew() {
       if (!selectedClient) throw new Error("Please select a client");
 
       const metadataJson = dynamicFields.length > 0 ? customFields : null;
+      const normalizedDescription = normalizeRichTextForStorage(description);
 
       return apiRequest("POST", "/api/v1/portal/support/tickets", {
         clientId: selectedClient,
         title,
-        description: description || null,
+        description: normalizedDescription || null,
         category,
         priority,
         metadataJson,
@@ -158,13 +161,12 @@ export default function ClientPortalSupportNew() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
+                <Label>Description</Label>
+                <RichTextEditor
                   placeholder="Provide details about your request..."
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="min-h-[120px]"
+                  onChange={setDescription}
+                  minHeight="140px"
                   data-testid="input-ticket-description"
                 />
               </div>

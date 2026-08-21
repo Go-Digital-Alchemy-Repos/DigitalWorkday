@@ -1,5 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { PRIMARY_THEME_PACKS, getThemePack, normalizeThemePackId, type ThemePack } from "@/theme/themePacks";
+import {
+  PRIMARY_THEME_PACKS,
+  PRIMARY_THEME_PACK_IDS,
+  getThemePack,
+  normalizeThemePackId,
+  type PrimaryThemePack,
+  type PrimaryThemePackId,
+  type ThemePack,
+} from "@/theme/themePacks";
 
 export type ThemeMode = "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
@@ -22,15 +30,15 @@ type ThemeProviderContextType = {
   setTheme: (theme: ResolvedTheme) => void;
   toggleTheme: () => void;
   hydrateFromServer: (prefs: { themeMode?: string | null; themePackId?: string | null; themeAccent?: string | null; tenantDefaultAccent?: string | null; tenantDefaultThemePack?: string | null }) => void;
-  packId: string;
-  setPackId: (id: string) => void;
+  packId: PrimaryThemePackId;
+  setPackId: (id: PrimaryThemePackId) => void;
   activePack: ThemePack;
-  availablePacks: ThemePack[];
+  availablePacks: PrimaryThemePack[];
 };
 
 const ThemeProviderContext = createContext<ThemeProviderContextType | undefined>(undefined);
 
-function readStoredPack(): string {
+function readStoredPack(): PrimaryThemePackId {
   if (typeof window === "undefined") return DEFAULT_PACK_ID;
   const stored = localStorage.getItem(LS_PACK_KEY);
   if (stored) return normalizeThemePackId(stored);
@@ -40,17 +48,25 @@ function readStoredPack(): string {
   return DEFAULT_PACK_ID;
 }
 
-function applyPackTokens(pack: ThemePack) {
+const appliedPackTokenKeys = new Set<string>();
+
+export function applyPackTokens(pack: ThemePack) {
   const root = document.documentElement;
+  appliedPackTokenKeys.forEach((key) => root.style.removeProperty(key));
+  appliedPackTokenKeys.clear();
   Object.entries(pack.tokens).forEach(([key, value]) => {
     root.style.setProperty(key, value);
+    appliedPackTokenKeys.add(key);
   });
   root.classList.remove("light", "dark");
+  PRIMARY_THEME_PACK_IDS.forEach((id) => root.classList.remove(`theme-${id}`));
   root.classList.add(pack.kind);
+  root.classList.add(`theme-${pack.id}`);
+  root.dataset.themePack = pack.id;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [packId, setPackIdState] = useState<string>(readStoredPack);
+  const [packId, setPackIdState] = useState<PrimaryThemePackId>(readStoredPack);
   const [accent, setAccentState] = useState<AccentColor>(() => {
     if (typeof window === "undefined") return "blue";
     const stored = localStorage.getItem(LS_ACCENT_KEY) as AccentColor | null;
@@ -72,10 +88,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [accent]);
 
-  const setPackId = useCallback((id: string) => {
-    const pack = getThemePack(id);
-    setPackIdState(pack.id);
-    localStorage.setItem(LS_PACK_KEY, pack.id);
+  const setPackId = useCallback((id: PrimaryThemePackId) => {
+    const normalizedId = normalizeThemePackId(id);
+    setPackIdState(normalizedId);
+    localStorage.setItem(LS_PACK_KEY, normalizedId);
   }, []);
 
   const setAccent = useCallback((a: AccentColor) => {

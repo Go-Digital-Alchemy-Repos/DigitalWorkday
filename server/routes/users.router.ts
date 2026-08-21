@@ -180,7 +180,8 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
 const updateProfileSchema = z.object({
   firstName: z.string().max(100).optional(),
   lastName: z.string().max(100).optional(),
-  name: z.string().max(200).optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  email: z.string().trim().email().max(320).transform((value) => value.toLowerCase()).optional(),
   avatarUrl: z.string().url().nullable().optional(),
 }).strict();
 
@@ -197,12 +198,20 @@ router.patch("/users/me", requireAuth, async (req, res) => {
       throw AppError.badRequest("Invalid input", parseResult.error.issues);
     }
 
-    const { firstName, lastName, name, avatarUrl } = parseResult.data;
+    const { firstName, lastName, name, email, avatarUrl } = parseResult.data;
 
     const updates: Record<string, any> = {};
     if (firstName !== undefined) updates.firstName = firstName;
     if (lastName !== undefined) updates.lastName = lastName;
     if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl;
+
+    if (email !== undefined && email !== user.email.toLowerCase()) {
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser && existingUser.id !== user.id) {
+        throw AppError.badRequest("That email address is already in use");
+      }
+      updates.email = email;
+    }
 
     if (firstName && lastName && !name) {
       updates.name = `${firstName} ${lastName}`;
@@ -227,6 +236,8 @@ router.patch("/users/me", requireAuth, async (req, res) => {
     }
 
     const updatedUser = await storage.updateUser(user.id, updates);
+    if (!updatedUser) throw AppError.notFound("User");
+    const { passwordHash: _passwordHash, ...safeUser } = updatedUser;
 
     if (updates.avatarUrl !== undefined) {
       console.log("[profile-update] User ID:", user.id);
@@ -236,13 +247,13 @@ router.patch("/users/me", requireAuth, async (req, res) => {
     }
 
     if (req.user) {
-      Object.assign(req.user, updatedUser);
+      Object.assign(req.user, safeUser);
       if (updates.avatarUrl !== undefined) {
         console.log("[profile-update] req.user.avatarUrl after Object.assign:", (req.user as any).avatarUrl);
       }
     }
 
-    res.json({ user: updatedUser });
+    res.json({ user: safeUser });
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/users/me", req);
   }

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray, ne } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth, requireAdmin } from "../../../auth";
@@ -9,7 +9,10 @@ import {
   clientMessageTemplates,
   clientConversations,
   clientMessages,
+  clientUserAccess,
   tenantSettings,
+  users,
+  ClientAccessStatus,
   UserRole,
   type Notification,
 } from "@shared/schema";
@@ -193,6 +196,56 @@ router.get("/crm/portal/message-templates", requireAuth, async (req: Request, re
   }
 });
 
+router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Portal access only"), req);
+    }
+
+    const clientIdResult = z.string().uuid().safeParse(req.query.clientId);
+    if (!clientIdResult.success) {
+      return sendError(res, AppError.badRequest("A valid client account is required"), req);
+    }
+    const clientId = clientIdResult.data;
+
+    const { getClientUserAccessibleClients } = await import("../../../middleware/clientAccess");
+    const clientIds = await getClientUserAccessibleClients(user.id);
+    if (!clientIds.includes(clientId)) {
+      return sendError(res, AppError.forbidden("You do not have access to this client"), req);
+    }
+
+    const [tenantUsers, portalUsers] = await Promise.all([
+      db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(and(
+          eq(users.tenantId, tenantId),
+          eq(users.isActive, true),
+          inArray(users.role, [UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
+        ))
+        .orderBy(asc(users.name)),
+      db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(clientUserAccess)
+        .innerJoin(users, eq(users.id, clientUserAccess.userId))
+        .where(and(
+          eq(clientUserAccess.clientId, clientId),
+          eq(clientUserAccess.status, ClientAccessStatus.ACTIVE),
+          eq(users.isActive, true),
+          eq(users.role, UserRole.CLIENT),
+          ne(users.id, user.id),
+        ))
+        .orderBy(asc(users.name)),
+    ]);
+
+    res.json({ tenantUsers, portalUsers });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/portal/conversation-recipients", req);
+  }
+});
+
 router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -208,6 +261,10 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       subject: z.string().min(1).max(500),
       initialMessage: z.string().min(1).max(5000),
       templateId: z.string().uuid().optional(),
+      type: z.enum(["everyday", "service_request"]).optional().default("everyday"),
+      priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
+      recipientKind: z.enum(["service_team", "tenant_user", "portal_user"]).optional().default("service_team"),
+      recipientUserId: z.string().uuid().nullable().optional(),
     });
 
     const data = validateBody(req.body, schema, res);
@@ -231,11 +288,54 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       autoAssigneeId = settings.defaultConversationAssigneeId;
     }
 
+    let recipientUserId: string | null = null;
+    const portalParticipantUserIds = [userId];
+
+    if (data.recipientKind === "tenant_user") {
+      if (!data.recipientUserId) {
+        return sendError(res, AppError.badRequest("Please select a team recipient"), req);
+      }
+      const [target] = await db.select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.id, data.recipientUserId),
+          eq(users.tenantId, tenantId),
+          eq(users.isActive, true),
+          inArray(users.role, [UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
+        ))
+        .limit(1);
+      if (!target) return sendError(res, AppError.badRequest("That team recipient is not available"), req);
+      recipientUserId = target.id;
+      autoAssigneeId = target.id;
+    } else if (data.recipientKind === "portal_user") {
+      if (!data.recipientUserId || data.recipientUserId === userId) {
+        return sendError(res, AppError.badRequest("Please select another portal user"), req);
+      }
+      const [target] = await db.select({ id: users.id })
+        .from(clientUserAccess)
+        .innerJoin(users, eq(users.id, clientUserAccess.userId))
+        .where(and(
+          eq(clientUserAccess.clientId, data.clientId),
+          eq(clientUserAccess.userId, data.recipientUserId),
+          eq(clientUserAccess.status, ClientAccessStatus.ACTIVE),
+          eq(users.isActive, true),
+          eq(users.role, UserRole.CLIENT),
+        ))
+        .limit(1);
+      if (!target) return sendError(res, AppError.badRequest("That portal recipient is not available"), req);
+      recipientUserId = target.id;
+      portalParticipantUserIds.push(target.id);
+    }
+
     const [conversation] = await db.insert(clientConversations).values({
       tenantId,
       clientId: data.clientId,
       subject: data.subject,
+      type: data.type,
+      priority: data.priority,
       createdByUserId: userId,
+      recipientUserId,
+      portalParticipantUserIds,
       assignedToUserId: autoAssigneeId,
     }).returning();
 
@@ -279,6 +379,33 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
         subject: conversation.subject,
         assignedToUserId: autoAssigneeId,
         assignedByUserId: null,
+      });
+    }
+
+    if (data.recipientKind === "portal_user" && recipientUserId) {
+      try {
+        const notification = await storage.createNotification({
+          tenantId,
+          userId: recipientUserId,
+          type: "client_message",
+          title: "New portal message",
+          message: `${user.name} sent you a message: “${conversation.subject}”`,
+          payloadJson: { conversationId: conversation.id, clientId: data.clientId } as any,
+          entityType: "client_thread",
+          entityId: conversation.id,
+          href: "/portal/messages",
+        });
+        emitNotificationNew(recipientUserId, toNotificationPayload(notification));
+      } catch {}
+
+      emitToUser(recipientUserId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
+        conversationId: conversation.id,
+        tenantId,
+        clientId: data.clientId,
+        subject: conversation.subject,
+        assignedToUserId: autoAssigneeId,
+        authorUserId: userId,
+        messageId: msg.id,
       });
     }
 

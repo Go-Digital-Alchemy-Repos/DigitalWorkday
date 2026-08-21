@@ -9,13 +9,16 @@ struct DigitalWorkdayApp: App {
     @AppStorage("alwaysOnTop") private var alwaysOnTop = false
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
-    private var preferredScheme: ColorScheme? { AppearanceMode(rawValue: appearanceMode)?.colorScheme }
+    private var resolvedAppearance: AppearanceMode { AppearanceMode(rawValue: appearanceMode) ?? .system }
+    private var preferredScheme: ColorScheme? { resolvedAppearance.colorScheme }
+    private var theme: DWTheme { resolvedAppearance.theme }
 
     var body: some Scene {
         WindowGroup("Digital Workday", id: "tasks") {
             ContentView()
                 .environment(store)
-                .tint(DWDesign.accent)
+                .environment(\.dwTheme, theme)
+                .tint(theme.isEditorial ? theme.emphasis : theme.action)
                 .preferredColorScheme(preferredScheme)
                 .background(WindowPinningView(isPinned: alwaysOnTop))
                 .frame(minWidth: 620, idealWidth: 1180, minHeight: 560, idealHeight: 760)
@@ -41,7 +44,8 @@ struct DigitalWorkdayApp: App {
         MenuBarExtra {
             MenuBarView()
                 .environment(store)
-                .tint(DWDesign.accent)
+                .environment(\.dwTheme, theme)
+                .tint(theme.isEditorial ? theme.emphasis : theme.action)
                 .preferredColorScheme(preferredScheme)
         } label: {
             if store.bootstrap?.activeTimer == nil {
@@ -55,7 +59,8 @@ struct DigitalWorkdayApp: App {
         Settings {
             SettingsView(updater: updater)
                 .environment(store)
-                .tint(DWDesign.accent)
+                .environment(\.dwTheme, theme)
+                .tint(theme.isEditorial ? theme.emphasis : theme.action)
                 .preferredColorScheme(preferredScheme)
         }
     }

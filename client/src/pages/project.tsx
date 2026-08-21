@@ -1263,7 +1263,7 @@ export default function ProjectPage() {
         </div>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,_hsl(var(--surface-2))_0%,_transparent_45%)]">
+      <div className="app-page-surface flex-1 overflow-hidden">
         {view === "board" && (
           <DndContext
             sensors={sensors}

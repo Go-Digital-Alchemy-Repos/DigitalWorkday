@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AvatarView: View {
+    @Environment(\.dwTheme) private var theme
     @Environment(AppStore.self) private var store
     let user: DWUser
     var size: CGFloat = 32
@@ -29,10 +30,14 @@ struct AvatarView: View {
 
     private var initials: some View {
         ZStack {
-            LinearGradient(colors: [DWDesign.accent, DWDesign.accentBright], startPoint: .topLeading, endPoint: .bottomTrailing)
+            if theme.isEditorial {
+                theme.emphasis
+            } else {
+                LinearGradient(colors: [theme.emphasis, theme.emphasisBright], startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
             Text(user.initials)
                 .font(.system(size: size * 0.34, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(theme.navigationForeground)
         }
     }
 }

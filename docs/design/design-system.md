@@ -111,7 +111,7 @@ const STATUS_COLORS = {
 
 ## Theme Packs
 
-14 curated themes defined in `client/src/theme/themePacks.ts`. Each pack sets all semantic CSS variables. Resolution chain:
+15 curated themes are defined in `client/src/theme/themePacks.ts`; Light, Dark, and Anthropic are the selectable primary collection. Each pack sets all semantic CSS variables. Resolution chain:
 
 ```
 themePackId ?? themeMode ?? tenantDefaultThemePack ?? "light"

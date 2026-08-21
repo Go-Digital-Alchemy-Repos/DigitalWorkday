@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotificationInboxView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dwTheme) private var theme
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -15,23 +16,24 @@ struct NotificationInboxView: View {
             } else {
                 List(store.inbox) { notification in
                     NotificationRow(notification: notification)
-                        .listRowBackground(notification.isUnread ? DWDesign.selection : Color.clear)
+                        .listRowBackground(notification.isUnread ? theme.selection : Color.clear)
                 }.listStyle(.inset)
             }
-        }.background(DWDesign.canvas)
+        }.background(theme.canvas)
     }
 }
 
 private struct NotificationRow: View {
+    @Environment(\.dwTheme) private var theme
     @Environment(AppStore.self) private var store
     let notification: DWNotification
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).foregroundStyle(notification.isUnread ? DWDesign.accent : .secondary).frame(width: 24, height: 24).background(DWDesign.subtleFill, in: Circle())
+            Image(systemName: icon).foregroundStyle(notification.isUnread ? theme.emphasis : .secondary).frame(width: 24, height: 24).background(theme.subtleFill, in: Circle())
             VStack(alignment: .leading, spacing: 4) {
                 HStack { Text(notification.title).font(.system(size: 13, weight: notification.isUnread ? .semibold : .regular)); Spacer(); Text(notification.lastEventAt, style: .relative).font(.caption2).foregroundStyle(.tertiary) }
                 if let message = notification.message { Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
-                Text(category).font(.caption2.weight(.medium)).foregroundStyle(DWDesign.accent)
+                Text(category).font(.caption2.weight(.medium)).foregroundStyle(theme.emphasis)
             }
             Menu { Button("Open") { Task { await store.openNotification(notification) } }; Button("Dismiss", role: .destructive) { Task { await store.dismissNotification(notification) } } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton)
         }.padding(.vertical, 7).contentShape(Rectangle()).onTapGesture { Task { await store.openNotification(notification) } }

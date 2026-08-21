@@ -4,10 +4,11 @@ import multer from "multer";
 import { config } from "../../config";
 import { storage } from "../../storage";
 import { hasTenantAdminAccess } from "@shared/roles";
-import { desktopBootstrapSchema, desktopNotificationPageSchema, desktopProfileUpdateSchema, desktopTaskDetailSchema, desktopTaskPageSchema, desktopTodaySchema, desktopUserSchema } from "@shared/desktopContracts";
+import { desktopBootstrapSchema, desktopCommandCenterSchema, desktopNotificationPageSchema, desktopProfileUpdateSchema, desktopTaskDetailSchema, desktopTaskPageSchema, desktopTodaySchema, desktopUserSchema } from "@shared/desktopContracts";
 import { getTasksByUserBatched } from "../../http/services/taskBatchHydrator";
 import { desktopIdempotencyMiddleware } from "./desktopIdempotency.middleware";
-import { toDesktopComment, toDesktopProject, toDesktopTask, toDesktopTaskPage, toDesktopTimer, toDesktopUser } from "./desktopContracts";
+import { toDesktopComment, toDesktopProject, toDesktopTask, toDesktopTaskPage, toDesktopTimeEntry, toDesktopTimer, toDesktopUser } from "./desktopContracts";
+import { trailingDateKeys, zonedDateKey, zonedDayRange } from "./desktopCommandCenter";
 import { canViewTask } from "../../lib/privateVisibility";
 import { listDesktopSessions, revokeDesktopSessionById } from "./desktopAuth.service";
 import tasksRouter from "../../http/domains/tasks.router";
@@ -136,7 +137,7 @@ async function loadDesktopData(req: import("express").Request) {
   const workspace = await storage.getWorkspace(auth.workspaceId);
   if (!workspace || workspace.tenantId !== auth.tenantId) throw new Error("Desktop workspace is unavailable");
 
-  const [tasks, projects, timer, memberships] = await Promise.all([
+  const [tasks, projects, timer, tenantUsers] = await Promise.all([
     getTasksByUserBatched(user.id, auth.tenantId),
     storage.getProjectsForUser(
       user.id,
@@ -145,21 +146,34 @@ async function loadDesktopData(req: import("express").Request) {
       hasTenantAdminAccess(user.role),
     ),
     storage.getActiveTimerByUserAndTenant(user.id, auth.tenantId),
-    storage.getWorkspaceMembers(auth.workspaceId),
+    storage.getUsersByTenant(auth.tenantId),
   ]);
   const clientIds = Array.from(new Set(projects.map((project) => project.clientId).filter((id): id is string => Boolean(id))));
   const clients = clientIds.length ? await storage.getClientsByIds(clientIds) : [];
   const clientsById = new Map(clients.map((client) => [client.id, client]));
-  const members = memberships
-    .filter((member) => member.status === "active" && member.user?.isActive !== false)
-    .flatMap((member) => member.user ? [{
-      id: member.user.id,
-      name: member.user.name ?? null,
-      email: member.user.email,
-      role: member.user.role,
-      avatarUrl: member.user.avatarUrl ?? null,
-    }] : []);
+  const members = toDesktopMembers(tenantUsers);
   return { workspace, tasks, projects, clients, clientsById, timer, members };
+}
+
+type DesktopMemberSource = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+  avatarUrl: string | null;
+  isActive: boolean;
+};
+
+export function toDesktopMembers(users: DesktopMemberSource[]) {
+  return users
+    .filter((user) => user.isActive !== false)
+    .map((user) => ({
+      id: user.id,
+      name: user.name ?? null,
+      email: user.email,
+      role: user.role,
+      avatarUrl: user.avatarUrl ?? null,
+    }));
 }
 
 router.get("/bootstrap", async (req, res, next) => {
@@ -188,6 +202,100 @@ router.get("/bootstrap", async (req, res, next) => {
 const desktopRangeSchema = z.object({
   start: z.string().datetime({ offset: true }),
   end: z.string().datetime({ offset: true }),
+});
+
+const commandCenterQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  timeZone: z.string().trim().min(1).max(100),
+});
+
+router.get("/command-center", async (req, res, next) => {
+  const parsed = commandCenterQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "A valid date and time zone are required" });
+    return;
+  }
+  try {
+    const { date, timeZone } = parsed.data;
+    let range: { start: Date; end: Date };
+    try {
+      range = zonedDayRange(date, timeZone);
+    } catch {
+      res.status(400).json({ error: "The requested time zone is invalid" });
+      return;
+    }
+
+    const data = await loadDesktopData(req);
+    const entries = await storage.getTimeEntriesByUser(req.user!.id, req.desktopAuth!.workspaceId);
+    const open = data.tasks.filter((task) => task.status !== "done");
+    const datedOpen = open.filter((task) => task.dueDate);
+    const overdue = datedOpen.filter((task) => new Date(task.dueDate!).getTime() < range.start.getTime());
+    const today = datedOpen.filter((task) => {
+      const due = new Date(task.dueDate!).getTime();
+      return due >= range.start.getTime() && due < range.end.getTime();
+    });
+    const upcoming = datedOpen.filter((task) => new Date(task.dueDate!).getTime() >= range.end.getTime());
+
+    const dateKeys = trailingDateKeys(date, 7);
+    const trackedByDate = new Map(dateKeys.map((key) => [key, 0]));
+    for (const entry of entries) {
+      const key = zonedDateKey(new Date(entry.startTime), timeZone);
+      if (trackedByDate.has(key)) {
+        trackedByDate.set(key, (trackedByDate.get(key) ?? 0) + Math.max(0, entry.durationSeconds ?? 0));
+      }
+    }
+    const trackedDays = dateKeys.map((key) => ({ date: key, seconds: trackedByDate.get(key) ?? 0 }));
+
+    const taskEvents = today.map((task) => {
+      const start = new Date(task.dueDate!);
+      const allDay = start.getUTCHours() === 0 && start.getUTCMinutes() === 0;
+      return {
+        id: `task:${task.id}`,
+        kind: task.isPersonal ? "personal_task" as const : "task" as const,
+        taskId: task.id,
+        title: task.title,
+        subtitle: task.project?.name ?? "Personal",
+        start: start.toISOString(),
+        end: null,
+        allDay,
+        durationSeconds: task.estimateMinutes ? task.estimateMinutes * 60 : null,
+      };
+    });
+    const timeEvents = entries
+      .filter((entry) => {
+        const value = new Date(entry.startTime).getTime();
+        return value >= range.start.getTime() && value < range.end.getTime();
+      })
+      .map((entry) => ({
+        id: `time:${entry.id}`,
+        kind: "time_entry" as const,
+        taskId: entry.taskId ?? null,
+        title: entry.title || entry.description || entry.task?.title || "Tracked work",
+        subtitle: entry.project?.name ?? null,
+        start: new Date(entry.startTime).toISOString(),
+        end: entry.endTime ? new Date(entry.endTime).toISOString() : null,
+        allDay: false,
+        durationSeconds: Math.max(0, entry.durationSeconds ?? 0),
+      }));
+    const agenda = [...taskEvents, ...timeEvents].sort((left, right) => {
+      if (left.allDay !== right.allDay) return left.allDay ? -1 : 1;
+      return left.start.localeCompare(right.start);
+    });
+
+    const response = desktopCommandCenterSchema.parse({
+      date,
+      timeZone,
+      workload: { overdue: overdue.length, today: today.length, upcoming: upcoming.length },
+      trackedTodaySeconds: trackedByDate.get(date) ?? 0,
+      trackedWeekSeconds: trackedDays.reduce((total, day) => total + day.seconds, 0),
+      trackedDays,
+      agenda,
+    });
+    res.set("Cache-Control", "private, no-store");
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get("/today", async (req, res, next) => {
@@ -290,9 +398,10 @@ router.get("/task-details/:id", async (req, res, next) => {
       res.status(404).json({ error: "Task not found" });
       return;
     }
-    const [task, comments] = await Promise.all([
+    const [task, comments, userTimeEntries] = await Promise.all([
       storage.getTaskWithRelations(req.params.id),
       storage.getCommentsByTask(req.params.id),
+      storage.getTimeEntriesByUser(req.user!.id, auth.workspaceId),
     ]);
     if (!task || task.tenantId !== auth.tenantId) {
       res.status(404).json({ error: "Task not found" });
@@ -303,6 +412,7 @@ router.get("/task-details/:id", async (req, res, next) => {
     res.json(desktopTaskDetailSchema.parse({
       task: toDesktopTask(task, clientsById),
       comments: comments.map(toDesktopComment),
+      timeEntries: userTimeEntries.filter((entry) => entry.taskId === task.id).map(toDesktopTimeEntry),
     }));
   } catch (error) {
     next(error);
@@ -336,6 +446,27 @@ router.patch("/tasks/:id", async (req, res, next) => {
     next(error);
   }
 });
+
+async function ensureOwnedDesktopTimeEntry(
+  req: import("express").Request,
+  res: import("express").Response,
+  next: import("express").NextFunction,
+) {
+  try {
+    const auth = req.desktopAuth!;
+    const entry = await storage.getTimeEntryByIdAndTenant(req.params.id, auth.tenantId);
+    if (!entry || entry.userId !== req.user!.id || entry.workspaceId !== auth.workspaceId) {
+      res.status(404).json({ error: "Time entry not found" });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+router.patch("/time-entries/:id", ensureOwnedDesktopTimeEntry);
+router.delete("/time-entries/:id", ensureOwnedDesktopTimeEntry);
 
 // Mount the existing domain handlers under the versioned desktop namespace so
 // task completion, notifications, automations, comments and time tracking keep

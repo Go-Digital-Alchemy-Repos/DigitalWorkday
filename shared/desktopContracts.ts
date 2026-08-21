@@ -92,6 +92,21 @@ export const desktopTaskPageSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 
+export const desktopTimeEntrySchema = z.object({
+  id: z.string(),
+  taskId: z.string().nullable(),
+  projectId: z.string().nullable(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  startTime: z.string().datetime({ offset: true }),
+  endTime: isoDate,
+  durationSeconds: z.number().int().nonnegative(),
+  isManual: z.boolean(),
+  projectName: z.string().nullable(),
+  taskTitle: z.string().nullable(),
+  updatedAt: z.string().datetime({ offset: true }),
+});
+
 export const desktopCommentSchema = z.object({
   id: z.string(),
   taskId: z.string().nullable(),
@@ -105,6 +120,40 @@ export const desktopCommentSchema = z.object({
 export const desktopTaskDetailSchema = z.object({
   task: desktopTaskSchema,
   comments: z.array(desktopCommentSchema),
+  timeEntries: z.array(desktopTimeEntrySchema),
+});
+
+export const desktopWorkloadSchema = z.object({
+  overdue: z.number().int().nonnegative(),
+  today: z.number().int().nonnegative(),
+  upcoming: z.number().int().nonnegative(),
+});
+
+export const desktopTrackedDaySchema = z.object({
+  date: z.string().date(),
+  seconds: z.number().int().nonnegative(),
+});
+
+export const desktopAgendaEventSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["task", "personal_task", "time_entry"]),
+  taskId: z.string().nullable(),
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  start: z.string().datetime({ offset: true }),
+  end: isoDate,
+  allDay: z.boolean(),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+});
+
+export const desktopCommandCenterSchema = z.object({
+  date: z.string().date(),
+  timeZone: z.string(),
+  workload: desktopWorkloadSchema,
+  trackedTodaySeconds: z.number().int().nonnegative(),
+  trackedWeekSeconds: z.number().int().nonnegative(),
+  trackedDays: z.array(desktopTrackedDaySchema).length(7),
+  agenda: z.array(desktopAgendaEventSchema),
 });
 
 export const desktopTodaySchema = z.object({
@@ -155,6 +204,8 @@ export type DesktopTaskPage = z.infer<typeof desktopTaskPageSchema>;
 export type DesktopBootstrap = z.infer<typeof desktopBootstrapSchema>;
 export type DesktopComment = z.infer<typeof desktopCommentSchema>;
 export type DesktopTaskDetail = z.infer<typeof desktopTaskDetailSchema>;
+export type DesktopTimeEntry = z.infer<typeof desktopTimeEntrySchema>;
+export type DesktopCommandCenter = z.infer<typeof desktopCommandCenterSchema>;
 export type DesktopMember = z.infer<typeof desktopMemberSchema>;
 export type DesktopToday = z.infer<typeof desktopTodaySchema>;
 export type DesktopNotification = z.infer<typeof desktopNotificationSchema>;

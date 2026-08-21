@@ -31,6 +31,11 @@ export default {
           foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
           border: "var(--primary-border)",
         },
+        action: {
+          DEFAULT: "hsl(var(--action-primary) / <alpha-value>)",
+          foreground: "hsl(var(--action-primary-foreground) / <alpha-value>)",
+          hover: "hsl(var(--action-primary-hover) / <alpha-value>)",
+        },
         secondary: {
           DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
           foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
