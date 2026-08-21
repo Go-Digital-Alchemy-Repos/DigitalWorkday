@@ -53,7 +53,10 @@ struct ContentView: View {
 
     private var detailPane: some View {
         Group {
-            if let detail = store.taskDetail { TaskDetailView(detail: detail) }
+            if let detail = store.taskDetail {
+                TaskDetailView(detail: detail)
+                    .id(TaskDetailViewIdentity(taskID: detail.task.id, updatedAt: detail.task.updatedAt))
+            }
             else { EmptyTaskDetailView() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+struct TaskDetailViewIdentity: Hashable {
+    let taskID: String
+    let updatedAt: Date
+}
+
 struct TaskDetailView: View {
     @Environment(AppStore.self) private var store
     let detail: DWTaskDetail
@@ -65,7 +70,6 @@ struct TaskDetailView: View {
         }
         .background(DWDesign.detailCanvas)
         .onReceive(NotificationCenter.default.publisher(for: .dwSaveTask)) { _ in if isDirty { save() } }
-        .id(detail.task.updatedAt)
     }
 
     private var navigationBar: some View {

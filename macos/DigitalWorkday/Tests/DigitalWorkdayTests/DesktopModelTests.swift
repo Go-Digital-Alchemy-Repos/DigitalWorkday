@@ -124,4 +124,13 @@ func testLegacyTaskDetailWithoutTimeEntriesStillDecodes() throws {
     XCTAssertEqual(detail.task.id, "task")
     XCTAssertTrue(detail.timeEntries.isEmpty)
 }
+
+func testTaskDetailIdentityChangesAcrossSelectionAndRefresh() {
+    let updatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    let first = TaskDetailViewIdentity(taskID: "task-a", updatedAt: updatedAt)
+
+    XCTAssertNotEqual(first, TaskDetailViewIdentity(taskID: "task-b", updatedAt: updatedAt))
+    XCTAssertNotEqual(first, TaskDetailViewIdentity(taskID: "task-a", updatedAt: updatedAt.addingTimeInterval(1)))
+    XCTAssertEqual(first, TaskDetailViewIdentity(taskID: "task-a", updatedAt: updatedAt))
+}
 }
