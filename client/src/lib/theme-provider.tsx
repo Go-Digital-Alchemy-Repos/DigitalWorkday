@@ -50,6 +50,18 @@ function readStoredPack(): PrimaryThemePackId {
 
 const appliedPackTokenKeys = new Set<string>();
 
+export function resolveHydratedThemePackId(
+  prefs: {
+    themeMode?: string | null;
+    themePackId?: string | null;
+    tenantDefaultThemePack?: string | null;
+  },
+  currentPackId: PrimaryThemePackId,
+): PrimaryThemePackId {
+  const remotePackId = prefs.themePackId ?? prefs.themeMode ?? prefs.tenantDefaultThemePack;
+  return remotePackId ? normalizeThemePackId(remotePackId) : currentPackId;
+}
+
 export function applyPackTokens(pack: ThemePack) {
   const root = document.documentElement;
   appliedPackTokenKeys.forEach((key) => root.style.removeProperty(key));
@@ -130,11 +142,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     tenantDefaultAccent?: string | null;
     tenantDefaultThemePack?: string | null;
   }) => {
-    const resolvedPackId = normalizeThemePackId(
-      prefs.themePackId ?? prefs.themeMode ?? prefs.tenantDefaultThemePack ?? DEFAULT_PACK_ID
-    );
-    setPackIdState(resolvedPackId);
-    localStorage.setItem(LS_PACK_KEY, resolvedPackId);
+    setPackIdState((currentPackId) => {
+      const resolvedPackId = resolveHydratedThemePackId(prefs, currentPackId);
+      localStorage.setItem(LS_PACK_KEY, resolvedPackId);
+      return resolvedPackId;
+    });
 
     const accentValue = prefs.themeAccent || prefs.tenantDefaultAccent;
     if (accentValue && ACCENT_OPTIONS.includes(accentValue as AccentColor)) {

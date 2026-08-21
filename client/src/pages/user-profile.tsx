@@ -452,7 +452,7 @@ function AppearanceCard() {
           Appearance
         </CardTitle>
         <CardDescription>
-          Choose Light, Dark, or the warm editorial Anthropic theme
+          Choose Light, Dark, Anthropic, Huly, or Asana
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

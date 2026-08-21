@@ -75,8 +75,54 @@ struct DWTheme: Equatable {
         compactRadius: 12
     )
 
+    static let asana = DWTheme(
+        id: "asana",
+        isEditorial: true,
+        action: Color(red: 0x0D / 255, green: 0x0D / 255, blue: 0x0D / 255),
+        actionPressed: Color(red: 0x71 / 255, green: 0x0C / 255, blue: 0x3A / 255),
+        actionForeground: .white,
+        emphasis: Color(red: 0x22 / 255, green: 0x28 / 255, blue: 0x75 / 255),
+        emphasisBright: Color(red: 0xFF / 255, green: 0x58 / 255, blue: 0x4A / 255),
+        navigation: Color(red: 0xF3 / 255, green: 0xF3 / 255, blue: 0xF3 / 255),
+        navigationForeground: Color(red: 0x0D / 255, green: 0x0D / 255, blue: 0x0D / 255),
+        selection: Color(red: 0xFF / 255, green: 0xEA / 255, blue: 0xEC / 255),
+        selectedBorder: Color(red: 0x69 / 255, green: 0x00 / 255, blue: 0x31 / 255),
+        elevated: .white,
+        canvas: .white,
+        detailCanvas: Color(red: 0xF3 / 255, green: 0xF3 / 255, blue: 0xF3 / 255).opacity(0.7),
+        subtleFill: Color(red: 0xF3 / 255, green: 0xF3 / 255, blue: 0xF3 / 255),
+        divider: Color(red: 0xE7 / 255, green: 0xE7 / 255, blue: 0xE7 / 255),
+        hover: Color(red: 0xFF / 255, green: 0xEA / 255, blue: 0xEC / 255).opacity(0.72),
+        mutedText: Color(red: 0x6E / 255, green: 0x6E / 255, blue: 0x6E / 255),
+        cardRadius: 12,
+        compactRadius: 4
+    )
+
+    static let huly = DWTheme(
+        id: "huly",
+        isEditorial: true,
+        action: Color(red: 0x56 / 255, green: 0x83 / 255, blue: 0xDA / 255),
+        actionPressed: Color(red: 0x45 / 255, green: 0x6F / 255, blue: 0xC0 / 255),
+        actionForeground: Color(red: 0x09 / 255, green: 0x0A / 255, blue: 0x0C / 255),
+        emphasis: Color(red: 0x56 / 255, green: 0x83 / 255, blue: 0xDA / 255),
+        emphasisBright: Color(red: 0xFF / 255, green: 0x89 / 255, blue: 0x64 / 255),
+        navigation: Color(red: 0x09 / 255, green: 0x0A / 255, blue: 0x0C / 255),
+        navigationForeground: Color(red: 0xD1 / 255, green: 0xD1 / 255, blue: 0xD1 / 255),
+        selection: Color(red: 0x56 / 255, green: 0x83 / 255, blue: 0xDA / 255).opacity(0.18),
+        selectedBorder: Color(red: 0x56 / 255, green: 0x83 / 255, blue: 0xDA / 255),
+        elevated: Color(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255),
+        canvas: Color(red: 0x30 / 255, green: 0x32 / 255, blue: 0x36 / 255),
+        detailCanvas: Color(red: 0x09 / 255, green: 0x0A / 255, blue: 0x0C / 255),
+        subtleFill: Color(red: 0x4A / 255, green: 0x4B / 255, blue: 0x50 / 255),
+        divider: Color(red: 0x4A / 255, green: 0x4B / 255, blue: 0x50 / 255),
+        hover: Color(red: 0x56 / 255, green: 0x83 / 255, blue: 0xDA / 255).opacity(0.14),
+        mutedText: Color(red: 0xA9 / 255, green: 0xA9 / 255, blue: 0xAA / 255),
+        cardRadius: 12,
+        compactRadius: 4
+    )
+
     func contentFont(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
-        let font = Font.system(style, design: isEditorial ? .serif : .default)
+        let font = Font.system(style, design: id == "anthropic" ? .serif : .default)
         return weight.map { font.weight($0) } ?? font
     }
 }
@@ -116,13 +162,30 @@ private struct AnthropicPrimaryButtonStyle: ButtonStyle {
     }
 }
 
+private struct ThemedPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.dwTheme) private var theme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(.body, design: .default).weight(.medium))
+            .foregroundStyle(theme.actionForeground)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(configuration.isPressed ? theme.actionPressed : theme.action, in: Capsule())
+            .opacity(isEnabled ? 1 : 0.48)
+    }
+}
+
 private struct DWPrimaryActionModifier: ViewModifier {
     @Environment(\.dwTheme) private var theme
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if theme.isEditorial {
+        if theme.id == "anthropic" {
             content.buttonStyle(AnthropicPrimaryButtonStyle())
+        } else if theme.isEditorial {
+            content.buttonStyle(ThemedPrimaryButtonStyle())
         } else {
             content.buttonStyle(.borderedProminent)
         }

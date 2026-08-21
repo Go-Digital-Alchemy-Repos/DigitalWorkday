@@ -37,7 +37,7 @@ struct AvatarView: View {
             }
             Text(user.initials)
                 .font(.system(size: size * 0.34, weight: .semibold, design: .rounded))
-                .foregroundStyle(theme.navigationForeground)
+                .foregroundStyle(theme.actionForeground)
         }
     }
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyPackTokens, resolveHydratedThemePackId } from "@/lib/theme-provider";
+import { applyPackTokens } from "@/lib/theme-provider";
 import {
   PRIMARY_THEME_PACKS,
   getThemePack,
@@ -55,47 +55,37 @@ function fakeDocumentRoot() {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("Asana theme pack", () => {
-  it("adds Asana without replacing the existing signature themes", () => {
-    expect(PRIMARY_THEME_PACKS.map(({ id }) => id)).toEqual(["light", "dark", "anthropic", "huly", "asana"]);
-    expect(normalizeThemePackId("anthropic")).toBe("anthropic");
-    expect(normalizeThemePackId("asana")).toBe("asana");
-    expect(normalizeThemePackId("espresso")).toBe("dark");
-    expect(normalizeThemePackId("sand")).toBe("light");
-    expect(normalizeThemePackId("unknown")).toBe("light");
-    expect(getThemePack("anthropic").name).toBe("Anthropic");
-    expect(getThemePack("asana").name).toBe("Asana");
-    expect(getThemePack("asana").kind).toBe("light");
+describe("Huly theme pack", () => {
+  it("is a selectable dark primary theme", () => {
+    expect(PRIMARY_THEME_PACKS.map(({ id }) => id)).toContain("huly");
+    expect(normalizeThemePackId("huly")).toBe("huly");
+    expect(getThemePack("huly").name).toBe("Huly");
+    expect(getThemePack("huly").kind).toBe("dark");
   });
 
-  it("preserves a local Asana choice when the server has no explicit preference", () => {
-    expect(resolveHydratedThemePackId({}, "asana")).toBe("asana");
-    expect(resolveHydratedThemePackId({ themePackId: "dark" }, "asana")).toBe("dark");
-    expect(resolveHydratedThemePackId({ tenantDefaultThemePack: "asana" }, "light")).toBe("asana");
-  });
-
-  it("meets contrast targets for text, actions, and focus", () => {
-    const tokens = getThemePack("asana").tokens;
+  it("preserves accessible contrast for text, actions, and focus", () => {
+    const tokens = getThemePack("huly").tokens;
     expect(contrastRatio(tokens["--foreground"], tokens["--background"])).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(tokens["--muted-foreground"], tokens["--background"])).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(tokens["--action-primary-foreground"], tokens["--action-primary"])).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(tokens["--sidebar-accent-foreground"], tokens["--sidebar-accent"])).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(tokens["--ring"], tokens["--background"])).toBeGreaterThanOrEqual(3);
   });
 
-  it("removes Asana-only tokens and classes when switching packs", () => {
+  it("clears Huly-only tokens and classes when switching themes", () => {
     const { root, properties, classes } = fakeDocumentRoot();
     vi.stubGlobal("document", { documentElement: root });
 
-    applyPackTokens(getThemePack("asana"));
-    expect(properties.get("--surface-0")).toBe("0 0% 100%");
+    applyPackTokens(getThemePack("huly"));
+    expect(properties.get("--font-display")).toContain("Space Grotesk");
     expect(properties.get("--theme-control-radius")).toBe("999px");
-    expect(classes.has("theme-asana")).toBe(true);
-    expect(root.dataset.themePack).toBe("asana");
+    expect(classes.has("dark")).toBe(true);
+    expect(classes.has("theme-huly")).toBe(true);
+    expect(root.dataset.themePack).toBe("huly");
 
     applyPackTokens(getThemePack("light"));
-    expect(properties.has("--surface-0")).toBe(false);
-    expect(properties.get("--shadow-soft")).not.toBe("none");
-    expect(classes.has("theme-asana")).toBe(false);
+    expect(properties.has("--font-display")).toBe(false);
+    expect(classes.has("theme-huly")).toBe(false);
     expect(classes.has("theme-light")).toBe(true);
     expect(root.dataset.themePack).toBe("light");
   });

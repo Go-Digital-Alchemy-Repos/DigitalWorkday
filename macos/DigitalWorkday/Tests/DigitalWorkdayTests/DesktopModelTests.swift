@@ -111,15 +111,38 @@ func testInvalidAppearanceFallsBackToSystem() {
     XCTAssertNil(mode.colorScheme)
 }
 
-func testAnthropicAppearanceUsesWarmLightTheme() {
+func testAnthropicAppearanceUsesEditorialLightTheme() {
     let mode = AppearanceMode.anthropic
+    XCTAssertEqual(mode.label, "Anthropic")
     XCTAssertEqual(mode.colorScheme, .light)
     XCTAssertEqual(mode.systemImage, "book.closed.fill")
     XCTAssertEqual(mode.theme.id, "anthropic")
     XCTAssertTrue(mode.theme.isEditorial)
     XCTAssertEqual(mode.theme.cardRadius, 24)
     XCTAssertEqual(mode.theme.compactRadius, 12)
-    XCTAssertEqual(AppearanceMode.allCases.map(\.rawValue), ["system", "light", "dark", "anthropic"])
+}
+
+func testHulyAppearanceUsesMidnightTheme() {
+    let mode = AppearanceMode.huly
+    XCTAssertEqual(mode.label, "Huly")
+    XCTAssertEqual(mode.colorScheme, .dark)
+    XCTAssertEqual(mode.systemImage, "sparkles")
+    XCTAssertEqual(mode.theme.id, "huly")
+    XCTAssertTrue(mode.theme.isEditorial)
+    XCTAssertEqual(mode.theme.cardRadius, 12)
+    XCTAssertEqual(mode.theme.compactRadius, 4)
+}
+
+func testAsanaAppearanceUsesCalmWorkspaceTheme() {
+    let mode = AppearanceMode.asana
+    XCTAssertEqual(mode.label, "Asana")
+    XCTAssertEqual(mode.colorScheme, .light)
+    XCTAssertEqual(mode.systemImage, "checklist")
+    XCTAssertEqual(mode.theme.id, "asana")
+    XCTAssertTrue(mode.theme.isEditorial)
+    XCTAssertEqual(mode.theme.cardRadius, 12)
+    XCTAssertEqual(mode.theme.compactRadius, 4)
+    XCTAssertEqual(AppearanceMode.allCases.map(\.rawValue), ["system", "light", "dark", "anthropic", "huly", "asana"])
 }
 
 func testAdditiveDesktopTaskFieldsDecode() throws {

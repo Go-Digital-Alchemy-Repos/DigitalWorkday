@@ -169,10 +169,15 @@ private struct AppearanceSettingsView: View {
     }
 
     private func previewBackground(for mode: AppearanceMode) -> Color {
-        mode == .anthropic ? mode.theme.canvas : (mode == .dark ? Color.black.opacity(0.86) : Color.white)
+        mode.theme.isEditorial ? mode.theme.canvas : (mode == .dark ? Color.black.opacity(0.86) : Color.white)
     }
     private func previewForeground(for mode: AppearanceMode) -> Color {
-        mode == .anthropic ? mode.theme.emphasis : (mode == .dark ? .white : .black)
+        switch mode {
+        case .anthropic: mode.theme.emphasis
+        case .huly: .white
+        case .dark: .white
+        default: .black
+        }
     }
 }
 

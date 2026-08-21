@@ -418,6 +418,76 @@
     transform: none;
     box-shadow: none;
   }
+
+  .theme-asana [data-ui="card"] {
+    border-radius: var(--theme-card-radius);
+    box-shadow: none;
+  }
+
+  .theme-asana :is(button, input, textarea, select, nav, table, [role="menu"], [role="tab"], [role="dialog"], .ProseMirror),
+  .theme-asana [data-ui="button"] {
+    font-family: var(--font-ui);
+  }
+
+  .theme-asana [data-ui="button"] {
+    border-radius: var(--theme-control-radius);
+    box-shadow: none;
+  }
+
+  .theme-asana :is(input, textarea, select, .ProseMirror) {
+    border-radius: var(--theme-input-radius);
+  }
+
+  .theme-asana :is(.ProseMirror, .prose, main p) a:not([role="button"]) {
+    color: hsl(var(--accent-foreground));
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.16em;
+  }
+
+  .theme-asana .card-specular::before {
+    display: none;
+  }
+
+  .theme-asana .card-interactive:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: hsl(var(--ring) / 0.72);
+  }
+
+  .theme-huly {
+    font-feature-settings: "cv01", "ss03", "liga" 1, "calt" 1;
+  }
+
+  .theme-huly main h1 {
+    font-family: var(--font-display);
+    letter-spacing: -0.04em;
+  }
+
+  .theme-huly [data-ui="card"] {
+    border-radius: var(--theme-card-radius);
+    border-color: hsl(var(--card-border));
+    box-shadow: var(--shadow-soft);
+  }
+
+  .theme-huly :is(button, nav, table, [role="menu"], [role="tab"], [role="dialog"], .ProseMirror),
+  .theme-huly [data-ui="button"] {
+    font-family: var(--font-ui);
+  }
+
+  .theme-huly [data-ui="button"] {
+    border-radius: var(--theme-control-radius);
+  }
+
+  .theme-huly :is(input, textarea, select, .ProseMirror) {
+    border-radius: var(--theme-input-radius);
+  }
+
+  .theme-huly .card-interactive:hover {
+    transform: none;
+    border-color: hsl(var(--ring) / 0.72);
+    box-shadow: var(--shadow-medium);
+  }
 }
 
 /**

@@ -111,7 +111,7 @@ const STATUS_COLORS = {
 
 ## Theme Packs
 
-15 curated themes are defined in `client/src/theme/themePacks.ts`; Light, Dark, and Anthropic are the selectable primary collection. Each pack sets all semantic CSS variables. Resolution chain:
+17 curated themes are defined in `client/src/theme/themePacks.ts`; Light, Dark, Anthropic, Huly, and Asana are the selectable primary collection. Existing theme IDs remain unchanged, while Huly and Asana are additive, opt-in themes. Huly is a dark command-center theme with iris and ember accents; Asana is a calm light workspace with ink, coral, and violet accents. Each pack sets all semantic CSS variables. Resolution chain:
 
 ```
 themePackId ?? themeMode ?? tenantDefaultThemePack ?? "light"
@@ -126,7 +126,7 @@ client/src/
   styles/
     tokens.css         # CSS custom properties (spacing, typography, motion, z-index)
   theme/
-    themePacks.ts      # 14 theme pack definitions
+    themePacks.ts      # 17 theme pack definitions
   components/ui-system/
     tokens.ts          # Convenience aliases derived from design/tokens.ts
   components/ui/

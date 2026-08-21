@@ -1,4 +1,4 @@
-import { BookOpen, Check, Moon, Sun, type LucideIcon } from "lucide-react";
+import { BookOpen, Check, ListChecks, Moon, Orbit, Sun, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,8 @@ const THEME_ICONS: Record<PrimaryThemePackId, LucideIcon> = {
   light: Sun,
   dark: Moon,
   anthropic: BookOpen,
+  huly: Orbit,
+  asana: ListChecks,
 };
 
 interface ThemeToggleProps {
