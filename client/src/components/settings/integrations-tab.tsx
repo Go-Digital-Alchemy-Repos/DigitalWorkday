@@ -18,7 +18,7 @@ import {
 import { 
   Mail, Save, Loader2, CheckCircle2, XCircle, 
   AlertTriangle, TestTube, Eye, EyeOff, RefreshCw, Webhook, Send, Sparkles, HardDrive,
-  Building2, Link2, Unplug
+  Building2, Link2, Unplug, Server
 } from "lucide-react";
 import { SiSlack, SiZapier, SiGooglecalendar, SiCloudflare, SiOpenai } from "react-icons/si";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -77,12 +77,19 @@ export function IntegrationsTab() {
   const [showR2Keys, setShowR2Keys] = useState(false);
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [showQuickBooksSecret, setShowQuickBooksSecret] = useState(false);
+  const [showWpEnginePassword, setShowWpEnginePassword] = useState(false);
 
   const [quickBooksForm, setQuickBooksForm] = useState({
     enabled: true,
     environment: "sandbox" as "sandbox" | "production",
     clientId: "",
     clientSecret: "",
+  });
+
+  const [wpEngineForm, setWpEngineForm] = useState({
+    enabled: true,
+    apiUsername: "",
+    apiPassword: "",
   });
 
   const { data, isLoading, error, refetch } = useQuery<IntegrationsListResponse>({
@@ -93,6 +100,7 @@ export function IntegrationsTab() {
   const r2Integration = data?.integrations?.find(i => i.provider === "r2");
   const openaiIntegration = data?.integrations?.find(i => i.provider === "openai");
   const quickBooksIntegration = data?.integrations?.find(i => i.provider === "quickbooks");
+  const wpEngineIntegration = data?.integrations?.find(i => i.provider === "wpengine");
   const quickBooksRedirectUri = typeof window !== "undefined"
     ? `${window.location.origin}/api/v1/tenant/integrations/quickbooks/callback`
     : "/api/v1/tenant/integrations/quickbooks/callback";
@@ -155,7 +163,14 @@ export function IntegrationsTab() {
         clientSecret: "",
       });
     }
-  }, [mailgunIntegration, r2Integration, openaiIntegration, quickBooksIntegration]);
+    if (wpEngineIntegration?.publicConfig) {
+      setWpEngineForm({
+        enabled: wpEngineIntegration.publicConfig.enabled ?? true,
+        apiUsername: wpEngineIntegration.publicConfig.apiUsername || "",
+        apiPassword: "",
+      });
+    }
+  }, [mailgunIntegration, r2Integration, openaiIntegration, quickBooksIntegration, wpEngineIntegration]);
 
   const saveMailgunMutation = useMutation({
     mutationFn: async (formData: typeof mailgunForm) => {
@@ -342,6 +357,46 @@ export function IntegrationsTab() {
     },
     onError: () => {
       toast({ title: "Failed to test QuickBooks", variant: "destructive" });
+    },
+  });
+
+  const saveWPEngineMutation = useMutation({
+    mutationFn: async (formData: typeof wpEngineForm) => {
+      const payload: any = {
+        enabled: formData.enabled,
+        apiUsername: formData.apiUsername || undefined,
+      };
+      if (formData.apiPassword) {
+        payload.apiPassword = formData.apiPassword;
+      }
+      return apiRequest("PUT", "/api/v1/tenant/integrations/wpengine", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      setWpEngineForm(prev => ({ ...prev, apiPassword: "" }));
+      toast({ title: "WP Engine settings saved successfully" });
+    },
+    onError: (err: any) => {
+      const message = err?.message || "Failed to save WP Engine settings";
+      toast({ title: message, variant: "destructive" });
+    },
+  });
+
+  const testWPEngineMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/v1/tenant/integrations/wpengine/test", {});
+      return await res.json();
+    },
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      if (response.success) {
+        toast({ title: response.message || "WP Engine test successful" });
+      } else {
+        toast({ title: response.message || "WP Engine test failed", variant: "destructive" });
+      }
+    },
+    onError: () => {
+      toast({ title: "Failed to test WP Engine", variant: "destructive" });
     },
   });
 
@@ -1091,6 +1146,119 @@ export function IntegrationsTab() {
                 <>
                   <Save className="h-4 w-4 mr-2" />
                   Save QuickBooks
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Server className="h-5 w-5 text-sky-600" />
+              <CardTitle className="text-lg">WP Engine Hosting</CardTitle>
+            </div>
+            {getStatusBadge(wpEngineIntegration?.status || "not_configured")}
+          </div>
+          <CardDescription>
+            Connect the WP Engine API (read-only) to list the agency&apos;s hosted WordPress installs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="wpengine-enabled">Enable WP Engine</Label>
+              <p className="text-xs text-muted-foreground">
+                Generate API credentials in the WP Engine portal under Profile → API Access.
+              </p>
+            </div>
+            <Switch
+              id="wpengine-enabled"
+              checked={wpEngineForm.enabled}
+              onCheckedChange={(checked) => setWpEngineForm({ ...wpEngineForm, enabled: checked })}
+              data-testid="switch-wpengine-enabled"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="wpengine-api-username">API Username</Label>
+              <Input
+                id="wpengine-api-username"
+                placeholder="WP Engine API username"
+                value={wpEngineForm.apiUsername}
+                onChange={(e) => setWpEngineForm({ ...wpEngineForm, apiUsername: e.target.value })}
+                data-testid="input-wpengine-api-username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="wpengine-api-password">
+                API Password {wpEngineIntegration?.secretMasked?.apiKeyMasked && (
+                  <span className="text-muted-foreground font-normal">({wpEngineIntegration.secretMasked.apiKeyMasked})</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="wpengine-api-password"
+                  type={showWpEnginePassword ? "text" : "password"}
+                  placeholder={wpEngineIntegration?.secretConfigured ? "Enter new password to replace" : "WP Engine API password"}
+                  value={wpEngineForm.apiPassword}
+                  onChange={(e) => setWpEngineForm({ ...wpEngineForm, apiPassword: e.target.value })}
+                  data-testid="input-wpengine-api-password"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowWpEnginePassword(!showWpEnginePassword)}
+                  data-testid="button-toggle-wpengine-password"
+                >
+                  {showWpEnginePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave blank to keep the existing API password.
+              </p>
+            </div>
+          </div>
+
+          {wpEngineIntegration?.lastTestedAt && (
+            <p className="text-xs text-muted-foreground">
+              Last tested: {new Date(wpEngineIntegration.lastTestedAt).toLocaleString()}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => testWPEngineMutation.mutate()}
+              disabled={testWPEngineMutation.isPending || wpEngineIntegration?.status !== "configured"}
+              data-testid="button-test-wpengine"
+            >
+              {testWPEngineMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <TestTube className="h-4 w-4 mr-2" />
+                  Test Connection
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => saveWPEngineMutation.mutate(wpEngineForm)}
+              disabled={saveWPEngineMutation.isPending}
+              data-testid="button-save-wpengine"
+            >
+              {saveWPEngineMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save WP Engine
                 </>
               )}
             </Button>

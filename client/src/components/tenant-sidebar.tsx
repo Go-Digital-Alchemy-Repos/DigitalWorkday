@@ -28,6 +28,8 @@ import {
   LifeBuoy,
   ClipboardList,
   Inbox,
+  Receipt,
+  Globe,
 } from "lucide-react";
 import {
   DndContext,
@@ -174,6 +176,8 @@ const mainNavItems = [
   // { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
   { title: "Support", url: "/support", icon: LifeBuoy, color: "text-orange-500" },
+  { title: "Invoice Audit", url: "/finance/invoice-audit", icon: Receipt, color: "text-teal-500", financeOnly: true },
+  { title: "Website Matching", url: "/finance/website-matching", icon: Globe, color: "text-teal-500", financeOnly: true },
 ];
 
 export function TenantSidebar() {
@@ -459,7 +463,10 @@ export function TenantSidebar() {
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {mainNavItems.filter((item: any) => !item.adminOnly || showPmDashboard).map((item) => (
+                  {mainNavItems
+                    .filter((item: any) => !item.adminOnly || showPmDashboard)
+                    .filter((item: any) => !item.financeOnly || user?.canViewFinance)
+                    .map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild

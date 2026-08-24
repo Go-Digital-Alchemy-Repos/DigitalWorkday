@@ -31,6 +31,8 @@ import {
   Pin,
   Inbox,
   LifeBuoy,
+  Receipt,
+  Globe,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -72,6 +74,8 @@ const mainNavItems = [
   { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
   { title: "Service Requests", url: "/service-requests", icon: Wrench, color: "text-lime-600", adminOnly: true },
   { title: "Support Center", url: "/support", icon: LifeBuoy, color: "text-orange-500" },
+  { title: "Invoice Audit", url: "/finance/invoice-audit", icon: Receipt, color: "text-teal-500", financeOnly: true },
+  { title: "Website Matching", url: "/finance/website-matching", icon: Globe, color: "text-teal-500", financeOnly: true },
 ];
 
 export function AppSidebar() {
@@ -184,7 +188,10 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.filter((item: any) => !item.adminOnly || showPmDashboard).map((item) => (
+              {mainNavItems
+                .filter((item: any) => !item.adminOnly || showPmDashboard)
+                .filter((item: any) => !item.financeOnly || user?.canViewFinance)
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

@@ -501,6 +501,7 @@ const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(["admin", "project_manager", "employee", "client"]).optional(),
   isActive: z.boolean().optional(),
+  canViewFinance: z.boolean().optional(),
 });
 
 tenantUsersRouter.patch("/tenants/:tenantId/users/:userId", requireSuperUser, async (req, res) => {
@@ -532,6 +533,7 @@ tenantUsersRouter.patch("/tenants/:tenantId/users/:userId", requireSuperUser, as
     if (data.name) updates.name = data.name;
     if (data.role) updates.role = data.role;
     if (data.isActive !== undefined) updates.isActive = data.isActive;
+    if (data.canViewFinance !== undefined) updates.canViewFinance = data.canViewFinance;
     
     const updatedUser = await storage.updateUserWithTenant(userId, tenantId, updates);
     if (data.role) {

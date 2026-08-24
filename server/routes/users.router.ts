@@ -31,7 +31,7 @@ import {
   workspaceMembers,
   UserRole,
 } from "@shared/schema";
-import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess } from "@shared/roles";
+import { getWorkspaceMembershipRoleForUserRole, hasTenantAdminAccess, isSuperUserRole } from "@shared/roles";
 import { cleanupUserReferences } from "../utils/userDeletion";
 import { buildAppUrl } from "../lib/appLinks";
 
@@ -362,6 +362,15 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
 
     const targetUser = await storage.getUserByIdAndTenant(id, tenantId);
     if (!targetUser) throw AppError.notFound("User not found in your organization");
+
+    // Finance access is a sensitive-data entitlement: only super users may
+    // change it. Tenant admins manage users but cannot grant themselves (or
+    // anyone) visibility into QuickBooks billing data.
+    if ("canViewFinance" in updates
+      && Boolean(updates.canViewFinance) !== Boolean(targetUser.canViewFinance)
+      && !isSuperUserRole(currentUser?.role)) {
+      throw AppError.forbidden("Only a super admin can change finance access");
+    }
 
     const user = await storage.updateUser(id, updates);
     if (updates.role) {

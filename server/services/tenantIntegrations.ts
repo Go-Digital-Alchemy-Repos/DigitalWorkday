@@ -6,7 +6,7 @@ import { externalFetch } from "../lib/fetchWithTimeout";
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana" | "quickbooks";
+export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana" | "quickbooks" | "wpengine";
 
 interface MailgunPublicConfig {
   domain: string;
@@ -96,8 +96,18 @@ export interface QuickBooksSecretConfig {
   refreshToken?: string;
 }
 
-type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | OpenAIPublicConfig | AsanaPublicConfig | QuickBooksPublicConfig;
-type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | OpenAISecretConfig | AsanaSecretConfig | QuickBooksSecretConfig;
+export interface WPEnginePublicConfig {
+  enabled: boolean;
+  apiUsername?: string;
+  accountName?: string | null;
+}
+
+export interface WPEngineSecretConfig {
+  apiPassword?: string;
+}
+
+type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | OpenAIPublicConfig | AsanaPublicConfig | QuickBooksPublicConfig | WPEnginePublicConfig;
+type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | OpenAISecretConfig | AsanaSecretConfig | QuickBooksSecretConfig | WPEngineSecretConfig;
 
 interface SecretMaskedInfo {
   apiKeyMasked?: string | null;
@@ -169,6 +179,43 @@ async function refreshQuickBooksToken(
   }
 
   return JSON.parse(text) as QuickBooksTokenResponse;
+}
+
+export interface QuickBooksInvoiceLine {
+  itemId: string | null;
+  itemName: string | null;
+  description: string | null;
+  amount: number;
+}
+
+export interface QuickBooksInvoiceSummary {
+  id: string;
+  docNumber: string | null;
+  txnDate: string;
+  dueDate: string | null;
+  totalAmount: number;
+  balance: number;
+  customerId: string | null;
+  customerName: string | null;
+  lines: QuickBooksInvoiceLine[];
+}
+
+const WPENGINE_API_BASE_URL = "https://api.wpengineapi.com/v1";
+
+export interface WPEngineInstallSummary {
+  id: string;
+  name: string | null;
+  environment: string | null;
+  primaryDomain: string | null;
+  cname: string | null;
+  phpVersion: string | null;
+  status: string | null;
+  siteName: string | null;
+  // WP Engine "accounts" are the physical servers/plans; a dedicated customer
+  // often has its own account (e.g. da4sunstoppers), which makes the account
+  // name a strong ownership signal.
+  accountId: string | null;
+  accountName: string | null;
 }
 
 export interface IntegrationUpdateInput {
@@ -243,6 +290,11 @@ export class TenantIntegrationService {
             clientSecretMasked: maskSecret(qbSecrets.clientSecret),
             refreshTokenMasked: maskSecret(qbSecrets.refreshToken),
           };
+        } else if (provider === "wpengine") {
+          const wpSecrets = secrets as WPEngineSecretConfig;
+          secretMasked = {
+            apiKeyMasked: maskSecret(wpSecrets.apiPassword),
+          };
         }
       } catch (err) {
         debugLog("getIntegration - failed to decrypt secrets for masking", { tenantId, provider });
@@ -284,7 +336,7 @@ export class TenantIntegrationService {
       if (message.includes("does not exist") || message.includes("column")) {
         console.warn("[TenantIntegrations] listIntegrations table/column issue:", message);
         // Return empty list with not_configured status for all providers
-        return ["mailgun", "s3", "r2", "openai", "quickbooks"].map(p => ({
+        return ["mailgun", "s3", "r2", "openai", "quickbooks", "wpengine"].map(p => ({
           provider: p,
           status: IntegrationStatus.NOT_CONFIGURED,
           publicConfig: null,
@@ -295,7 +347,7 @@ export class TenantIntegrationService {
       throw dbError;
     }
 
-    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai", "quickbooks"];
+    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai", "quickbooks", "wpengine"];
     const result: IntegrationResponse[] = [];
 
     for (const provider of providers) {
@@ -323,6 +375,9 @@ export class TenantIntegrationService {
                 clientSecretMasked: maskSecret(qbSecrets.clientSecret),
                 refreshTokenMasked: maskSecret(qbSecrets.refreshToken),
               };
+            } else if (provider === "wpengine") {
+              const wpSecrets = secrets as WPEngineSecretConfig;
+              secretMasked = { apiKeyMasked: maskSecret(wpSecrets.apiPassword) };
             }
           } catch {
             debugLog("listIntegrations - failed to decrypt secrets for masking", { tenantId, provider });
@@ -540,6 +595,9 @@ export class TenantIntegrationService {
         case "quickbooks":
           testResult = await this.testQuickBooks(tenantId);
           break;
+        case "wpengine":
+          testResult = await this.testWPEngine(tenantId);
+          break;
         default:
           testResult = { success: false, message: `Unknown provider: ${provider}` };
       }
@@ -743,9 +801,134 @@ export class TenantIntegrationService {
         }
         break;
       }
+      case "wpengine": {
+        const config = publicConfig as WPEnginePublicConfig;
+        if (config.enabled && config.apiUsername && hasSecret) {
+          return IntegrationStatus.CONFIGURED;
+        }
+        break;
+      }
     }
 
     return IntegrationStatus.NOT_CONFIGURED;
+  }
+
+  /**
+   * Returns a valid QuickBooks access token plus API context, refreshing and
+   * persisting tokens when the stored access token is missing or near expiry.
+   * Throws when QuickBooks is not configured/connected for the tenant.
+   */
+  private async getQuickBooksAccessContext(tenantId: string | null): Promise<{
+    accessToken: string;
+    baseUrl: string;
+    realmId: string;
+  }> {
+    const integration = await this.getIntegration(tenantId, "quickbooks");
+    const secrets = await this.getDecryptedSecrets(tenantId, "quickbooks") as QuickBooksSecretConfig | null;
+
+    if (!integration?.publicConfig) {
+      throw new Error("QuickBooks is not configured");
+    }
+    const config = integration.publicConfig as QuickBooksPublicConfig;
+    if (!config.enabled) {
+      throw new Error("QuickBooks integration is disabled");
+    }
+    if (!config.clientId || !secrets?.clientSecret) {
+      throw new Error("QuickBooks client ID and client secret are required");
+    }
+    if (!config.realmId || !secrets?.refreshToken) {
+      throw new Error("QuickBooks is not connected yet");
+    }
+
+    const baseUrl = getQuickBooksApiBaseUrl(config.environment);
+    const expiresAt = config.accessTokenExpiresAt ? Date.parse(config.accessTokenExpiresAt) : 0;
+    const isTokenFresh = Boolean(secrets.accessToken) && expiresAt - Date.now() > 120_000;
+    if (isTokenFresh) {
+      return { accessToken: secrets.accessToken!, baseUrl, realmId: config.realmId };
+    }
+
+    const tokenResult = await refreshQuickBooksToken(config.clientId, secrets.clientSecret, secrets.refreshToken);
+    const accessToken = tokenResult.access_token;
+    const now = Date.now();
+    await this.upsertIntegration(tenantId, "quickbooks", {
+      publicConfig: {
+        accessTokenExpiresAt: new Date(now + (tokenResult.expires_in || 3600) * 1000).toISOString(),
+        refreshTokenExpiresAt: tokenResult.x_refresh_token_expires_in
+          ? new Date(now + tokenResult.x_refresh_token_expires_in * 1000).toISOString()
+          : config.refreshTokenExpiresAt,
+      },
+      secretConfig: {
+        accessToken,
+        refreshToken: tokenResult.refresh_token || secrets.refreshToken,
+      },
+    });
+
+    return { accessToken, baseUrl, realmId: config.realmId };
+  }
+
+  /**
+   * Fetches invoices from the connected QuickBooks company, newest first.
+   * `sinceDate` is an ISO date (YYYY-MM-DD) lower bound on TxnDate.
+   */
+  async fetchQuickBooksInvoices(tenantId: string | null, sinceDate: string): Promise<QuickBooksInvoiceSummary[]> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sinceDate)) {
+      throw new Error(`Invalid sinceDate: ${sinceDate}`);
+    }
+    const { accessToken, baseUrl, realmId } = await this.getQuickBooksAccessContext(tenantId);
+
+    const pageSize = 1000;
+    const maxPages = 20;
+    const invoices: QuickBooksInvoiceSummary[] = [];
+
+    for (let page = 0; page < maxPages; page++) {
+      const startPosition = page * pageSize + 1;
+      const query = `SELECT * FROM Invoice WHERE TxnDate >= '${sinceDate}' ORDERBY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS ${pageSize}`;
+      const response = await externalFetch(
+        `${baseUrl}/v3/company/${encodeURIComponent(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=75`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`QuickBooks invoice query failed (${response.status}): ${body.slice(0, 180)}`);
+      }
+
+      const body = await response.json();
+      const rows: any[] = body?.QueryResponse?.Invoice || [];
+      for (const row of rows) {
+        const lines: QuickBooksInvoiceLine[] = [];
+        for (const line of row.Line || []) {
+          const detail = line.SalesItemLineDetail;
+          if (!detail) continue;
+          lines.push({
+            itemId: detail.ItemRef?.value ?? null,
+            itemName: detail.ItemRef?.name ?? null,
+            description: line.Description ?? null,
+            amount: Number(line.Amount) || 0,
+          });
+        }
+        invoices.push({
+          id: String(row.Id),
+          docNumber: row.DocNumber ?? null,
+          txnDate: row.TxnDate,
+          dueDate: row.DueDate ?? null,
+          totalAmount: Number(row.TotalAmt) || 0,
+          balance: Number(row.Balance) || 0,
+          customerId: row.CustomerRef?.value ?? null,
+          customerName: row.CustomerRef?.name ?? null,
+          lines,
+        });
+      }
+
+      if (rows.length < pageSize) break;
+    }
+
+    return invoices;
   }
 
   private async testQuickBooks(tenantId: string | null): Promise<{ success: boolean; message: string }> {
@@ -853,6 +1036,161 @@ export class TenantIntegrationService {
       console.error("[OpenAI] Test failed:", error);
       return { success: false, message: error.message || "Failed to connect to OpenAI API" };
     }
+  }
+
+  /**
+   * Resolves the WP Engine Basic auth header for a tenant, throwing when the
+   * integration is not configured, disabled, or missing credentials.
+   */
+  private async getWPEngineAuthHeader(tenantId: string | null): Promise<string> {
+    const integration = await this.getIntegration(tenantId, "wpengine");
+    if (!integration?.publicConfig) {
+      throw new Error("WP Engine is not configured");
+    }
+
+    const config = integration.publicConfig as WPEnginePublicConfig;
+    if (!config.enabled) {
+      throw new Error("WP Engine integration is disabled");
+    }
+    if (!config.apiUsername) {
+      throw new Error("WP Engine API username is required");
+    }
+
+    const secrets = await this.getDecryptedSecrets(tenantId, "wpengine") as WPEngineSecretConfig | null;
+    if (!secrets?.apiPassword) {
+      throw new Error("WP Engine API password is required");
+    }
+
+    return `Basic ${Buffer.from(`${config.apiUsername}:${secrets.apiPassword}`).toString("base64")}`;
+  }
+
+  private async testWPEngine(tenantId: string | null): Promise<{ success: boolean; message: string }> {
+    let authHeader: string;
+    try {
+      authHeader = await this.getWPEngineAuthHeader(tenantId);
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : "WP Engine is not configured" };
+    }
+
+    const response = await externalFetch(`${WPENGINE_API_BASE_URL}/installs?limit=1`, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/json",
+      },
+    });
+
+    if (response.status === 401) {
+      return { success: false, message: "WP Engine rejected the request (401); check API credentials" };
+    }
+    if (!response.ok) {
+      const body = await response.text();
+      return { success: false, message: `WP Engine API check failed (${response.status}): ${body.slice(0, 160)}` };
+    }
+
+    let installCount: number | null = null;
+    try {
+      const body = await response.json();
+      if (typeof body?.count === "number") {
+        installCount = body.count;
+      } else if (Array.isArray(body?.results)) {
+        installCount = body.results.length;
+      }
+    } catch {
+      // A successful status is enough for a connection test.
+    }
+
+    return {
+      success: true,
+      message: installCount !== null
+        ? `WP Engine connection successful (${installCount} install${installCount === 1 ? "" : "s"})`
+        : "WP Engine connection successful",
+    };
+  }
+
+  /**
+   * Pages through a WP Engine collection endpoint (GET-only).
+   */
+  private async listWPEngineResources(authHeader: string, resource: "installs" | "accounts" | "sites"): Promise<any[]> {
+    const pageSize = 100;
+    const maxPages = 20;
+    const rowsOut: any[] = [];
+    let nextUrl: string | null = `${WPENGINE_API_BASE_URL}/${resource}?limit=${pageSize}`;
+
+    for (let page = 0; page < maxPages && nextUrl; page++) {
+      const response = await externalFetch(nextUrl, {
+        headers: {
+          Authorization: authHeader,
+          Accept: "application/json",
+        },
+      });
+
+      if (response.status === 401) {
+        throw new Error("WP Engine rejected the request (401); check API credentials");
+      }
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`WP Engine ${resource} listing failed (${response.status}): ${body.slice(0, 160)}`);
+      }
+
+      const body = await response.json();
+      const rows: any[] = Array.isArray(body?.results) ? body.results : [];
+      rowsOut.push(...rows);
+
+      // Only follow next links that stay on the WP Engine API host.
+      nextUrl = typeof body?.next === "string" && body.next.startsWith(WPENGINE_API_BASE_URL) ? body.next : null;
+      if (!nextUrl && rows.length === pageSize) {
+        // Some responses omit the next link; fall back to offset paging.
+        nextUrl = `${WPENGINE_API_BASE_URL}/${resource}?limit=${pageSize}&offset=${(page + 1) * pageSize}`;
+      }
+      if (rows.length < pageSize) break;
+    }
+
+    return rowsOut;
+  }
+
+  /**
+   * Lists all WordPress installs across the WP Engine accounts visible to the
+   * configured API user (GET-only). Install payloads only carry account/site
+   * ids, so the human-readable names are joined from /accounts and /sites.
+   */
+  async listWPEngineInstalls(tenantId: string | null): Promise<WPEngineInstallSummary[]> {
+    const authHeader = await this.getWPEngineAuthHeader(tenantId);
+
+    const [installRows, accountRows, siteRows] = await Promise.all([
+      this.listWPEngineResources(authHeader, "installs"),
+      this.listWPEngineResources(authHeader, "accounts"),
+      this.listWPEngineResources(authHeader, "sites"),
+    ]);
+
+    const accountNames = new Map<string, string>();
+    for (const account of accountRows) {
+      if (account?.id && account?.name) accountNames.set(String(account.id), String(account.name));
+    }
+    const siteNames = new Map<string, string>();
+    for (const site of siteRows) {
+      if (site?.id && site?.name) siteNames.set(String(site.id), String(site.name));
+    }
+
+    const installs: WPEngineInstallSummary[] = [];
+    for (const install of installRows) {
+      if (!install?.id) continue;
+      const accountId = install.account?.id ? String(install.account.id) : null;
+      const siteId = install.site?.id ? String(install.site.id) : null;
+      installs.push({
+        id: String(install.id),
+        name: install.name ?? null,
+        environment: install.environment ?? null,
+        primaryDomain: install.primary_domain ?? null,
+        cname: install.cname ?? null,
+        phpVersion: install.php_version ?? null,
+        status: install.status ?? null,
+        siteName: (siteId && siteNames.get(siteId)) || null,
+        accountId,
+        accountName: (accountId && accountNames.get(accountId)) || null,
+      });
+    }
+
+    return installs;
   }
 
   async clearSecret(tenantId: string | null, provider: IntegrationProvider, secretName: string): Promise<void> {

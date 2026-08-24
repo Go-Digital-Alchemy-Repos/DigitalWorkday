@@ -56,6 +56,8 @@ const UserManagerPage = lazy(trackChunkLoad("UserManager", () => import("@/pages
 const UserProfilePage = lazy(trackChunkLoad("UserProfile", () => import("@/pages/user-profile")));
 const ChatPage = lazy(trackChunkLoad("Chat", () => import("@/pages/chat")));
 const ReportsPage = lazy(trackChunkLoad("Reports", () => import("@/pages/reports")));
+const FinanceInvoiceAuditPage = lazy(trackChunkLoad("FinanceInvoiceAudit", () => import("@/pages/finance-invoice-audit")));
+const FinanceWebsiteMatchingPage = lazy(trackChunkLoad("FinanceWebsiteMatching", () => import("@/pages/finance-website-matching")));
 const EmployeeProfileReportPage = lazy(trackChunkLoad("EmployeeProfile", () => import("@/pages/employee-profile-report")));
 const ClientProfileReportPage = lazy(trackChunkLoad("ClientProfile", () => import("@/pages/client-profile-report")));
 const TemplatesPage = lazy(trackChunkLoad("Templates", () => import("@/pages/templates")));
@@ -155,6 +157,12 @@ function TenantRouter() {
         </Route>
         <Route path="/reports">
           {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
+        <Route path="/finance/invoice-audit">
+          {() => <TenantRouteGuard component={FinanceInvoiceAuditPage} />}
+        </Route>
+        <Route path="/finance/website-matching">
+          {() => <TenantRouteGuard component={FinanceWebsiteMatchingPage} />}
         </Route>
         <Route path="/templates">
           {() => <TenantRouteGuard component={TemplatesPage} />}

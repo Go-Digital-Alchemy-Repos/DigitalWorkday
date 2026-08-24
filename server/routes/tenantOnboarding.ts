@@ -424,7 +424,7 @@ router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
 // INTEGRATION ENDPOINTS
 // =============================================================================
 
-const validProviders: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai", "quickbooks"];
+const validProviders: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai", "quickbooks", "wpengine"];
 
 function isValidProvider(provider: string): provider is IntegrationProvider {
   return validProviders.includes(provider as IntegrationProvider);
@@ -507,6 +507,12 @@ const quickBooksUpdateSchema = z.object({
   environment: z.enum(["sandbox", "production"]).optional(),
   clientId: z.string().optional(),
   clientSecret: z.string().optional(),
+});
+
+const wpEngineUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  apiUsername: z.string().optional(),
+  apiPassword: z.string().optional(),
 });
 
 function getQuickBooksRedirectUri(req: Request): string {
@@ -627,6 +633,15 @@ router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (re
       };
       if (data.clientSecret) {
         secretConfig = { clientSecret: data.clientSecret };
+      }
+    } else if (provider === "wpengine") {
+      const data = wpEngineUpdateSchema.parse(req.body);
+      publicConfig = {
+        enabled: data.enabled ?? true,
+        apiUsername: data.apiUsername,
+      };
+      if (data.apiPassword) {
+        secretConfig = { apiPassword: data.apiPassword };
       }
     }
 

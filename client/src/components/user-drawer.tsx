@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth";
 import type { User, Team, Client } from "@shared/schema";
 
 const userSchema = z.object({
@@ -30,6 +31,7 @@ const userSchema = z.object({
   email: z.string().email("Valid email is required"),
   role: z.enum(["admin", "project_manager", "employee", "client"]).default("employee"),
   isActive: z.boolean().default(true),
+  canViewFinance: z.boolean().default(false),
   teamIds: z.array(z.string()).default([]),
   clientIds: z.array(z.string()).default([]),
 });
@@ -63,6 +65,9 @@ export function UserDrawer({
 }: UserDrawerProps) {
   const [hasChanges, setHasChanges] = useState(false);
   const prevOpenRef = useRef(false);
+  const { user: currentUser } = useAuth();
+  // Finance access is a sensitive-data entitlement; only super users can change it.
+  const canManageFinanceAccess = currentUser?.role === "super_user";
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -72,6 +77,7 @@ export function UserDrawer({
       email: "",
       role: "employee",
       isActive: true,
+      canViewFinance: false,
       teamIds: [],
       clientIds: [],
     },
@@ -91,6 +97,7 @@ export function UserDrawer({
           email: user.email,
           role: (user.role as "admin" | "project_manager" | "employee" | "client") || "employee",
           isActive: user.isActive ?? true,
+          canViewFinance: (user as any).canViewFinance ?? false,
           teamIds: userTeamIds,
           clientIds: userClientIds,
         });
@@ -101,6 +108,7 @@ export function UserDrawer({
           email: "",
           role: "employee",
           isActive: true,
+          canViewFinance: false,
           teamIds: [],
           clientIds: [],
         });
@@ -258,6 +266,31 @@ export function UserDrawer({
                     <FormLabel>User is active</FormLabel>
                     <FormDescription>
                       Inactive users cannot log in or access the system
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          )}
+
+          {mode === "edit" && canManageFinanceAccess && (
+            <FormField
+              control={form.control}
+              name="canViewFinance"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-user-finance"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Finance access</FormLabel>
+                    <FormDescription>
+                      Grants the Invoice Audit and Website Matching views (QuickBooks billing data).
+                      This is a per-user grant, separate from role.
                     </FormDescription>
                   </div>
                 </FormItem>

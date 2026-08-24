@@ -522,6 +522,8 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   googleId: text("google_id").unique(),
   mustChangePasswordOnNextLogin: boolean("must_change_password_on_next_login").notNull().default(false),
+  // Per-user gate for the finance area (QuickBooks invoice audit); independent of role
+  canViewFinance: boolean("can_view_finance").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -4535,3 +4537,31 @@ export const aiSummaries = pgTable("ai_summaries", {
 ]);
 
 export type AiSummary = typeof aiSummaries.$inferSelect;
+
+// ============================================================
+// FINANCE WEBSITE ASSIGNMENTS — WP Engine install → billed customer
+// ============================================================
+
+// Maps a hosted WP Engine install to the QuickBooks customer who pays for it.
+// customerName is the QBO display name (the billing identity); clientId is
+// linked when a matching client record exists. Gated by users.can_view_finance.
+export const financeWebsiteAssignments = pgTable("finance_website_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  wpeInstallId: varchar("wpe_install_id").notNull(),
+  installName: text("install_name"),
+  primaryDomain: text("primary_domain"),
+  customerName: text("customer_name").notNull(),
+  clientId: varchar("client_id").references(() => clients.id),
+  source: text("source").notNull().default("manual"), // manual | suggestion_accepted
+  notes: text("notes"),
+  assignedByUserId: varchar("assigned_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("finance_website_assignments_tenant_install_unique").on(table.tenantId, table.wpeInstallId),
+  index("finance_website_assignments_tenant_customer_idx").on(table.tenantId, table.customerName),
+]);
+
+export type FinanceWebsiteAssignment = typeof financeWebsiteAssignments.$inferSelect;
+export type InsertFinanceWebsiteAssignment = typeof financeWebsiteAssignments.$inferInsert;

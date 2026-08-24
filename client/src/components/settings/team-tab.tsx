@@ -349,7 +349,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
     await createUserMutation.mutateAsync(data);
   };
 
-  const handleUpdateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isActive: boolean; teamIds: string[]; clientIds: string[] }) => {
+  const handleUpdateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isActive: boolean; canViewFinance: boolean; teamIds: string[]; clientIds: string[] }) => {
     if (!editingUser) return;
     await updateUserMutation.mutateAsync({
       id: editingUser.id,
@@ -509,9 +509,16 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRoleBadgeVariant(user.role || "employee")}>
-                            {user.role || "employee"}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge variant={getRoleBadgeVariant(user.role || "employee")}>
+                              {user.role || "employee"}
+                            </Badge>
+                            {user.canViewFinance && (
+                              <Badge variant="outline" className="text-xs" title="Has finance access (Invoice Audit / Website Matching)">
+                                Finance
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
