@@ -20,7 +20,7 @@ import {
   Loader2, Shield, Save, Mail, Plus, Link, Copy, MoreHorizontal, Camera,
   UserCheck, UserX, Clock, AlertCircle, KeyRound, Eye, EyeOff, Trash2, Send,
   Search, Building2, Users, ChevronLeft, ChevronRight, Activity, Edit, X,
-  Monitor, Laptop, ExternalLink
+  Monitor, Laptop, ExternalLink, Receipt,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -74,6 +74,7 @@ interface AppUser {
   lastName: string | null;
   role: string;
   isActive: boolean;
+  canViewFinance?: boolean;
   isPendingInvite?: boolean;
   needsPassword?: boolean;
   expiresAt?: string;
@@ -1481,6 +1482,29 @@ export default function SuperAdminUsers() {
                         Generate Password Reset Link
                       </Button>
                       
+                      {selectedAppUser.canViewFinance ? (
+                        <Button
+                          className="w-full justify-start"
+                          variant="outline"
+                          onClick={() => updateAppUserMutation.mutate({ id: selectedAppUser.id, data: { canViewFinance: false } })}
+                          disabled={updateAppUserMutation.isPending}
+                          data-testid="button-revoke-finance"
+                        >
+                          <Receipt className="h-4 w-4 mr-2" />
+                          Revoke Finance Access
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full justify-start"
+                          variant="outline"
+                          onClick={() => updateAppUserMutation.mutate({ id: selectedAppUser.id, data: { canViewFinance: true } })}
+                          disabled={updateAppUserMutation.isPending}
+                          data-testid="button-grant-finance"
+                        >
+                          <Receipt className="h-4 w-4 mr-2" />
+                          Grant Finance Access
+                        </Button>
+                      )}
                       {selectedAppUser.isActive ? (
                         <Button 
                           className="w-full justify-start" 

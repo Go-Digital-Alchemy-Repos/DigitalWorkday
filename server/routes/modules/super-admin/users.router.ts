@@ -293,6 +293,7 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
       lastName: users.lastName,
       role: users.role,
       isActive: users.isActive,
+      canViewFinance: users.canViewFinance,
       avatarUrl: users.avatarUrl,
       tenantId: users.tenantId,
       tenantName: tenants.name,
@@ -336,6 +337,7 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
         lastName: u.lastName,
         role: u.role,
         isActive: u.isActive,
+        canViewFinance: u.canViewFinance,
         isPendingInvite: false,
         needsPassword: u.passwordHash === null,
         avatarUrl: u.avatarUrl,
@@ -635,6 +637,7 @@ superUsersRouter.patch("/users/:userId", requireSuperUser, async (req, res) => {
       email: z.string().email().optional(),
       role: z.enum(["admin", "project_manager", "employee"]).optional(),
       isActive: z.boolean().optional(),
+      canViewFinance: z.boolean().optional(),
     }).parse(req.body);
     const superUser = req.user!;
     
@@ -666,6 +669,7 @@ superUsersRouter.patch("/users/:userId", requireSuperUser, async (req, res) => {
     if (data.email !== undefined) updates.email = data.email;
     if (data.role) updates.role = data.role;
     if (data.isActive !== undefined) updates.isActive = data.isActive;
+    if (data.canViewFinance !== undefined) updates.canViewFinance = data.canViewFinance;
     
     const [updatedUser] = await db.update(users)
       .set(updates)

@@ -59,6 +59,7 @@ interface TenantUser {
   lastName: string | null;
   role: string;
   isActive: boolean;
+  canViewFinance?: boolean;
   avatarUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -251,6 +252,19 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
     },
     onError: () => {
       toast({ title: "Failed to update user status", variant: "destructive" });
+    },
+  });
+
+  const toggleFinanceAccessMutation = useMutation({
+    mutationFn: async (canViewFinance: boolean) => {
+      return apiRequest("PATCH", `/api/v1/super/tenants/${tenantId}/users/${userId}`, { canViewFinance });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId, "users"] });
+      toast({ title: user?.canViewFinance ? "Finance access revoked" : "Finance access granted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update finance access", variant: "destructive" });
     },
   });
 
@@ -637,6 +651,23 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                         onCheckedChange={(checked) => toggleUserActiveMutation.mutate(checked)}
                         disabled={toggleUserActiveMutation.isPending}
                         data-testid="switch-user-active"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <p className="font-medium">Finance Access</p>
+                        <p className="text-sm text-muted-foreground">
+                          {user.canViewFinance
+                            ? "Can view the Invoice Audit and Website Matching pages (QuickBooks billing data)"
+                            : "No access to the finance area (Invoice Audit / Website Matching)"}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={Boolean(user.canViewFinance)}
+                        onCheckedChange={(checked) => toggleFinanceAccessMutation.mutate(checked)}
+                        disabled={toggleFinanceAccessMutation.isPending}
+                        data-testid="switch-user-finance"
                       />
                     </div>
                     
