@@ -10,6 +10,7 @@ import {
   type QuickBooksInvoiceSummary,
   type WPEngineInstallSummary,
 } from "../../services/tenantIntegrations";
+import { emailEvidenceByInstallName } from "./financeEmailEvidence";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -64,9 +65,11 @@ function bareDomain(domain: string): string {
 
 interface AssignmentSuggestion {
   customerName: string;
-  confidence: "high" | "medium";
+  confidence: "high" | "medium" | "low";
   evidence: string;
 }
+
+const CONFIDENCE_RANK: Record<AssignmentSuggestion["confidence"], number> = { high: 3, medium: 2, low: 1 };
 
 /**
  * Best-effort ownership suggestions for WP Engine installs, strongest first:
@@ -75,9 +78,13 @@ interface AssignmentSuggestion {
  *    e.g. account "da4sunstoppers" -> customer "Sun Stoppers Inc".
  * 3. Customer name and domain/install/site name share a compact identity.
  * 4. A sibling install in the same WP Engine site group already matched.
+ * 5. Client correspondence in Mike's email archive names the site. This tier
+ *    carries its own high/medium/low confidence and replaces an earlier
+ *    suggestion only when it outranks it; on equal confidence the live
+ *    QBO/WPE-derived suggestion wins.
  * Final calls stay human: suggestions are only persisted when accepted in the UI.
  */
-function suggestAssignments(
+export function suggestAssignments(
   installs: Array<{
     id: string;
     name: string | null;
@@ -164,6 +171,25 @@ function suggestAssignments(
         evidence: `Sibling install in WP Engine site group "${install.siteName}"`,
       });
     }
+  }
+
+  // 5. Email-archive evidence, keyed by install name. Where the mined client
+  // name fuzzy-matches a live QBO customer, suggest the QBO spelling so
+  // accepting the suggestion lines up with invoice matching downstream.
+  for (const install of installs) {
+    const match = install.name ? emailEvidenceByInstallName[install.name.toLowerCase()] : undefined;
+    if (!match) continue;
+    const existing = suggestions.get(install.id);
+    if (existing && CONFIDENCE_RANK[existing.confidence] >= CONFIDENCE_RANK[match.confidence]) continue;
+    const minedCompact = compactName(match.clientName);
+    const qboCustomer = minedCompact.length >= 5
+      ? customers.find(c => c.compact === minedCompact || c.compact.includes(minedCompact) || minedCompact.includes(c.compact))
+      : undefined;
+    suggestions.set(install.id, {
+      customerName: qboCustomer?.name ?? match.clientName,
+      confidence: match.confidence,
+      evidence: `Email archive: ${match.evidence}`,
+    });
   }
 
   return suggestions;

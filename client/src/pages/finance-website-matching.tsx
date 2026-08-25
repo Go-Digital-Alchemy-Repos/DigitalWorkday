@@ -58,7 +58,7 @@ interface InstallRow {
   } | null;
   suggestion: {
     customerName: string;
-    confidence: "high" | "medium";
+    confidence: "high" | "medium" | "low";
     evidence: string;
   } | null;
 }
@@ -331,7 +331,9 @@ export default function FinanceWebsiteMatchingPage() {
                                 className={
                                   install.suggestion.confidence === "high"
                                     ? "mr-1.5 bg-sky-500/15 text-sky-600 dark:text-sky-400"
-                                    : "mr-1.5 bg-slate-500/15 text-slate-600 dark:text-slate-400"
+                                    : install.suggestion.confidence === "medium"
+                                      ? "mr-1.5 bg-slate-500/15 text-slate-600 dark:text-slate-400"
+                                      : "mr-1.5 bg-amber-500/15 text-amber-600 dark:text-amber-400"
                                 }
                               >
                                 {install.suggestion.confidence}
