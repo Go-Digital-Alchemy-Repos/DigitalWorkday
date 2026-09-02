@@ -200,6 +200,16 @@ export interface QuickBooksInvoiceSummary {
   lines: QuickBooksInvoiceLine[];
 }
 
+export interface QuickBooksSalesReceiptSummary {
+  id: string;
+  docNumber: string | null;
+  txnDate: string;
+  totalAmount: number;
+  customerId: string | null;
+  customerName: string | null;
+  lines: QuickBooksInvoiceLine[];
+}
+
 const WPENGINE_API_BASE_URL = "https://api.wpengineapi.com/v1";
 
 export interface WPEngineInstallSummary {
@@ -929,6 +939,70 @@ export class TenantIntegrationService {
     }
 
     return invoices;
+  }
+
+  /**
+   * Fetches sales receipts from the connected QuickBooks company, newest first.
+   * Website hosting is commonly billed this way, so website ownership evidence
+   * must consider these alongside invoices.
+   */
+  async fetchQuickBooksSalesReceipts(tenantId: string | null, sinceDate: string): Promise<QuickBooksSalesReceiptSummary[]> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sinceDate)) {
+      throw new Error(`Invalid sinceDate: ${sinceDate}`);
+    }
+    const { accessToken, baseUrl, realmId } = await this.getQuickBooksAccessContext(tenantId);
+
+    const pageSize = 1000;
+    const maxPages = 20;
+    const receipts: QuickBooksSalesReceiptSummary[] = [];
+
+    for (let page = 0; page < maxPages; page++) {
+      const startPosition = page * pageSize + 1;
+      const query = `SELECT * FROM SalesReceipt WHERE TxnDate >= '${sinceDate}' ORDERBY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS ${pageSize}`;
+      const response = await externalFetch(
+        `${baseUrl}/v3/company/${encodeURIComponent(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=75`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`QuickBooks sales receipt query failed (${response.status}): ${body.slice(0, 180)}`);
+      }
+
+      const body = await response.json();
+      const rows: any[] = body?.QueryResponse?.SalesReceipt || [];
+      for (const row of rows) {
+        const lines: QuickBooksInvoiceLine[] = [];
+        for (const line of row.Line || []) {
+          const detail = line.SalesItemLineDetail;
+          if (!detail) continue;
+          lines.push({
+            itemId: detail.ItemRef?.value ?? null,
+            itemName: detail.ItemRef?.name ?? null,
+            description: line.Description ?? null,
+            amount: Number(line.Amount) || 0,
+          });
+        }
+        receipts.push({
+          id: String(row.Id),
+          docNumber: row.DocNumber ?? null,
+          txnDate: row.TxnDate,
+          totalAmount: Number(row.TotalAmt) || 0,
+          customerId: row.CustomerRef?.value ?? null,
+          customerName: row.CustomerRef?.name ?? null,
+          lines,
+        });
+      }
+
+      if (rows.length < pageSize) break;
+    }
+
+    return receipts;
   }
 
   private async testQuickBooks(tenantId: string | null): Promise<{ success: boolean; message: string }> {

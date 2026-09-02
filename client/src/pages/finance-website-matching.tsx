@@ -55,10 +55,13 @@ interface InstallRow {
     clientId: string | null;
     source: string;
     notes: string | null;
+    evidenceSource: string;
+    evidence: string | null;
   } | null;
   suggestion: {
     customerName: string;
     confidence: "high" | "medium" | "low";
+    evidenceSource: string;
     evidence: string;
   } | null;
 }
@@ -84,6 +87,7 @@ export default function FinanceWebsiteMatchingPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<RowFilter>("all");
+  const [customerFilter, setCustomerFilter] = useState("all");
   const [search, setSearch] = useState("");
 
   const { data, isLoading, isFetching, refetch } = useQuery<WebsiteAssignmentsResponse>({
@@ -104,6 +108,8 @@ export default function FinanceWebsiteMatchingPage() {
         installName: input.install.name,
         primaryDomain: input.install.primaryDomain,
         source: input.source,
+        evidenceSource: input.source === "suggestion_accepted" ? input.install.suggestion?.evidenceSource : null,
+        evidenceDetails: input.source === "suggestion_accepted" ? input.install.suggestion?.evidence : null,
       });
     },
     onSuccess: (_result, input) => {
@@ -133,6 +139,8 @@ export default function FinanceWebsiteMatchingPage() {
           installName: install.name,
           primaryDomain: install.primaryDomain,
           source: "suggestion_accepted",
+          evidenceSource: install.suggestion!.evidenceSource,
+          evidenceDetails: install.suggestion!.evidence,
         })),
       });
       return installs.length;
@@ -145,6 +153,13 @@ export default function FinanceWebsiteMatchingPage() {
   });
 
   const installs = data?.installs ?? [];
+  const customerOptions = useMemo(
+    () => Array.from(new Set([
+      ...(data?.customers ?? []),
+      ...installs.flatMap((install) => [install.assignment?.customerName, install.suggestion?.customerName]),
+    ].filter((name): name is string => Boolean(name)))).sort((a, b) => a.localeCompare(b)),
+    [data?.customers, installs],
+  );
   const counts = useMemo(() => {
     const assigned = installs.filter((i) => i.assignment).length;
     const suggested = installs.filter((i) => !i.assignment && i.suggestion).length;
@@ -162,6 +177,8 @@ export default function FinanceWebsiteMatchingPage() {
       if (filter === "assigned" && !install.assignment) return false;
       if (filter === "unassigned" && install.assignment) return false;
       if (filter === "suggested" && (install.assignment || !install.suggestion)) return false;
+      const rowCustomer = install.assignment?.customerName ?? install.suggestion?.customerName ?? null;
+      if (customerFilter !== "all" && rowCustomer !== customerFilter) return false;
       if (!q) return true;
       const blob = [
         install.name,
@@ -176,7 +193,7 @@ export default function FinanceWebsiteMatchingPage() {
         .toLowerCase();
       return blob.includes(q);
     });
-  }, [installs, filter, search]);
+  }, [installs, filter, customerFilter, search]);
 
   if (authLoading) {
     return <div className="p-6"><Skeleton className="h-64" /></div>;
@@ -198,7 +215,8 @@ export default function FinanceWebsiteMatchingPage() {
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Attach each WP Engine production install to the QuickBooks customer who pays for it.
-              Suggestions are computed from invoices, dedicated servers, and name matching — accept
+              Suggestions are computed from QuickBooks invoices and sales receipts, email evidence,
+              dedicated servers, and name matching. Accept
               them or pick a customer yourself. See the{" "}
               <Link href="/finance/invoice-audit" className="underline">Invoice Audit</Link> for the
               billing gaps this feeds.
@@ -276,6 +294,17 @@ export default function FinanceWebsiteMatchingPage() {
                     <SelectItem value="assigned">Assigned</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={customerFilter} onValueChange={setCustomerFilter}>
+                  <SelectTrigger className="w-64" data-testid="select-customer-filter">
+                    <SelectValue placeholder="All customers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All customers</SelectItem>
+                    {customerOptions.map((customer) => (
+                      <SelectItem key={customer} value={customer}>{customer}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
@@ -291,6 +320,7 @@ export default function FinanceWebsiteMatchingPage() {
                       <TableHead>Install</TableHead>
                       <TableHead>Server</TableHead>
                       <TableHead>Customer</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Evidence</TableHead>
                       <TableHead className="w-40 text-right">Actions</TableHead>
                     </TableRow>
@@ -319,11 +349,18 @@ export default function FinanceWebsiteMatchingPage() {
                             disabled={assignMutation.isPending}
                           />
                         </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <EvidenceSourceBadge
+                            source={install.assignment?.evidenceSource ?? install.suggestion?.evidenceSource ?? null}
+                          />
+                        </TableCell>
                         <TableCell className="max-w-72 text-sm text-muted-foreground">
                           {install.assignment ? (
-                            <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                              {install.assignment.source === "suggestion_accepted" ? "Suggestion accepted" : "Assigned manually"}
-                            </Badge>
+                            install.assignment.evidence || (
+                              <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                                {install.assignment.source === "suggestion_accepted" ? "Suggestion accepted" : "Assigned manually"}
+                              </Badge>
+                            )
                           ) : install.suggestion ? (
                             <span title={install.suggestion.evidence}>
                               <Badge
@@ -380,7 +417,7 @@ export default function FinanceWebsiteMatchingPage() {
                     ))}
                     {visible.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                           No installs match the current filter.
                         </TableCell>
                       </TableRow>
@@ -393,7 +430,7 @@ export default function FinanceWebsiteMatchingPage() {
 
           {data && (
             <p className="text-xs text-muted-foreground">
-              Suggestions use the last {data.windowMonths} months of QuickBooks invoices · generated{" "}
+              Suggestions use the last {data.windowMonths} months of QuickBooks invoices and sales receipts · generated{" "}
               {new Date(data.generatedAt).toLocaleString()}
             </p>
           )}
@@ -464,6 +501,34 @@ function CustomerPicker({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+const EVIDENCE_SOURCE_LABELS: Record<string, string> = {
+  quickbooks_invoice: "QBO Invoice",
+  quickbooks_sales_receipt: "QBO Sales Receipt",
+  quickbooks_invoice_and_sales_receipt: "QBO Invoice + Receipt",
+  email_archive: "Email",
+  wpengine_dedicated_server: "WP Engine server",
+  wpengine_site_sibling: "WP Engine site group",
+  name_match: "Name match",
+  manual: "Manual",
+};
+
+function EvidenceSourceBadge({ source }: { source: string | null }) {
+  if (!source) return <span className="text-muted-foreground">—</span>;
+  const isQuickBooks = source.startsWith("quickbooks_");
+  const isEmail = source === "email_archive";
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        isQuickBooks && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+        isEmail && "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+      )}
+    >
+      {EVIDENCE_SOURCE_LABELS[source] ?? source}
+    </Badge>
   );
 }
 

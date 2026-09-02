@@ -4555,6 +4555,8 @@ export const financeWebsiteAssignments = pgTable("finance_website_assignments", 
   clientId: varchar("client_id").references(() => clients.id),
   source: text("source").notNull().default("manual"), // manual | suggestion_accepted
   notes: text("notes"),
+  evidenceSource: text("evidence_source"),
+  evidenceDetails: text("evidence_details"),
   assignedByUserId: varchar("assigned_by_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -57,6 +57,7 @@ const IMPORTANT_TABLES = [
   "chat_mentions",
   "chat_message_reactions",
   "chat_attachments",
+  "finance_website_assignments",
 ];
 
 const OPTIONAL_TABLES = [
@@ -112,6 +113,8 @@ const IMPORTANT_COLUMNS: SchemaColumnCheck[] = [
   { table: "chat_messages", column: "edited_at" },
   { table: "chat_messages", column: "deleted_at" },
   { table: "chat_messages", column: "archived_at" },
+  { table: "finance_website_assignments", column: "evidence_source" },
+  { table: "finance_website_assignments", column: "evidence_details" },
 ];
 
 const OPTIONAL_COLUMNS: SchemaColumnCheck[] = [];

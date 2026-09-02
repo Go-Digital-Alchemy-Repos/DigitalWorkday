@@ -55,6 +55,7 @@ describe("schema readiness guards", () => {
         "comment_mentions",
         "chat_reads",
         "chat_thread_reads",
+        "finance_website_assignments",
       ]),
     );
     expect(IMPORTANT_COLUMNS).toEqual(
@@ -72,6 +73,8 @@ describe("schema readiness guards", () => {
         { table: "division_members", column: "division_id" },
         { table: "comments", column: "visibility" },
         { table: "comment_mentions", column: "mentioned_user_id" },
+        { table: "finance_website_assignments", column: "evidence_source" },
+        { table: "finance_website_assignments", column: "evidence_details" },
       ]),
     );
   });

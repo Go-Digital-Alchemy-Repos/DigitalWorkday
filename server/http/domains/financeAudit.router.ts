@@ -8,6 +8,7 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import {
   tenantIntegrationService,
   type QuickBooksInvoiceSummary,
+  type QuickBooksSalesReceiptSummary,
   type WPEngineInstallSummary,
 } from "../../services/tenantIntegrations";
 import { emailEvidenceByInstallName } from "./financeEmailEvidence";
@@ -66,7 +67,23 @@ function bareDomain(domain: string): string {
 interface AssignmentSuggestion {
   customerName: string;
   confidence: "high" | "medium" | "low";
+  evidenceSource: WebsiteEvidenceSource;
   evidence: string;
+}
+
+export type WebsiteEvidenceSource =
+  | "quickbooks_invoice"
+  | "quickbooks_sales_receipt"
+  | "quickbooks_invoice_and_sales_receipt"
+  | "wpengine_dedicated_server"
+  | "wpengine_site_sibling"
+  | "name_match"
+  | "email_archive"
+  | "manual";
+
+export interface HostingEvidenceLine {
+  description: string;
+  transactionType: "invoice" | "sales_receipt";
 }
 
 const CONFIDENCE_RANK: Record<AssignmentSuggestion["confidence"], number> = { high: 3, medium: 2, low: 1 };
@@ -94,7 +111,7 @@ export function suggestAssignments(
     accountName: string | null;
   }>,
   customerNames: string[],
-  hostingDescriptionsByCustomer: Map<string, string[]>,
+  hostingDescriptionsByCustomer: Map<string, HostingEvidenceLine[]>,
 ): Map<string, AssignmentSuggestion> {
   const suggestions = new Map<string, AssignmentSuggestion>();
 
@@ -120,15 +137,33 @@ export function suggestAssignments(
 
     // 1. Invoice-line evidence.
     if (domain) {
-      let found: string | null = null;
-      for (const [customer, descriptions] of hostingDescriptionsByCustomer) {
-        if (descriptions.some(d => d.includes(domain) || (bare.length > 5 && d.replace(/[^a-z0-9]/g, "").includes(bare)))) {
-          found = customer;
+      let found: { customer: string; lines: HostingEvidenceLine[] } | null = null;
+      for (const [customer, lines] of hostingDescriptionsByCustomer) {
+        const matches = lines.filter(({ description }) =>
+          description.includes(domain) || (bare.length > 5 && description.replace(/[^a-z0-9]/g, "").includes(bare)),
+        );
+        if (matches.length > 0) {
+          found = { customer, lines: matches };
           break;
         }
       }
       if (found) {
-        suggestions.set(install.id, { customerName: found, confidence: "high", evidence: "Domain appears on a hosting invoice line" });
+        const transactionTypes = new Set(found.lines.map(line => line.transactionType));
+        const both = transactionTypes.size === 2;
+        suggestions.set(install.id, {
+          customerName: found.customer,
+          confidence: "high",
+          evidenceSource: both
+            ? "quickbooks_invoice_and_sales_receipt"
+            : transactionTypes.has("sales_receipt")
+              ? "quickbooks_sales_receipt"
+              : "quickbooks_invoice",
+          evidence: both
+            ? "Domain appears on QuickBooks invoice and sales receipt hosting lines"
+            : transactionTypes.has("sales_receipt")
+              ? "Domain appears on a QuickBooks sales receipt hosting line"
+              : "Domain appears on a QuickBooks invoice hosting line",
+        });
         continue;
       }
     }
@@ -139,6 +174,7 @@ export function suggestAssignments(
       suggestions.set(install.id, {
         customerName: dedicated.name,
         confidence: "high",
+        evidenceSource: "wpengine_dedicated_server",
         evidence: `Hosted on dedicated WP Engine server "${dedicated.account}"`,
       });
       continue;
@@ -149,7 +185,12 @@ export function suggestAssignments(
       .filter(v => v.length >= 5);
     const named = customers.find(c => identities.some(v => v.includes(c.compact) || c.compact.includes(v)));
     if (named) {
-      suggestions.set(install.id, { customerName: named.name, confidence: "medium", evidence: "Customer name matches domain/install name" });
+      suggestions.set(install.id, {
+        customerName: named.name,
+        confidence: "medium",
+        evidenceSource: "name_match",
+        evidence: "Customer name matches domain/install name",
+      });
     }
   }
 
@@ -168,6 +209,7 @@ export function suggestAssignments(
       suggestions.set(install.id, {
         customerName: sibling.customerName,
         confidence: "medium",
+        evidenceSource: "wpengine_site_sibling",
         evidence: `Sibling install in WP Engine site group "${install.siteName}"`,
       });
     }
@@ -188,6 +230,7 @@ export function suggestAssignments(
     suggestions.set(install.id, {
       customerName: qboCustomer?.name ?? match.clientName,
       confidence: match.confidence,
+      evidenceSource: "email_archive",
       evidence: `Email archive: ${match.evidence}`,
     });
   }
@@ -480,17 +523,21 @@ router.get("/website-assignments", async (req, res) => {
     const production = installs.filter(i => i.environment === "production" && i.status !== "inactive");
 
     let invoices: QuickBooksInvoiceSummary[] = [];
+    let salesReceipts: QuickBooksSalesReceiptSummary[] = [];
     let quickbooks: { connected: boolean; error?: string } = { connected: true };
     try {
       invoices = await tenantIntegrationService.fetchQuickBooksInvoices(tenantId, sinceDate);
+      salesReceipts = await tenantIntegrationService.fetchQuickBooksSalesReceipts(tenantId, sinceDate);
     } catch (error) {
       quickbooks = { connected: false, error: error instanceof Error ? error.message : "QuickBooks fetch failed" };
     }
 
-    const customerNames = Array.from(new Set(invoices.map(i => i.customerName).filter((n): n is string => Boolean(n))))
+    const customerNames = Array.from(new Set(
+      [...invoices, ...salesReceipts].map(i => i.customerName).filter((n): n is string => Boolean(n)),
+    ))
       .sort((a, b) => a.localeCompare(b));
 
-    const hostingDescriptionsByCustomer = new Map<string, string[]>();
+    const hostingDescriptionsByCustomer = new Map<string, HostingEvidenceLine[]>();
     const customersWithHosting = new Set<string>();
     for (const invoice of invoices) {
       if (!invoice.customerName) continue;
@@ -499,8 +546,20 @@ router.get("/website-assignments", async (req, res) => {
         customersWithHosting.add(invoice.customerName);
         if (line.description) {
           const list = hostingDescriptionsByCustomer.get(invoice.customerName) || [];
-          list.push(line.description.toLowerCase());
+          list.push({ description: line.description.toLowerCase(), transactionType: "invoice" });
           hostingDescriptionsByCustomer.set(invoice.customerName, list);
+        }
+      }
+    }
+    for (const receipt of salesReceipts) {
+      if (!receipt.customerName) continue;
+      for (const line of receipt.lines) {
+        if (!line.itemName || !HOSTING_ITEM_PATTERN.test(line.itemName)) continue;
+        customersWithHosting.add(receipt.customerName);
+        if (line.description) {
+          const list = hostingDescriptionsByCustomer.get(receipt.customerName) || [];
+          list.push({ description: line.description.toLowerCase(), transactionType: "sales_receipt" });
+          hostingDescriptionsByCustomer.set(receipt.customerName, list);
         }
       }
     }
@@ -521,6 +580,10 @@ router.get("/website-assignments", async (req, res) => {
     const rows = production
       .map(install => {
         const assignment = assignmentByInstall.get(install.id) || null;
+        const suggestion = suggestions.get(install.id) || null;
+        const assignmentMatchesSuggestion = Boolean(
+          assignment && suggestion && normalizeCompanyName(assignment.customerName) === normalizeCompanyName(suggestion.customerName),
+        );
         return {
           id: install.id,
           name: install.name,
@@ -533,9 +596,14 @@ router.get("/website-assignments", async (req, res) => {
                 clientId: assignment.clientId,
                 source: assignment.source,
                 notes: assignment.notes,
+                evidenceSource: assignment.evidenceSource
+                  || (assignmentMatchesSuggestion ? suggestion!.evidenceSource : "manual"),
+                evidence: assignment.evidenceDetails
+                  || assignment.notes
+                  || (assignmentMatchesSuggestion ? suggestion!.evidence : null),
               }
             : null,
-          suggestion: suggestions.get(install.id) || null,
+          suggestion,
         };
       })
       .sort((a, b) => (a.primaryDomain ?? a.name ?? "").localeCompare(b.primaryDomain ?? b.name ?? ""));
@@ -564,6 +632,8 @@ interface AssignmentInput {
   primaryDomain?: string | null;
   clientId?: string | null;
   notes?: string | null;
+  evidenceSource?: WebsiteEvidenceSource | null;
+  evidenceDetails?: string | null;
   source?: string;
 }
 
@@ -578,6 +648,17 @@ function parseAssignmentInput(raw: any): AssignmentInput {
   }
   const optionalText = (value: any, max: number) =>
     typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+  const evidenceSources = new Set<WebsiteEvidenceSource>([
+    "quickbooks_invoice",
+    "quickbooks_sales_receipt",
+    "quickbooks_invoice_and_sales_receipt",
+    "wpengine_dedicated_server",
+    "wpengine_site_sibling",
+    "name_match",
+    "email_archive",
+    "manual",
+  ]);
+  const rawEvidenceSource = optionalText(raw?.evidenceSource, 100);
   return {
     wpeInstallId,
     customerName,
@@ -585,6 +666,10 @@ function parseAssignmentInput(raw: any): AssignmentInput {
     primaryDomain: optionalText(raw?.primaryDomain, 300),
     clientId: optionalText(raw?.clientId, 100),
     notes: optionalText(raw?.notes, 2000),
+    evidenceSource: rawEvidenceSource && evidenceSources.has(rawEvidenceSource as WebsiteEvidenceSource)
+      ? rawEvidenceSource as WebsiteEvidenceSource
+      : null,
+    evidenceDetails: optionalText(raw?.evidenceDetails, 2000),
     source: raw?.source === "suggestion_accepted" ? "suggestion_accepted" : "manual",
   };
 }
@@ -620,6 +705,8 @@ async function upsertAssignments(tenantId: string, userId: string | null, inputs
         clientId,
         source: input.source || "manual",
         notes: input.notes,
+        evidenceSource: input.evidenceSource,
+        evidenceDetails: input.evidenceDetails,
         assignedByUserId: userId,
       })
       .onConflictDoUpdate({
@@ -631,6 +718,8 @@ async function upsertAssignments(tenantId: string, userId: string | null, inputs
           clientId,
           source: input.source || "manual",
           notes: input.notes,
+          evidenceSource: input.evidenceSource,
+          evidenceDetails: input.evidenceDetails,
           assignedByUserId: userId,
           updatedAt: new Date(),
         },
