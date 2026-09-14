@@ -28,6 +28,11 @@ describe("Projects Router – authTenant policy drift tests", () => {
     expect(meta!.policy).toBe("authTenant");
   });
 
+  it("PATCH /api/projects/:projectId/sections/reorder rejects unauthenticated with 401", async () => {
+    const res = await request(buildApp()).patch("/api/projects/project-1/sections/reorder");
+    expect(res.status).toBe(401);
+  });
+
   // Project CRUD
   it("GET /api/projects rejects unauthenticated with 401", async () => {
     const res = await request(buildApp()).get("/api/projects");
