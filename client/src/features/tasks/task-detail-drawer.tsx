@@ -202,6 +202,8 @@ function TaskDetailDrawerContent({
   
   const [showTimeTrackingPrompt, setShowTimeTrackingPrompt] = useState(false);
   const [showTimeEntryForm, setShowTimeEntryForm] = useState(false);
+  const [manualTimeEntry, setManualTimeEntry] = useState(false);
+  const [deletingTimeEntry, setDeletingTimeEntry] = useState<TimeEntry | null>(null);
   const [completionTimeHours, setCompletionTimeHours] = useState(0);
   const [completionTimeMinutes, setCompletionTimeMinutes] = useState(0);
   const [completionTimeDescription, setCompletionTimeDescription] = useState("");
@@ -471,6 +473,21 @@ function TaskDetailDrawerContent({
       return res.json();
     },
     enabled: !!task?.id && open,
+  });
+
+  const deleteTimeEntryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/time-entries/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      setDeletingTimeEntry(null);
+      toast({ title: "Time entry deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete time entry", description: error.message, variant: "destructive" });
+    },
   });
 
   const updateTimeEntryMutation = useMutation({
@@ -775,7 +792,7 @@ function TaskDetailDrawerContent({
   const handleTimeEntrySubmit = async () => {
     const totalSeconds = (completionTimeHours * 60 + completionTimeMinutes) * 60;
     
-    if (totalSeconds <= 0) {
+    if (!Number.isFinite(totalSeconds) || totalSeconds <= 0 || completionTimeHours < 0 || completionTimeHours > 24 || completionTimeMinutes < 0 || completionTimeMinutes > 59) {
       toast({ title: "Please enter a valid time", variant: "destructive" });
       return;
     }
@@ -783,10 +800,10 @@ function TaskDetailDrawerContent({
     if (task?.projectId && !projectContext?.clientId) {
       toast({ 
         title: "Client context required", 
-        description: "Unable to log time for this project task. Completing without time entry.",
+        description: manualTimeEntry ? "Unable to load client context. Please try again." : "Unable to log time for this project task. Completing without time entry.",
         variant: "destructive" 
       });
-      await completeTaskDirectly();
+      if (!manualTimeEntry) await completeTaskDirectly();
       return;
     }
 
@@ -795,12 +812,17 @@ function TaskDetailDrawerContent({
     try {
       await createTimeEntryMutation.mutateAsync({
         durationSeconds: totalSeconds,
-        description: completionTimeDescription || `Completed: ${task?.title}`,
+        description: completionTimeDescription || (manualTimeEntry ? task!.title : `Completed: ${task?.title}`),
         taskId: task!.id,
         projectId: task?.projectId || null,
         clientId: projectContext?.clientId || null,
       });
       
+      if (manualTimeEntry) {
+        toast({ title: "Time entry added" });
+        resetCompletionState();
+        return;
+      }
       await updateTaskStatusMutation.mutateAsync("done");
       toast({ 
         title: "Task completed with time logged", 
@@ -809,13 +831,14 @@ function TaskDetailDrawerContent({
       resetCompletionState();
       onOpenChange(false);
     } catch (error) {
-      toast({ title: "Failed to complete task", variant: "destructive" });
+      toast({ title: manualTimeEntry ? "Failed to add time entry" : "Failed to complete task", variant: "destructive" });
     } finally {
       setIsCompletingTask(false);
     }
   };
 
   const resetCompletionState = () => {
+    setManualTimeEntry(false);
     setShowTimeTrackingPrompt(false);
     setShowTimeEntryForm(false);
     setCompletionTimeHours(0);
@@ -1532,12 +1555,18 @@ function TaskDetailDrawerContent({
 
           <div className={sectionCardClass}>
             <div className="space-y-3">
-              <div className={sectionHeaderClass}>
+              <div className={cn(sectionHeaderClass, "flex-wrap")}>
                 <label className={sectionTitleClass}>
                   <Timer className="h-3.5 w-3.5" />
                   Time Entries
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-9 rounded-xl"
+                    onClick={() => { resetCompletionState(); setManualTimeEntry(true); setShowTimeEntryForm(true); }}
+                    data-testid="button-add-task-time-entry">
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Add Time
+                  </Button>
                   {timerState === "idle" && (
                     <Button
                       size="sm"
@@ -1639,6 +1668,13 @@ function TaskDetailDrawerContent({
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
+                      {(entry.userId === currentUser?.id || isAdmin) && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                          onClick={() => setDeletingTimeEntry(entry)} aria-label="Delete time entry"
+                          data-testid={`button-delete-task-time-entry-${entry.id}`}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1739,12 +1775,13 @@ function TaskDetailDrawerContent({
       </Dialog>
 
       <Dialog open={showTimeEntryForm} onOpenChange={(open) => {
+        if (isCompletingTask) return;
         if (!open) resetCompletionState();
         else setShowTimeEntryForm(open);
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Log time and complete task</DialogTitle>
+            <DialogTitle>{manualTimeEntry ? "Add time entry" : "Log time and complete task"}</DialogTitle>
             <DialogDescription>
               Enter the time spent on "{task.title}"
             </DialogDescription>
@@ -1794,6 +1831,7 @@ function TaskDetailDrawerContent({
             <Button
               variant="outline"
               onClick={() => resetCompletionState()}
+              disabled={isCompletingTask}
               data-testid="button-cancel-time-entry"
             >
               Cancel
@@ -1806,18 +1844,38 @@ function TaskDetailDrawerContent({
               {isCompletingTask ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  Completing...
+                  {manualTimeEntry ? "Saving..." : "Completing..."}
                 </>
               ) : (
                 <>
                   <Check className="h-4 w-4 mr-1" />
-                  Log Time & Complete
+                  {manualTimeEntry ? "Add Time" : "Log Time & Complete"}
                 </>
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!deletingTimeEntry} onOpenChange={(open) => {
+        if (!open && !deleteTimeEntryMutation.isPending) setDeletingTimeEntry(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete time entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this time entry and remove its duration from the task total. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteTimeEntryMutation.isPending}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" disabled={deleteTimeEntryMutation.isPending}
+              onClick={() => deletingTimeEntry && deleteTimeEntryMutation.mutate(deletingTimeEntry.id)}>
+              {deleteTimeEntryMutation.isPending ? "Deleting..." : "Delete time entry"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={!!editingTimeEntry} onOpenChange={(open) => !open && setEditingTimeEntry(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
