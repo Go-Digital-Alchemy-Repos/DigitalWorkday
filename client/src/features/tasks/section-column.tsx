@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus, MoreHorizontal, Pencil, Trash2, XCircle, Archive } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, XCircle, Archive, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,6 +33,10 @@ interface SectionColumnProps {
   onArchiveSection?: (sectionId: string) => void;
   onDeleteSection?: (sectionId: string) => void;
   onClearSectionTasks?: (sectionId: string) => void;
+  onMoveSection?: (direction: "left" | "right" | "start" | "end") => void;
+  isFirstSection?: boolean;
+  isLastSection?: boolean;
+  isReorderingSections?: boolean;
   portalMode?: boolean;
 }
 
@@ -45,6 +49,10 @@ export function SectionColumn({
   onArchiveSection,
   onDeleteSection,
   onClearSectionTasks,
+  onMoveSection,
+  isFirstSection = false,
+  isLastSection = false,
+  isReorderingSections = false,
   portalMode = false,
 }: SectionColumnProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -99,12 +107,13 @@ export function SectionColumn({
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
-            {(onEditSection || onArchiveSection || onDeleteSection || onClearSectionTasks) && <DropdownMenu>
+            {(onEditSection || onArchiveSection || onDeleteSection || onClearSectionTasks || onMoveSection) && <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6"
+                  aria-label={`Section options for ${section.name}`}
                   data-testid={`button-section-menu-${section.id}`}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
@@ -118,6 +127,23 @@ export function SectionColumn({
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit Section
                 </DropdownMenuItem>
+                {onMoveSection && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem disabled={isFirstSection || isReorderingSections} onClick={() => onMoveSection("left")}>
+                      <ArrowLeft className="h-4 w-4 mr-2" />Move left
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={isLastSection || isReorderingSections} onClick={() => onMoveSection("right")}>
+                      <ArrowRight className="h-4 w-4 mr-2" />Move right
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={isFirstSection || isReorderingSections} onClick={() => onMoveSection("start")}>
+                      <ChevronsLeft className="h-4 w-4 mr-2" />Move to start
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={isLastSection || isReorderingSections} onClick={() => onMoveSection("end")}>
+                      <ChevronsRight className="h-4 w-4 mr-2" />Move to end
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {onArchiveSection && (
                   <>
                     <DropdownMenuSeparator />

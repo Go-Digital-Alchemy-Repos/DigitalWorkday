@@ -429,6 +429,32 @@ export default function ProjectPage() {
     },
   });
 
+  const reorderSectionsMutation = useMutation({
+    mutationFn: async (sectionIds: string[]) => {
+      await apiRequest("PATCH", `/api/projects/${projectId}/sections/reorder`, { sectionIds });
+    },
+    onSuccess: () => {
+      toast({ title: "Section order saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to reorder sections", description: error.message, variant: "destructive" });
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      setLocalSections(null);
+    },
+  });
+
+  const moveSection = (sectionId: string, direction: "left" | "right" | "start" | "end") => {
+    if (reorderSectionsMutation.isPending || reorderMutation.isPending) return;
+    const from = orderedSections.findIndex((section) => section.id === sectionId);
+    const to = direction === "start" ? 0 : direction === "end" ? orderedSections.length - 1 : from + (direction === "left" ? -1 : 1);
+    if (from < 0 || to < 0 || to >= orderedSections.length || from === to) return;
+    const reordered = arrayMove(orderedSections, from, to);
+    setLocalSections(reordered);
+    reorderSectionsMutation.mutate(reordered.map((section) => section.id));
+  };
+
   const updateSectionMutation = useMutation({
     mutationFn: async ({ sectionId, name }: { sectionId: string; name: string }) => {
       return apiRequest("PATCH", `/api/sections/${sectionId}`, { name });
@@ -566,6 +592,7 @@ export default function ProjectPage() {
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      if (reorderSectionsMutation.isPending) { setActiveTaskId(null); return; }
       const { active, over } = event;
       setActiveTaskId(null);
 
@@ -660,7 +687,7 @@ export default function ProjectPage() {
         ]);
       }
     },
-    [displaySections, reorderMutation]
+    [orderedSections, reorderMutation, reorderSectionsMutation.isPending]
   );
 
   const refetchSelectedTask = useCallback(async () => {
@@ -1272,13 +1299,17 @@ export default function ProjectPage() {
             onDragEnd={handleDragEnd}
           >
             <div className="flex h-full gap-4 overflow-x-auto px-4 py-5 sm:px-5 lg:px-8 md:py-6 snap-x snap-mandatory sm:snap-none scroll-smooth">
-              {orderedSections.map((section) => (
+              {orderedSections.map((section, sectionIndex) => (
                 <div key={section.id} className="snap-center sm:snap-align-none">
                   <SectionColumn
                     section={section}
                     onAddTask={() => handleAddTask(section.id)}
                     onTaskSelect={handleTaskSelect}
                     onTaskStatusChange={handleStatusChange}
+                    onMoveSection={(direction) => moveSection(section.id, direction)}
+                    isFirstSection={sectionIndex === 0}
+                    isLastSection={sectionIndex === orderedSections.length - 1}
+                    isReorderingSections={reorderSectionsMutation.isPending || reorderMutation.isPending}
                     onEditSection={handleEditSection}
                     onArchiveSection={(sectionId) => archiveSectionMutation.mutate(sectionId)}
                     onDeleteSection={openDeleteSectionDialog}

@@ -71,7 +71,7 @@ import {
 import type { Project, ProjectTemplateContent } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import { db } from "../../db";
-import { eq, and, inArray, ilike, asc, desc } from "drizzle-orm";
+import { eq, and, inArray, ilike, asc, desc, isNull } from "drizzle-orm";
 import { config } from "../../config";
 import { canManageProjectAccess } from "../../lib/privateVisibility";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
@@ -87,6 +87,7 @@ import {
   emitProjectDeleted,
   emitSectionCreated,
   emitSectionUpdated,
+  emitSectionReordered,
   emitSectionDeleted,
   emitTaskReordered,
 } from "../../realtime/events";
@@ -962,6 +963,39 @@ router.get("/projects/:projectId/sections", async (req: Request, res: Response) 
     res.json(sections);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/projects/:projectId/sections", req);
+  }
+});
+
+router.patch("/projects/:projectId/sections/reorder", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const projectId = req.params.projectId;
+    const project = await storage.getProjectByIdAndTenant(projectId, tenantId);
+    if (!project || !(await canViewProject(tenantId, projectId, getCurrentUserId(req)))) {
+      throw AppError.notFound("Project");
+    }
+    const data = validateBody(req.body, z.object({
+      sectionIds: z.array(z.string().min(1)).min(1).refine((ids) => new Set(ids).size === ids.length, "Section IDs must be unique"),
+    }), res);
+    if (!data) return;
+
+    await db.transaction(async (tx) => {
+      const current = await tx.select({ id: sections.id }).from(sections)
+        .where(and(eq(sections.projectId, projectId), isNull(sections.archivedAt)))
+        .orderBy(asc(sections.id)).for("update");
+      const ids = new Set(current.map((section) => section.id));
+      if (ids.size !== data.sectionIds.length || data.sectionIds.some((id) => !ids.has(id))) {
+        throw AppError.badRequest("Sections have changed. Refresh the project and try again.");
+      }
+      for (const [orderIndex, id] of data.sectionIds.entries()) {
+        await tx.update(sections).set({ orderIndex }).where(and(eq(sections.id, id), eq(sections.projectId, projectId)));
+      }
+    });
+    emitSectionReordered(projectId, data.sectionIds.map((id, position) => ({ id, position })));
+    res.json({ success: true });
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/projects/:projectId/sections/reorder", req);
   }
 });
 
