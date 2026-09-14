@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { hasTenantAdminAccess } from "@shared/roles";
 import {
   storage,
   handleRouteError,
@@ -406,6 +407,9 @@ router.delete("/time-entries/:id", async (req, res) => {
     }
     
     if (!entry) throw AppError.notFound("Time entry");
+    if (entry.userId !== userId && !hasTenantAdminAccess(req.user?.role)) {
+      throw AppError.forbidden("You can only delete your own time entries");
+    }
 
     if (entry.tenantId) {
       await storage.deleteTimeEntryWithTenant(req.params.id, entry.tenantId);
