@@ -1173,7 +1173,7 @@ export default function ClientDetailPage() {
                   </TabsTrigger>
                 )}
                 <TabsTrigger value="portal" data-testid="tab-portal">
-                  Portal Users
+                  Portal Access
                 </TabsTrigger>
                 {featureFlags.assetLibraryV2 && (
                   <TabsTrigger value="asset-library" data-testid="tab-asset-library" className="gap-1.5">

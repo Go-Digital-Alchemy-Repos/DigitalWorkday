@@ -45,7 +45,7 @@ export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
   { id: "notes", label: "Notes", icon: StickyNote, testId: "tab-notes", primary: false },
   { id: "approvals", label: "Approvals", icon: ClipboardCheck, testId: "tab-approvals", primary: false, requiresCrmFlag: "approvals" },
   { id: "messages", label: "Messages", icon: MessageSquare, testId: "tab-messages", primary: false, requiresCrmFlag: "clientMessaging" },
-  { id: "portal", label: "Portal Users", icon: Globe, testId: "tab-portal", primary: false },
+  { id: "portal", label: "Portal Access", icon: Globe, testId: "tab-portal", primary: false },
   { id: "asset-library", label: "Asset Library", icon: PackageOpen, testId: "tab-asset-library", primary: true, requiresFeatureFlag: "assetLibraryV2" },
 ];
 

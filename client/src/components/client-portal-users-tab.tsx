@@ -66,6 +66,8 @@ import {
   Mail,
   MessageSquare,
   RefreshCw,
+  Search,
+  ShieldCheck,
 } from "lucide-react";
 
 interface ClientUser {
@@ -125,6 +127,16 @@ interface PortalAccessScopeOption {
   relationship: "current" | "child" | "descendant" | "other";
 }
 
+interface InternalClientTeamUser {
+  id: string;
+  name: string | null;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role: string;
+  selected: boolean;
+}
+
 const createUserSchema = z.object({
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1, "First name is required"),
@@ -176,6 +188,8 @@ interface ClientPortalUsersTabProps {
 export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const { toast } = useToast();
   const [addUserOpen, setAddUserOpen] = useState(false);
+  const [internalTeamOpen, setInternalTeamOpen] = useState(false);
+  const [internalTeamSearch, setInternalTeamSearch] = useState("");
   const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
   const [userToRevoke, setUserToRevoke] = useState<ClientUser | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -211,6 +225,16 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const { data: portalUsers = [], isLoading: usersLoading } = useQuery<ClientUser[]>({
     queryKey: ["/api/clients", clientId, "users"],
+    enabled: !!clientId,
+  });
+
+  const { data: internalTeamData, isLoading: internalTeamLoading } = useQuery<{ users: InternalClientTeamUser[] }>({
+    queryKey: ["/api/clients", clientId, "internal-team"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/internal-team`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load the internal client team");
+      return res.json();
+    },
     enabled: !!clientId,
   });
 
@@ -286,6 +310,18 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
         variant: "destructive",
       });
     },
+  });
+
+  const addInternalTeamMemberMutation = useMutation({
+    mutationFn: async (userId: string) => (await apiRequest("POST", `/api/clients/${clientId}/internal-team`, { userId })).json(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "internal-team"] }),
+    onError: (error: Error) => toast({ title: "Unable to update client team", description: error.message, variant: "destructive" }),
+  });
+
+  const removeInternalTeamMemberMutation = useMutation({
+    mutationFn: async (userId: string) => apiRequest("DELETE", `/api/clients/${clientId}/internal-team/${userId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "internal-team"] }),
+    onError: (error: Error) => toast({ title: "Unable to update client team", description: error.message, variant: "destructive" }),
   });
 
   const updateUserMutation = useMutation({
@@ -450,6 +486,18 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const accessScopeEntries = accessScopeData?.entries || [];
   const accessScopeOptions = accessScopeOptionsData?.entries || [];
+  const internalTeamUsers = internalTeamData?.users || [];
+  const selectedInternalTeamUsers = internalTeamUsers.filter((user) => user.selected);
+  const filteredInternalTeamUsers = internalTeamUsers.filter((user) => {
+    const haystack = `${user.name || ""} ${user.firstName || ""} ${user.lastName || ""} ${user.email}`.toLowerCase();
+    return haystack.includes(internalTeamSearch.trim().toLowerCase());
+  });
+  const internalTeamMutationPending = addInternalTeamMemberMutation.isPending || removeInternalTeamMemberMutation.isPending;
+
+  const toggleInternalTeamMember = (user: InternalClientTeamUser, selected: boolean) => {
+    if (selected) addInternalTeamMemberMutation.mutate(user.id);
+    else removeInternalTeamMemberMutation.mutate(user.id);
+  };
 
   useEffect(() => {
     if (!editingUser || !accessScopeData) return;
@@ -574,9 +622,9 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       </div>
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-semibold">Portal Users</h3>
+          <h3 className="font-semibold">Portal Access</h3>
           <p className="text-sm text-muted-foreground">
-            Manage client users who can access the client portal to view projects and tasks.
+            Manage external portal users and the internal team members they can interact with.
           </p>
         </div>
         <Button onClick={handleOpenAddUser} data-testid="button-add-portal-user">
@@ -584,6 +632,42 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
           Add Portal User
         </Button>
       </div>
+
+      <Card data-testid="card-internal-client-team">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck className="h-4 w-4" />
+                Internal Client Team
+              </CardTitle>
+              <CardDescription>
+                Choose the internal people portal users can see, assign, message, and mention for this client.
+              </CardDescription>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setInternalTeamOpen(true)} data-testid="button-manage-internal-client-team">
+              Manage Team
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {internalTeamLoading ? (
+            <Skeleton className="h-12 w-full" />
+          ) : selectedInternalTeamUsers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {selectedInternalTeamUsers.map((user) => (
+                <Badge key={user.id} variant="secondary" data-testid={`internal-client-team-member-${user.id}`}>
+                  {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              No internal users are exposed to this client. Portal assignee and individual-recipient lists will remain private.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {uninvitedContacts.length > 0 && (
         <Card>
@@ -1056,6 +1140,52 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                 </div>
               </form>
             </Form>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={internalTeamOpen} onOpenChange={setInternalTeamOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg" data-testid="sheet-internal-client-team">
+          <SheetHeader>
+            <SheetTitle>Manage Internal Client Team</SheetTitle>
+            <SheetDescription>
+              Selected employees become visible and available to portal users across this client account.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="py-6">
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={internalTeamSearch}
+                onChange={(event) => setInternalTeamSearch(event.target.value)}
+                placeholder="Search internal users..."
+                className="pl-9"
+                data-testid="input-search-internal-client-team"
+              />
+            </div>
+            <div className="space-y-2">
+              {internalTeamLoading ? (
+                <><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></>
+              ) : filteredInternalTeamUsers.length > 0 ? filteredInternalTeamUsers.map((user) => (
+                <Label key={user.id} className="flex cursor-pointer items-center gap-3 rounded-md border p-3 font-normal">
+                  <Checkbox
+                    checked={user.selected}
+                    disabled={internalTeamMutationPending}
+                    onCheckedChange={(checked) => toggleInternalTeamMember(user, checked === true)}
+                    data-testid={`checkbox-internal-client-team-${user.id}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">
+                      {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+                  </div>
+                  <Badge variant={user.selected ? "secondary" : "outline"}>{user.selected ? "Visible" : "Hidden"}</Badge>
+                </Label>
+              )) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No matching internal users.</p>
+              )}
+            </div>
           </div>
         </SheetContent>
       </Sheet>

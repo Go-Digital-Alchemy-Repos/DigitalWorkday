@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
+import { and, asc, eq, ne } from "drizzle-orm";
+import { db } from "../../db";
 import { storage } from "../../storage";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
-import { InvitationStatus, UserRole, ClientAccessLevel, CommentVisibility } from "@shared/schema";
+import { InvitationStatus, UserRole, ClientAccessLevel, CommentVisibility, userClientAccess, users } from "@shared/schema";
 import { hasTenantAdminAccess } from "@shared/roles";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes, createHash } from "crypto";
@@ -16,6 +18,10 @@ import {
   filterCommentsForPortalUser,
   replacePortalAccessScope,
 } from "../../services/customerAccessPermissions";
+import {
+  isClientPortalDirectoryEnabled,
+  setClientPortalDirectoryEnabled,
+} from "../../services/clientPortalDirectory";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -158,6 +164,123 @@ router.get("/:clientId/access-scope-options", requireTenantAdminAccess, async (r
     res.json({ entries });
   } catch (error) {
     return handleRouteError(res, error, "GET /:clientId/access-scope-options", req);
+  }
+});
+
+router.get("/:clientId/internal-team", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const client = await storage.getClientByIdAndTenant(req.params.clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+
+    const [tenantUsers, accessRows] = await Promise.all([
+      db.select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        avatarUrl: users.avatarUrl,
+        role: users.role,
+      }).from(users).where(and(
+        eq(users.tenantId, tenantId),
+        eq(users.isActive, true),
+        ne(users.role, UserRole.CLIENT),
+      )).orderBy(asc(users.name), asc(users.email)),
+      db.select({ userId: userClientAccess.userId, permissions: userClientAccess.permissions })
+        .from(userClientAccess)
+        .where(and(
+          eq(userClientAccess.tenantId, tenantId),
+          eq(userClientAccess.clientId, client.id),
+        )),
+    ]);
+    const selectedIds = new Set(accessRows
+      .filter((row) => isClientPortalDirectoryEnabled(row.permissions))
+      .map((row) => row.userId));
+
+    res.json({
+      users: tenantUsers.map((user) => ({ ...user, selected: selectedIds.has(user.id) })),
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /:clientId/internal-team", req);
+  }
+});
+
+router.post("/:clientId/internal-team", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const { userId } = z.object({ userId: z.string().uuid() }).parse(req.body);
+    const client = await storage.getClientByIdAndTenant(req.params.clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+
+    const [target] = await db.select({ id: users.id }).from(users).where(and(
+      eq(users.id, userId),
+      eq(users.tenantId, tenantId),
+      eq(users.isActive, true),
+      ne(users.role, UserRole.CLIENT),
+    )).limit(1);
+    if (!target) throw AppError.badRequest("Only active internal users in this tenant can join the client team");
+
+    const [existing] = await db.select().from(userClientAccess).where(and(
+      eq(userClientAccess.tenantId, tenantId),
+      eq(userClientAccess.clientId, client.id),
+      eq(userClientAccess.userId, userId),
+    )).limit(1);
+    const permissions = setClientPortalDirectoryEnabled(existing?.permissions, true);
+    const [membership] = existing
+      ? await db.update(userClientAccess).set({ permissions }).where(eq(userClientAccess.id, existing.id)).returning()
+      : await db.insert(userClientAccess).values({
+          tenantId,
+          workspaceId: client.workspaceId,
+          clientId: client.id,
+          userId,
+          accessLevel: "viewer",
+          permissions,
+        }).returning();
+
+    await storage.createActivityLog({
+      workspaceId: client.workspaceId,
+      actorUserId: getCurrentUserId(req),
+      entityType: "client",
+      entityId: client.id,
+      action: "client_internal_team_member_added",
+      diffJson: { userId },
+    });
+    res.status(201).json({ id: membership.id, userId, selected: true });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /:clientId/internal-team", req);
+  }
+});
+
+router.delete("/:clientId/internal-team/:userId", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const client = await storage.getClientByIdAndTenant(req.params.clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+    const [existing] = await db.select().from(userClientAccess).where(and(
+      eq(userClientAccess.tenantId, tenantId),
+      eq(userClientAccess.clientId, client.id),
+      eq(userClientAccess.userId, req.params.userId),
+    )).limit(1);
+    if (existing) {
+      await db.update(userClientAccess)
+        .set({ permissions: setClientPortalDirectoryEnabled(existing.permissions, false) })
+        .where(eq(userClientAccess.id, existing.id));
+      await storage.createActivityLog({
+        workspaceId: client.workspaceId,
+        actorUserId: getCurrentUserId(req),
+        entityType: "client",
+        entityId: client.id,
+        action: "client_internal_team_member_removed",
+        diffJson: { userId: req.params.userId },
+      });
+    }
+    res.status(204).send();
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /:clientId/internal-team/:userId", req);
   }
 });
 
