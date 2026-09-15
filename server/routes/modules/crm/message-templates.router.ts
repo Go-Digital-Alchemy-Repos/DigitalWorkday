@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import multer from "multer";
 import { db } from "../../../db";
-import { eq, and, asc, inArray, ne } from "drizzle-orm";
+import { eq, and, asc, ne } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth, requireAdmin } from "../../../auth";
@@ -29,6 +29,7 @@ import {
   deleteCommunicationAttachments,
   uploadCommunicationAttachments,
 } from "../../../services/communicationAttachments";
+import { getClientPortalInternalDirectory } from "../../../services/clientPortalDirectory";
 
 const router = Router();
 const attachmentUpload = multer({
@@ -229,15 +230,8 @@ router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Reque
       return sendError(res, AppError.forbidden("You do not have access to this client"), req);
     }
 
-    const [tenantUsers, portalUsers] = await Promise.all([
-      db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
-        .from(users)
-        .where(and(
-          eq(users.tenantId, tenantId),
-          eq(users.isActive, true),
-          inArray(users.role, [UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
-        ))
-        .orderBy(asc(users.name)),
+    const [internalDirectory, portalUsers] = await Promise.all([
+      getClientPortalInternalDirectory(clientId),
       db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
         .from(clientUserAccess)
         .innerJoin(users, eq(users.id, clientUserAccess.userId))
@@ -251,6 +245,11 @@ router.get("/crm/portal/conversation-recipients", requireAuth, async (req: Reque
         .orderBy(asc(users.name)),
     ]);
 
+    const tenantUsers = internalDirectory.map((person) => ({
+      ...person,
+      email: "",
+      role: "team_member",
+    }));
     res.json({ tenantUsers, portalUsers });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/portal/conversation-recipients", req);
@@ -316,15 +315,8 @@ router.post(
       if (!data.recipientUserId) {
         return sendError(res, AppError.badRequest("Please select a team recipient"), req);
       }
-      const [target] = await db.select({ id: users.id })
-        .from(users)
-        .where(and(
-          eq(users.id, data.recipientUserId),
-          eq(users.tenantId, tenantId),
-          eq(users.isActive, true),
-          inArray(users.role, [UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
-        ))
-        .limit(1);
+      const target = (await getClientPortalInternalDirectory(data.clientId))
+        .find((person) => person.id === data.recipientUserId);
       if (!target) return sendError(res, AppError.badRequest("That team recipient is not available"), req);
       recipientUserId = target.id;
       autoAssigneeId = target.id;

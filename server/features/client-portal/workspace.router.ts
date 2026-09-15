@@ -18,7 +18,6 @@ import {
   clientUserProjectAccess,
   clients,
   passwordResetTokens,
-  projectMembers,
   projects,
   sections,
   subtasks,
@@ -38,7 +37,8 @@ import {
   normalizePortalAccessLevel,
   requireActivePortalAccess,
 } from "../../services/portalAuthorization";
-import { canClientAccessProject } from "../../middleware/clientAccess";
+import { canClientAccessProject, getClientUserAccessibleProjects } from "../../middleware/clientAccess";
+import { assertClientPortalDirectoryUsers, getClientPortalProjectDirectory } from "../../services/clientPortalDirectory";
 
 const router = Router();
 const portalTaskUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -308,20 +308,7 @@ const taskFieldsSchema = z.object({
 }).strict();
 
 async function validatePortalAssignees(clientId: string, projectId: string, assigneeIds: string[]) {
-  if (!assigneeIds.length) return;
-  const [portalRows, memberRows] = await Promise.all([
-    db.select({ userId: clientUserAccess.userId }).from(clientUserAccess).where(and(
-      eq(clientUserAccess.clientId, clientId),
-      eq(clientUserAccess.status, ClientAccessStatus.ACTIVE),
-      inArray(clientUserAccess.userId, assigneeIds),
-    )),
-    db.select({ userId: projectMembers.userId }).from(projectMembers).where(and(
-      eq(projectMembers.projectId, projectId),
-      inArray(projectMembers.userId, assigneeIds),
-    )),
-  ]);
-  const allowed = new Set([...portalRows, ...memberRows].map((row) => row.userId));
-  if (assigneeIds.some((id) => !allowed.has(id))) throw AppError.forbidden("One or more assignees are not available to this client project");
+  await assertClientPortalDirectoryUsers(clientId, projectId, assigneeIds);
 }
 
 async function updateTaskJoins(taskId: string, tenantId: string, workspaceId: string, data: z.infer<typeof taskFieldsSchema>) {
@@ -637,13 +624,7 @@ router.patch("/clients/:clientId/subtasks/:subtaskId", async (req, res) => {
 router.get("/clients/:clientId/projects/:projectId/assignees", async (req, res) => {
   try {
     await getVisibleProject(req.user!.id, req.params.clientId, req.params.projectId);
-    const portalUsers = await db.select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl })
-      .from(clientUserAccess).innerJoin(users, eq(users.id, clientUserAccess.userId))
-      .where(and(eq(clientUserAccess.clientId, req.params.clientId), eq(clientUserAccess.status, ClientAccessStatus.ACTIVE), eq(users.isActive, true)));
-    const projectUsers = await db.select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl })
-      .from(projectMembers).innerJoin(users, eq(users.id, projectMembers.userId))
-      .where(and(eq(projectMembers.projectId, req.params.projectId), eq(users.isActive, true)));
-    res.json([...new Map([...portalUsers, ...projectUsers].map((user) => [user.id, user])).values()]);
+    res.json(await getClientPortalProjectDirectory(req.params.clientId, req.params.projectId));
   } catch (error) {
     return handleRouteError(res, error, "GET /client-portal/clients/:clientId/projects/:projectId/assignees", req);
   }
@@ -664,10 +645,15 @@ router.get("/clients/:clientId/projects/:projectId/tags", async (req, res) => {
 router.get("/clients/:clientId/activity", async (req, res) => {
   try {
     await requireActivePortalAccess(req.user!.id, req.params.clientId, { admin: true });
-    const projectRows = await db.select({ id: projects.id }).from(projects)
-      .where(and(eq(projects.clientId, req.params.clientId), ne(projects.visibility, "private")));
+    const accessibleProjectIds = new Set(await getClientUserAccessibleProjects(req.user!.id));
+    const projectRows = (await db.select({ id: projects.id }).from(projects)
+      .where(and(eq(projects.clientId, req.params.clientId), ne(projects.visibility, "private"))))
+      .filter((project) => accessibleProjectIds.has(project.id));
     const projectIds = projectRows.map((row) => row.id);
     if (!projectIds.length) return res.json([]);
+    const visibleActorIds = new Set((await Promise.all(
+      projectIds.map((projectId) => getClientPortalProjectDirectory(req.params.clientId, projectId)),
+    )).flat().map((user) => user.id));
     const taskRows = await db.select({ id: tasks.id }).from(tasks)
       .where(and(inArray(tasks.projectId, projectIds), ne(tasks.visibility, "private")));
     const taskIds = taskRows.map((row) => row.id);
@@ -687,7 +673,7 @@ router.get("/clients/:clientId/activity", async (req, res) => {
       entityType: log.entityType,
       entityId: log.entityId,
       action: log.action,
-      actorName: actorName || "Team member",
+      actorName: visibleActorIds.has(log.actorUserId) ? actorName || "Team member" : "Team member",
       createdAt: log.createdAt,
       details: Object.fromEntries(Object.entries((log.diffJson || {}) as Record<string, unknown>).filter(([key]) => safeDiffKeys.has(key))),
     })));

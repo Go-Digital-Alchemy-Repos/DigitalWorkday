@@ -5,6 +5,7 @@ import { storage } from "../../storage";
 import { CommentVisibility, UserRole, tasks } from "@shared/schema";
 import type { Request, Response, NextFunction } from "express";
 import { canClientAccessProject, getClientUserAccessibleClients, getClientUserAccessibleProjects } from "../../middleware/clientAccess";
+import { getClientPortalProjectDirectory } from "../../services/clientPortalDirectory";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { filterCommentsForPortalUser } from "../../services/customerAccessPermissions";
 import { getPortalCapabilities, normalizePortalAccessLevel } from "../../services/portalAuthorization";
@@ -247,6 +248,9 @@ router.get("/projects/:projectId", async (req, res) => {
       (t as any).visibility !== 'private'
       && (!t.sectionId || activeSectionIds.has(t.sectionId)),
     );
+    const visibleAssigneeIds = new Set(
+      (await getClientPortalProjectDirectory(project.clientId, projectId)).map((user) => user.id),
+    );
     
     const tasksForClient = tasks.map(task => ({
       id: task.id,
@@ -260,7 +264,7 @@ router.get("/projects/:projectId", async (req, res) => {
       createdAt: task.createdAt,
       sectionId: task.sectionId,
       section: task.section,
-      assignees: task.assignees?.map(a => ({
+      assignees: task.assignees?.filter((a) => visibleAssigneeIds.has(a.user?.id || a.userId)).map(a => ({
         userId: a.user?.id || a.userId,
         user: {
           id: a.user?.id || a.userId,
@@ -337,6 +341,9 @@ router.get("/tasks", async (req, res) => {
         if (projectId && project.id !== projectId) continue;
         
         const tasks = await storage.getTasksByProject(project.id);
+        const visibleAssigneeIds = new Set(
+          (await getClientPortalProjectDirectory(clientId, project.id)).map((user) => user.id),
+        );
         
         for (const task of tasks) {
           if ((task as any).visibility === 'private') continue;
@@ -354,7 +361,7 @@ router.get("/tasks", async (req, res) => {
             clientId,
             isPersonal: false,
             sectionId: task.sectionId,
-            assignees: task.assignees?.map(a => ({
+            assignees: task.assignees?.filter((a) => visibleAssigneeIds.has(a.user?.id || a.userId)).map(a => ({
               id: a.user?.id || a.userId,
               name: a.user?.name || "Unknown",
               avatarUrl: a.user?.avatarUrl,
@@ -414,6 +421,9 @@ router.get("/tasks/:taskId", async (req, res) => {
       await storage.getCommentsByTask(taskId),
       userId,
     );
+    const visibleAssigneeIds = project
+      ? new Set((await getClientPortalProjectDirectory(clientId, project.id)).map((user) => user.id))
+      : new Set<string>([userId]);
     
     res.json({
       id: task.id,
@@ -432,7 +442,7 @@ router.get("/tasks/:taskId", async (req, res) => {
       capabilities: getPortalCapabilities(access.accessLevel),
       sectionId: task.sectionId,
       section: task.section,
-      assignees: task.assignees?.map(a => ({
+      assignees: task.assignees?.filter((a) => visibleAssigneeIds.has(a.user?.id || a.userId)).map(a => ({
         id: a.user?.id || a.userId,
         name: a.user?.name || "Unknown",
         avatarUrl: a.user?.avatarUrl,
@@ -443,11 +453,11 @@ router.get("/tasks/:taskId", async (req, res) => {
         id: c.id,
         body: c.body,
         createdAt: c.createdAt,
-        user: c.user ? {
-          id: c.user.id,
-          name: c.user.name,
-          avatarUrl: c.user.avatarUrl,
-        } : null,
+        user: c.user
+          ? visibleAssigneeIds.has(c.user.id)
+            ? { id: c.user.id, name: c.user.name, avatarUrl: c.user.avatarUrl }
+            : { id: "internal-team", name: "Team member", avatarUrl: null }
+          : null,
       })),
     });
   } catch (error) {

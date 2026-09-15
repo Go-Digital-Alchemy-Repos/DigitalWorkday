@@ -41,6 +41,7 @@ import {
   toPublicCommunicationAttachments,
   uploadCommunicationAttachments,
 } from "../../../services/communicationAttachments";
+import { getClientPortalConversationDirectory } from "../../../services/clientPortalDirectory";
 
 const router = Router();
 const attachmentUpload = multer({
@@ -822,6 +823,10 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       }
     }
 
+    const portalVisibleUserIds = user.role === UserRole.CLIENT
+      ? new Set((await getClientPortalConversationDirectory(conversation.clientId)).map((person) => person.id))
+      : null;
+
     let assigneeName: string | null = null;
     if (conversation.assignedToUserId) {
       const [assignee] = await db.select({ name: users.name })
@@ -865,11 +870,20 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       .orderBy(clientMessages.createdAt);
 
     const messageRows = await messagesQuery;
-    const messages = messageRows.map((message) => ({
-      ...message,
-      attachmentsJson: undefined,
-      attachments: toPublicCommunicationAttachments(message.attachmentsJson),
-    }));
+    const messages = messageRows.map((message) => {
+      const hideInternalAuthor = portalVisibleUserIds
+        && message.authorRole !== UserRole.CLIENT
+        && !!message.authorUserId
+        && !portalVisibleUserIds.has(message.authorUserId);
+      return {
+        ...message,
+        authorUserId: hideInternalAuthor ? null : message.authorUserId,
+        authorName: hideInternalAuthor ? "Team member" : message.authorName,
+        authorRole: hideInternalAuthor ? null : message.authorRole,
+        attachmentsJson: undefined,
+        attachments: toPublicCommunicationAttachments(message.attachmentsJson),
+      };
+    });
 
     let slaPolicy = null;
     if (user.role !== UserRole.CLIENT) {
@@ -883,7 +897,23 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       slaPolicy = policy || null;
     }
 
-    res.json({ conversation: { ...conversation, assigneeName, recipientName, slaPolicy }, messages });
+    const assigneeVisible = !portalVisibleUserIds
+      || !conversation.assignedToUserId
+      || portalVisibleUserIds.has(conversation.assignedToUserId);
+    const recipientVisible = !portalVisibleUserIds
+      || !conversation.recipientUserId
+      || portalVisibleUserIds.has(conversation.recipientUserId);
+    res.json({
+      conversation: {
+        ...conversation,
+        assignedToUserId: assigneeVisible ? conversation.assignedToUserId : null,
+        recipientUserId: recipientVisible ? conversation.recipientUserId : null,
+        assigneeName: assigneeVisible ? assigneeName : "Team member",
+        recipientName: recipientVisible ? recipientName : "Team member",
+        slaPolicy,
+      },
+      messages,
+    });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/messages", req);
   }
@@ -1379,7 +1409,9 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
 
     const results = await db.select({
       conversation: clientConversations,
+      creatorUserId: users.id,
       creatorName: users.name,
+      creatorRole: users.role,
       clientName: clients.companyName,
     })
       .from(clientConversations)
@@ -1398,6 +1430,17 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
       )
       .orderBy(desc(clientConversations.updatedAt));
 
+    const directoryPromises = new Map<string, Promise<Set<string>>>();
+    const getVisibleDirectoryIds = (clientId: string) => {
+      let directory = directoryPromises.get(clientId);
+      if (!directory) {
+        directory = getClientPortalConversationDirectory(clientId)
+          .then((people) => new Set(people.map((person) => person.id)));
+        directoryPromises.set(clientId, directory);
+      }
+      return directory;
+    };
+
     const convosWithMeta = await Promise.all(results.map(async (r) => {
       const publicOnly = and(
         eq(clientMessages.conversationId, r.conversation.id),
@@ -1411,7 +1454,9 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
       const [lastMsg] = await db.select({
         bodyText: clientMessages.bodyText,
         createdAt: clientMessages.createdAt,
+        authorUserId: users.id,
         authorName: users.name,
+        authorRole: users.role,
       })
         .from(clientMessages)
         .leftJoin(users, eq(clientMessages.authorUserId, users.id))
@@ -1428,13 +1473,32 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
         recipientName = recipient?.name || null;
       }
 
+      const visibleInternalIds = await getVisibleDirectoryIds(r.conversation.clientId);
+      const creatorHidden = r.creatorRole !== UserRole.CLIENT
+        && !!r.creatorUserId
+        && !visibleInternalIds.has(r.creatorUserId);
+      const lastMessageAuthorHidden = lastMsg?.authorRole !== UserRole.CLIENT
+        && !!lastMsg?.authorUserId
+        && !visibleInternalIds.has(lastMsg.authorUserId);
+      const recipientVisible = !r.conversation.recipientUserId
+        || visibleInternalIds.has(r.conversation.recipientUserId);
+      const assigneeVisible = !r.conversation.assignedToUserId
+        || visibleInternalIds.has(r.conversation.assignedToUserId);
+
       return {
         ...r.conversation,
-        creatorName: r.creatorName || "Unknown",
+        assignedToUserId: assigneeVisible ? r.conversation.assignedToUserId : null,
+        recipientUserId: recipientVisible ? r.conversation.recipientUserId : null,
+        creatorName: creatorHidden ? "Team member" : r.creatorName || "Unknown",
         clientName: r.clientName || "Unknown",
-        recipientName,
+        recipientName: recipientVisible ? recipientName : "Team member",
         messageCount: msgCount?.value || 0,
-        lastMessage: lastMsg || null,
+        lastMessage: lastMsg ? {
+          ...lastMsg,
+          authorUserId: lastMessageAuthorHidden ? null : lastMsg.authorUserId,
+          authorName: lastMessageAuthorHidden ? "Team member" : lastMsg.authorName,
+          authorRole: lastMessageAuthorHidden ? null : lastMsg.authorRole,
+        } : null,
       };
     }));
 
