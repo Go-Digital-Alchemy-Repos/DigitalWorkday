@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -57,10 +58,11 @@ type CreateProjectFormData = z.infer<typeof createProjectSchema>;
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateProjectFormData) => void;
+  onSubmit: (data: CreateProjectFormData) => void | Promise<void>;
   teams?: Team[];
   clients?: Client[];
   isPending?: boolean;
+  defaultClientId?: string;
 }
 
 export function CreateProjectDialog({
@@ -70,13 +72,14 @@ export function CreateProjectDialog({
   teams = [],
   clients = [],
   isPending = false,
+  defaultClientId = "",
 }: CreateProjectDialogProps) {
   const form = useForm<CreateProjectFormData>({
     resolver: zodResolver(createProjectSchema),
     defaultValues: {
       name: "",
       description: "",
-      clientId: "",
+      clientId: defaultClientId,
       divisionId: "",
       teamId: "",
       color: "#3B82F6",
@@ -93,9 +96,27 @@ export function CreateProjectDialog({
 
   const clientHasDivisions = divisions && divisions.length > 0;
 
-  const handleSubmit = (data: CreateProjectFormData) => {
-    onSubmit(data);
-    form.reset();
+  useEffect(() => {
+    if (!open) return;
+
+    form.reset({
+      name: "",
+      description: "",
+      clientId: defaultClientId,
+      divisionId: "",
+      teamId: "",
+      color: "#3B82F6",
+      visibility: "workspace",
+    });
+  }, [defaultClientId, form, open]);
+
+  const handleSubmit = async (data: CreateProjectFormData) => {
+    try {
+      await onSubmit(data);
+      form.reset();
+    } catch (error) {
+      console.error("Failed to create project:", error);
+    }
   };
 
   const handleClientChange = (clientId: string) => {

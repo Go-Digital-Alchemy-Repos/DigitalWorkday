@@ -21,9 +21,11 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CreateProjectDialog } from "@/features/projects/create-project-dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
@@ -51,6 +53,10 @@ import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  CREATE_NEW_PROJECT_VALUE,
+  getCreatedProjectSelection,
+} from "@/lib/task-create-project";
 import type { Client, Project, Section, Tag as TagType } from "@shared/schema";
 
 const createTaskSchema = z.object({
@@ -144,6 +150,7 @@ export function TaskCreateDrawer({
   const [taskContext, setTaskContext] = useState<TaskCreationContext>("personal");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
@@ -204,6 +211,44 @@ export function TaskCreateDrawer({
     },
   });
 
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: {
+      name: string;
+      description?: string;
+      clientId: string;
+      divisionId?: string;
+      teamId?: string;
+      color: string;
+      visibility: "workspace" | "private";
+    }) => {
+      const response = await apiRequest("POST", "/api/projects", data);
+      return response.json() as Promise<Project>;
+    },
+    onSuccess: (newProject) => {
+      const selection = getCreatedProjectSelection(newProject);
+      queryClient.setQueryData<Project[]>(["/api/projects"], (current = []) => {
+        if (current.some((project) => project.id === newProject.id)) return current;
+        return [...current, newProject];
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      setSelectedClientId(selection.clientId);
+      setSelectedProjectId(selection.projectId);
+      setSelectedTagIds([]);
+      setQueuedFiles([]);
+      form.setValue("sectionId", "");
+      setCreateProjectOpen(false);
+      toast({ title: "Project created and selected" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to create project",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   useEffect(() => {
     if (open && defaultSectionId) {
       form.setValue("sectionId", defaultSectionId);
@@ -217,6 +262,7 @@ export function TaskCreateDrawer({
       setTaskContext("personal");
       setSelectedClientId("");
       setSelectedProjectId("");
+      setCreateProjectOpen(false);
       setSelectedTagIds([]);
       setSubtaskTitles([]);
       setNewSubtaskTitle("");
@@ -368,24 +414,29 @@ export function TaskCreateDrawer({
     createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
   };
 
+  const handleCreateProject = async (data: Parameters<typeof createProjectMutation.mutateAsync>[0]) => {
+    await createProjectMutation.mutateAsync(data);
+  };
+
   return (
-    <FullScreenDrawer
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Create Task"
-      description={allowTaskAssociation ? "Create a personal task or connect it to client work" : "Add a new task to your project"}
-      hasUnsavedChanges={hasChanges}
-      onConfirmClose={handleClose}
-      width="xl"
-      footer={
-        <FullScreenDrawerFooter
-          onCancel={handleCancel}
-          onSave={form.handleSubmit(handleSubmit)}
-          isLoading={isLoading}
-          saveLabel="Create Task"
-        />
-      }
-    >
+    <>
+      <FullScreenDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Create Task"
+        description={allowTaskAssociation ? "Create a personal task or connect it to client work" : "Add a new task to your project"}
+        hasUnsavedChanges={hasChanges}
+        onConfirmClose={handleClose}
+        width="xl"
+        footer={
+          <FullScreenDrawerFooter
+            onCancel={handleCancel}
+            onSave={form.handleSubmit(handleSubmit)}
+            isLoading={isLoading}
+            saveLabel="Create Task"
+          />
+        }
+      >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
           {allowTaskAssociation && (
@@ -462,6 +513,10 @@ export function TaskCreateDrawer({
                   <Select
                     value={selectedProjectId}
                     onValueChange={(value) => {
+                      if (value === CREATE_NEW_PROJECT_VALUE) {
+                        setCreateProjectOpen(true);
+                        return;
+                      }
                       setSelectedProjectId(value);
                       const project = projects.find((item) => item.id === value);
                       if (project?.clientId) setSelectedClientId(project.clientId);
@@ -481,6 +536,13 @@ export function TaskCreateDrawer({
                           {project.name}
                         </SelectItem>
                       ))}
+                      {availableProjects.length > 0 && <SelectSeparator />}
+                      <SelectItem value={CREATE_NEW_PROJECT_VALUE} data-testid="select-create-new-project">
+                        <span className="flex items-center gap-2 font-medium text-primary">
+                          <Plus className="h-4 w-4" />
+                          Create New Project
+                        </span>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -1044,6 +1106,16 @@ export function TaskCreateDrawer({
           )}
         </form>
       </Form>
-    </FullScreenDrawer>
+      </FullScreenDrawer>
+
+      <CreateProjectDialog
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        onSubmit={handleCreateProject}
+        clients={clients}
+        isPending={createProjectMutation.isPending}
+        defaultClientId={selectedClientId}
+      />
+    </>
   );
 }
