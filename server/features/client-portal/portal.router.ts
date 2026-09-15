@@ -4,7 +4,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { CommentVisibility, UserRole, tasks } from "@shared/schema";
 import type { Request, Response, NextFunction } from "express";
-import { isClientUser, getClientUserAccessibleClients } from "../../middleware/clientAccess";
+import { canClientAccessProject, getClientUserAccessibleClients, getClientUserAccessibleProjects } from "../../middleware/clientAccess";
 import { handleRouteError, AppError } from "../../lib/errors";
 import { filterCommentsForPortalUser } from "../../services/customerAccessPermissions";
 import { getPortalCapabilities, normalizePortalAccessLevel } from "../../services/portalAuthorization";
@@ -32,7 +32,7 @@ async function getPortalTaskContext(userId: string, taskId: string) {
   const project = await storage.getProject(task.projectId);
   if (!project?.clientId || project.visibility === "private") throw AppError.notFound("Task");
   const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-  if (!access || access.status === "suspended") throw AppError.forbidden("Access denied");
+  if (!access || !(await canClientAccessProject(userId, project.id))) throw AppError.forbidden("Access denied");
   return { task, project, clientId: project.clientId, access };
 }
 
@@ -89,11 +89,13 @@ router.get("/dashboard", async (req, res) => {
     
     const allProjects: any[] = [];
     const allTasks: any[] = [];
+    const accessibleProjectIds = new Set(await getClientUserAccessibleProjects(userId));
     
     for (const clientId of clientIds) {
       const projects = await storage.getProjectsByClient(clientId);
       
       for (const project of projects) {
+        if (!accessibleProjectIds.has(project.id)) continue;
         if ((project as any).visibility === 'private') continue;
         allProjects.push({
           id: project.id,
@@ -179,12 +181,14 @@ router.get("/projects", async (req, res) => {
     const clientIds = await getClientUserAccessibleClients(userId);
     
     const allProjects: any[] = [];
+    const accessibleProjectIds = new Set(await getClientUserAccessibleProjects(userId));
     
     for (const clientId of clientIds) {
       const client = await storage.getClient(clientId);
       const projects = await storage.getProjectsByClient(clientId);
       
       for (const project of projects) {
+        if (!accessibleProjectIds.has(project.id)) continue;
         if ((project as any).visibility === 'private') continue;
         const tasks = await storage.getTasksByProject(project.id);
         const visibleTasks = tasks.filter(t => (t as any).visibility !== 'private');
@@ -227,10 +231,11 @@ router.get("/projects/:projectId", async (req, res) => {
       throw AppError.notFound("Project");
     }
     
-    const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-    if (!access || access.status === "suspended") {
+    if (!(await canClientAccessProject(userId, projectId))) {
       throw AppError.forbidden("Access denied");
     }
+    const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
+    if (!access) throw AppError.forbidden("Access denied");
     
     const client = await storage.getClient(project.clientId);
     const [allTasks, activeSections] = await Promise.all([
@@ -321,11 +326,13 @@ router.get("/tasks", async (req, res) => {
     const { status, projectId } = req.query;
     
     const allTasks: any[] = [];
+    const accessibleProjectIds = new Set(await getClientUserAccessibleProjects(userId));
     
     for (const clientId of clientIds) {
       const projects = await storage.getProjectsByClient(clientId);
       
       for (const project of projects) {
+        if (!accessibleProjectIds.has(project.id)) continue;
         if ((project as any).visibility === 'private') continue;
         if (projectId && project.id !== projectId) continue;
         

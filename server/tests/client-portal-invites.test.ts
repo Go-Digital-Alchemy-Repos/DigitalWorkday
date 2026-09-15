@@ -17,6 +17,10 @@ const storageMocks = {
   createUser: vi.fn(),
   getContactsByClient: vi.fn(),
   createClientContact: vi.fn(),
+  getInvitationsByTenant: vi.fn(),
+  getInvitesByClient: vi.fn(),
+  updateInvitation: vi.fn(),
+  updateClientInvite: vi.fn(),
 };
 
 const sendEmailMock = vi.fn();
@@ -136,6 +140,93 @@ describe("client portal invitations", () => {
     getPortalAccessOptionsMock.mockResolvedValue([]);
     getPortalAccessMatrixMock.mockResolvedValue([]);
     replacePortalAccessScopeMock.mockResolvedValue([]);
+    storageMocks.getInvitationsByTenant.mockResolvedValue([]);
+    storageMocks.getInvitesByClient.mockResolvedValue([]);
+    storageMocks.updateInvitation.mockImplementation(async (_id, updates) => ({
+      id: "invite-1",
+      ...updates,
+    }));
+    storageMocks.updateClientInvite.mockResolvedValue(undefined);
+  });
+
+  it("lists canonical client invitations without exposing token hashes", async () => {
+    storageMocks.getInvitationsByTenant.mockResolvedValue([{
+      id: "invite-1",
+      tenantId: "tenant-1",
+      workspaceId: "workspace-1",
+      email: contact.email,
+      role: UserRole.CLIENT,
+      clientId: "client-1",
+      tokenHash: "secret-hash",
+      status: InvitationStatus.PENDING,
+      expiresAt: new Date("2026-10-01T00:00:00.000Z"),
+      usedAt: null,
+      createdByUserId: "admin-1",
+      createdAt: new Date("2026-09-15T00:00:00.000Z"),
+    }]);
+
+    const response = await request(createApp()).get("/api/clients/client-1/invitations");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([expect.objectContaining({ id: "invite-1", status: "pending" })]);
+    expect(response.body[0]).not.toHaveProperty("tokenHash");
+  });
+
+  it("revokes the canonical invitation and its audit row", async () => {
+    storageMocks.getInvitationsByTenant.mockResolvedValue([{
+      id: "invite-1",
+      tenantId: "tenant-1",
+      workspaceId: "workspace-1",
+      email: contact.email,
+      role: UserRole.CLIENT,
+      clientId: "client-1",
+      tokenHash: "secret-hash",
+      status: InvitationStatus.PENDING,
+      expiresAt: new Date("2026-10-01T00:00:00.000Z"),
+      usedAt: null,
+      createdByUserId: "admin-1",
+      createdAt: new Date(),
+    }]);
+    storageMocks.getInvitesByClient.mockResolvedValue([{ id: "audit-1", invitationId: "invite-1" }]);
+
+    const response = await request(createApp()).delete("/api/clients/client-1/invitations/invite-1");
+
+    expect(response.status).toBe(204);
+    expect(storageMocks.updateInvitation).toHaveBeenCalledWith("invite-1", { status: InvitationStatus.REVOKED });
+    expect(storageMocks.updateClientInvite).toHaveBeenCalledWith("audit-1", { status: InvitationStatus.REVOKED });
+  });
+
+  it("rotates the token when resending an invitation", async () => {
+    storageMocks.getInvitationsByTenant.mockResolvedValue([{
+      id: "invite-1",
+      tenantId: "tenant-1",
+      workspaceId: "workspace-1",
+      email: contact.email,
+      role: UserRole.CLIENT,
+      clientId: "client-1",
+      tokenHash: "old-hash",
+      status: InvitationStatus.PENDING,
+      expiresAt: new Date("2026-09-01T00:00:00.000Z"),
+      usedAt: null,
+      createdByUserId: "admin-1",
+      createdAt: new Date(),
+    }]);
+    storageMocks.getInvitesByClient.mockResolvedValue([{ id: "audit-1", invitationId: "invite-1" }]);
+
+    const response = await request(createApp())
+      .post("/api/clients/client-1/invitations/invite-1/resend")
+      .set("Host", "app.test")
+      .set("X-Forwarded-Proto", "https");
+
+    expect(response.status).toBe(200);
+    expect(response.body.registrationUrl).toMatch(/^https:\/\/app\.test\/accept-invite\//);
+    expect(storageMocks.updateInvitation).toHaveBeenCalledWith("invite-1", expect.objectContaining({
+      status: InvitationStatus.PENDING,
+      tokenHash: expect.not.stringMatching(/^old-hash$/),
+    }));
+    expect(storageMocks.updateClientInvite).toHaveBeenCalledWith("audit-1", expect.objectContaining({
+      status: InvitationStatus.PENDING,
+    }));
   });
 
   it("returns portal users in the flattened shape used by the management UI", async () => {
@@ -241,6 +332,7 @@ describe("client portal invitations", () => {
       status: InvitationStatus.PENDING,
     }));
     expect(storageMocks.createClientInvite).toHaveBeenCalledWith(expect.objectContaining({
+      invitationId: "invite-1",
       clientId: "client-1",
       contactId: contact.id,
       roleHint: ClientAccessLevel.COLLABORATOR,

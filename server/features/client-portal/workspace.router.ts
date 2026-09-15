@@ -15,6 +15,7 @@ import {
   clientContacts,
   clientDivisions,
   clientUserAccess,
+  clientUserProjectAccess,
   clients,
   passwordResetTokens,
   projectMembers,
@@ -37,6 +38,7 @@ import {
   normalizePortalAccessLevel,
   requireActivePortalAccess,
 } from "../../services/portalAuthorization";
+import { canClientAccessProject } from "../../middleware/clientAccess";
 
 const router = Router();
 const portalTaskUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -118,6 +120,7 @@ async function getVisibleProject(userId: string, clientId: string, projectId: st
   await requireActivePortalAccess(userId, clientId);
   const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.clientId, clientId))).limit(1);
   if (!project || project.visibility === "private") throw AppError.notFound("Project");
+  if (!(await canClientAccessProject(userId, projectId))) throw AppError.forbidden("Access denied");
   return project;
 }
 
@@ -129,6 +132,7 @@ async function getVisibleTask(userId: string, clientId: string, taskId: string) 
     .where(and(eq(tasks.id, taskId), eq(projects.clientId, clientId)))
     .limit(1);
   if (!row || row.task.visibility === "private" || row.project.visibility === "private") throw AppError.notFound("Task");
+  if (!(await canClientAccessProject(userId, row.project.id))) throw AppError.forbidden("Access denied");
   return row;
 }
 
@@ -247,7 +251,7 @@ const projectCreateSchema = z.object({
 
 router.post("/clients/:clientId/projects", async (req, res) => {
   try {
-    await requireActivePortalAccess(req.user!.id, req.params.clientId, { admin: true });
+    const access = await requireActivePortalAccess(req.user!.id, req.params.clientId, { admin: true });
     const data = projectCreateSchema.parse(req.body);
     const client = await storage.getClient(req.params.clientId);
     if (!client || !client.tenantId) throw AppError.notFound("Client");
@@ -264,6 +268,14 @@ router.post("/clients/:clientId/projects", async (req, res) => {
       visibility: "workspace",
       createdBy: req.user!.id,
     }, client.tenantId);
+    if (access.projectScope === "selected") {
+      await db.insert(clientUserProjectAccess).values({
+        workspaceId: client.workspaceId,
+        clientId: client.id,
+        projectId: project.id,
+        userId: req.user!.id,
+      });
+    }
     res.status(201).json(project);
   } catch (error) {
     return handleRouteError(res, error, "POST /client-portal/clients/:clientId/projects", req);
@@ -762,6 +774,7 @@ router.post("/clients/:clientId/users/invite", async (req, res) => {
       createdByUserId: req.user!.id,
     });
     await storage.createClientInvite({
+      invitationId: invitation.id,
       clientId: client.id,
       contactId: contact.id,
       email: data.email.toLowerCase(),

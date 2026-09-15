@@ -65,6 +65,7 @@ import {
   Link,
   Mail,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 
 interface ClientUser {
@@ -90,6 +91,14 @@ interface ClientContact {
   title: string | null;
 }
 
+interface PortalInvitation {
+  id: string;
+  email: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expiresAt: string;
+  createdAt: string;
+}
+
 interface PortalAccessScopeEntry {
   client: {
     id: string;
@@ -100,7 +109,10 @@ interface PortalAccessScopeEntry {
     clientId: string;
     userId: string;
     accessLevel: "collaborator" | "client_admin";
+    projectScope: "all_visible" | "selected";
   } | null;
+  projectIds: string[];
+  projects: Array<{ id: string; name: string }>;
   relationship: "current" | "child" | "descendant" | "other";
 }
 
@@ -169,6 +181,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [accessScopeDraft, setAccessScopeDraft] = useState<Record<string, "collaborator" | "client_admin" | null>>({});
+  const [projectScopeDraft, setProjectScopeDraft] = useState<Record<string, { scope: "all_visible" | "selected"; projectIds: string[] }>>({});
   const [createAccessClientIds, setCreateAccessClientIds] = useState<string[]>([clientId]);
   const [lastInviteLink, setLastInviteLink] = useState<{ email: string; registrationUrl: string; emailSent: boolean; emailError?: string | null } | null>(null);
 
@@ -198,6 +211,16 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
 
   const { data: portalUsers = [], isLoading: usersLoading } = useQuery<ClientUser[]>({
     queryKey: ["/api/clients", clientId, "users"],
+    enabled: !!clientId,
+  });
+
+  const { data: portalInvitations = [] } = useQuery<PortalInvitation[]>({
+    queryKey: ["/api/clients", clientId, "invitations"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/invitations`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load portal invitations");
+      return res.json();
+    },
     enabled: !!clientId,
   });
 
@@ -292,11 +315,13 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const updateAccessScopeMutation = useMutation({
     mutationFn: async () => {
       if (!editingUser) return null;
-      const entries = Object.entries(accessScopeDraft)
+      const entries = Object.entries(resolvedAccessScopeDraft)
         .filter(([, accessLevel]) => !!accessLevel)
         .map(([entryClientId, accessLevel]) => ({
           clientId: entryClientId,
           accessLevel,
+          projectScope: projectScopeDraft[entryClientId]?.scope || "all_visible",
+          projectIds: projectScopeDraft[entryClientId]?.projectIds || [],
         }));
       const res = await apiRequest("PATCH", `/api/clients/${clientId}/users/${editingUser.userId}/access-scope`, { entries });
       return res.json();
@@ -333,6 +358,35 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
         variant: "destructive",
       });
     },
+  });
+
+  const revokeInvitationMutation = useMutation({
+    mutationFn: async (invitationId: string) => {
+      await apiRequest("DELETE", `/api/clients/${clientId}/invitations/${invitationId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation revoked" });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "invitations"] });
+    },
+    onError: (error: Error) => toast({ title: "Failed to revoke invitation", description: error.message, variant: "destructive" }),
+  });
+
+  const resendInvitationMutation = useMutation({
+    mutationFn: async (invitation: PortalInvitation) => {
+      const res = await apiRequest("POST", `/api/clients/${clientId}/invitations/${invitation.id}/resend`);
+      return { invitation, ...(await res.json()) };
+    },
+    onSuccess: (data) => {
+      setLastInviteLink({
+        email: data.invitation.email,
+        registrationUrl: data.registrationUrl,
+        emailSent: !!data.emailSent,
+        emailError: data.emailError,
+      });
+      toast({ title: data.emailSent ? "Invitation resent" : "New invitation link created", description: data.emailError || undefined });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "invitations"] });
+    },
+    onError: (error: Error) => toast({ title: "Failed to resend invitation", description: error.message, variant: "destructive" }),
   });
 
   const handleCloseAddUser = () => {
@@ -375,6 +429,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const handleOpenEditUser = (portalUser: ClientUser) => {
     setEditingUser(portalUser);
     setAccessScopeDraft({});
+    setProjectScopeDraft({});
     setShowEditPassword(false);
     editForm.reset({
       firstName: portalUser.user.firstName || portalUser.user.name?.split(" ")[0] || "",
@@ -388,12 +443,24 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
   const handleCloseEditUser = () => {
     setEditingUser(null);
     setAccessScopeDraft({});
+    setProjectScopeDraft({});
     setShowEditPassword(false);
     editForm.reset();
   };
 
   const accessScopeEntries = accessScopeData?.entries || [];
   const accessScopeOptions = accessScopeOptionsData?.entries || [];
+
+  useEffect(() => {
+    if (!editingUser || !accessScopeData) return;
+    setProjectScopeDraft(Object.fromEntries(accessScopeData.entries.map((entry) => [
+      entry.client.id,
+      {
+        scope: entry.access?.projectScope || "all_visible",
+        projectIds: entry.projectIds || [],
+      },
+    ])));
+  }, [editingUser?.userId, accessScopeData]);
 
   useEffect(() => {
     if (!addUserOpen) return;
@@ -420,6 +487,23 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
       ...current,
       [entry.client.id]: accessLevel,
     }));
+  };
+
+  const setProjectScope = (clientId: string, scope: "all_visible" | "selected") => {
+    setProjectScopeDraft((current) => ({
+      ...current,
+      [clientId]: { scope, projectIds: current[clientId]?.projectIds || [] },
+    }));
+  };
+
+  const toggleProjectGrant = (clientId: string, projectId: string, checked: boolean) => {
+    setProjectScopeDraft((current) => {
+      const existing = current[clientId] || { scope: "selected" as const, projectIds: [] };
+      const projectIds = checked
+        ? Array.from(new Set([...existing.projectIds, projectId]))
+        : existing.projectIds.filter((id) => id !== projectId);
+      return { ...current, [clientId]: { scope: "selected", projectIds } };
+    });
   };
 
   const toggleCreateScopeClient = (entry: PortalAccessScopeOption, checked: boolean) => {
@@ -529,6 +613,62 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                 </Badge>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {portalInvitations.filter((invitation) => invitation.status !== "accepted").length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Portal Invitations</CardTitle>
+                <CardDescription>Track links that have not been accepted yet.</CardDescription>
+              </div>
+              <Badge variant="secondary">
+                {portalInvitations.filter((invitation) => invitation.status === "pending").length} pending
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2 pt-0">
+            {portalInvitations.filter((invitation) => invitation.status !== "accepted").map((invitation) => (
+              <div key={invitation.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{invitation.email}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {invitation.status === "pending"
+                      ? `Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`
+                      : invitation.status}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => resendInvitationMutation.mutate(invitation)}
+                    disabled={resendInvitationMutation.isPending}
+                    data-testid={`button-resend-invitation-${invitation.id}`}
+                  >
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                    Resend
+                  </Button>
+                  {invitation.status === "pending" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => revokeInvitationMutation.mutate(invitation.id)}
+                      disabled={revokeInvitationMutation.isPending}
+                      data-testid={`button-revoke-invitation-${invitation.id}`}
+                    >
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
@@ -1034,36 +1174,68 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                           return (
                             <div
                               key={entry.client.id}
-                              className="flex items-center justify-between gap-3 rounded-md border p-3"
+                              className="space-y-3 rounded-md border p-3"
                               data-testid={`portal-scope-client-${entry.client.id}`}
                             >
-                              <div className="flex min-w-0 items-center gap-3">
-                                <Checkbox
-                                  checked={!!selectedAccess}
-                                  disabled={isCurrentClient}
-                                  onCheckedChange={(checked) => toggleScopeClient(entry, checked === true)}
-                                  data-testid={`checkbox-portal-scope-${entry.client.id}`}
-                                />
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-medium">{entry.client.companyName}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {isCurrentClient ? "Current client" : entry.relationship === "child" ? "Child account" : "Descendant account"}
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <Checkbox
+                                    checked={!!selectedAccess}
+                                    disabled={isCurrentClient}
+                                    onCheckedChange={(checked) => toggleScopeClient(entry, checked === true)}
+                                    data-testid={`checkbox-portal-scope-${entry.client.id}`}
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-medium">{entry.client.companyName}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {isCurrentClient ? "Current client" : entry.relationship === "child" ? "Child account" : "Descendant account"}
+                                    </div>
                                   </div>
                                 </div>
+                                <Select
+                                  value={selectedAccess || "collaborator"}
+                                  disabled={!selectedAccess}
+                                  onValueChange={(value) => updateScopeAccessLevel(entry, value as "collaborator" | "client_admin")}
+                                >
+                                  <SelectTrigger className="h-8 w-36" data-testid={`select-portal-scope-level-${entry.client.id}`}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="collaborator">Collaborator</SelectItem>
+                                    <SelectItem value="client_admin">Client Admin</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
-                              <Select
-                                value={selectedAccess || "collaborator"}
-                                disabled={!selectedAccess}
-                                onValueChange={(value) => updateScopeAccessLevel(entry, value as "collaborator" | "client_admin")}
-                              >
-                                <SelectTrigger className="h-8 w-36" data-testid={`select-portal-scope-level-${entry.client.id}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="collaborator">Collaborator</SelectItem>
-                                  <SelectItem value="client_admin">Client Admin</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              {selectedAccess && entry.projects.length > 0 && (
+                                <div className="space-y-2 border-t pt-3">
+                                  <Select
+                                    value={projectScopeDraft[entry.client.id]?.scope || "all_visible"}
+                                    onValueChange={(value) => setProjectScope(entry.client.id, value as "all_visible" | "selected")}
+                                  >
+                                    <SelectTrigger data-testid={`select-project-scope-${entry.client.id}`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all_visible">All client-visible projects</SelectItem>
+                                      <SelectItem value="selected">Only selected projects</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {projectScopeDraft[entry.client.id]?.scope === "selected" && (
+                                    <div className="grid gap-2 pl-1">
+                                      {entry.projects.map((project) => (
+                                        <Label key={project.id} className="flex items-center gap-2 font-normal">
+                                          <Checkbox
+                                            checked={projectScopeDraft[entry.client.id]?.projectIds.includes(project.id) || false}
+                                            onCheckedChange={(checked) => toggleProjectGrant(entry.client.id, project.id, checked === true)}
+                                            data-testid={`checkbox-project-grant-${project.id}`}
+                                          />
+                                          <span>{project.name}</span>
+                                        </Label>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}

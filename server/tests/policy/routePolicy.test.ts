@@ -78,7 +78,7 @@ describe("Route Policy Drift Tests", () => {
     });
 
     it("all routes must declare a valid policy", () => {
-      const validPolicies = ["public", "authOnly", "authTenant", "superUser"];
+      const validPolicies = ["public", "authOnly", "authTenant", "internalTenant", "superUser"];
       for (const route of registry) {
         expect(validPolicies).toContain(route.policy);
       }
@@ -112,45 +112,45 @@ describe("Route Policy Drift Tests", () => {
       expect(system!.policy).toBe("superUser");
     });
 
-    it("tags domain must use authTenant policy", () => {
+    it("tags domain must use internalTenant policy", () => {
       const tags = registry.find((r) => r.domain === "tags");
       expect(tags).toBeDefined();
-      expect(tags!.policy).toBe("authTenant");
+      expect(tags!.policy).toBe("internalTenant");
       expect(tags!.legacy).toBe(false);
     });
 
-    it("activity domain must use authTenant policy", () => {
+    it("activity domain must use internalTenant policy", () => {
       const activity = registry.find((r) => r.domain === "activity");
       expect(activity).toBeDefined();
-      expect(activity!.policy).toBe("authTenant");
+      expect(activity!.policy).toBe("internalTenant");
       expect(activity!.legacy).toBe(false);
     });
 
-    it("comments domain must use authTenant policy", () => {
+    it("comments domain must use internalTenant policy", () => {
       const comments = registry.find((r) => r.domain === "comments");
       expect(comments).toBeDefined();
-      expect(comments!.policy).toBe("authTenant");
+      expect(comments!.policy).toBe("internalTenant");
       expect(comments!.legacy).toBe(false);
     });
 
-    it("presence domain must use authTenant policy", () => {
+    it("presence domain must use internalTenant policy", () => {
       const presence = registry.find((r) => r.domain === "presence" && !r.legacy);
       expect(presence).toBeDefined();
-      expect(presence!.policy).toBe("authTenant");
+      expect(presence!.policy).toBe("internalTenant");
       expect(presence!.legacy).toBe(false);
     });
 
-    it("ai domain must use authTenant policy", () => {
+    it("ai domain must use internalTenant policy", () => {
       const ai = registry.find((r) => r.domain === "ai" && !r.legacy);
       expect(ai).toBeDefined();
-      expect(ai!.policy).toBe("authTenant");
+      expect(ai!.policy).toBe("internalTenant");
       expect(ai!.legacy).toBe(false);
     });
 
-    it("attachments domain must use authTenant policy", () => {
+    it("attachments domain must use internalTenant policy", () => {
       const attachments = registry.find((r) => r.domain === "attachments" && !r.legacy);
       expect(attachments).toBeDefined();
-      expect(attachments!.policy).toBe("authTenant");
+      expect(attachments!.policy).toBe("internalTenant");
       expect(attachments!.legacy).toBe(false);
     });
 
@@ -161,10 +161,10 @@ describe("Route Policy Drift Tests", () => {
       expect(flags!.legacy).toBe(false);
     });
 
-    it("uploads domain must use authTenant policy", () => {
+    it("uploads domain must use internalTenant policy", () => {
       const uploads = registry.find((r) => r.domain === "uploads" && !r.legacy);
       expect(uploads).toBeDefined();
-      expect(uploads!.policy).toBe("authTenant");
+      expect(uploads!.policy).toBe("internalTenant");
       expect(uploads!.legacy).toBe(false);
     });
   });
@@ -276,6 +276,41 @@ describe("Route Policy Drift Tests", () => {
       const meta = getRouterMeta(uploads!.router);
       expect(meta).toBeDefined();
       expect(meta!.policy).toBe("authTenant");
+    });
+  });
+
+  describe("Client Portal Isolation", () => {
+    it("denies client sessions from every tenant domain unless explicitly allowlisted", () => {
+      const clientCapableDomains = new Set(["flags", "users", "crm", "features", "file-serve"]);
+      const tenantDomains = registry.filter((route) =>
+        route.policy === "authTenant" || route.policy === "internalTenant"
+      );
+
+      for (const route of tenantDomains) {
+        if (clientCapableDomains.has(route.domain)) {
+          expect(route.policy).toBe("authTenant");
+        } else {
+          expect(route.policy).toBe("internalTenant");
+        }
+      }
+    });
+
+    it("blocks a client session from internal API paths and allows portal paths", async () => {
+      const { enforceClientApiIsolation } = await import("../../http/mount");
+      const deniedNext = vi.fn();
+      const allowedNext = vi.fn();
+
+      enforceClientApiIsolation({
+        user: { role: "client" },
+        path: "/workspaces",
+      } as any, {} as any, deniedNext);
+      enforceClientApiIsolation({
+        user: { role: "client" },
+        path: "/client-portal/projects",
+      } as any, {} as any, allowedNext);
+
+      expect(deniedNext).toHaveBeenCalledWith(expect.objectContaining({ code: "FORBIDDEN" }));
+      expect(allowedNext).toHaveBeenCalledWith();
     });
   });
 

@@ -271,6 +271,7 @@ export interface IStorage {
   createClientInvite(invite: InsertClientInvite): Promise<ClientInvite>;
   updateClientInvite(id: string, invite: Partial<InsertClientInvite>): Promise<ClientInvite | undefined>;
   deleteClientInvite(id: string): Promise<void>;
+  revokeClientInvite(id: string): Promise<ClientInvite | undefined>;
   
   // Projects by client
   getProjectsByClient(clientId: string): Promise<Project[]>;
@@ -2248,6 +2249,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClientInvite(id: string): Promise<void> {
     await db.delete(clientInvites).where(eq(clientInvites.id, id));
+  }
+
+  async revokeClientInvite(id: string): Promise<ClientInvite | undefined> {
+    return db.transaction(async (tx) => {
+      const [invite] = await tx.select().from(clientInvites).where(eq(clientInvites.id, id)).limit(1);
+      if (!invite) return undefined;
+
+      if (invite.invitationId) {
+        await tx.update(invitations)
+          .set({ status: "revoked" })
+          .where(eq(invitations.id, invite.invitationId));
+      } else if (invite.tokenPlaceholder) {
+        // Backward compatibility for audit rows created before invitation_id.
+        await tx.update(invitations)
+          .set({ status: "revoked" })
+          .where(and(
+            eq(invitations.tokenHash, invite.tokenPlaceholder),
+            eq(invitations.clientId, invite.clientId),
+          ));
+      }
+
+      const [revoked] = await tx.update(clientInvites)
+        .set({ status: "revoked", updatedAt: new Date() })
+        .where(eq(clientInvites.id, id))
+        .returning();
+      return revoked || undefined;
+    });
   }
 
   // =============================================================================

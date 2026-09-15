@@ -963,6 +963,9 @@ export const clientCrm = pgTable("client_crm", {
  */
 export const clientInvites = pgTable("client_invites", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Kept as a plain id here because invitations is declared later in this
+  // module; the database migration adds the foreign-key constraint.
+  invitationId: varchar("invitation_id"),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   contactId: varchar("contact_id").references(() => clientContacts.id).notNull(),
   email: text("email").notNull(),
@@ -973,6 +976,7 @@ export const clientInvites = pgTable("client_invites", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
+  uniqueIndex("client_invites_invitation_unique").on(table.invitationId),
   index("client_invites_client_idx").on(table.clientId),
   index("client_invites_contact_idx").on(table.contactId),
 ]);
@@ -1996,6 +2000,7 @@ export const clientUserAccess = pgTable("client_user_access", {
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   accessLevel: text("access_level").notNull().default("collaborator"),
+  projectScope: text("project_scope").notNull().default("all_visible"),
   status: text("status").notNull().default("active"),
   suspendedAt: timestamp("suspended_at"),
   suspendedByUserId: varchar("suspended_by_user_id").references(() => users.id),
@@ -2003,6 +2008,19 @@ export const clientUserAccess = pgTable("client_user_access", {
 }, (table) => [
   uniqueIndex("client_user_access_unique").on(table.clientId, table.userId),
   index("client_user_access_user_idx").on(table.userId),
+]);
+
+/** Explicit project grants used when a client access row is in selected mode. */
+export const clientUserProjectAccess = pgTable("client_user_project_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }).notNull(),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("client_user_project_access_unique").on(table.userId, table.projectId),
+  index("client_user_project_access_user_client_idx").on(table.userId, table.clientId),
 ]);
 
 /**
@@ -2828,6 +2846,25 @@ export const clientUserAccessRelations = relations(clientUserAccess, ({ one }) =
   }),
   user: one(users, {
     fields: [clientUserAccess.userId],
+    references: [users.id],
+  }),
+}));
+
+export const clientUserProjectAccessRelations = relations(clientUserProjectAccess, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [clientUserProjectAccess.workspaceId],
+    references: [workspaces.id],
+  }),
+  client: one(clients, {
+    fields: [clientUserProjectAccess.clientId],
+    references: [clients.id],
+  }),
+  project: one(projects, {
+    fields: [clientUserProjectAccess.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [clientUserProjectAccess.userId],
     references: [users.id],
   }),
 }));
