@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
-import { UserRole } from "@shared/schema";
+import { UserRole, clientUserProjectAccess } from "@shared/schema";
 import { ClientAccessStatus } from "@shared/schema";
+import { db } from "../db";
+import { and, eq } from "drizzle-orm";
 
 // Check if the current user is a client user
 export function isClientUser(req: Request): boolean {
@@ -76,9 +78,20 @@ export async function getClientUserAccessibleProjects(userId: string): Promise<s
   const clientsAccess = await storage.getClientsForUser(userId);
   const projectIds: string[] = [];
   
-  for (const { client } of clientsAccess) {
-    const projects = await storage.getProjectsByClient(client.id);
-    projectIds.push(...projects.map(p => p.id));
+  for (const { client, access } of clientsAccess) {
+    if (access.status === ClientAccessStatus.SUSPENDED) continue;
+    if (access.projectScope === "selected") {
+      const grants = await db.select({ projectId: clientUserProjectAccess.projectId })
+        .from(clientUserProjectAccess)
+        .where(and(
+          eq(clientUserProjectAccess.userId, userId),
+          eq(clientUserProjectAccess.clientId, client.id),
+        ));
+      projectIds.push(...grants.map((grant) => grant.projectId));
+    } else {
+      const projects = await storage.getProjectsByClient(client.id);
+      projectIds.push(...projects.map(p => p.id));
+    }
   }
   
   return projectIds;
@@ -92,7 +105,18 @@ export async function canClientAccessProject(userId: string, projectId: string):
   }
   
   const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
-  return !!access;
+  if (!access || access.status === ClientAccessStatus.SUSPENDED) return false;
+  if (access.projectScope !== "selected") return true;
+
+  const [grant] = await db.select({ id: clientUserProjectAccess.id })
+    .from(clientUserProjectAccess)
+    .where(and(
+      eq(clientUserProjectAccess.userId, userId),
+      eq(clientUserProjectAccess.clientId, project.clientId),
+      eq(clientUserProjectAccess.projectId, projectId),
+    ))
+    .limit(1);
+  return !!grant;
 }
 
 // Check if a client user can access a specific task

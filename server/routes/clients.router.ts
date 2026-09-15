@@ -406,7 +406,10 @@ router.delete("/clients/:clientId/invites/:inviteId", async (req, res) => {
     const client = await storage.getClient(req.params.clientId);
     if (!client) throw AppError.notFound("Client");
 
-    await storage.deleteClientInvite(req.params.inviteId);
+    const invite = await storage.getClientInvite(req.params.inviteId);
+    if (!invite || invite.clientId !== req.params.clientId) throw AppError.notFound("Invite");
+
+    await storage.revokeClientInvite(req.params.inviteId);
 
     emitClientInviteRevoked(
       req.params.inviteId,

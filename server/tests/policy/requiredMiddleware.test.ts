@@ -5,6 +5,7 @@ import {
   getPolicyMiddleware,
   requireExplicitTenantContext,
 } from "../../http/policy/requiredMiddleware";
+import { blockClientUsers } from "../../middleware/clientAccess";
 import { AppError } from "../../lib/errors";
 
 function makeReq(overrides: Partial<Request>): Request {
@@ -16,6 +17,16 @@ describe("required route policy middleware", () => {
     const middleware = getPolicyMiddleware("authTenant");
 
     expect(middleware).toContain(requireExplicitTenantContext);
+  });
+
+  it("internalTenant policy includes the client-session deny guard", () => {
+    const middleware = getPolicyMiddleware("internalTenant");
+
+    expect(middleware).toContain(requireExplicitTenantContext);
+    expect(middleware).toContain(blockClientUsers);
+    expect(middleware.indexOf(blockClientUsers)).toBeGreaterThan(
+      middleware.indexOf(requireExplicitTenantContext),
+    );
   });
 
   it("blocks super users without an effective tenant on tenant-scoped routes", () => {

@@ -76,6 +76,9 @@ import emailOutboxRoutes from "../routes/emailOutbox";
 import chatRetentionRoutes from "../routes/chatRetention";
 import tenancyHealthRoutes from "../routes/tenancyHealth";
 import webhookRoutes from "../routes/webhooks";
+import type { NextFunction, Request, Response } from "express";
+import { UserRole } from "@shared/schema";
+import { AppError } from "../lib/errors";
 
 interface DomainEntry {
   path: string;
@@ -508,6 +511,43 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
   },
 ];
 
+// Client sessions are denied from tenant APIs by default. Only these domains
+// contain routes intentionally used by the client portal; each of them applies
+// narrower route- or resource-level authorization internally.
+const CLIENT_CAPABLE_DOMAINS = new Set([
+  "flags",
+  "users",
+  "crm",
+  "features",
+  "file-serve",
+]);
+
+function resolveMountedPolicy(entry: DomainEntry): DomainEntry["policy"] {
+  if (entry.policy === "authTenant" && !CLIENT_CAPABLE_DOMAINS.has(entry.domain)) {
+    return "internalTenant";
+  }
+  return entry.policy;
+}
+
+const CLIENT_API_ALLOWLIST: RegExp[] = [
+  /^\/client-portal(?:\/|$)/,
+  /^\/v1\/portal(?:\/|$)/,
+  /^\/notifications(?:\/|$)/,
+  /^\/users\/me(?:\/|$)/,
+  /^\/crm\/flags(?:\/|$)/,
+  /^\/crm\/portal(?:\/|$)/,
+  /^\/crm\/approvals\/[^/]+$/,
+  /^\/crm\/conversations\/[^/]+\/messages(?:\/|$)/,
+  /^\/crm\/conversations\/[^/]+\/attachments\/[^/]+\/download$/,
+];
+
+export function enforceClientApiIsolation(req: Request, _res: Response, next: NextFunction) {
+  if (req.user?.role !== UserRole.CLIENT || CLIENT_API_ALLOWLIST.some((pattern) => pattern.test(req.path))) {
+    return next();
+  }
+  return next(AppError.forbidden("This internal API is not available to client portal users"));
+}
+
 export function orderRoutesBySpecificity(
   routes: ReadonlyArray<RouteMount>
 ): RouteMount[] {
@@ -523,13 +563,13 @@ export async function mountAllRoutes(
 ): Promise<Server> {
   clearRouteRegistry();
 
-  app.use("/api", apiNoCacheMiddleware);
+  app.use("/api", apiNoCacheMiddleware, enforceClientApiIsolation);
 
   for (const entry of REGISTERED_DOMAINS) {
     registerRoute({
       path: entry.path,
       router: entry.router,
-      policy: entry.policy,
+      policy: resolveMountedPolicy(entry),
       domain: entry.domain,
       description: entry.description,
       legacy: false,

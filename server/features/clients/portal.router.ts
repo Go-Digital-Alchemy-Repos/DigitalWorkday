@@ -34,6 +34,8 @@ const router = Router();
 const portalAccessEntrySchema = z.object({
   clientId: z.string().min(1),
   accessLevel: z.enum([ClientAccessLevel.COLLABORATOR, ClientAccessLevel.CLIENT_ADMIN]).default(ClientAccessLevel.COLLABORATOR),
+  projectScope: z.enum(["all_visible", "selected"]).default("all_visible"),
+  projectIds: z.array(z.string().min(1)).default([]),
 });
 
 const portalAccessScopeSchema = z.object({
@@ -159,6 +161,96 @@ router.get("/:clientId/access-scope-options", requireTenantAdminAccess, async (r
   }
 });
 
+router.get("/:clientId/invitations", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const client = await storage.getClientByIdAndTenant(req.params.clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+
+    const rows = (await storage.getInvitationsByTenant(tenantId))
+      .filter((invitation) => invitation.role === UserRole.CLIENT && invitation.clientId === client.id)
+      .map(({ tokenHash: _tokenHash, ...invitation }) => invitation);
+    res.json(rows);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /:clientId/invitations", req);
+  }
+});
+
+router.delete("/:clientId/invitations/:invitationId", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const client = await storage.getClientByIdAndTenant(req.params.clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+    const invitation = (await storage.getInvitationsByTenant(tenantId))
+      .find((row) => row.id === req.params.invitationId && row.clientId === client.id && row.role === UserRole.CLIENT);
+    if (!invitation) throw AppError.notFound("Invitation");
+    if (invitation.status === InvitationStatus.ACCEPTED || invitation.usedAt) {
+      throw AppError.conflict("Accepted invitations cannot be revoked");
+    }
+
+    await storage.updateInvitation(invitation.id, { status: InvitationStatus.REVOKED });
+    const audit = (await storage.getInvitesByClient(client.id)).find((row) => row.invitationId === invitation.id);
+    if (audit) await storage.updateClientInvite(audit.id, { status: InvitationStatus.REVOKED });
+    res.status(204).send();
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /:clientId/invitations/:invitationId", req);
+  }
+});
+
+router.post("/:clientId/invitations/:invitationId/resend", requireTenantAdminAccess, async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+    const client = await storage.getClientByIdAndTenant(req.params.clientId, tenantId);
+    if (!client) throw AppError.notFound("Client");
+    const invitation = (await storage.getInvitationsByTenant(tenantId))
+      .find((row) => row.id === req.params.invitationId && row.clientId === client.id && row.role === UserRole.CLIENT);
+    if (!invitation) throw AppError.notFound("Invitation");
+    if (invitation.status === InvitationStatus.ACCEPTED || invitation.usedAt) {
+      throw AppError.conflict("Accepted invitations cannot be resent");
+    }
+
+    const token = generateInviteToken();
+    const tokenHash = hashToken(token);
+    const updated = await storage.updateInvitation(invitation.id, {
+      tokenHash,
+      status: InvitationStatus.PENDING,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      usedAt: null,
+    });
+    const audit = (await storage.getInvitesByClient(client.id)).find((row) => row.invitationId === invitation.id);
+    if (audit) await storage.updateClientInvite(audit.id, {
+      tokenPlaceholder: tokenHash,
+      status: InvitationStatus.PENDING,
+    });
+
+    const registrationUrl = buildAppUrl(`/accept-invite/${token}`, req);
+    const { emailOutboxService } = await import("../../services/emailOutbox");
+    const result = await emailOutboxService.sendEmail({
+      tenantId,
+      messageType: "invitation",
+      toEmail: invitation.email,
+      subject: `Reminder: you've been invited to ${client.displayName || client.companyName}`,
+      textBody: `Accept your client portal invitation: ${registrationUrl}`,
+      htmlBody: `<p>Your client portal invitation is ready.</p><p><a href="${registrationUrl}">Accept invitation</a></p>`,
+      actionUrl: registrationUrl,
+      actionLabel: "Accept invitation",
+      requestId: req.requestId,
+      metadata: { invitationId: invitation.id, clientId: client.id, resent: true },
+    });
+    res.json({
+      invitation: updated,
+      registrationUrl,
+      emailSent: result.success,
+      emailError: result.error || null,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /:clientId/invitations/:invitationId/resend", req);
+  }
+});
+
 // Invite a contact to become a client portal user
 router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res) => {
   try {
@@ -254,6 +346,7 @@ router.post("/:clientId/users/invite", requireTenantAdminAccess, async (req, res
 
     // Keep the client invite audit trail in sync while the portal invite UI is being completed.
     const invite = await storage.createClientInvite({
+      invitationId: invitation.id,
       clientId,
       contactId,
       email: contact.email,
@@ -446,6 +539,7 @@ router.post("/:clientId/users/setup", requireTenantAdminAccess, async (req, res)
     });
 
     const invite = await storage.createClientInvite({
+      invitationId: invitation.id,
       clientId,
       contactId: contact.id,
       email: data.email,

@@ -6,8 +6,9 @@ import {
 } from "../../middleware/tenantContext";
 import { UserRole } from "@shared/schema";
 import { AppError } from "../../lib/errors";
+import { blockClientUsers } from "../../middleware/clientAccess";
 
-export type PolicyName = "public" | "authOnly" | "authTenant" | "superUser";
+export type PolicyName = "public" | "authOnly" | "authTenant" | "internalTenant" | "superUser";
 
 export interface PolicyDefinition {
   name: PolicyName;
@@ -55,6 +56,11 @@ const POLICY_DEFINITIONS: Record<PolicyName, PolicyDefinition> = {
     name: "authTenant",
     description: "Authentication and explicit tenant context required.",
     middleware: [requireAuth, requireExplicitTenantContext],
+  },
+  internalTenant: {
+    name: "internalTenant",
+    description: "Authentication and explicit tenant context required; client portal users are denied.",
+    middleware: [requireAuth, requireExplicitTenantContext, blockClientUsers],
   },
   superUser: {
     name: "superUser",

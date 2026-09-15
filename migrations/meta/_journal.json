@@ -176,6 +176,13 @@
       "when": 1788029435508,
       "tag": "0062_finance_website_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789459200000,
+      "tag": "0063_client_access_hardening",
+      "breakpoints": true
     }
   ]
 }

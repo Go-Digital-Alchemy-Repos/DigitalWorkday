@@ -55,7 +55,7 @@ describe("Route Policy Drift Detection", () => {
 
   it("every registered route should have a valid policy", () => {
     const registry = getRouteRegistry();
-    const validPolicies = ["public", "authOnly", "authTenant", "superUser"];
+    const validPolicies = ["public", "authOnly", "authTenant", "internalTenant", "superUser"];
 
     for (const route of registry) {
       expect(validPolicies).toContain(route.policy);
