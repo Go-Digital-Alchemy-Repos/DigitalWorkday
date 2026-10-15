@@ -121,3 +121,9 @@
 ---
 
 *Last Updated: 2026-02-04*
+
+## Assignment email opt-in
+
+`PATCH /api/projects/:id` accepts `assignmentEmailsEnabled` (boolean). It defaults to false in the database for both existing and new projects. Only tenant administrators, project managers, and super admins may change this setting or enable it through project creation. Project and recipient tenant checks still apply.
+
+Enabling the setting does not send notifications for existing assignments. New internal task/subtask assignments enqueue emails only when the recipient's existing `emailEnabled` preference is true. See [Notifications](../18-FUNCTIONAL-DOCS/06-NOTIFICATIONS.md#project-assignment-emails) for supported paths and delivery behavior.

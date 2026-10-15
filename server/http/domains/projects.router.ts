@@ -456,7 +456,10 @@ router.post("/projects", async (req: Request, res: Response) => {
       workspaceId,
       createdBy: creatorId,
     });
-    
+    if (data.assignmentEmailsEnabled && !hasTenantAdminAccess(req.user?.role)) {
+      return sendError(res, AppError.forbidden("Only project managers and admins can enable assignment emails"), req);
+    }
+
     let project;
     if (tenantId) {
       project = await storage.createProjectWithTenant(data, tenantId);
@@ -541,6 +544,13 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       return sendError(res, AppError.notFound("Project"), req);
     }
     
+    if (data.assignmentEmailsEnabled !== undefined && data.assignmentEmailsEnabled !== existingProject.assignmentEmailsEnabled) {
+      const actor = await storage.getUser(currentUserId);
+      if (!hasTenantAdminAccess(actor?.role)) {
+        return sendError(res, AppError.forbidden("Only project managers and admins can change assignment emails"), req);
+      }
+    }
+
     const effectiveClientId = data.clientId !== undefined ? data.clientId : existingProject.clientId;
     const effectiveDivisionId = data.divisionId !== undefined ? data.divisionId : existingProject.divisionId;
     

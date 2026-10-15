@@ -45,6 +45,7 @@
  */
 
 import { Request, Response } from "express";
+import { assignTaskWithEmail } from "../../services/assignmentEmails";
 import { z } from "zod";
 import { createApiRouter } from "../routerFactory";
 import { blockClientUsers } from "../../middleware/clientAccess";
@@ -1051,11 +1052,12 @@ router.post("/tasks", async (req, res) => {
       
       for (const assigneeId of validatedAssigneeIds) {
         try {
-          await storage.addTaskAssignee({
+          await assignTaskWithEmail({
+            actorUserId: getCurrentUserId(req),
             taskId: task.id,
             userId: assigneeId,
             tenantId: tenantId || undefined,
-          });
+          }, req);
         } catch (assigneeError) {
           console.warn(`[Task Create] Failed to add assignee ${assigneeId} to task ${task.id}:`, assigneeError);
         }
@@ -1063,22 +1065,24 @@ router.post("/tasks", async (req, res) => {
       
       if (validatedAssigneeIds.length === 0) {
         try {
-          await storage.addTaskAssignee({
+          await assignTaskWithEmail({
+            actorUserId: getCurrentUserId(req),
             taskId: task.id,
             userId: userId,
             tenantId: tenantId || undefined,
-          });
+          }, req);
         } catch (assigneeError) {
           console.warn(`[Task Create] Failed to auto-assign task ${task.id} to user ${userId}:`, assigneeError);
         }
       }
     } else {
       try {
-        await storage.addTaskAssignee({
+        await assignTaskWithEmail({
+          actorUserId: getCurrentUserId(req),
           taskId: task.id,
           userId: userId,
           tenantId: tenantId || undefined,
-        });
+        }, req);
       } catch (assigneeError) {
         console.warn(`[Task Create] Failed to auto-assign task ${task.id} to user ${userId}:`, assigneeError);
       }
@@ -1130,11 +1134,12 @@ router.post("/tasks/:taskId/childtasks", async (req, res) => {
 
     if (body.assigneeId) {
       try {
-        await storage.addTaskAssignee({
+        await assignTaskWithEmail({
+          actorUserId: getCurrentUserId(req),
           taskId: task.id,
           userId: body.assigneeId,
           tenantId: effectiveTenantId || undefined,
-        });
+        }, req);
       } catch (assigneeError) {
         console.warn(`[Child Task Create] Failed to assign task ${task.id} to user ${body.assigneeId}:`, assigneeError);
       }
@@ -1239,7 +1244,9 @@ router.patch("/tasks/:id", async (req, res) => {
         ...current.filter((assignee) => !requested.includes(assignee.userId))
           .map((assignee) => storage.removeTaskAssignee(task.id, assignee.userId)),
         ...requested.filter((id) => !currentIDs.has(id))
-          .map((id) => storage.addTaskAssignee({ taskId: task.id, userId: id, tenantId: tenantId || undefined })),
+          .map((id) => assignTaskWithEmail({
+            actorUserId: userId, taskId: task.id, userId: id, tenantId: tenantId || undefined,
+          }, req)),
       ]);
     }
 
@@ -1522,13 +1529,14 @@ router.post("/tasks/:taskId/assignees", async (req, res) => {
       }
     }
     
-    const assignee = await storage.addTaskAssignee({
+    const { assignment: assignee, created } = await assignTaskWithEmail({
+      actorUserId: getCurrentUserId(req),
       taskId: req.params.taskId,
       userId: assigneeUserId,
       tenantId: tenantId || undefined,
-    });
+    }, req);
     
-    if (assigneeUserId !== currentUserId && !task.isPersonal) {
+    if (created && assigneeUserId !== currentUserId && !task.isPersonal) {
       const currentUser = await storage.getUser(currentUserId);
       const project = task.projectId 
         ? (tenantId 

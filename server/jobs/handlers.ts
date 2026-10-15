@@ -1,3 +1,4 @@
+import { ASSIGNMENT_EMAIL_JOB, deliverAssignmentEmail } from "../services/assignmentEmails";
 import { registerHandler, type JobContext } from "./queue";
 import { AsanaClient } from "../services/asana/asanaClient";
 import { AsanaImportPipeline, type AsanaImportOptions } from "../services/asana/importPipeline";
@@ -328,6 +329,7 @@ async function handleAiGeneration(ctx: JobContext): Promise<void> {
 }
 
 export function registerAllHandlers(): void {
+  registerHandler(ASSIGNMENT_EMAIL_JOB, deliverAssignmentEmail, 2);
   registerHandler("asana_import", handleAsanaImport, 1);
   registerHandler("csv_import", handleCsvImport, 1);
   registerHandler("bulk_tasks_import", handleBulkTasksImport, 2);

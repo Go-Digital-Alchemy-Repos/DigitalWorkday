@@ -29,7 +29,7 @@
 
 ## Notes / Gotchas
 
-*Add manual notes here. This section will be preserved during sync.*
+`PATCH /api/notifications/preferences` accepts the existing `emailEnabled` boolean for the authenticated recipient. Its false default and existing values are preserved. Notification Center exposes it as **Assignment emails**. It only enables new assignment emails from projects with `assignmentEmailsEnabled=true`; it does not gate existing mention, invitation, or password emails. In-app preferences are unchanged.
 
 <!-- === END MANUAL NOTES SECTION === -->
 

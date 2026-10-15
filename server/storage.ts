@@ -934,6 +934,7 @@ export class DatabaseStorage implements IStorage {
   async getProjectsForUser(userId: string, tenantId: string, _workspaceId?: string, _isAdmin?: boolean): Promise<Project[]> {
     return db.select({
         id: projects.id,
+        assignmentEmailsEnabled: projects.assignmentEmailsEnabled,
         tenantId: projects.tenantId,
         workspaceId: projects.workspaceId,
         teamId: projects.teamId,

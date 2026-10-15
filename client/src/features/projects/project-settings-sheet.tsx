@@ -1,3 +1,4 @@
+import { Switch } from "@/components/ui/switch";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -63,6 +64,7 @@ const PROJECT_COLORS = [
 ];
 
 const editProjectSchema = z.object({
+  assignmentEmailsEnabled: z.boolean().default(false),
   name: z.string().min(1, "Project name is required"),
   description: z.string().optional(),
   teamId: z.string().optional(),
@@ -114,6 +116,7 @@ export function ProjectSettingsSheet({
   const form = useForm<EditProjectFormData>({
     resolver: zodResolver(editProjectSchema),
     defaultValues: {
+      assignmentEmailsEnabled: project.assignmentEmailsEnabled ?? false,
       name: project.name,
       description: getEditableProjectDescription(project.description),
       teamId: project.teamId || "",
@@ -125,6 +128,7 @@ export function ProjectSettingsSheet({
   useEffect(() => {
     if (open) {
       form.reset({
+        assignmentEmailsEnabled: project.assignmentEmailsEnabled ?? false,
         name: project.name,
         description: getEditableProjectDescription(project.description),
         teamId: project.teamId || "",
@@ -138,6 +142,7 @@ export function ProjectSettingsSheet({
   const updateProjectMutation = useMutation({
     mutationFn: async (data: EditProjectFormData) => {
       const res = await apiRequest("PATCH", `/api/projects/${project.id}`, {
+        ...(isAdmin ? { assignmentEmailsEnabled: data.assignmentEmailsEnabled } : {}),
         name: data.name,
         description: normalizeRichTextForStorage(data.description) || null,
         teamId: data.teamId || null,
@@ -434,6 +439,24 @@ export function ProjectSettingsSheet({
                   </FormItem>
                 )}
               />
+
+              {isAdmin && (
+                <FormField control={form.control} name="assignmentEmailsEnabled" render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4">
+                      <FormLabel>Email new assignees</FormLabel>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-project-assignment-emails" />
+                      </FormControl>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Email people when tasks or subtasks are assigned to them in this project.
+                      Recipients must also enable assignment emails in Notification Center settings.
+                      Existing assignments and imports will not trigger emails.
+                    </p>
+                  </FormItem>
+                )} />
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 {teams.length > 0 && (
