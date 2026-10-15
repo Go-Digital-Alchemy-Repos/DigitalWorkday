@@ -159,7 +159,7 @@ Update unread count in UI
 Assignment emails are opt-in at two levels:
 
 - An administrator or project manager enables **Email new assignees** in Project Settings (`projects.assignmentEmailsEnabled`). Existing and new projects default to off.
-- Each recipient enables **Assignment emails** in Notification Center settings. This uses the existing `notification_preferences.email_enabled` field and preserves its existing value and false default. In-app preferences are independent.
+- Each recipient enables **Email notifications** under **Task Assignments** in the notification bell settings. This uses the existing `notification_preferences.email_enabled` field and preserves its existing value and false default. In-app preferences are independent.
 
 The internal task UI sends emails for newly added task or subtask assignees, including task creation, child task creation, and assignee changes through task updates. Selecting an assignee saves immediately. Unchanged assignees, self-assignments, personal tasks, imports, bulk administration, and client portal assignment paths do not generate these emails. Enabling a project does not notify existing assignees.
 
