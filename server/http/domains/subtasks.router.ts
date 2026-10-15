@@ -1,3 +1,4 @@
+import { assignSubtaskWithEmail } from "../../services/assignmentEmails";
 import { createApiRouter } from "../routerFactory";
 import { blockClientUsers } from "../../middleware/clientAccess";
 import { z } from "zod";
@@ -77,7 +78,16 @@ router.post("/tasks/:taskId/subtasks", async (req, res) => {
         ? await storage.getTask(req.params.taskId) 
         : null;
 
-    const subtask = await storage.createSubtask(data);
+    const { assigneeId, ...otherFields } = data;
+    const subtask = await storage.createSubtask(assigneeId ? otherFields : data);
+
+    if (assigneeId) {
+      await assignSubtaskWithEmail({
+        subtaskId: subtask.id, userId: assigneeId,
+        actorUserId: getCurrentUserId(req), tenantId, setPrimaryAssignee: true,
+      }, req);
+      subtask.assigneeId = assigneeId;
+    }
 
     if (parentTask && parentTask.projectId) {
       emitSubtaskCreated(
@@ -123,7 +133,17 @@ router.patch("/subtasks/:id", async (req, res) => {
       updateData.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
     }
     
-    const subtask = await storage.updateSubtask(req.params.id, updateData);
+    // New assignment rows and delivery jobs are owned by the shared writer.
+    // Clearing an assignee retains the existing storage removal behavior.
+    const { assigneeId, ...otherUpdates } = updateData;
+    const subtask = await storage.updateSubtask(req.params.id, assigneeId ? otherUpdates : updateData);
+    if (subtask && assigneeId) {
+      await assignSubtaskWithEmail({
+        subtaskId: subtask.id, userId: assigneeId, actorUserId: getCurrentUserId(req),
+        tenantId, setPrimaryAssignee: true,
+      }, req);
+      subtask.assigneeId = assigneeId;
+    }
     if (!subtask) {
       return sendError(res, AppError.notFound("Subtask"), req);
     }
@@ -242,11 +262,13 @@ router.post("/subtasks/:id/assignees", async (req, res) => {
     if (!userId) {
       return sendError(res, AppError.badRequest("userId is required"), req);
     }
-    const assignee = await storage.addSubtaskAssignee({
+    const { assignment: assignee, created } = await assignSubtaskWithEmail({
+      actorUserId: getCurrentUserId(req),
       subtaskId: req.params.id,
       userId,
       tenantId: tenantId || null,
-    });
+    }, req);
+    if (!created) throw AppError.conflict("User already assigned to subtask");
     res.status(201).json(assignee);
   } catch (error: any) {
     if (error?.code === '23505') {

@@ -153,3 +153,20 @@ Update unread count in UI
 
 - [Chat System](../CHAT.md)
 - [Email Observability](../EMAIL_OBSERVABILITY.md)
+
+## Project assignment emails
+
+Assignment emails are opt-in at two levels:
+
+- An administrator or project manager enables **Email new assignees** in Project Settings (`projects.assignmentEmailsEnabled`). Existing and new projects default to off.
+- Each recipient enables **Assignment emails** in Notification Center settings. This uses the existing `notification_preferences.email_enabled` field and preserves its existing value and false default. In-app preferences are independent.
+
+The internal task UI sends emails for newly added task or subtask assignees, including task creation, child task creation, and assignee changes through task updates. Selecting an assignee saves immediately. Unchanged assignees, self-assignments, personal tasks, imports, bulk administration, and client portal assignment paths do not generate these emails. Enabling a project does not notify existing assignees.
+
+Interactive assignments and their delivery jobs commit in one database transaction. The existing background queue processes `assignment_email` jobs with up to three attempts, using the existing `task_assignment` template, Mailgun configuration fallback, application link builder, and email logs. Before sending, the worker rechecks project opt-in, recipient email opt-in, active recipient status, tenant boundaries, task/project visibility, and the original assignment ID. Removing and re-adding an assignee invalidates the old delivery job. A job already logged as sent is skipped on replay.
+
+Delivery has the usual at-least-once limitation: if Mailgun accepts a message but the process fails before recording success, a retry can send it again. Normal repeated assignment requests are deduplicated by the assignment's unique database constraint.
+
+Other notifications retain their existing behavior: comment mentions, invitations, password emails, in-app assignment calls, and status/completion notifications are not rerouted through this feature. The personal email control is shown once because the database stores one flag; it governs this assignment email feature, not existing mention or transactional emails.
+
+Deployment requires migration `0064_project_assignment_emails`. The existing Railway `AUTO_MIGRATE=true` startup path applies it. No new environment variables or provider credentials are required. Task links are resolved with the existing trusted-host/public-URL helper during the assignment request and persisted with the job, so background delivery does not depend on request headers or a new URL setting. Disabling the project toggle cancels pending emails when the worker rechecks eligibility. To roll back application code, leave the additive column in place.

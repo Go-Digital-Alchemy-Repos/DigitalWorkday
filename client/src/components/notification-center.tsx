@@ -1144,6 +1144,18 @@ export function NotificationCenter() {
                   <p className="text-sm text-muted-foreground">
                     Choose which notifications you want to receive.
                   </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <Label htmlFor="pref-assignment-email">Assignment emails</Label>
+                      <Switch id="pref-assignment-email" checked={preferences.emailEnabled ?? false}
+                        onCheckedChange={() => handleToggleEmailEnabled("task_assigned", preferences.emailEnabled ?? false)}
+                        data-testid="switch-email-task_assigned" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Receive assignment emails from projects with “Email new assignees” enabled.
+                      Other notification emails keep their existing behavior.
+                    </p>
+                  </div>
                   <Separator />
                   <div className="space-y-4">
                     {(Object.keys(NOTIFICATION_TYPE_LABELS) as NotificationType[]).map((type) => {
@@ -1164,17 +1176,6 @@ export function NotificationCenter() {
                               checked={pref.enabled}
                               onCheckedChange={() => handleToggleEnabled(type, pref.enabled)}
                               data-testid={`switch-notification-${type}`}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between pl-6">
-                            <Label htmlFor={`pref-${type}-email`} className="text-xs text-muted-foreground">
-                              Email notifications
-                            </Label>
-                            <Switch
-                              id={`pref-${type}-email`}
-                              checked={pref.emailEnabled}
-                              onCheckedChange={() => handleToggleEmailEnabled(type, pref.emailEnabled)}
-                              data-testid={`switch-email-${type}`}
                             />
                           </div>
                         </div>

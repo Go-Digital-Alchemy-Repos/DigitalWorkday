@@ -1480,6 +1480,7 @@ export const projects = pgTable("projects", {
   visibility: text("visibility").notNull().default("workspace"),
   status: text("status").notNull().default("active"),
   color: text("color").default("#3B82F6"),
+  assignmentEmailsEnabled: boolean("assignment_emails_enabled").default(false).notNull(),
   budgetMinutes: integer("budget_minutes"), // Optional project budget in minutes for workload forecasting
   stickyAt: timestamp("sticky_at"),
   createdBy: varchar("created_by").references(() => users.id),

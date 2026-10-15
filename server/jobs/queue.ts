@@ -169,7 +169,15 @@ async function claimSingleJob(
   `);
 
   const rows = (result as any).rows || result;
-  return rows?.[0] || null;
+  const row = rows?.[0];
+  if (!row) return null;
+  // Raw SQL returns database column names, unlike Drizzle's query builder.
+  return {
+    ...row,
+    tenantId: row.tenantId ?? row.tenant_id,
+    createdByUserId: row.createdByUserId ?? row.created_by_user_id,
+    maxAttempts: row.maxAttempts ?? row.max_attempts,
+  };
 }
 
 async function executeJob(job: any): Promise<void> {

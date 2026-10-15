@@ -10,6 +10,11 @@ export interface RenderedEmail {
   textBody: string;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function renderString(template: string, variables: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     return variables[key] !== undefined ? variables[key] : match;
@@ -43,10 +48,14 @@ export class EmailTemplateService {
     return systemTemplate || null;
   }
 
-  renderTemplate(template: { subject: string; htmlBody: string; textBody: string }, variables: Record<string, string>): RenderedEmail {
+  renderTemplate(template: { subject: string; htmlBody: string; textBody: string }, variables: Record<string, string>, escapeVariables = false): RenderedEmail {
+    const htmlVariables = escapeVariables
+      ? Object.fromEntries(Object.entries(variables).map(([key, value]) => [key,
+          ["actionBlock", "logoBlock"].includes(key) ? value : escapeHtml(value)]))
+      : variables;
     return {
       subject: renderString(template.subject, variables),
-      htmlBody: renderString(template.htmlBody, variables),
+      htmlBody: renderString(template.htmlBody, htmlVariables),
       textBody: renderString(template.textBody, variables),
     };
   }
@@ -76,7 +85,7 @@ export class EmailTemplateService {
           </tr>`;
   }
 
-  async renderByKey(tenantId: string | null, templateKey: string, variables: Record<string, string>): Promise<RenderedEmail | null> {
+  async renderByKey(tenantId: string | null, templateKey: string, variables: Record<string, string>, escapeVariables = false): Promise<RenderedEmail | null> {
     if (!("actionBlock" in variables)) {
       variables = {
         ...variables,
@@ -99,12 +108,12 @@ export class EmailTemplateService {
 
     const template = await this.getTemplate(tenantId, templateKey);
     if (template) {
-      return this.renderTemplate(template, variables);
+      return this.renderTemplate(template, variables, escapeVariables);
     }
 
     const defaultTemplate = getDefaultTemplate(templateKey);
     if (defaultTemplate) {
-      return this.renderTemplate(defaultTemplate, variables);
+      return this.renderTemplate(defaultTemplate, variables, escapeVariables);
     }
 
     return null;

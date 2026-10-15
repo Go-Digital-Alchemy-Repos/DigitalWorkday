@@ -72,6 +72,7 @@ const REQUIRED_TABLES = [
 ];
 
 const CRITICAL_COLUMNS: SchemaColumnCheck[] = [
+  { table: "projects", column: "assignment_emails_enabled" },
   { table: "users", column: "tenant_id" },
   { table: "projects", column: "tenant_id" },
   { table: "projects", column: "client_id" },
