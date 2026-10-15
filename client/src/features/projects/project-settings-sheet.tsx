@@ -451,7 +451,7 @@ export function ProjectSettingsSheet({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Email people when tasks or subtasks are assigned to them in this project.
-                      Recipients must also enable assignment emails in Notification Center settings.
+                      Recipients must also enable email notifications under Task Assignments in the notification bell settings.
                       Existing assignments and imports will not trigger emails.
                     </p>
                   </FormItem>

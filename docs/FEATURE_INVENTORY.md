@@ -333,7 +333,7 @@ Final task assignment: `finalTaskId = subtaskId || taskId`
 
 ### Project assignment emails
 
-- UI: Project Settings → Email new assignees; Notification Center → Settings → Assignment emails.
+- UI: Project Settings → Email new assignees; Notification bell → Settings → Task Assignments → Email notifications.
 - API: `PATCH /api/projects/:id` (`assignmentEmailsEnabled`), `PATCH /api/notifications/preferences` (`emailEnabled`), internal task/subtask assignment routes.
 - Both opt-ins default to off. New interactive assignments use the existing Mailgun sender, task-assignment template, email logs and background queue. Imports and existing notification behavior are preserved.
 - Details: [Project assignment emails](18-FUNCTIONAL-DOCS/06-NOTIFICATIONS.md#project-assignment-emails).
